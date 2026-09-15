@@ -1,0 +1,118 @@
+! ============================================================================
+! OBC tidal-forcing validation — cartesian seamount, M2 at the west boundary.
+!
+! Exercises the C3 OBC boundary-tide machinery (#310): an M2 tide is
+! prescribed at the WEST open boundary and propagates east across the domain
+! and over a Gaussian seamount, radiating out the (Flather) east boundary.
+!
+! IMPORTANT: the ocean C-grid reads &ocean_bc_nml ONLY — the coastal
+! &boundary_nml block does NOT reach the ocean path.  Tidal constituents are
+! keyed by ANGULAR FREQUENCY (rad/s), not name: M2 = 1.4051890e-4 (the exact
+! rdb_ocean_tide_astro catalog value).  Amplitude is in metres, phase in
+! radians.  obc_tidal_nodal=.false. => legacy eta = amp*cos(omega*t + phase);
+! set .true. to fold in the astronomical/nodal correction (then a parseable
+! &ocean_tides_nml ref_date is required and omega must match the catalog).
+!
+! Validation: SSH oscillates at the M2 period (12.4206 h) across the domain;
+! the domain is far shorter than the M2 wavelength (~8900 km) so it
+! co-oscillates nearly in phase, with tidal currents steered over the
+! seamount.  See README.md for the M2 harmonic-fit check.
+!
+! 128 x 64 x 10 @ 2 km, 4 days @ dt = 300 s.  Runs serially on CPU.
+! ============================================================================
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 128
+   ny     = 64
+   dx     = 2000.0      ! metres (cartesian)
+   dy     = 2000.0
+   nghost = 2
+/
+
+&ocean_bc_nml
+   west  = "tidal"      ! fires the OBC_TIDAL eta_target constituent sum
+   east  = "open"       ! Flather radiation outflow
+   south = "wall"
+   north = "wall"
+   west_n_tidal     = 1
+   west_tidal_amp   = 1.0            ! M2 elevation amplitude, metres
+   west_tidal_phase = 0.0           ! radians
+   west_tidal_omega = 1.4051890e-4  ! M2 angular frequency, rad/s (exact catalog value)
+   obc_tidal_nodal  = .false.       ! .true. => needs &ocean_tides_nml ref_date + exact omega
+/
+
+&time_nml
+   t_end        = 4.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4           ! f-plane
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 25000.0         ! metres (cartesian: pass-through)
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 5.0e2
+   nu_4 = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.
+   use_kpp     = .true.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "seamount_tidal_obc"
+   dt_out   = 0.05                  ! days (~1.2 h) — resolve the M2 SSH oscillation
+/
+
+&output_nml
+   output_dir     = "./out_seamount_tidal_obc"
+   output_to_file = .true.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 0.5
+/

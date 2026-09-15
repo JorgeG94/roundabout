@@ -1,0 +1,273 @@
+! Eady baroclinic-instability benchmark — Tier-2 dycore validation
+! with an *analytical* answer.
+!
+! RE-BASELINED 2026-09-13. This file now ships the front its analytical
+! scales below have always described (eady_dT_dy = -2e-5 K/m), a Laplacian
+! viscosity that does not compete with the mode (nu_h = 20 m²/s, was 100)
+! and a 60-day window (was 25). Measured on a V100 with these settings the
+! cross-channel velocity max|v| — zero in the basic state, so a pure
+! perturbation measure — grows ~1500x, from 1.3e-4 to 0.2 m/s, at the
+! Eady rate: the 125 km zonal mode (kx = 2 in this 250 km channel) grows
+! at sigma = 1.93e-6 1/s over days 20-60, against linear theory 1.98e-6
+! for that mode in this channel (3%). Grid-scale content of v is < 0.1%
+! throughout, MaxCFL <= 0.041, no velocity clamping, Mass / Salt / Heat
+! budgets closed to ~1e-14 relative. Measured under the `mont` PGF (the
+! default since PR #425; this file sets no `form`); `form = "fv_lite"`
+! gives the same numbers to every printed digit (flat bed, z*: the two
+! forms differ only at roundoff here), so the re-baseline is PGF-neutral.
+!
+! Before 2026-09-13 the file shipped dT_dy = -5e-6 with nu_h = 100 and the
+! perturbation DECAYED (sigma = -2.8e-7 1/s, max|v| 0.40x over 25 days):
+! the benchmark had never demonstrated the instability it exists to test.
+! Two independent causes, both measured, decided the re-baseline:
+!
+!  1. dT_dy = -5e-6 is a weak front (Ri = 2482, Eady e-folding 18.6 days)
+!     whose mode barely clears the random-noise seed in 25 days (kx = 2
+!     grows ~2x under the noise; nothing visible in max|v| or En). Lowering
+!     nu_h for THAT front does NOT recover Eady growth: at nu_h <= 10 what
+!     grows is a broadband, wavenumber-INDEPENDENT signal (kx = 1..8 all at
+!     the same rate, ~0.9e-6 at nu_h = 10, ~2.4e-6 at nu_h = 0) that is
+!     faster for a WEAKER front (4.0e-6 at dT_dy = -1.25e-6) and is still
+!     there with NO front at all (dT_dy = 0, resting stratified channel,
+!     nu_h = 0: max|v| 0 -> 2 cm/s in 25 days at 4.7e-6 1/s). That is not
+!     baroclinic instability; it is a numerical growth of the resting
+!     stratified state (see "Known issue" below). The earlier "nu_h = 10
+!     matches theory to 31%" result was that signal, not the Eady mode.
+!
+!  2. At the front the header describes (-2e-5, Ri = 155) the Eady mode is
+!     unambiguous — kx = 2 grows ~22000x while kx >= 5 decay — and its rate
+!     is insensitive to nu_h from 10 to 100 (1.98 / 1.93 / 1.89 e-6 modal
+!     at 10 / 20 / 50). nu_h = 100 (the old value) still costs the run: it
+!     drains the jet through the effective no-slip side walls (-8% En over
+!     25 days) and the mode needs ~10 extra days to clear the noise. nu_h = 20
+!     keeps the mode's rate and, with the jet present, the short waves
+!     decay (kx = 5, 6 at -1e-7 / -2e-7 1/s; at nu_h = 10 kx = 7, 8 still
+!     creep up at +5e-7) — the measured v spectrum is the Eady mode alone.
+!
+! Sensitivity at dT_dy = -2e-5 (modal amplitude of the kx = 2 mode, days
+! 15-25, NetCDF; and the console-visible max|v| fit over days 30-60):
+!
+!        nu_h   sigma_kx2 (1/s)   max|v| fit d30-60   max|v| day-60 / day-1
+!         10       1.99e-6          1.94e-6              2050x
+!         20       1.99e-6          1.93e-6              1480x
+!         50       1.89e-6          (25-day run only)       -
+!        100       1.85e-6          (25-day run only)       -
+!       theory     1.98e-6  (kx = 2, l = pi/L_y channel mode; see below)
+!
+! WHY t_end = 60 DAYS AND NOT LONGER. The linear phase is clean to day
+! ~62 and the mode is at 0.2 m/s (from 1e-4) when the run ends. Beyond it
+! the front collapses violently: max|u| passes 0.5 m/s at day ~68, 1 m/s
+! at day ~72, hits the 2 m/s `maxvel` clamp and the NaN-catch fires
+! (~day 75), at n_inner = 20 AND 30, with maxvel = 10, and with the old
+! nu_h = 100 stack. Halving dt to 300 s survives to day 100 but with En
+! reaching 0.21 m²/s² — above the ~0.17 m²/s² of available potential
+! energy the front holds, i.e. energy is being manufactured, not
+! released. The nonlinear collapse of THIS front at 5 km / 10 layers /
+! dt = 600 is therefore outside the validated envelope and is tracked as
+! an open item; this file is a LINEAR-growth benchmark by construction,
+! and its stability-suite gates (tests/regression/stability_manifest.py)
+! assert the growth rate and the amplification inside the 60-day window.
+!
+! Known issue (open, found 2026-09-13 while re-baselining): with
+! eady_dT_dy = 0 — a RESTING, stably stratified channel seeded with the
+! same +-0.5 mK white-noise T perturbation — and nu_h = 0 (Smagorinsky
+! KH + AH and nu_4 = 5e8 still on), En grows from 0 to 3e-5 m²/s² in 25
+! days (max|v| 2 cm/s, e-folding 2.5 days, broadband in x, symmetric
+! high vertical mode). A motionless stratified fluid has no energy
+! source; that growth is numerical. nu_h lowers its LEVEL, not its rate:
+! at nu_h = 20 the same control reaches En 1.3e-7 (max|v| 1.5 mm/s) at
+! day 25, 230x below nu_h = 0, still growing at ~2e-6; nu_h = 100 holds
+! it at En 1.6e-11 (the old file's stack was doing this job). It is broadband in
+! x (kx = 1..8 alike), smooth in the vertical (bed- and surface-
+! intensified, symmetric), and comes with a resting-state T range that
+! shrinks 0.5 K at each end in 25 days. Reproducers:
+! tmp_local_artifacts/eady_hunt/p3 (Z_nu0 / Z_nu10 / Z_nu20 / Z_nu100).
+! Not chased here. It does not touch this benchmark's window — with the
+! jet present the v spectrum is the kx = 2 mode with the short waves
+! decaying and < 0.1% grid-scale content to day 60 — but it is why the
+! weak-front variants of this file cannot be trusted at low nu_h, and
+! why any "growth" here must be checked for wavenumber selectivity.
+!
+! Setup (the classical Eady (1949) front):
+!   * 250 km × 250 km, periodic in x, walls north/south
+!     (50 × 50 cells @ 5 km), H = 1000 m, flat bottom.
+!   * 10 layers, ~100 m thick, z* coordinate.
+!   * f-plane Coriolis at f = 1e-4 s^-1 (midlatitude, ~43°N).
+!   * Linear EOS: alpha_T = 0.17 kg/m³/K, rho_0 = 1035.
+!   * Eady IC:
+!       T(y, z) = T_ref + (dT/dz) · z + (dT/dy) · (y - y_mid)
+!                                                  + ε(i, j, k)
+!       with dT/dz = 0.01 K/m (=> N² = 1.61e-5 s^-2, N = 4.0e-3 s^-1)
+!            dT/dy = -2e-5 K/m (5 K cold-to-north over 250 km)
+!            ε     = uniform random ±0.5 mK perturbation, seed = 12345
+!              (compiler RNG: the realisation differs gfortran vs nvfortran;
+!               the mode's growth rate does not)
+!   * u_face_x(z) = (dU/dz) · (z - z_mid) with
+!       dU/dz = g · alpha_T / (rho_0 · f) · |dT/dy| = 3.22e-4 s^-1
+!     (zero-mean shear, ±0.16 m/s, jet centred at z = -500 m)
+!   * No wind, no surface flux, no bottom drag, no vertical mixing closure.
+!
+! Analytical scales:
+!   Deformation radius   Rd = N H / f = 40.1 km  (8 cells @ 5 km)
+!   Richardson number    Ri = N² / (dU/dz)²      = 155
+!   Eady growth rate     sigma_max = 0.31 f / √Ri = 2.49e-6 s^-1
+!     (unbounded domain, at lambda = 3.9 Rd = 157 km)
+!   In THIS channel the zonal wavenumber is quantised (250 / kx km) and
+!   the gravest cross-channel structure is sin(pi y / L_y), so the mode
+!   that grows is kx = 2 (125 km) with
+!     sigma = k (Λ H / μ) sqrt[(coth(μ/2) - μ/2)(μ/2 - tanh(μ/2))],
+!     μ = Rd sqrt(k² + (pi/L_y)²) = 2.08  =>  sigma = 1.98e-6 s^-1
+!     (kx = 1: 1.95e-6; kx >= 3 are Eady-stable, μ > 2.4).
+!   e-folding time       1/sigma = 5.8 days
+!
+! Expected outcome (what the stability suite gates on):
+!   * max|v| ~ noise floor (~1e-4 m/s) to day ~10, then exponential;
+!     from day ~25 the kx = 2 mode holds ~50% of max|v| and the console
+!     `[diag] v` extrema grow at sigma = 1.9-2.0e-6 (gate: [1.5, 2.5] e-6,
+!     fit over days 30-60). max|v| reaches ~0.2 m/s at day 60 (1000-2000x
+!     its day-1 value; gate: >= 300x).
+!   * En (total KE, dominated by the ±0.16 m/s jet, 4.3e-3 m²/s²) drifts
+!     DOWN ~6% to day 45 (wall drain of the jet) and turns up only at
+!     day ~50 (6.9e-3 at day 60) — do not read En as the growth signal.
+!   * One-and-a-half to two zonal wavelengths of the 125 km mode across
+!     the channel in v, SSH and T at z = -500 m.
+!   * Mass, S, T means conserved to ~1e-14 relative; MaxCFL <= 0.05.
+!
+! Diagnostic interpretation:
+!   * Growth rate too high, or growth that is the SAME at every zonal
+!     wavenumber → spurious source (the resting-state growth above, an
+!     EOS sign error, Coriolis-adv KE non-conservation, BPG residual).
+!   * Growth rate too low → over-damping (nu_h, Smag_AH, PPM truncation),
+!     or a fit window that still contains the noise floor.
+!   * Sub-µHz oscillation superimposed on En = inertia-gravity waves from
+!     the unbalanced IC (no balanced eta); period ~2π/f = 17 hours.
+!
+! Expected wallclock single V100: ~2 min for 60 days.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 50
+   ny     = 50
+   dx     = 5000.0
+   dy     = 5000.0
+   nghost = 3            ! periodic-x requires nghost >= 3 (PPM + biharmonic
+                         ! stencil depth at the seam)
+/
+
+! Reentrant channel: periodic in x (the classical Eady configuration),
+! walls north/south.  Removes the wall quantisation of the zonal
+! wavenumber that the closed-basin variant suffered.
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+/
+
+&time_nml
+   t_end        = 5184000.0   ! 60 days — the clean linear-growth window.
+                              ! The front's nonlinear collapse past day
+                              ! ~65 is NOT integrable at this dt (header).
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&vcoord_nml
+   vcoord_type = "zstar"        ! Anchors layers in z while allowing
+                                ! η to evolve — keeps the Eady IC
+                                ! analytically consistent across remap.
+/
+
+&tracer_nml
+   ! These are overwritten by the Eady IC overlay below; we only set
+   ! S since salinity is not part of the Eady setup (uniform).
+   initial_salinity    = 35.0
+   initial_temperature = 10.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config       = "flat"
+   max_depth   = 1000.0
+   wind_config       = "constant"
+   coriolis_beta     = 0.0          ! f-plane
+   coriolis_y_ref    = 0.0
+/
+
+&ocean_ic_nml
+   ic_config         = "eady"
+   ! Realistic seawater EOS — required for Eady's thermal-wind
+   ! balance to produce a physically meaningful jet.  Defaults
+   ! (matching the eos slot defaults) are 1000× too small.
+   alpha_T     = 0.17
+   rho_0       = 1035.0
+   ! Eady-front IC parameters.  See header for derived scales.
+   eady_dT_dz        = 0.01
+   eady_dT_dy        = -2.0e-5    ! The front the analytical scales describe
+                                  ! (Ri = 155, e-folding 5.8 d). Weaker
+                                  ! fronts do not clear the noise seed in
+                                  ! a useful time — see header.
+   eady_T_ref        = 10.0
+   eady_pert_amp     = 1.0e-3
+   eady_pert_seed    = 12345
+/
+
+&ocean_pgf_nml
+   maxvel        = 2.0         ! Velocity-clamp sanity cap (m/s); never
+                               ! reached inside the 60-day window (max|u|
+                               ! 0.21 m/s at day 60).
+/
+
+&ocean_hvisc_nml
+   ! Dissipation stack.  The Smagorinsky pair controls the IG-wave
+   ! transient of the unbalanced IC and the grid scale; the constant
+   ! Laplacian floor is what holds the resting-state growth down (header)
+   ! and MUST NOT be raised to the point of competing with the mode:
+   ! nu_h k² at 125 km is 5e-8 at 20 (2.5% of sigma), 2.5e-7 at 100.
+   nu_h          = 20.0        ! Laplacian momentum visc (m²/s); was 100
+   nu_4          = 5.0e8       ! Background biharmonic (m⁴/s)
+   lateral_closure = "smagorinsky"  ! Flow-aware Laplacian
+   c_smag        = 0.15        ! MOM6 default
+   smag_ah       = .true.      ! Flow-aware biharmonic
+   smag_bi_const = 0.06        ! MOM6 SMAG_BI_CONST default
+   nu_4_max      = 5.0e8       ! Hard biharm cap (CFL-bounded)
+/
+
+&ocean_vmix_nml
+                                     ! gravity-wave CFL ≈ 0.6 @ H=1000 m
+   use_closure  = .false.       ! Pure dyn-core test
+   use_kpp      = .false.
+/
+
+&ocean_bt_nml
+   n_inner           = 20            ! dt_inner = 30 s
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "eady"
+   dt_out   = 21600.0     ! 6-hourly snapshots → 240 outputs
+/
+
+&output_nml
+   output_dir      = "./out_eady"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0         ! Daily progress
+/

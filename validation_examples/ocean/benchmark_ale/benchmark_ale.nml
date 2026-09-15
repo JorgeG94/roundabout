@@ -1,0 +1,133 @@
+! ===========================================================================
+! rdb "benchmark_ALE" — our target ALE integration benchmark.
+!
+! Mirrors MOM6's ocean_only/benchmark_ALE (spherical seamount, stratified,
+! wind-forced, full physics stack on a small cheap grid) AS CLOSELY AS our
+! CURRENT capability allows.  It is the north-star coupled-physics validation
+! we grow toward: each capability we add (FNC1 stretched z*, GM/Redi/MEKE,
+! Henyey background, ...) flips another knob from TODO to ON.  See README.md
+! for the full MOM6 knob -> rdb status checklist.
+!
+! Grid matches MOM6 EXACTLY: 120 x 60 x 75, a 100 deg x 50 deg sector from
+! SOUTHLAT=-45, MAXIMUM_DEPTH=5500 m, DT=1800/DT_THERM=3600.  We run 5 days
+! (MOM6 DAYMAX is 0.5) so the wind-driven gyre spins up.  The remaining
+! differences vs MOM6 are the physics gaps tracked in README.md (each
+! capability we add — FNC1 stretched z*, GM/Redi/MEKE, Henyey, ... — flips
+! another knob from TODO to ON).
+!
+! Long-time fields (t_end, dt_out, status_interval) are written in DAYS via
+! &time_nml time_unit="day"; the CFL-bounded dt_fixed stays in seconds.
+! ===========================================================================
+&sim_nml
+   sim_type = "ocean"
+/
+&grid_nml
+   nx     = 120
+   ny     = 60
+   dx     = 0.83333     ! dlon (deg) = LENLON 100 / NIGLOBAL 120
+   dy     = 0.83333     ! dlat (deg) = LENLAT  50 / NJGLOBAL  60
+   nghost = 3
+/
+&ocean_grid_nml
+   grid_config = "spherical"
+   lon_west    = 0.0
+   lat_south   = -45.0     ! MOM6 SOUTHLAT
+/
+&time_nml
+   time_unit = "day"       ! t_end / dt_out / status_interval read in days
+   t_end     = 5.0         ! 5-day spin-up (MOM6 DAYMAX is 0.5; we run longer)
+   dt_fixed  = 1800.0      ! MOM6 DT (stays in seconds — CFL-bounded)
+/
+&nonhydrostatic_nml
+   nz_layers = 75          ! MOM6 NK
+/
+&physics_nml
+   coriolis_f = 0.0        ! beta-plane set via ocean_topo_nml
+/
+&tracer_nml
+   initial_temperature = 18.0    ! MOM6 INITIAL_SST
+   initial_salinity    = 33.0    ! MOM6 INITIAL_SSS
+   T_init_surface      = 18.0    ! stratified: warm light surface ...
+   T_init_bottom       = 9.0     ! ... to cold dense bed (~MOM6 INITIAL_T_RANGE=-9)
+/
+&ocean_eos_nml
+   eos = "roquet_spv"            ! Roquet TEOS-10 (~ MOM6 ROQUET_RHO)
+/
+&vcoord_nml
+   vcoord_type = "zstar_sigma"   ! LITE.  TODO: "hycom" + FNC1 stretch once GVC merges
+   ! remap_method = "ppm"        ! TODO: "pqm" once P4 merges
+   ! regrid_time_scale = 0.0     ! TODO: tune once P5 merges (grid time-filter)
+/
+&ocean_topo_nml
+   topo_config    = "seamount"   ! MOM6 TS_CONFIG=seamount (benchmark topo deferred)
+   max_depth      = 5500.0       ! MOM6 MAXIMUM_DEPTH
+   edge_depth     = 200.0
+   slope_scale    = 25000.0
+   wind_config    = "2gyre"      ! ~ MOM6 WIND_CONFIG=gyres
+   taux_magnitude = 0.1          ! ~ MOM6 TAUX_SIN_AMP
+   coriolis_beta  = 2.3e-11
+   coriolis_y_ref = 0.0
+/
+&ocean_pgf_nml
+   form        = "fv_mom6"
+   mass_weight = .true.          ! MOM6 MASS_WEIGHT_IN_PRESSURE_GRADIENT
+/
+&ocean_coriolis_nml
+   form = "sadourny"             ! MOM6 SADOURNY75_ENSTRO
+/
+&ocean_bt_nml
+   bebt         = 0.2            ! MOM6 BEBT
+   auto_n_inner = .true.
+/
+&ocean_hvisc_nml
+   smag_ah = .true.              ! MOM6 SMAGORINSKY_AH
+   nu_h    = 0.0
+/
+&ocean_bdrag_nml
+   form         = "quadratic"
+   hbbl         = 10.0           ! MOM6 HBBL
+   channel_drag = .true.         ! MOM6 CHANNEL_DRAG
+   cdrag_side   = 2.5e-3
+/
+&ocean_vmix_nml
+   use_kpp        = .false.      ! EPBL replaces KPP below
+   dt_therm_ratio = 2            ! MOM6 DT_THERM=3600 / DT=1800
+/
+&ocean_epbl_nml
+   enable = .true.               ! MOM6 ENERGETICS_SFC_PBL
+   use_lt = .true.               ! MOM6 USE_LA_LI2016 (Langmuir)
+/
+&ocean_kappa_shear_nml
+   enable = .true.               ! MOM6 USE_JACKSON_PARAM
+/
+&ocean_tracers_nml
+   enable_ideal_age = .true.     ! MOM6 USE_IDEAL_AGE_TRACER
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "benchmark_ale"
+   dt_out   = 0.25         ! days (time_unit="day")
+/
+&output_nml
+   output_dir     = "./out_benchmark_ale"
+   output_to_file = .false.
+/
+&logging_nml
+   log_level       = "info"
+   status_interval = 0.125        ! days (time_unit="day")
+/
+
+! ---------------------------------------------------------------------------
+! GAPS vs MOM6 benchmark_ALE (NOT YET in rdb — the work-toward list):
+!   FNC1 stretched z* resolution     (we use uniform dsig)
+!   THICKNESSDIFFUSE / GM            (mesoscale eddy bolus transport)
+!   USE_STORED_SLOPES (isopycnal)    (Redi neutral diffusion)
+!   USE_MEKE                          (eddy kinetic energy)
+!   USE_VARIABLE_MIXING / RESOLN_*    (Visbeck-style scaled mixing)
+!   HENYEY_IGW_BACKGROUND             (lat-dependent background diffusivity)
+!   USE_LOTW_BBL_DIFFUSIVITY          (law-of-the-wall BBL)
+!   RESTOREBUOY / SST-SSS restoring   (partial: have q_heat/q_salt)
+!   FRAZIL / TFREEZE                  (freezing)
+!   USE_BODNER23                      (we have FK11 MLE)
+!   TOPO_CONFIG="benchmark"           (we use "seamount")
+! ---------------------------------------------------------------------------

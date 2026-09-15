@@ -1,0 +1,117 @@
+! Two-layer (Phillips) baroclinic instability — periodic-x channel.
+! The canonical MINIMAL baroclinic-instability test: an interior PV-jump
+! instability (NOT Eady boundary edge-waves) on a thermal-wind front, so
+! eddies fill the channel interior.  Fast, analytically anchored, and
+! cleanly resolved (Ld ~ 14 km ~ 7 cells at 2 km) so a coherent eddy field
+! is unambiguously distinguishable from grid noise.
+!
+! This is the eddy-generation regression the suite was missing: the
+! flat-bottom double-gyre (eddy_test) is only validated through its laminar
+! spin-up and is marginal at 5 km; here the deformation radius is well
+! resolved and the instability is interior, so "do we still get physical
+! eddies" is a clean yes/no.
+!
+! EXPECTED SIGNATURE (check the console stats; no NetCDF needed for this):
+!   * En sits at the mean-front baseline (~3.2e-3) through the linear phase
+!   * exponential growth, onset ~day 18-22, then SATURATION (roll-up into
+!     a coherent vortex train) by ~day 35-40 at En ~ 0.08-0.10
+!   * Mass / Salt / Heat conserved to ~1e-13 relative the whole way
+!   * MaxCFL stays bounded (~0.3) — NO monotonic-growth-to-CFL-trip
+!     (that would be a numerical instability, not physical eddies)
+! Unforced (no surface restoring): a spin-down problem — the eddies consume
+! the front's available potential energy, so after saturation En slowly
+! decays.  Restoring (the SST-restore fast-follow) would make it steady.
+!
+! Run + animate:
+!   # first load your NVHPC + NetCDF toolchain (module load / spack / conda;
+!   # see environments/) -- one toolchain per shell, never stack two
+!   CUDA_VISIBLE_DEVICES=<gpu> ./build/rdb validation_examples/ocean/baroclinic_channel/baroclinic_2layer.nml
+!   python validation_examples/ocean/baroclinic_channel/animate_baroclinic.py \
+!          out_bci_2layer/bci_2layer_rank_000000.nc
+! ~3 min for 40 days on a single V100 (192 x 96 x 2 = 37k cells).
+
+&sim_nml
+   sim_type = "ocean"
+/
+&grid_nml
+   nx = 192
+   ny = 96
+   dx = 2000.0
+   dy = 2000.0
+   nghost = 3            ! periodic-x needs nghost >= 3 (PPM + biharmonic seam)
+/
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+/
+&time_nml
+   t_end        = 3456000.0   ! 40 days
+   dt_fixed     = 200.0
+   cfl_interval = 1
+/
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+&nonhydrostatic_nml
+   nz_layers = 2
+/
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 10.0
+/
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 1000.0
+   wind_config    = "constant"
+   coriolis_beta  = 0.0          ! f-plane
+   coriolis_y_ref = 0.0
+/
+&ocean_ic_nml
+   ic_config      = "eady"       ! thermal-wind front; with nz=2 = Phillips 2-layer
+   alpha_T        = 0.17
+   rho_0          = 1035.0
+   eady_dT_dz     = 0.01
+   eady_dT_dy     = -2.0e-5      ! strong front (fast growth); -5e-6 is the gentle eady.nml value
+   eady_T_ref     = 10.0
+   eady_pert_amp  = 1.0e-2
+   eady_pert_seed = 12345
+/
+&ocean_pgf_nml
+   maxvel = 2.0
+/
+&ocean_hvisc_nml
+   nu_h = 100.0
+/
+&ocean_bt_nml
+   ! Fixed n_inner=24 satisfies the 2-D external-gravity-wave CFL at H=1000m
+   ! (c_ext~99 m/s, dt_bt=8.3s, CFL~0.58) independent of build — works whether
+   ! or not the auto_n_inner 2-D-CFL fix (feat/ocean-bt-cfl-2d) is merged.
+   ! auto_n_inner=.true. + cfl_bt_safety=0.65 also works once that fix lands.
+   n_inner = 24
+   bebt    = 0.2                 ! barotropic velocity projection — stabilizes the fast mode
+/
+&ocean_diag_nml
+   ! Kept lean via coarse cadence (12-hourly) — the dominant I/O lever.
+   ! Only nz=2 layers here so layer output is tiny; the animation uses the
+   ! surface (top) layer.  (For deep configs the heavy I/O is frame count x
+   ! layers; coarsen dt_out.)
+   enabled  = .true.
+   filename = "bci_2layer"
+   dt_out   = 43200.0            ! 12-hourly
+   vgrid    = "layer"
+/
+&output_nml
+   output_dir     = "./out_bci_2layer"
+   output_to_file = .false.
+/
+&logging_nml
+   status_interval = 43200.0     ! 0.5 day — En / conservation / MaxCFL trace
+/

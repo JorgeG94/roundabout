@@ -1,0 +1,129 @@
+! PGF-form coverage: `mont`, the Boussinesq Montgomery-potential PGF.
+!
+! Purpose is coverage, not science. `mont` and `fv_wright` were selected by
+! ZERO shipped namelists, which is how each came to carry a defect nobody saw.
+! These two cases exercise them so a regression is caught.
+!
+! !! NOTE: this file and its `fv_wright` sibling originally shipped WITHOUT an
+! !! `&ocean_pgf_nml` group at all, so both silently ran the then-`fv_lite`
+! !! DEFAULT (the default is `mont` as of 2026-09-13; this file pins its form
+! !! EXPLICITLY regardless -- its job is to select a form, not to track the
+! !! default).
+! !! That is why they appeared to "agree" — they were the same run. The group
+! !! below is what actually selects the form; do not delete it.
+!
+! THE ASSERTION: `mont` must agree with `fv_lite`. On this flat-bed config the
+! two now track each other to every printed digit over the whole 5 days,
+! ending at En = 1.220E-05 (fv_mom6 lands on the same value; `fv_wright`
+! deliberately differs at 2.793E-05 because it re-evaluates in-situ density
+! along the integration path).
+!
+! `form="mont"` — the Boussinesq Montgomery potential
+!
+!     M = p/rho0 + rho_star*z,        rho_star = g*rho_layer/rho0
+!
+! which is CONSTANT through a layer of uniform density, so ONE horizontal
+! difference of M is the acceleration: M already carries g*z. Built by a
+! vertical recursion seeded at the free surface (bottom-up here: k=1 is the
+! bed), then differenced per face, plus a `z_eff`-weighted horizontal-density
+! term. On columns of equal layer thickness the whole expression reduces
+! ALGEBRAICALLY to `fv_lite`; over sloping bathymetry it is the geopotential
+! inside M that makes the difference legitimate.
+!
+! HISTORY: before 2026-09-12 this form had no geopotential term at all -- it
+! differenced layer-centre pressure along the coordinate surface and stopped.
+! That was exact only where dz = 0 across a face, and NaN'd on every sloping
+! case tried (lagrangian seamount, zstar_sigma seamount, zstar double_gyre)
+! AND on this flat-bed sigma case, where the free surface alone makes the
+! layer thickness vary across a face. It is now general-purpose: valid over
+! sloping bathymetry and every vertical coordinate, and EXACT at rest in
+! isopycnal columns wherever a layer is present on both sides of a face.
+!
+! Derived from eddy_test_quick.nml, shrunk to 128x128 over 5 days -- this is
+! a form-coverage case, not an eddy study.
+!
+! Quicker version of `eddy_test.nml` — 10 days instead of 30, ~10 km
+! resolution instead of 5 km.  Use this to first verify spin-up
+! before the longer eddy-formation run.
+!
+! At 10 km the Rossby radius (~33 km) is ~3 cells across — eddy-
+! permitting but not eddy-resolving.  WBC spin-up should still be
+! visible by day 10 (broadening jet, SSH dipole), but eddy shedding
+! won't be developed yet.  For real eddies use `eddy_test.nml`.
+!
+! Expected wallclock single V100: ~5-7 min for 10 days.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 128
+   ny     = 128
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 432000.0    ! 5 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   T_init_surface      = 20.0
+   T_init_bottom       = 5.0
+   initial_salinity    = 35.0
+/
+
+&ocean_topo_nml
+   topo_config       = "flat"
+   max_depth   = 4000.0
+   wind_config       = "2gyre"
+   taux_magnitude    = 0.1
+   coriolis_beta     = 1.76e-11
+   coriolis_y_ref    = 750000.0    ! Mid-domain (1500/2 km)
+/
+
+&ocean_hvisc_nml
+   nu_h        = 1.0e4       ! Munk BL ~80 km — well resolved at 10 km
+/
+
+&ocean_pgf_nml
+   form = "mont"
+/
+
+&ocean_bt_nml
+   n_inner           = 30
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "pgf_mont"
+   dt_out   = 21600.0   ! Every 6 hr — 40 frames
+/
+
+&output_nml
+   output_dir      = "./out_pgf_mont"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 43200.0       ! Every 12 hr
+/

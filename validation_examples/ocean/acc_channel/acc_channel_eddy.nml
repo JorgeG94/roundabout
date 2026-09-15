@@ -1,0 +1,217 @@
+! Idealized ACC, EDDY-RESOLVING stress-test variant: the same 24 x 14 deg
+! channel as acc_channel.nml refined to 0.1 deg (~8 km zonal at 45 S)
+! with 50 layers (60 m) => 240 x 140 x 50 = 1.7M cells.  Same physics
+! stack (spherical metrics + planetary f, periodic-x, EPBL, kappa-shear,
+! Smagorinsky + biharmonic); nu_h floor dropped to 500 (eddy-resolving —
+! Smag carries the closure), dt_fixed = 300 s (baroclinic; the
+! barotropic fast loop subcycles via auto_n_inner).
+!
+! This is the single-GPU compute stress test.
+!
+! A RE-ENTRANT (periodic-x) SPHERICAL channel in the Southern Ocean
+! (~45 S) with a seamount ridge mid-channel, exercising in ONE run:
+!   * spherical curvilinear metrics + PLANETARY Coriolis
+!     (f = 2*Omega*sin(lat), southern hemisphere => f < 0; the closures
+!      take |f|),
+!   * periodic-x OBC (re-entrant channel) + walls north/south,
+!   * EPBL surface boundary layer (RH18 energetics-based PBL),
+!   * kappa-shear (JHL08) interior mixing,
+!   * the production envelope: linear EOS (alpha_T=0.2, matching the
+!     epbl_mld thermal pattern), Smagorinsky KH+AH, zstar vcoord,
+!     distributed linear bottom drag, the diag manager.
+!
+! Forcing: steady zonal (westerly) wind stress 0.12 Pa + weak surface
+! cooling (-40 W/m^2) so EPBL has BOTH wind and convective TKE.  The
+! wind is depth-uniform "constant" (tau_x from &physics_nml); a
+! sinusoidal jet profile would be more ACC-like but is a follow-up
+! (no kernel exists for a meridional tau_x(y) ramp on the ocean path
+! beyond the closed-basin 2gyre cosine — see README caveats).
+!
+! Domain: lon_west=0, 24 deg lon x 14 deg lat, lat_south=-52
+! (centre ~-45 S), 0.5 deg resolution => 48 x 28 cells, nghost=3
+! (periodic-x needs nghost>=3 for the PPM + biharmonic seam stencil).
+! nz=16 over H=3000 m; ridge peak rises to 1500 m (50% of depth).
+!
+! Run:
+!   cd validation_examples/ocean/acc_channel
+!   # first load your NVHPC + NetCDF toolchain (module load / spack / conda;
+!   # see environments/) -- one toolchain per shell, never stack two
+!   CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel.nml
+!
+! See acc_channel_quiescent.nml for the resting-state tier-1.5 trap
+! (same grid/bathy/BCs, zero forcing — must stay at rest).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   ! In spherical mode dx/dy are reinterpreted as dlon/dlat in DEGREES.
+   nx     = 240
+   ny     = 140
+   dx     = 0.1
+   dy     = 0.1
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = 0.0
+   lat_south       = -52.0
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"
+   omega           = 7.2921e-5
+/
+
+! Re-entrant channel: periodic in x, solid walls north/south.
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+/
+
+&time_nml
+   t_end        = 1.0
+   time_unit    = "day"
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! Planetary Coriolis comes from &ocean_grid_nml; coriolis_f here is
+   ! unused by the metric f-fill but kept non-zero for any legacy guards.
+   coriolis_f    = 1.0e-4
+   ! Steady zonal westerly wind stress (Pa) consumed by wind_config="constant".
+   wind_stress_x = 0.12
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   ! z*-lite: layers track in z while eta evolves; pairs with the
+   ! conservative ALE remap so the seamount ridge does not destroy the
+   ! lower layers.  (sigma is the flat-bottom fallback if z* is unstable
+   ! over the ridge — see README.)
+   vcoord_type = "zstar"
+/
+
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 8.0
+   ! Linear T(z): 2 degC at the bed (k=1) -> 8 degC at the surface (k=nz)
+   ! over 3000 m.  With alpha_T=0.2 => N^2 ~ 4e-6 1/s^2, a realistic
+   ! Southern-Ocean stratification.
+   T_init_surface = 8.0
+   T_init_bottom  = 2.0
+/
+
+&ocean_ic_nml
+   ! Linear-EOS thermal expansion (kg/m^3/K) — matches the epbl_mld
+   ! basins' thermal pattern; the ocean EOS + EPBL energetics read this.
+   alpha_T = 0.2
+   rho_0   = 1035.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   ! Weak surface cooling (W/m^2, positive down => negative = heat loss).
+   ! Gives EPBL a convective-TKE source on top of the wind-driven mixing.
+   q_heat = -40.0
+/
+
+&ocean_topo_nml
+   ! Seamount ridge: a centred Gaussian bump.  In spherical mode the
+   ! setter's x/y lengths are in DEGREES, so edge_depth (peak depth) and
+   ! slope_scale (Gaussian half-width, here ~3 deg) are degree-scaled.
+   ! peak rises to 1500 m over the 3000 m channel (50% of depth).
+   topo_config    = "seamount"
+   max_depth      = 3000.0
+   edge_depth     = 1500.0
+   slope_scale    = 3.0
+   ! Constant zonal wind (tau_x from &physics_nml above).
+   wind_config    = "constant"
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   ! Takes the `mont` default.  This used to pin fv_lite because
+   ! "Montgomery hits the maxvel clamp on the stratified-at-rest ridge
+   ! test" — that referred to the OLD `mont`, which carried no
+   ! geopotential term and was valid only where dz = 0 across a face.
+   ! `mont` is a real Montgomery potential as of the PGF fix, and this
+   ! case is now bit-comparable under either form: En 2.091E-05 /
+   ! MaxCFL 0.00043 at day 1 for acc_channel, En 1.647E-05 /
+   ! MaxCFL 0.00382 for acc_channel_eddy, identical to 4 s.f. between
+   ! fv_lite and mont, with zero clamp trips.
+   maxvel = 2.0
+/
+
+&ocean_hvisc_nml
+   nu_h            = 500.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   kh_vel_scale    = 3.0e-3
+   ah_max          = 1.0e4
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_bg         = 0.0
+   nu_4_max        = 1.0e12
+/
+
+&ocean_bdrag_nml
+   form          = "linear"
+   r             = 2.5e-5
+   hbbl          = 10.0
+   bg_vel        = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_vmix_nml
+   use_closure    = .true.   ! required by both EPBL and kappa-shear
+   use_kpp        = .false.  ! EPBL replaces the KPP overlay
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1
+/
+
+&ocean_epbl_nml
+   enable             = .true.
+   mstar_scheme       = "om4"
+   mld_use_prev_guess = .true.
+   tke_diags          = .false.
+   use_lt             = .false.   ! one-knob LT variant: set .true. (LF17 wind-only)
+/
+
+&ocean_kappa_shear_nml
+   enable = .true.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&ocean_diag_nml
+   ! SSH, T, S, u, v, KE are registered by default; MLD_EPBL + Kd_EPBL
+   ! register automatically when EPBL is on, Kd_KSHEAR when kappa-shear
+   ! is on.
+   enabled  = .true.
+   filename = "acc_channel_eddy"
+   dt_out   = 1.0     ! one frame per day
+/
+
+&output_nml
+   output_dir     = "./out_acc_channel_eddy"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0
+/

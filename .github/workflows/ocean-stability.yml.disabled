@@ -1,0 +1,120 @@
+# Tier-2 ocean stability gate.
+#
+# Runs on a STANDARD GitHub-hosted runner: no NVIDIA hardware, gfortran (not
+# NVHPC), 2-4 cores.  That constraint is the whole reason tier 2 exists --
+# see tests/regression/README.md "The two tiers".
+#
+# What it gates:
+#   1. the unit/analytical test suite (`ctest -R rdb`),
+#   2. the tier-2 stability sweep -- every shipped ocean namelist run as a
+#      dimensionless-number-preserving downscaled twin, asserting no NaN,
+#      closed budgets, no energy growth in an unforced case, and bounded CFL.
+#
+# Tier 1 (full scale, GPU, NVHPC) is NOT wired in here: a hosted runner has no
+# GPU.  Run it locally or on a self-hosted GPU box -- see the README.
+name: ocean stability (tier 2)
+
+# TRIGGERS ARE DELIBERATELY MANUAL-ONLY.
+#
+# This workflow is complete and verified (49 cases, ~2.5 min wall on 4 workers
+# locally), but automatic triggers are commented out so it consumes NO GitHub
+# Actions minutes until someone decides to switch it on. Run it by hand from
+# the Actions tab ("Run workflow"), or uncomment the push/pull_request blocks
+# below to make it a real gate.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tier2:
+    name: gfortran CPU build + tier-2 stability sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # NetCDF/HDF5 from apt -- a hosted runner has no module environment.
+      - name: Install toolchain and NetCDF
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gfortran cmake ninja-build \
+            libnetcdf-dev libnetcdff-dev libhdf5-dev
+
+      - name: Report toolchain
+        run: |
+          gfortran --version | head -1
+          cmake --version | head -1
+          nf-config --version || true
+          nproc
+
+      # Cache the build tree so the sweep, not the compile, dominates the job.
+      - name: Cache build tree
+        uses: actions/cache@v4
+        with:
+          path: build_ci
+          key: build_ci-${{ runner.os }}-gfortran-${{ hashFiles('CMakeLists.txt', 'src/**/*.F90', 'cmake/**') }}
+          restore-keys: |
+            build_ci-${{ runner.os }}-gfortran-
+
+      - name: Configure
+        run: |
+          cmake -B build_ci -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRDB_ENABLE_GPU=OFF \
+            -DRDB_ENABLE_MPI=OFF \
+            -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build_ci -j "$(nproc)"
+
+      # Unit + analytical tests.  NEVER `-j N` here: several tests use
+      # non-thread-safe HDF5 and the project forbids parallel ctest.
+      - name: Unit and analytical tests (ctest -R rdb)
+        working-directory: build_ci
+        env:
+          OMP_NUM_THREADS: "1"
+        run: ctest -R rdb --output-on-failure
+
+      # The downscale rules are a manifest-level invariant: a twin that
+      # violates them is not the same test as its tier-1 parent, so check
+      # them before spending any wallclock on runs.
+      - name: Validate tier-2 downscale rules
+        run: python3 tests/regression/downscale.py
+
+      # Who tests the test: replays the MEASURED 2026-09-11 failure signatures
+      # through the assertions and checks each is classified correctly --
+      # including that the weaker gates (an absolute energy ceiling, a
+      # whole-run growth fit) genuinely do NOT see the instability, which is
+      # why the windowed rate exists. Runs no model; a second or two.
+      - name: Self-test the stability assertions
+        run: python3 tests/regression/stability.py --self-test
+
+      - name: Tier-2 stability sweep
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          python3 tests/regression/stability.py \
+            --tier 2 --backend cpu --build-dir build_ci \
+            --jobs "$(nproc)" \
+            --out tmp_local_artifacts/tier2_results.json
+
+      - name: Upload tier-2 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tier2-stability-results
+          path: |
+            tmp_local_artifacts/tier2_results.json
+            tmp_local_artifacts/stability/tier2/**/run.log
+          retention-days: 14
+          if-no-files-found: warn

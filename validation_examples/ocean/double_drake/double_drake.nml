@@ -1,0 +1,148 @@
+! Double Drake — static land-mask INTEGRATION SHOWCASE (CHUNK B).
+!
+! Ferreira, Marshall & Campin (2010, J. Climate): an idealised global
+! ocean with TWO thin meridional wall-continents 90 degrees of longitude
+! apart, each running from the north pole down to ~35 S, leaving a
+! reentrant circumpolar (Drake-Passage analogue) channel to the south.
+! This exercises the full land-mask stack at once on a SPHERICAL,
+! PERIODIC-X grid: interior coastlines, the periodic-x seam wall (one
+! continent sits on the x=0 = x=360 seam), and the reentrant channel.
+!
+! Grid:
+!   * Spherical lon-lat sector, FULL 360 deg periodic in x.
+!     nx = 72, dx (=dlon) = 5 deg  ->  72*5 = 360 deg (periodic seam).
+!     ny = 24, dy (=dlat) = 5 deg, lat_south = -60  ->  -60..+60 deg.
+!     nghost = 3 (periodic-x: PPM + biharmonic + Flather stencils).
+!   * grid_config = "spherical": dx/dy are reinterpreted as degrees;
+!     cell metrics + planetary f come from the lon-lat generator.
+!
+! Bathymetry (topo_config = "double_drake"):
+!   * Flat 4000 m ocean everywhere except two one-cell-wide meridional
+!     walls at i_phys = 1 (western seam) and i_phys = nx/4 = 18 (90 deg
+!     across).  Each wall spans the NORTHERN (1 - 2*slope_scale) fraction
+!     of the y-axis; slope_scale = 0.2 -> southern 40 % (~ below -12 deg
+!     on this -60..+60 grid; tune lat_south/slope_scale for the Ferreira
+!     ~35 S channel top) is the open reentrant channel.
+!   * Walls reach the pole through the north y-ghosts; the seam wall is
+!     land in the periodic-x halo (wet_u derived from the halo-wrapped
+!     wet_mask, R5a) so the seam masks correctly.
+!
+! Forcing: zonal wind (eastward) spins up gyres in each basin + an ACC-
+! like jet through the southern channel.  Planetary f from the spherical
+! metric gives realistic rotation; free-slip coasts.
+!
+! Expected outcome (orchestrator GPU check):
+!   * Runs STABLE (no NaN, no blow-up) for the configured horizon — the
+!     headline: the mask makes the two continents + seam wall hard,
+!     free-slip, no-normal-flow boundaries and a clean reentrant channel.
+!   * No-normal-flow at every wall face; wet-domain mass conserved.
+!   * The periodic-x seam continent blocks zonal flow exactly (no leak
+!     across the x=0=360 seam), while the southern channel stays open
+!     (a coherent circumpolar jet develops).
+!   * A blow-up, a seam leak, or flow through a wall = a CHUNK-B / R5a
+!     bug.
+!
+! 72 x 24 x 4 = ~7k cells; a few-second showcase.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 72
+   ny     = 24
+   dx     = 5.0          ! = dlon in degrees (spherical)
+   dy     = 5.0          ! = dlat in degrees
+   nghost = 3            ! periodic-x requires nghost >= 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = 0.0
+   lat_south       = -60.0
+   coriolis_scheme = "planetary"
+/
+
+&time_nml
+   t_end        = 864000.0    ! 10 days spin-up
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 0.0        ! ignored: spherical+planetary fills f from geolat
+   wind_stress_x = 0.1
+   wind_stress_y = 0.0
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   north = "wall"
+   south = "wall"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 4
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   T_init_surface      = 0.0
+   T_init_bottom       = 0.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h    = 20000.0     ! coarse spherical cells need broad Laplacian smoothing
+   no_slip = .false.     ! free-slip coasts
+/
+
+&ocean_bdrag_nml
+   form   = "linear"
+   r      = 2.5e-5
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_topo_nml
+   topo_config    = "double_drake"
+   max_depth      = 4000.0
+   slope_scale    = 0.2       ! wall half-fraction -> southern 40 % open channel
+   wind_config    = "constant"
+   taux_magnitude = 0.1
+   coriolis_beta  = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+   n_inner = 40
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "double_drake"
+   dt_out   = 86400.0
+/
+
+&output_nml
+   output_dir     = "./out_double_drake"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/

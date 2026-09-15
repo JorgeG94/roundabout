@@ -1,0 +1,252 @@
+! ACC channel — SHORTWAVE-PENETRATION benchmark.  The kitchen-sink
+! full-physics stack, but with a POSITIVE (solar) surface heat flux and
+! C9 two-band shortwave penetration ON (&ocean_thermo_nml sw_pen_frac),
+! so the penetrating SW warms the upper water column instead of all of
+! Q_heat landing in the surface layer.  Same re-entrant spherical
+! Southern-Ocean channel as acc_channel_kitchensink.nml (spherical
+! metrics + planetary f, periodic-x, seamount ridge, Smagorinsky +
+! biharmonic, zstar + ALE remap, linear bottom drag, EPBL + kappa-shear
+! + Fox-Kemper + geothermal), on a MODERATE grid so a profiling pass
+! turns over in seconds.
+!
+! NOTE: SW deposited below the EPBL boundary layer reduces the
+! destabilizing surface buoyancy flux the PBL would otherwise see — the
+! B_0 coupling MOM6 wires via optics is a documented v1 gap (this bench
+! deposits straight to T).  Coverage/profiling bench, NOT a validation
+! target — use it to exercise + profile the SW kernel in a full run.
+!
+! New physics enabled ON TOP of the acc_channel_eddy stack:
+!   * shortwave penetration (C9, two-band Jerlov)        &ocean_thermo_nml
+!   * EPBL surface boundary layer (RH18)                 &ocean_epbl_nml
+!   * kappa-shear interior mixing (JHL08)        &ocean_kappa_shear_nml
+!   * Fox-Kemper MLE restratification (FK08/11)     &ocean_foxkemper_nml
+!       (reads epbl%mld; FK11 momentum-mixrate timescale)
+!   * geothermal bottom heat flux (C8)            &ocean_geothermal_nml
+!   * PPM_H4 higher-order ALE remap (D3)        remap_method="ppm_h4"
+!   * advective-CFL velocity truncation (E7)      cfl_trunc in &ocean_pgf_nml
+!   * windowed flux-accumulated tracer advect      dt_tracer_advect_ratio
+!       (MOM6 DT_TRACER_ADVECT cadence: uhtr/vhtr accumulate every step,
+!        swept-average CW-PPM drain once per window)
+!   * ideal-age tracer (3rd tracer through the windowed advect / ALE / vdiff)
+!   * first-baroclinic wave-speed / Rd diagnostic (B1) &ocean_wavespeed_nml
+!       -- feeds nothing in THIS bench (VarMix/GM/MEKE all off here), so it
+!          costs but does not change any answer; see acc_channel_eddy.nml or
+!          a VarMix-enabled case for the live B2 consumer.
+!
+! NOT a validation target — physics combos are stacked for COVERAGE, not
+! realism; use the per-feature examples (epbl_mld, double_gyre, ...) to
+! validate any one closure.  The quiescent trap is acc_channel_quiescent.
+!
+! dt_tracer_advect_ratio = 2 (full windowed-advect cadence): the SW +
+! EPBL + kappa-shear + FK stack is stable + mass-conserving here.  (This
+! config previously needed ratio = 1: shortwave nudged the EPBL-diagnosed
+! MLD, Fox-Kemper's Psi ~ MLD^2 amplified it, and the FK transport — which
+! was ~1e4x too large from a missing 1/dx metric factor, pinned at the
+! availability cap — tipped to NaN at ratio > 1.  Fixed in the FK metric
+! correction: FK now runs at its correct magnitude, the cap no longer
+! binds, and ratio = 2 conserves to round-off.)
+!
+! Run:
+!   cd validation_examples/ocean/acc_channel
+!   # first load your NVHPC + NetCDF toolchain (module load / spack / conda;
+!   # see environments/) -- one toolchain per shell, never stack two
+!   CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb acc_channel_sw_penetration.nml
+! Profile:  nsys profile -t nvtx,openacc -o ks <the above>
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 120
+   ny     = 70
+   dx     = 0.2
+   dy     = 0.2
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = 0.0
+   lat_south       = -52.0
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"
+   omega           = 7.2921e-5
+/
+
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+/
+
+&time_nml
+   t_end        = 1.0
+   time_unit    = "day"
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.12
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 30
+/
+
+&vcoord_nml
+   vcoord_type   = "zstar"
+   remap_method  = "ppm_h4"   ! D3: higher-order (H4 edge) PPM remap
+/
+
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 8.0
+   T_init_surface = 8.0
+   T_init_bottom  = 2.0
+/
+
+&ocean_ic_nml
+   alpha_T = 0.2
+   rho_0   = 1035.0
+/
+
+&ocean_tracers_nml
+   enable_ideal_age = .true.   ! 3rd prognostic tracer — exercises the windowed
+                               ! advect / ALE remap / vdiff registry loop with
+                               ! more than the S+T pair
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   q_heat = 40.0    ! positive (solar warming) so the penetrating SW
+                    ! fraction below is physically meaningful; same
+                    ! magnitude as the (stable) kitchensink's |q_heat|
+   ! --- C9 shortwave penetration (the feature this bench exercises) ---
+   ! 67% of Q_heat penetrates as a two-band Jerlov-type-I exponential
+   ! (Paulson & Simpson 1977); the rest is absorbed at the surface.
+   ! Deposits heat through the upper column instead of all at k=nz.
+   sw_pen_frac   = 0.67
+   sw_band_ratio = 0.58
+   sw_zeta1      = 0.35
+   sw_zeta2      = 23.0
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 3000.0
+   edge_depth     = 1500.0
+   slope_scale    = 3.0
+   wind_config    = "constant"
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   form      = "fv_lite"
+   maxvel    = 2.0
+   cfl_trunc = 0.5      ! E7: advective-CFL velocity truncation (MOM6 ~0.5)
+/
+
+&ocean_hvisc_nml
+   nu_h            = 500.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   kh_vel_scale    = 3.0e-3
+   ah_max          = 1.0e4
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_bg         = 0.0
+   nu_4_max        = 1.0e12
+/
+
+&ocean_bdrag_nml
+   form          = "linear"
+   r             = 2.5e-5
+   hbbl          = 10.0
+   bg_vel        = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_vmix_nml
+   use_closure    = .true.
+   use_kpp        = .false.   ! EPBL replaces the KPP overlay
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio         = 2   ! DT_THERM = 2*dt — ALE remap + diabatic cadence
+   dt_tracer_advect_ratio = 2   ! DT_TRACER_ADVECT = 2*dt — windowed flux-accumulated
+                                ! tracer advect.  Stable with SW + FK after the FK
+                                ! metric fix (see header); was 1 to dodge the
+                                ! pre-fix FK over-amplification.
+/
+
+&ocean_epbl_nml
+   enable             = .true.
+   mstar_scheme       = "om4"
+   mld_use_prev_guess = .true.
+   tke_diags          = .false.
+   use_lt             = .false.
+/
+
+&ocean_kappa_shear_nml
+   enable = .true.
+/
+
+&ocean_foxkemper_nml
+   enable          = .true.
+   use_mom_mixrate = .true.   ! FK11 momentum-mixrate timescale (production)
+   mld_decay_time  = 86400.0  ! running-mean MLD filter (s): damp the transient
+                              ! EPBL boundary-layer swings before they drive
+                              ! the FK streamfunction (Psi ~ MLD^2).  MOM6
+                              ! MLE_MLD_DECAY_TIME — stabilises FK + windowed
+                              ! tracer advect under a thinning diagnosed MLD.
+/
+
+&ocean_geothermal_nml
+   enable = .true.
+   q_geo  = 0.1               ! W/m^2 bottom heat flux (~observed range)
+/
+
+&ocean_wavespeed_nml
+   enable      = .true.       ! B1 cg1 / Rossby-radius diagnostic.
+   n_wavespeed = 1            ! Dispatched every outer step (thermo cadence);
+                             ! feeds nothing in THIS bench (VarMix/GM/MEKE
+                             ! all off) so it costs but does not change any
+                             ! answer here.
+/
+
+&ocean_bt_nml
+   ! PINNED, and LOAD-BEARING: since 2026-09-14 "ssp_rk2" is NOT the
+   ! default (pred_corr is), so without this line the file would not run.
+   ! The pred_corr v1 envelope refuses dt_tracer_advect_ratio > 1 (the predictor's
+   ! TR_MODE_NONE + window accounting is unexercised) -- a fail-loud
+   ! `validate_config` error, not a silent downgrade. This file's subject IS
+   ! the windowed tracer-advect drain, so the pin is what keeps the stability
+   ! suite's outer-split axis (tests/regression/stability_manifest.py) from
+   ! building an impossible pred_corr twin of it. Lifting the pin needs the
+   ! windowed path wired through the predictor-corrector loop.
+   split_scheme = "ssp_rk2"
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "acc_channel_sw_penetration"
+   dt_out   = 1.0
+/
+
+&output_nml
+   output_dir     = "./out_acc_channel_sw_penetration"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0
+/

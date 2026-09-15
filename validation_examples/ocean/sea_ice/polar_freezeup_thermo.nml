@@ -1,0 +1,170 @@
+! Polar freeze-up + brine rejection — sea-ice THERMODYNAMICS-ONLY
+! end-to-end coupled validation (SIS2 port, PRs 2-5: multi-category ITD,
+! frazil/brine thermo, category transport, C-grid EVP dynamics).
+!
+! Nothing has validated the ice physics end-to-end before this namelist —
+! only unit tests exist upstream.  This is a SMALL, fast, single-rank CPU
+! case whose only job is to catch integration-level problems the unit
+! tests can't see: does frazil ice actually nucleate from a supercooled
+! surface, does it thicken to a plausible order-1-3 m over a realistic
+! freeze-up window, and does surface salinity rise (brine rejection) as
+! it does so?
+!
+! ICE DYNAMICS ARE OFF in this file — see polar_freezeup_dynamics.nml for
+! the EVP + wind-drift follow-on.  Build this one up first and confirm it
+! is sane before layering dynamics on top.
+!
+! Domain: 40 x 30 cells @ 10 km, flat 50 m basin, 4 layers (~12.5 m each).
+! Shallow-and-small on purpose: a thin, small-heat-capacity mixed layer
+! lets a modest surface cooling flux supercool the surface within the
+! first few outer steps (frazil bootstrap) and lets a 90-day cooling
+! season grow ice from nucleation (~day 1.5) to ~2.5 m (order-1-3 m,
+! multi-category ITD regime) without needing years of model time.
+!
+! Freezing point: T_f = TFR_S_COEFF*S = -0.054 * 34 psu = -1.836 degC
+! (rdb_eos%eos_freezing_point, linear liquidus, same formula for
+! every EOS variant per MOM6 TFREEZE_FORM="LINEAR").  Salinity 34 PSU is
+! a realistic polar-surface value.  Initial SST is set at -1.80 degC —
+! just ABOVE T_f — so the small surface cooling flux below pushes it
+! through the freezing point within the first outer step or two and
+! triggers `ice_frazil_accumulate` (the ONLY nucleation path in this
+! model: `ice_thermo_columns` only steps categories that already carry
+! ice mass, so bare open water can never grow ice on its own — the
+! ocean-side frazil clamp is what banks the first ice-forming heat
+! deficit; see rdb_ice_frazil.F90 / rdb_ice_column.F90).
+!
+! Ice-thickness-category bounds are NOT a namelist knob in this branch —
+! `ice_itd_category_bounds` (rdb_ice_state.F90) hard-codes the SIS2
+! default lower-thickness-limit table from `ncat` alone:
+!   ncat=5 => h_lim = [1e-10, 0.1, 0.3, 0.7, 1.1, 1.5] m (category 5 is
+!   unbounded above, so growth past 1.5 m keeps accumulating in cat 5 —
+!   nothing to override here, this is just how the port ships).
+!
+! Atmospheric forcing is the v1 scalar restoring filler
+! (`rdb_ice_atm_forcing`): SF(T) = restore_lambda*(T - air_temp), positive
+! upward (cooling); air_temp = -20 degC is a plausible polar-winter value,
+! restore_lambda = 20 W/m^2/K is the "production melt season" reference
+! value quoted in the &ocean_ice_nml restore_lambda docstring. sw_down = 0
+! (polar night) keeps this a pure freeze-up signal with no melt term to
+! confound the growth curve.
+!
+! Run:
+!   source mac_env.sh
+!   build/rdb validation_examples/ocean/sea_ice/polar_freezeup_thermo.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 40
+   ny     = 30
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 90.0
+   time_unit    = "day"
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! f-plane, high-latitude (~80N): f = 2*Omega*sin(80deg) ~ 1.435e-4 /s.
+   coriolis_f    = 1.435e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 4
+/
+
+&tracer_nml
+   initial_salinity    = 34.0
+   initial_temperature = -1.80    ! just above T_f = -1.836 degC
+/
+
+&ocean_ic_nml
+   alpha_T = 1.7e-4
+   rho_0   = 1027.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   ! Modest uniform surface cooling (W/m^2, positive down => negative =
+   ! heat loss) — just enough to push the surface below T_f within the
+   ! first outer step or two and bootstrap the frazil bank. Once ice
+   ! covers the cell the ice model (not this flux) governs the ice-ocean
+   ! exchange via fb / the atm-restoring seam.
+   q_heat = -60.0
+/
+
+&ocean_topo_nml
+   topo_config = "flat"
+   max_depth   = 50.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   form   = "fv_lite"
+   maxvel = 2.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 500.0
+/
+
+&ocean_bdrag_nml
+   form  = "linear"
+   r     = 2.5e-5
+   hbbl  = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_vmix_nml
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_ice_nml
+   enable         = .true.
+   ncat           = 5
+   nk_ice         = 2
+   air_temp       = -20.0
+   restore_lambda = 20.0
+   sw_down        = 0.0
+   transport      = .false.
+   dynamics       = .false.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "polar_freezeup_thermo"
+   dt_out   = 0.25     ! 6-hour frames (time_unit = day above)
+/
+
+&output_nml
+   output_dir     = "./out_polar_freezeup_thermo"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 0.5     ! days
+/

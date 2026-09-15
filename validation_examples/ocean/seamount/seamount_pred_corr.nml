@@ -1,0 +1,106 @@
+! Idealised seamount — MOM6 predictor-corrector split-scheme coverage.
+!
+! Identical to seamount.nml (quiescent stratified-free seamount: uniform
+! T=15/S=35, f=0, no wind/flux/sponge, closed walls, zstar_sigma NK=15)
+! EXCEPT the barotropic split scheme is the MOM6 predictor-corrector
+! (`&ocean_bt_nml split_scheme="pred_corr"`) PINNED explicitly -- it became
+! the default on 2026-09-14, and the pin is what keeps this golden
+! invariant across any future default move.  It exercises the
+! SPLIT_SCHEME_PRED_CORR production branches
+! in rdb_ocean_dyn.F90 (predictor stage, corrector on the time-mean
+! u_av/h_av, restore_state, the is_pc conditionals) that the rest of the
+! regression corpus — all ssp_rk2 — never touches.
+!
+! pred_corr was generalized to all ALE vcoords (merged #395); zstar_sigma
+! is a NON-Lagrangian ALE coordinate, so this covers the newly-shipped
+! generalized-vcoord path, not just the old Lagrangian one.
+!
+! Expected outcome (validated stable): identically zero motion — the pc
+! outer loop preserves the rest state to machine precision on
+! zstar_sigma (En ~ 2.5e-21, MaxCFL 0, mass conserved), same as the
+! ssp_rk2 seamount.  This is the generalized-vcoord + rest-preservation
+! guard on the predictor-corrector loop.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 50
+   ny     = 50
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 300.0       ! 5 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 0.0        ! f-plane f=0 — no Coriolis feedback
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"   ! Production default — same as Tasman
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   T_init_surface      = 0.0     ! Uniform — no T(z) stratification
+   T_init_bottom       = 0.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"  ! Pin: regression calibrated on this branch
+/
+
+&ocean_topo_nml
+   topo_config       = "seamount"
+   max_depth   = 4000.0    ! Basin depth
+   edge_depth  = 200.0     ! Seamount peak depth
+   slope_scale = 25000.0   ! Gaussian half-width (m)
+   wind_config       = "constant"
+   taux_magnitude    = 0.0
+   coriolis_beta     = 0.0       ! f-plane
+   coriolis_y_ref    = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h        = 0.0       ! No viscosity — pure dyn-core test
+   nu_4        = 0.0       ! No biharmonic either
+/
+
+&ocean_vmix_nml
+   use_closure  = .false.   ! PP81 + KPP off — pure dyn-core test
+   use_kpp      = .false.
+/
+
+&ocean_bt_nml
+   n_inner           = 60          ! dt_inner = 5 s; gravity-wave CFL = 0.49 at H=4000 m
+   split_scheme      = "pred_corr"   ! MOM6 predictor-corrector outer loop (pinned; also the default)
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "seamount_pred_corr"
+   dt_out   = 21600.0  ! 6-hourly snapshots
+/
+
+&output_nml
+   output_dir      = "./out_seamount_pred_corr"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0     ! Daily progress
+/

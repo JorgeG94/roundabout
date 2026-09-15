@@ -1,0 +1,136 @@
+! Double-gyre (NK=10 linear) with WENO3 PV reconstruction (F1) under the
+! pred_corr split scheme.
+!
+! Sibling of double_gyre_weno3.nml (see it for the full rationale): the
+! IDENTICAL WENO3-on-Sadourny-enstrophy wind-driven gyre, but with
+! &ocean_bt_nml split_scheme="pred_corr" PINNED rather than left to the
+! default (which has been that same scheme since 2026-09-14).  The
+! Coriolis-advection kernel (and
+! hence the weno3 branch) runs every stage of BOTH split integrators, so
+! this proves the reconstruction fires clean under the predictor-corrector
+! loop too.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 44
+   ny     = 40
+   nghost = 2
+/
+
+&ocean_grid_nml
+   axis_units = "degrees"
+   len_lon    = 22.0
+   len_lat    = 20.0
+   rad_earth  = 6.378e6
+/
+
+&time_nml
+   t_end        = 10.0
+   time_unit    = "day"
+   dt_fixed     = 1200.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   alpha_T             = 0.0
+   beta_S              = 0.0
+/
+
+&ocean_ic_nml
+   rho_lightest = 1035.0
+   rho_range    = 2.0
+/
+
+&ocean_coriolis_nml
+   form          = "sadourny"
+   pv_adv_scheme = "weno3"
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .false.
+/
+
+&ocean_topo_nml
+   topo_config       = "spoon"
+   max_depth   = 2000.0
+   edge_depth  = 100.0
+   slope_scale = 400000.0
+   wind_config       = "2gyre"
+   taux_magnitude    = 0.1
+   coriolis_beta     = 1.76e-11
+   coriolis_y_ref    = 1113200.0
+/
+
+&ocean_pgf_nml
+   form    = "fv_lite"
+   maxvel  = 6.0
+/
+
+&ocean_bdrag_nml
+   form  = "linear"
+   r     = 2.5e-5
+   hbbl  = 10.0
+   bg_vel = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_hvisc_nml
+   nu_h        = 10000.0
+   nu_4        = 0.0
+   smag_ah      = .true.
+   smag_bi_const = 0.06
+   nu_4_bg      = 0.0
+   nu_4_max     = 1.0e12
+   lateral_closure = "smagorinsky"
+   c_smag      = 0.15
+   kh_vel_scale = 3.0e-3
+   ah_max      = 1.0e4
+/
+
+&ocean_vmix_nml
+   kv_ml_invz2 = 0.01
+   hmix_fixed  = 20.0
+   harmonic_visc = .true.
+   dt_therm_ratio = 2
+/
+
+&ocean_bt_nml
+   auto_n_inner      = .true.
+   cfl_bt_safety     = 0.65
+   bebt               = 0.2
+   split_scheme      = "pred_corr"
+/
+
+&vcoord_nml
+   vcoord_type = "zstar"
+/
+
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "double_gyre_weno3_pred_corr"
+   dt_out   = 1.0
+/
+
+&output_nml
+   output_dir     = "./out_double_gyre_weno3_pred_corr"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0
+/

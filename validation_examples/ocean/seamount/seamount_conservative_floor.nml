@@ -1,0 +1,135 @@
+! Lagrangian (isopycnal) seamount — conservative min-thickness coverage case.
+!
+! Purpose (regression coverage, NOT validation): exercise the conservative
+! minimum-thickness "borrow" that replaces the injecting angstrom_h floor on
+! the Lagrangian continuity h-update            -> rdb_ocean_min_thickness
+!
+! conservative_floor is fail-loud: it requires vcoord_type="lagrangian" AND
+! angstrom_h > 0.  On a seamount the uniform-z isopycnal seed grounds the
+! bottom layers against the bump; the sub-floor deficit is borrowed from
+! surplus layers in the same column (mass/momentum/tracer conserving) instead
+! of being injected, which is precisely the min_thickness kernel's job.
+!
+! Coarse + short by design: 48x48 @ 8 km, 20 layers.  Coarse dx keeps the
+! effective lateral viscosity (nu_h/dx^2) high enough that the rim layers do
+! not over-drain -- the grounding blow-up is a FINE-resolution phenomenon
+! (see double_gyre_lagrangian_nk50.nml), so a coarse seamount is the stable,
+! cheap way to keep the borrow firing every step without a NaN.
+!
+! Bleck (2002) Ocean Modelling 4:55 (isopycnal/hybrid coordinate);
+! Hallberg & Adcroft (2009) Ocean Modelling 29:15 (Angstrom min-thickness).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 48
+   dx     = 8000.0
+   dy     = 8000.0
+   nghost = 3
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 20
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   alpha_T             = 0.0
+   beta_S              = 0.0
+/
+
+&ocean_ic_nml
+   rho_lightest = 1035.0
+   rho_range    = 2.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .false.
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 2000.0
+   edge_depth     = 100.0
+   slope_scale    = 60000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_pgf_nml
+   form   = "fv_lite"
+   maxvel = 6.0
+/
+
+&ocean_hvisc_nml
+   nu_h       = 1.0e4        ! per-face harmonic clamp (grounding stability)
+   nu_4       = 0.0
+   bound_kh   = .true.
+   bound_coef = 0.15
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bdrag_nml
+   form = "linear"
+   r    = 2.5e-5
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&vcoord_nml
+   vcoord_type      = "lagrangian"
+   thickness_config = "uniform_z"    ! flat resting isopycnals (no shelf APE)
+/
+
+! --- conservative minimum-thickness borrow (the coverage target) ---------
+&ocean_isopycnal_nml
+   angstrom_h          = 1.0e-2      ! min-thickness floor (m); required > 0
+   reset_vanished_u    = .true.
+   cfl_ignore_vanished = .true.
+   conservative_floor  = .true.      ! per-column borrow -> rdb_ocean_min_thickness
+/
+
+&ocean_diag_nml
+   enabled = .false.
+/
+
+&output_nml
+   output_dir     = "./out_seamount_conservative_floor"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

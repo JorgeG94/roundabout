@@ -1,0 +1,148 @@
+! EPBL vs KPP mixed-layer-depth comparison — EPBL run.
+!
+! Thermally-active double-gyre basin (the canonical adiabatic NK=2
+! double_gyre_mom6.nml cannot exercise a surface boundary layer):
+! flat 600 m bottom, 30 sigma layers (20 m each — resolves a
+! 50-200 m MLD), 2gyre wind (0.1 Pa) + uniform 100 W/m2 surface
+! cooling on a beta plane, linear EOS with a realistic thermal
+! expansion (alpha_T = 0.2 kg/m3/K), linear T(z) IC 10 -> 18 degC.
+!
+! Expected (30 days): wind+cooling-driven MLD deepening to ~100 m
+! (encroachment scale sqrt(2|B0|t)/N ~ 97 m), shaped by the gyres
+! (deeper under the subpolar/cooling-dominated interior, shallower
+! in the subtropical gyre).  Compare against kpp_basin.nml /
+! epbl_lt_basin.nml with tools in this directory:
+!
+!   ./build/rdb validation_examples/ocean/epbl_mld/kpp_basin.nml
+!   ./build/rdb validation_examples/ocean/epbl_mld/epbl_basin.nml
+!   ./build/rdb validation_examples/ocean/epbl_mld/epbl_lt_basin.nml
+!   python3 validation_examples/ocean/epbl_mld/compare_epbl_kpp.py
+!
+! The three namelists are identical except for the &ocean_epbl_nml
+! block and the output directory.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 44
+   ny     = 40
+   dx     = 55660.0
+   dy     = 55660.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 30.0
+   time_unit    = "day"
+   dt_fixed     = 1200.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 30
+/
+
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 18.0
+   ! Linear T(z) IC: 10 degC at the bed -> 18 degC at the surface
+   ! over 600 m.  With alpha_T = 0.2 this gives N2 ~ 2.5e-5 1/s2.
+   T_init_surface = 18.0
+   T_init_bottom  = 10.0
+/
+
+&ocean_ic_nml
+   ! Realistic linear-EOS thermal expansion (kg/m3/K) — the ocean
+   ! EOS + EPBL energetics both read this.
+   alpha_T = 0.2
+   rho_0   = 1035.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   ! Uniform surface cooling (W/m2, positive down => negative =
+   ! heat loss).  Drives convective MLD deepening on top of the
+   ! wind-driven mixing.
+   q_heat = -100.0
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 600.0
+   wind_config    = "2gyre"
+   taux_magnitude = 0.1
+   coriolis_beta  = 1.76e-11
+   coriolis_y_ref = 1113200.0
+/
+
+&ocean_hvisc_nml
+   nu_h            = 10000.0
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_max        = 1.0e12
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   kh_vel_scale    = 3.0e-3
+   ah_max          = 1.0e4
+/
+
+&ocean_bdrag_nml
+   form          = "linear"
+   r             = 2.5e-5
+   hbbl          = 10.0
+   bg_vel        = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_vmix_nml
+   ! PP81 interior closure stays on under both KPP and EPBL.
+   use_closure    = .true.
+   use_kpp        = .true.      ! EPBL force-disables this (logged)
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1           ! boundary layer recomputed every step
+/
+
+&ocean_epbl_nml
+   enable             = .true.
+   mstar_scheme       = "om4"
+   mld_use_prev_guess = .true.
+   tke_diags          = .false.
+   use_lt             = .false.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&vcoord_nml
+   ! Sigma on a flat bottom = fixed 20 m z-levels, no ALE remap —
+   ! the cleanest frame for an MLD-physics comparison.
+   vcoord_type = "sigma"
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "epbl_basin"
+   dt_out   = 1.0
+/
+
+&output_nml
+   output_dir     = "./out_epbl_basin"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 5.0
+/

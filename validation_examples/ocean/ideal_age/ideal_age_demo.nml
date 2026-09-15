@@ -1,0 +1,126 @@
+! Ideal-age tracer demo — small, fast, observable.
+!
+! Purpose: show the MOM6-style ideal-age tracer (USE_IDEAL_AGE_TRACER
+! analogue) actually doing something you can SEE — in the console
+! status line AND in the NetCDF output.  The age tracer is passive
+! (0 at the surface, ages at 1 s/s in the interior, rides the tracer
+! registry through advection / ALE remap / vdiff), so it does not
+! perturb the dynamics; it just labels water by time-since-surface.
+!
+! Geometry: a shrunk version of seamount_bench_full (64×48×10 @ 2 km,
+! Gaussian seamount) with a linear T(z) 20→4 °C stratification, f-plane
+! Coriolis, KPP + PP81 vertical mixing, ALE on zstar_sigma, and weak
+! sponges on all 4 edges.  Small enough to run in a few seconds.
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/ideal_age/ideal_age_demo.nml
+!
+! What you should see:
+!   * Console: a "Age : <days>  days (volume-mean ideal age)" line each
+!     status interval, growing over the run (deep water ages, surface
+!     stays ~0).
+!   * NetCDF (out_ideal_age_demo/ideal_age_demo_rank_NNNNNN.nc): an
+!     "age" variable (units s) alongside SSH/T/S/u/v/KE — large in the
+!     deep interior, ~0 in the surface layer.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 64
+   ny     = 48
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 3.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_tracers_nml
+   ! The star of the show: register the ideal-age tracer (3rd prognostic
+   ! tracer).  Now wired to BOTH the diag output ("age" field) and the
+   ! console status line.
+   enable_ideal_age = .true.
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 30000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 5.0e2
+   nu_4 = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.
+   use_kpp     = .true.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&boundary_nml
+   bc_west         = "sponge"
+   bc_east         = "sponge"
+   bc_south        = "sponge"
+   bc_north        = "sponge"
+   sponge_width    = 8
+   sponge_strength = 5.0e-4
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "ideal_age_demo"
+   dt_out   = 1.0     ! one frame per day
+/
+
+&output_nml
+   output_dir     = "./out_ideal_age_demo"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

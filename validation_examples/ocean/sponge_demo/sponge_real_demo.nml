@@ -1,0 +1,150 @@
+! Real sponge demo (PR-23) — a per-cell Idamp map + 3-D reference state,
+! relaxing momentum toward u_ref/v_ref (not zero) and every tracer toward a
+! 3-D reference field (not a scalar).  Demonstrates the "nudge toward a
+! parent climatology" acceptance criterion WITHOUT a new file reader:
+! `target_source="ic"` snapshots whatever the seeded initial condition is,
+! and `&ocean_zinit_nml` can already point that seed at a pre-regridded
+! model-grid T/S climatology NetCDF (see the commented-out block below) —
+! the sponge then nudges the interior back toward it near the west edge.
+! This demo runs analytically-seeded (no external file) so it is
+! self-contained; swap the `&ocean_zinit_nml` block in to point at a real
+! climatology.
+!
+! Geometry: same small/fast seamount as ideal_age_demo.nml (64x48x10 @
+! 2 km) so the run finishes in a few seconds. Uses `&ocean_bc_nml` (NOT
+! the coastal-path `&boundary_nml` — the ocean path reads its own group;
+! `west/east/south/north` are the correct ocean-path keys).
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/sponge_demo/sponge_real_demo.nml
+!
+! What you should see:
+!   * Configure-time log line: "Sponge (map-driven): damp_source=band
+!     target_source=ic idamp_h max=... nonzero(h/u/v)=...".
+!   * A stable spinup (the sponge relaxes the west band's momentum toward
+!     the at-rest IC velocity — zero here, since this IC starts at rest —
+!     and every tracer toward the seeded T/S profile).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 64
+   ny     = 48
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 3.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+! Point this at a pre-regridded model-grid T/S NetCDF to nudge toward a
+! real parent climatology instead of the analytical profile above — no
+! new reader needed, target_source="ic" below snapshots whatever seed_ts_
+! from_zfile leaves in the tracer registry.
+!&ocean_zinit_nml
+!   enable = .true.
+!   file   = "/path/to/parent_climatology_on_this_grid.nc"
+!/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 30000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 5.0e2
+   nu_4 = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.
+   use_kpp     = .true.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+! Ocean-path boundary config (NOT &boundary_nml — that's the coastal-path
+! reader; the ocean path's own group is &ocean_bc_nml).  All four edges
+! sponge-tagged with the legacy width/strength — &ocean_sponge_nml below
+! either inherits these (per-edge overrides left at their -1 sentinel) or
+! narrows them per edge.
+&ocean_bc_nml
+   west             = "sponge"
+   east             = "sponge"
+   south            = "sponge"
+   north            = "sponge"
+   sponge_width     = 8
+   sponge_strength  = 5.0e-4
+/
+
+! The real sponge (PR-23): per-cell Idamp map (damp_source="band"
+! reproduces the legacy cosine ramp above, summed at the four corners)
+! relaxing momentum toward u_ref/v_ref and every tracer toward a 3-D
+! reference field, both snapshotted from the seeded IC (target_source=
+! "ic") — see the &ocean_zinit_nml block above for the climatology-nudge
+! variant.  enable=.false. (the default, omitted here since we want it
+! ON) would run the legacy &ocean_bc_nml band above unchanged.
+&ocean_sponge_nml
+   enable         = .true.
+   damp_source    = "band"
+   target_source  = "ic"
+   relax_uv       = .true.
+   relax_tracers  = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "sponge_real_demo"
+   dt_out   = 1.0     ! one frame per day
+/
+
+&output_nml
+   output_dir     = "./out_sponge_real_demo"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

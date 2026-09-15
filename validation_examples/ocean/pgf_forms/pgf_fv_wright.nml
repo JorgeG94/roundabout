@@ -1,0 +1,121 @@
+! PGF-form coverage: `fv_wright` on a FLAT BED, where it is valid.
+!
+! Purpose is coverage, not science. `mont` and `fv_wright` were selected by
+! ZERO shipped namelists, which is how each came to carry a
+! sloping-bathymetry defect nobody saw. These two cases exercise them inside
+! their domain of validity so a regression is caught.
+!
+! !! NOTE: this file and its `mont` sibling originally shipped WITHOUT an
+! !! `&ocean_pgf_nml` group at all, so both silently ran the then-`fv_lite`
+! !! DEFAULT (the default is `mont` as of 2026-09-13; this file pins its form
+! !! EXPLICITLY regardless -- its job is to select a form, not to track the
+! !! default).
+! !! That is why they appeared to "agree" with `fv_lite` -- they WERE `fv_lite`.
+! !! The group below is what actually selects the form; do not delete it.
+!
+! THE ASSERTION: on this flat-bed config `fv_wright` must stay at
+! En = 2.793E-05 at day 5. It deliberately does NOT match `fv_lite` /
+! `fv_mom6` / `mont` (all three land on 1.220E-05): `fv_wright` re-evaluates
+! in-situ density along the integration path with a Picard step, which is a
+! real physical difference, not a discretisation wobble. Any movement in
+! EITHER number is a bug in one of them.
+!
+! `form="fv_wright"` — finite-volume PGF with a per-layer Picard in-situ
+! density from the Wright (1997) EOS. Sound on a flat bed; on a SLOPING
+! stratified bed the in-situ density varying across a face breaks the
+! two-point cancellation and it NaNs at step ~24 on the zstar_sigma
+! stratified seamount, where fv_lite is stable. Prefer `fv_mom6`, which
+! solves that properly with a layer-integrated form plus in-layer T/S
+! reconstruction.
+!
+! Its three pre-existing unit tests are all flat-COLUMN, which is exactly
+! why the sloping-bathymetry failure went unnoticed for so long.
+!
+! Derived from eddy_test_quick.nml, shrunk to 128x128 over 5 days -- this is
+! a form-coverage case, not an eddy study.
+!
+! Quicker version of `eddy_test.nml` — 10 days instead of 30, ~10 km
+! resolution instead of 5 km.  Use this to first verify spin-up
+! before the longer eddy-formation run.
+!
+! At 10 km the Rossby radius (~33 km) is ~3 cells across — eddy-
+! permitting but not eddy-resolving.  WBC spin-up should still be
+! visible by day 10 (broadening jet, SSH dipole), but eddy shedding
+! won't be developed yet.  For real eddies use `eddy_test.nml`.
+!
+! Expected wallclock single V100: ~5-7 min for 10 days.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 128
+   ny     = 128
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 432000.0    ! 5 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   T_init_surface      = 20.0
+   T_init_bottom       = 5.0
+   initial_salinity    = 35.0
+/
+
+&ocean_topo_nml
+   topo_config       = "flat"
+   max_depth   = 4000.0
+   wind_config       = "2gyre"
+   taux_magnitude    = 0.1
+   coriolis_beta     = 1.76e-11
+   coriolis_y_ref    = 750000.0    ! Mid-domain (1500/2 km)
+/
+
+&ocean_hvisc_nml
+   nu_h        = 1.0e4       ! Munk BL ~80 km — well resolved at 10 km
+/
+
+&ocean_pgf_nml
+   form = "fv_wright"
+/
+
+&ocean_bt_nml
+   n_inner           = 30
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "pgf_fv_wright"
+   dt_out   = 21600.0   ! Every 6 hr — 40 frames
+/
+
+&output_nml
+   output_dir      = "./out_pgf_fv_wright"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 43200.0       ! Every 12 hr
+/

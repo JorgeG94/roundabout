@@ -1,0 +1,191 @@
+! bc_inst — two-layer reduced-gravity BAROCLINIC INSTABILITY, TUNED jet, 512^2.
+!
+! Head-to-head reproduction of the `bc_inst` experiment (SIM_DETAILS.md).
+! Spherical re-entrant channel, lon in [-193.75,-171.25] (22.5 deg span),
+! lat in [53.625, 64.875] (11.25 deg span), central lat phi0 = 59.25 deg,
+! 512 x 512 cells.  Two isopycnal layers: upper (surface) H1 = 500 m,
+! rho1 = 1025; lower (bed) H2 = 1500 m, rho2 = 1027; g' = 0.019141 m/s^2,
+! R_d = 21.4 km (~10 cells at 512^2).
+!
+! The IC (ic_config="baroclinic_jet") lays down a geostrophically balanced
+! tanh jet in the SURFACE layer (Roundabout k=2) with a front-localised sech^2
+! meander seed (3 zonal wavelengths).  v == 0 at t=0, so any growth of the
+! console `En` (KE/mass) or max|v| is the baroclinic instability rolling up.
+! This is the HEADLINE performance case (V100 baseline 15.4 s / sim-day).
+!
+! Run (single GPU):
+!   cd validation_examples/ocean/bc_inst
+!   # first load your NVHPC + NetCDF toolchain (module load / spack / conda;
+!   # see environments/) -- one toolchain per shell, never stack two
+!   CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb bc_inst_tuned_512.nml
+!
+! See README.md for the science questions + the faithful/256 variants.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   ! Spherical mode: dx/dy are dlon/dlat in DEGREES.  512 cells over the
+   ! 22.5 x 11.25 deg sector.  nghost = 3 (periodic-x PPM + biharmonic seam).
+   nx     = 512
+   ny     = 512
+   dx     = 0.0439453125
+   dy     = 0.0219726563
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = -193.75
+   lat_south       = 53.625
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"          ! f = 2*Omega*sin(lat)
+   omega           = 7.2921e-5
+/
+
+! Re-entrant channel: periodic in x, solid walls north/south (free-slip).
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+   ! Zero the wall-normal velocity at the solid N/S walls (MOM6 mask-in-
+   ! update); without it the raw v at the wall drifts to maxvel and paints
+   ! a spurious wall vorticity band (flux is masked, mass conserves).
+   mask_wall_velocity = .true.
+/
+
+&time_nml
+   ! Split outer dt at the internal-wave RK limit (~427 s @512^2, SIM_DETAILS
+   ! §7.timestep); the barotropic fast loop subcycles via auto_n_inner.
+   t_end        = 50.0
+   time_unit    = "day"
+   dt_fixed     = 200.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! Planetary Coriolis comes from &ocean_grid_nml; coriolis_f here is unused
+   ! by the metric f-fill (the IC also uses the variable f(phi)), kept
+   ! non-zero for legacy guards.  No wind (free decay of the balanced jet).
+   coriolis_f    = 1.2534e-4              ! f(phi0), reference only
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 2                          ! two-layer reduced gravity
+/
+
+&tracer_nml
+   ! Inert here (enable_thermodynamics=.false. + gprime PGF): tracers are
+   ! carried but never touch the dynamics.  Uniform seed keeps hTr/h clean.
+   initial_salinity    = 35.0
+   initial_temperature = 10.0
+/
+
+&ocean_ic_nml
+   ic_config        = "baroclinic_jet"
+   ! TUNED jet: L = 40 km, Dxi = 200 m => u_peak ~ 0.76 m/s, Ro ~ 0.15.
+   jet_half_width   = 40000.0             ! L
+   interface_amp    = 200.0               ! Dxi
+   pert_amp_frac    = 0.2                  ! A_pert = 0.2 * Dxi
+   pert_nx          = 3                    ! 3 zonal wavelengths across the domain
+   upper_layer_rest = 500.0               ! H1 (surface); H2 = max_depth - H1
+   ! Per-layer static density (bed k=1 first, surface k=nz last).  Documents
+   ! the stratification; the gprime PGF uses gprime_gint below, not these.
+   layer_rho_init   = 1027.0, 1025.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .false.        ! adiabatic 2-layer SW (no EOS/flux)
+/
+
+&ocean_topo_nml
+   topo_config = "flat"
+   max_depth   = 2000.0                   ! H1 + H2
+   wind_config = "constant"               ! tau = 0 from &physics_nml
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"                      ! enstrophy-conserving PV flux
+/
+
+&ocean_pgf_nml
+   ! Reduced-gravity two-layer PGF (SIM_DETAILS §1).  g_FS = g = 9.81 (free
+   ! surface), g_int = g' = 0.019141 (interface).  The IC reads these SAME
+   ! two reduced gravities for its geostrophic balance.
+   form        = "gprime"
+   gprime_gfs  = 9.81
+   gprime_gint = 0.019141
+   maxvel      = 5.0
+/
+
+&ocean_hvisc_nml
+   ! MINIMAL dissipation — SIM_DETAILS §7 uses a Shapiro 5-point filter on h
+   ! (eps=0.006), NO explicit viscosity.  Roundabout has no Shapiro filter; this
+   ! is the scheme substitute: a small constant Laplacian floor + light
+   ! Smagorinsky (flow-adaptive, vanishes in smooth flow) + a Smag biharmonic
+   ! backstop to mop up grid-scale noise without killing the resolved eddies.
+   nu_h            = 50.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_bg         = 0.0
+   nu_4_max        = 1.0e11
+/
+
+&ocean_bdrag_nml
+   ! No bottom drag (SIM_DETAILS has none — reduced-gravity, lower layer at
+   ! rest, Shapiro-only).  Linear form with r = 0 => inert.
+   form   = "linear"
+   r      = 0.0
+   bg_vel = 0.0
+/
+
+&ocean_vmix_nml
+   ! Inviscid interior / interface (2-layer SW): no PP81, no KPP overlay, so
+   ! the two layers stay dynamically distinct (the baroclinic shear is the
+   ! signal).
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&vcoord_nml
+   ! Isopycnal (Lagrangian) — the interface displacement IS the prognostic
+   ! and must move freely; the remap is a no-op so the baroclinic mode is not
+   ! pinned (a z*/sigma-target remap would suppress the instability).
+   vcoord_type = "lagrangian"
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&ocean_diag_nml
+   ! SSH, T, S, u, v, KE per layer registered by default; En + max stats also
+   ! print on the console status line.
+   enabled  = .true.
+   filename = "bc_inst_tuned_512"
+   dt_out   = 1.0                         ! one frame per day
+/
+
+&output_nml
+   output_dir     = "./out_bc_inst_tuned_512"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0                  ! days
+/
+
+&ocean_isopycnal_nml
+   ! Conservative min-layer-thickness: borrow sub-floor deficit from the
+   ! neighbour layer (mass-conserving) so the isopycnal interface cannot
+   ! outcrop to h->0.  Required for the vigorous eddy field to run stably +
+   ! faithfully (mass Error stays ~round-off, floor-value-independent).
+   angstrom_h         = 0.1
+   conservative_floor = .true.
+/

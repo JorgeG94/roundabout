@@ -1,0 +1,150 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "_base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "_nvhpc",
+      "hidden": true,
+      "inherits": "_base",
+      "cacheVariables": {
+        "CMAKE_Fortran_COMPILER": "nvfortran"
+      }
+    },
+    {
+      "name": "_gcc",
+      "hidden": true,
+      "inherits": "_base",
+      "cacheVariables": {
+        "CMAKE_Fortran_COMPILER": "gfortran"
+      }
+    },
+    {
+      "name": "gpu",
+      "displayName": "NVHPC GPU (single device)",
+      "description": "do concurrent + OpenACC, -stdpar=gpu, Release",
+      "inherits": "_nvhpc",
+      "cacheVariables": {
+        "RDB_ENABLE_GPU": "ON"
+      }
+    },
+    {
+      "name": "gpu-debug",
+      "displayName": "NVHPC GPU (Debug)",
+      "inherits": "gpu",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "gpu-mpi",
+      "displayName": "NVHPC GPU + CUDA-aware MPI",
+      "description": "Multi-GPU multi-node, GPU-direct halo exchange",
+      "inherits": "gpu",
+      "cacheVariables": {
+        "RDB_ENABLE_MPI": "ON",
+        "RDB_CUDA_AWARE_MPI": "ON"
+      }
+    },
+    {
+      "name": "multicore",
+      "displayName": "NVHPC multicore CPU",
+      "description": "do concurrent + OpenACC, -stdpar=multicore, Release",
+      "inherits": "_nvhpc",
+      "cacheVariables": {
+        "RDB_ENABLE_THREADS": "ON"
+      }
+    },
+    {
+      "name": "multicore-mpi",
+      "displayName": "NVHPC multicore + MPI",
+      "inherits": "multicore",
+      "cacheVariables": {
+        "RDB_ENABLE_MPI": "ON"
+      }
+    },
+    {
+      "name": "gcc",
+      "displayName": "gfortran serial",
+      "inherits": "_gcc"
+    },
+    {
+      "name": "gcc-threads",
+      "displayName": "gfortran threaded (-ftree-parallelize-loops)",
+      "inherits": "_gcc",
+      "cacheVariables": {
+        "RDB_ENABLE_THREADS": "ON"
+      }
+    },
+    {
+      "name": "gcc-debug",
+      "displayName": "gfortran Debug",
+      "inherits": "_gcc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "gcc-mpi",
+      "displayName": "gfortran + MPI",
+      "inherits": "_gcc",
+      "cacheVariables": {
+        "RDB_ENABLE_MPI": "ON"
+      }
+    },
+    {
+      "name": "perlmutter",
+      "displayName": "NERSC Perlmutter (A100 + CUDA-aware MPI, no NetCDF)",
+      "description": "NVHPC GPU build for Perlmutter: A100 (cc80), CUDA-aware MPI, legacy MPI module, NetCDF off",
+      "inherits": "_nvhpc",
+      "cacheVariables": {
+        "RDB_ENABLE_GPU": "ON",
+        "RDB_GPU_ARCH": "cc80",
+        "RDB_ENABLE_MPI": "ON",
+        "RDB_CUDA_AWARE_MPI": "ON",
+        "RDB_ENABLE_NETCDF": "OFF",
+        "RDB_ENABLE_TESTING": "ON",
+        "PIC_USE_LEGACY_MPI": "ON",
+        "PIC_MPICH_PERLMUTTER": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "gpu",            "configurePreset": "gpu" },
+    { "name": "gpu-debug",      "configurePreset": "gpu-debug" },
+    { "name": "gpu-mpi",        "configurePreset": "gpu-mpi" },
+    { "name": "multicore",      "configurePreset": "multicore" },
+    { "name": "multicore-mpi",  "configurePreset": "multicore-mpi" },
+    { "name": "gcc",            "configurePreset": "gcc" },
+    { "name": "gcc-threads",    "configurePreset": "gcc-threads" },
+    { "name": "gcc-debug",      "configurePreset": "gcc-debug" },
+    { "name": "gcc-mpi",        "configurePreset": "gcc-mpi" },
+    { "name": "perlmutter",     "configurePreset": "perlmutter" }
+  ],
+  "testPresets": [
+    {
+      "name": "_test_base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    { "name": "gpu",         "configurePreset": "gpu",         "inherits": "_test_base" },
+    { "name": "multicore",   "configurePreset": "multicore",   "inherits": "_test_base" },
+    { "name": "gcc",         "configurePreset": "gcc",         "inherits": "_test_base" },
+    { "name": "gcc-threads", "configurePreset": "gcc-threads", "inherits": "_test_base" },
+    { "name": "gcc-debug",   "configurePreset": "gcc-debug",   "inherits": "_test_base" },
+    { "name": "perlmutter",  "configurePreset": "perlmutter",  "inherits": "_test_base" }
+  ]
+}

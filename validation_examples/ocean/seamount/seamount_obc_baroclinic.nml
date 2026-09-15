@@ -1,0 +1,132 @@
+! Stratified seamount — baroclinic open-boundary coverage case.
+!
+! Purpose (regression coverage, NOT validation): exercise the per-layer
+! baroclinic open-boundary kernels that a CLOSED basin can never reach and
+! that the batch-1 corpus left at ~6%:            -> rdb_ocean_obc_baroclinic
+!   * ocean_obc_apply_baroclinic in its ORLANSKI branch (radiation_scheme=
+!       "orlanski"): per-layer implicit-upwind radiation with a running-mean
+!       phase speed rx (Orlanski 1976), plus the Marchesiello et al. (2001)
+!       inflow/outflow nudging that composes on top (nudge_tau_in/out > 0),
+!   * ocean_obc_update_reservoirs: the implicit backward-Euler open-edge
+!       tracer reservoirs (engaged by res_lscale_out/in > 0), and
+!   * ocean_obc_fill_ghosts / ocean_obc_refill_ghost_ssh at the open faces.
+!
+! Two open-ish edges drive the kernels: an M2 TIDAL west boundary (the
+! eta_target constituent sum gives a real inflow<->outflow reversal each M2
+! phase so both nudging directions and the Orlanski inflow/outflow arms fire)
+! and a Flather OPEN east boundary that radiates the signal out.  NK=10 with
+! 20->4 C stratification makes the per-layer (baroclinic) treatment non-trivial.
+!
+! Stability: Orlanski clamps its nondimensional phase speed (orlanski_rx_max),
+! the reservoirs + nudging are implicit/relaxational, and the run is only a
+! handful of outer steps, so this stays clean without the multi-day
+! integration the validation OBC case (tides/seamount_tidal_obc.nml) needs.
+!
+! Kept small + short: 96x64 @ 3 km, 10 layers.
+!
+! Orlanski (1976) J. Comput. Phys. 21:251 (radiation OBC);
+! Marchesiello, McWilliams & Shchepetkin (2001) Ocean Modelling 3:1
+! (adaptive radiation + nudging + reservoirs); Flather (1976).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 96
+   ny     = 64
+   dx     = 3000.0
+   dy     = 3000.0
+   nghost = 2
+/
+
+&ocean_bc_nml
+   west  = "tidal"        ! OBC_TIDAL eta_target: M2 constituent sum (inflow<->outflow)
+   east  = "open"         ! Flather radiation outflow
+   south = "wall"
+   north = "wall"
+   west_n_tidal     = 1
+   west_tidal_amp   = 0.5             ! M2 elevation amplitude, metres
+   west_tidal_phase = 0.0            ! radians
+   west_tidal_omega = 1.4051890e-4   ! M2 angular frequency, rad/s (exact catalog value)
+   obc_tidal_nodal  = .false.
+   ! --- per-layer Orlanski radiation (the baroclinic-OBC target) -----------
+   radiation_scheme = "orlanski"     ! per-layer implicit-upwind radiation
+   orlanski_rx_max  = 5.0            ! clamp on nondim phase speed (cells/step)
+   orlanski_gamma   = 0.7            ! running-mean weight
+   nudge_tau_in     = 43200.0        ! inflow nudging timescale (s)
+   nudge_tau_out    = 432000.0       ! outflow nudging timescale (s)
+   ! --- open-edge implicit tracer reservoirs -------------------------------
+   res_lscale_out   = 6000.0         ! outflow reservoir length scale (m)
+   res_lscale_in    = 6000.0         ! inflow reservoir length scale (m)
+/
+
+&time_nml
+   t_end        = 4.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4            ! f-plane
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 10
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 25000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 5.0e2
+   nu_4 = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.
+   use_kpp     = .true.
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_diag_nml
+   enabled = .false.
+/
+
+&output_nml
+   output_dir     = "./out_seamount_obc_baroclinic"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

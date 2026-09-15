@@ -1,0 +1,155 @@
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 440
+   ny     = 400
+   ! Uniform Cartesian ~0.5 deg = 55.66 km in both directions.
+   dx     = 55660.0
+   dy     = 55660.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 1.0
+   time_unit    = "day"
+   dt_fixed     = 1200.0   ! 4x the 300 s gravity-wave step; baroclinic CFL
+                           ! has the headroom. Stable to 2 days (2400 s
+                           ! diverges). ~3.8x throughput vs 300 s.
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&tracer_nml
+   ! Continuous stratification: linear temperature profile, constant
+   ! salinity.  T_init_surface lands at k=nz (surface), T_init_bottom
+   ! at k=1 (bed); the ocean IC interpolates linearly between them.
+   initial_temperature = 12.0
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_ic_nml
+   ! Linear EOS thermal expansion — non-zero so the T(z) profile drives
+   ! a real baroclinic pressure gradient.  rho_0 reference density.
+   alpha_T = 2.0e-4
+   rho_0   = 1035.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny_energy"
+/
+
+&ocean_thermo_nml
+   ! Full thermodynamics ON — EOS, tracer vdiff/hdiff, vertical
+   ! advection, KPP non-local, surface flux all active.  This is what
+   ! makes the run expensive and exercises the whole stack.
+   enable_thermodynamics = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "spoon"
+   max_depth      = 2000.0
+   edge_depth     = 100.0
+   slope_scale    = 400000.0
+   wind_config    = "2gyre"
+   taux_magnitude = 0.1
+   coriolis_beta  = 1.76e-11
+   ! Beta-plane reference latitude = basin centre = (ny/2)*dy
+   ! = 200 * 55660 = 11,132,000 m.  (Was 1,113,200 for ny=40.)
+   coriolis_y_ref = 11132000.0
+/
+
+&ocean_pgf_nml
+   ! Finite-volume Boussinesq PGF (MOM6 PressureForce_FV_Bouss port).
+   ! Works with the continuously-stratified rho_layer stack the linear
+   ! EOS produces from the T(z) profile.
+   form   = "fv_mom6"
+   ! Defensive velocity clamp — clips face velocities each outer step
+   ! so a transient never runs off to NaN before diagnostics fire.
+   maxvel = 6.0
+/
+
+&ocean_bdrag_nml
+   ! Linear (Rayleigh) bottom drag, HBBL-distributed over the bottom
+   ! 10 m.  Effective rate r = 2.5e-5 /s.
+   form          = "linear"
+   r             = 2.5e-5
+   hbbl          = 10.0
+   bg_vel        = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_hvisc_nml
+   ! Constant Laplacian floor + flow-aware Smagorinsky (Kh + biharmonic
+   ! Ah).  At dx ~ 55 km the Munk BL is well resolved; Smagorinsky adds
+   ! local damping wherever the WBC sharpens.
+   nu_h            = 10000.0
+   nu_4            = 0.0
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_bg         = 0.0
+   nu_4_max        = 1.0e12
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   kh_vel_scale    = 3.0e-3
+   ah_max          = 1.0e4
+/
+
+&ocean_vmix_nml
+   ! Full vertical mixing: PP81 Richardson interior closure + KPP
+   ! boundary-layer overlay.  This is the expensive path.
+   use_closure    = .true.
+   use_kpp        = .true.
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   direct_stress  = .false.
+   hmix_stress    = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 2
+/
+
+&ocean_bt_nml
+   ! Split-explicit barotropic; auto_n_inner derives the substep count
+   ! from the gravity-wave CFL each step.  cfl_bt_safety = 0.20 -> ~16
+   ! barotropic substeps at dt=1200 (vs the bare CFL minimum of ~5):
+   ! healthy margin, ~free (barotropic is ~1-3% of compute), and the
+   ! extra substeps are what keep the long outer step stable.
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.20
+   bebt          = 0.2
+/
+
+&vcoord_nml
+   ! z*-lite: one global z_ref stretched per column, SSH-tracking, all
+   ! 50 layers active everywhere (no vanishing bed layers).  Robust for
+   ! continuous stratification — unlike zstar_full, which is tuned for
+   ! the NK=2 reduced-gravity reference.
+   vcoord_type = "zstar"
+/
+
+&ocean_diag_nml
+   ! bench_ocean is NetCDF-free; diagnostics off.
+   enabled = .false.
+/
+
+&output_nml
+   output_dir     = "./out_double_gyre_mom6"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0     ! days (time_unit = "day")
+/

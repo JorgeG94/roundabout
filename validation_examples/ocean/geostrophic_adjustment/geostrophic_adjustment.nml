@@ -1,0 +1,132 @@
+! Geostrophic adjustment — Rossby's classic problem.  Drop a
+! Gaussian SSH bump on an f-plane and watch the system shed
+! inertia-gravity waves and settle (partially) into geostrophic
+! balance.  Cheap diagnostic of:
+!   * Coriolis coupling (oscillation period at the centre = 2π/f)
+!   * Hydrostatic + barotropic gravity-wave physics (IG-wave front
+!     speed = √(gH))
+!   * Energy conservation (bounded KE + PE after IG transient)
+!   * PGF / continuity sign + scaling
+!
+! Setup:
+!   * 1000 km × 1000 km closed basin (100 × 100 cells @ 10 km).
+!   * Single barotropic layer (nz=1), depth H = 1000 m.
+!   * f-plane at f = 1e-4 s^-1 (midlatitude, ~43°N).
+!   * Uniform T = 10°C, S = 35 PSU — pure barotropic adjustment,
+!     no baroclinic feedback.
+!   * 200 km Gaussian SSH bump at basin midpoint, amp = 1 m.
+!   * No wind, no surface flux, no drag.
+!
+! Analytical scales:
+!   Deformation radius   Rd = √(gH)/f = 990 km
+!   IG-wave speed        c = √(gH)    = 99 m/s
+!   IG period at centre  T = 2π/f      ≈ 17.5 hours (oscillation
+!                                       around residual balanced state)
+!   Bump-to-Rd ratio     L / Rd = 0.20 → most energy radiates
+!   Expected residual    ~10% of initial bump amplitude as the
+!                         balanced anticyclonic ring (small L / Rd)
+!
+! Expected outcome:
+!   * Days 0-3: IG waves radiate outward at ~99 m/s, reach the walls
+!     at t ≈ Lx/(2c) ≈ 1.4 hours, then reflect → standing-wave
+!     interference pattern.
+!   * Days 0-30: η at centre oscillates with ~17.5 h period, damping
+!     toward small residual.
+!   * Throughout: total mass + total energy bounded.
+!
+! Diagnostic interpretation:
+!   * KE growing without bound → numerical instability (bad PGF,
+!     bad Coriolis coupling, bad continuity).
+!   * Oscillation period drifting from 2π/f → Coriolis coupling bug.
+!   * Bump centre stays at A or grows → PGF not applying.
+!   * Bump radiates faster than √(gH) → wave-speed bug.
+!
+! Expected wallclock single V100: ~30 s for 30 days.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 100
+   ny     = 100
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 1
+/
+
+&vcoord_nml
+   vcoord_type = "zstar"
+/
+
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 10.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config      = "flat"
+   max_depth  = 1000.0
+   wind_config       = "constant"
+   coriolis_beta     = 0.0
+   coriolis_y_ref    = 0.0
+/
+
+&ocean_ic_nml
+   ic_config        = "geostrophic_adjustment"
+   ! Gaussian SSH bump: A=1 m, L=200 km, default centre = midpoint.
+   ga_eta_amp       = 1.0
+   ga_length_scale  = 200000.0
+/
+
+&ocean_hvisc_nml
+   ! Minimal dissipation — the test is meant to expose conservation
+   ! properties.  Add Smag if the run develops grid-scale noise.
+   nu_h        = 0.0
+   nu_4        = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure  = .false.       ! Pure barotropic test
+   use_kpp      = .false.
+/
+
+&ocean_bt_nml
+   n_inner           = 20            ! dt_inner = 30 s, CFL_grav ≈ 0.6
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "geostrophic_adjustment"
+   dt_out   = 3600.0      ! Hourly snapshots → 720 outputs
+                                     ! at the IG-wave timescale.
+/
+
+&output_nml
+   output_dir      = "./out_geostrophic_adjustment"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/

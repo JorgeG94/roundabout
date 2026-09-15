@@ -1,0 +1,111 @@
+! Stratified seamount — internal-tide (tidal) mixing coverage case.
+!
+! Purpose (regression coverage, NOT validation): exercise the
+! St-Laurent/Simmons bottom-intensified internal-tide diapycnal-mixing
+! closure                                              -> rdb_ocean_tidal_mixing
+!
+! The closure requires the interior vertical-mixing path (use_closure) and
+! thermodynamics (a stratified column for the N^2 the mixing profile scales
+! with).  A uniform bottom internal-tide energy input `e_uniform` drives a
+! non-zero bottom-intensified Kd every step, so the kernel does real work.
+!
+! Small + short for the regression budget: 96x96 @ 4 km, 20 layers,
+! 20->4 C stratification, seamount topography.
+!
+! St. Laurent, Simmons & Jayne (2002) GRL 29(23):2106;
+! Simmons, Jayne, St. Laurent & Weaver (2004) Ocean Modelling 6:245.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 96
+   ny     = 96
+   dx     = 4000.0
+   dy     = 4000.0
+   nghost = 3
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 20
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 40000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 5.0e2
+   nu_4 = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.     ! interior closure path (tidal mixing needs it)
+   use_kpp     = .true.
+/
+
+! --- internal-tide interior mixing (the coverage target) -----------------
+&ocean_tidal_mixing_nml
+   enable       = .true.    ! requires use_closure + thermodynamics
+   e_uniform    = 1.0e-3    ! uniform bottom internal-tide energy input (W/m^2)
+   gamma        = 0.3333    ! local-dissipation fraction q
+   mu           = 0.2       ! mixing efficiency Gamma_mix
+   zeta         = 500.0     ! bottom decay scale (m)
+   kd_max       = 1.0e-2    ! per-layer Kd cap (m^2/s)
+   prandtl_tidal = 1.0
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_diag_nml
+   enabled = .false.
+/
+
+&output_nml
+   output_dir     = "./out_seamount_tidal_mixing"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

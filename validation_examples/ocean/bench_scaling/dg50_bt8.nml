@@ -1,0 +1,281 @@
+! Roundabout ocean-path double-gyre — MOM6 reference reproduction.
+!
+! Mirrors NOAA-GFDL/MOM6-examples/ocean_only/double_gyre exactly up
+! to the limits of the current ocean stack:
+!   NIGLOBAL = 44, NJGLOBAL = 40
+!   22 deg lon x 20 deg lat at mid-lat ~40N -> Cartesian dx/dy
+!   NK = 2, MAX_DEPTH = 2000 m, spoon bathymetry (D_edge=100, slope=400 km)
+!   TAUX_MAGNITUDE = 0.1 Pa, 2gyre wind profile
+!   DT = 1200 s, DAYMAX = 10 days
+!   Beta-plane: f_0 = 9.4e-5 (40N), beta = 1.76e-11
+!
+! Goes through app/main.F90 -> driver_run -> driver_run_ocean.
+! For a separate Munk-regime double-gyre that drives ocean_dyn_step_split
+! directly (no driver, custom wind formula), see double_gyre.nml +
+! run_double_gyre.F90.
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/double_gyre/double_gyre_mom6.nml
+!
+! Output: per-rank NetCDF written via the diag manager to
+! out_double_gyre_mom6/double_gyre_rank_NNNNNN.nc with SSH, T, S, u, v, KE
+! at one frame per day.
+!
+! Known caveats vs MOM6 (see README.md):
+!   - MOM6 uses gprime / adiabatic reduced gravity, NK=2, with
+!     ENABLE_THERMODYNAMICS = False.  Roundabout's multilayer kernel
+!     always runs T/S advection, so we instead set alpha_T = beta_S
+!     = 0 below — the linear EOS returns rho_0 regardless of T/S
+!     so any tracer-advection drift cannot reach the dynamics.
+!     SSH amplitudes will not bit-match MOM6, but the mass + energy
+!     budget is decoupled from thermodynamics in the same spirit.
+!   - MOM6 BOUND_CORIOLIS = True (Sadourny + HK correction).  Roundabout
+!     ships the Arakawa-Hsu / HK kernel — engaged below via
+!     ocean_coriolis_form = "sadourny_hk".
+!   - MOM6 LINEAR_DRAG with HBBL=10m distributes the linear drag across
+!     the bottom HBBL metres.  Roundabout's bottom drag applies to the bed
+!     layer only (see rdb_ocean_bottom_drag) — same Rayleigh form but
+!     a different BBL footprint, so bottom-current structure will
+!     differ from the MOM6 reference.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 300
+   ny     = 300
+   ! MOM6 GRID_CONFIG="cartesian" converts the degree-extents to metres as an
+   ! arc length on RAD_EARTH=6.378e6 (no cos(lat)):
+   !   dx = Rad_Earth · LENLON · π/180 / NIGLOBAL = 6.378e6·22·π/180/300
+   !   dy = Rad_Earth · LENLAT · π/180 / NJGLOBAL = 6.378e6·20·π/180/300
+   ! LENLON=22 ≠ LENLAT=20 over the same 300 points ⇒ dx ≠ dy (anisotropic).
+   dx     = 8163.3
+   dy     = 7421.1
+   nghost = 3
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 1200.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   ! Belt-and-braces: even with ENABLE_THERMODYNAMICS = False below,
+   ! tracers still get carried along by the continuity-tracer step
+   ! (that kernel updates h and hTr together for CWC).  Setting
+   ! alpha_T = beta_S = 0 guarantees any residual tracer drift cannot
+   ! reach the dynamics via the EOS.
+   alpha_T             = 0.0
+   beta_S              = 0.0
+/
+
+&ocean_ic_nml
+   ! Per-layer static density (MOM6 COORD_CONFIG="gprime" analogue).
+   ! Convention: k=1 (bed) first, k=nz_ml (surface) last.  With
+   ! enable_thermodynamics=.false. the dyn-step EOS call is
+   ! skipped — without this knob, `ms%rho_layer` would stay at its
+   ! alloc-time zero and FV-LITE's pressure stack would collapse to
+   ! zero (no PGF, no Sverdrup balance, only wind+Coriolis dynamics).
+   ! Setting per-layer ρ here writes the values straight into
+   ! `rho_layer` so the FV PGF sees the MOM6-gprime stratification.
+   ! Density contrast 1.0 kg/m³ ⇒ effective g' = g·Δρ/ρ_0 ≈ 0.00948,
+   ! matching MOM6's GINT = 0.0098 to 3%.
+   !layer_rho_init = 1036.0, 1035.0
+      rho_lightest = 1035.0    ! surface layer density
+   rho_range    = 2.0       ! top-to-bottom contrast (MOM6 DENSITY_RANGE); tune to taste
+/
+
+&ocean_coriolis_nml
+   ! Matches MOM6's `CORIOLIS_SCHEME = "SADOURNY75_ENERGY"` default.
+   ! Moves day-10 NK=2 SSH min from −51 cm → −36 cm (and steady
+   ! state at day 30+ from −50 cm → −34 cm against MOM6's −23 cm
+   ! reference).  Trades SSH amplitude for bed-layer baroclinic
+   ! shear; total mean KE goes up ~2.9× because the enstrophy-
+   ! conserving variant was aliasing energy out.
+   form = "sadourny_energy"
+/
+
+&ocean_thermo_nml
+   ! ENABLE_THERMODYNAMICS = False analogue.  Skips EOS, tracer hdiff
+   ! and vertical advection, tracer vdiff, KPP non-local, and surface
+   ! tracer flux.  Matches MOM6's ADIABATIC=True for this config.
+   ! Tracers are still carried by the continuity-tracer step (h and
+   ! hTr update together), but with alpha_T=beta_S=0 above they have
+   ! no dynamical effect.
+   enable_thermodynamics = .false.
+/
+
+&ocean_topo_nml
+   topo_config       = "spoon"
+   max_depth   = 2000.0
+   edge_depth  = 100.0
+   slope_scale = 400000.0
+   wind_config       = "2gyre"
+   taux_magnitude    = 0.1
+   coriolis_beta     = 1.76e-11
+   coriolis_y_ref    = 1113200.0
+/
+
+&ocean_pgf_nml
+   ! Reduced-gravity / gprime PGF (MOM6 COORD_CONFIG="gprime").
+   ! Tier-1 NK=2 implementation: a_top = -g_FS · ∇η, a_bot = -g_FS ·
+   ! ∇η - g_int · ∇h_bot.  Matches MOM6's setup: GFS=0.98, GINT=0.0098.
+   !
+   ! NOTE: a faithful port of MOM6's `PressureForce_FV_Bouss`
+   ! (`ocean_pgf_form = "fv_mom6"`) is now available; the flip waits
+   ! until `ocean_layer_rho_init` (PR #2) is on main since FV_MOM6
+   ! needs the per-layer Rlay stack the rho-init knob provides.
+   ! PR-6: was form="gprime" — a 2-layer reduced-gravity PGF that writes
+   ! ONLY the top+bottom layer, so with nz_layers=50 layers 3-50 ran with
+   ! ZERO pressure gradient (silent). fv_lite is the general-nz z-corrected
+   ! FV PGF (matches the working sibling dg50_bt8_fv.nml). Flip to fv_mom6
+   ! once PR #2 (ocean_layer_rho_init) lands, per the note above.
+   form    = "fv_lite"
+   gprime_gfs  = 0.98
+   gprime_gint = 0.0098
+   ! Velocity clamp (MOM6 MAXVEL).  Defensive — clips face
+   ! velocities to ±maxvel each outer step.  Should rarely fire
+   ! in production; prevents exponential blowup from running off
+   ! to NaN before we get diagnostic data out.
+   maxvel      = 6.0
+/
+
+&ocean_bdrag_nml
+   ! Bottom drag — MOM6 LINEAR_DRAG analogue.  The stress is
+   ! distributed across the bottom ocean_bdrag_hbbl metres rather
+   ! than dumped into the bed-most layer.  Effective Rayleigh rate
+   ! is `r = C_d · DRAG_BG_VEL / HBBL = 2.5e-3 · 0.1 / 10 = 2.5e-5 /s`,
+   ! matching MOM6's reference for this config.
+   form  = "linear"
+   r     = 2.5e-5
+   hbbl  = 10.0
+   bg_vel = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_hvisc_nml
+   ! Laplacian viscosity.  MOM6's reference for this setup uses
+   ! KH = 1.0e4 m²/s as the constant floor + SMAGORINSKY_KH on top
+   ! (C_S = 0.15) + KH_VEL_SCALE = 3e-3.  We replicate all three
+   ! below.  At Δx≈50 km / β=1.76e-11 the Munk BL is ~80 km, very
+   ! heavily resolved; the Smagorinsky term adds local damping
+   ! wherever the WBC sharpens.
+   nu_h        = 10000.0
+   ! Biharmonic AH — bypassed when ocean_smag_ah=.true. (below).
+   ! Kept as a fallback floor for the constant-coefficient path.
+   nu_4        = 0.0
+   ! Flow-aware biharmonic (MOM6 SMAGORINSKY_AH=True analogue).
+   ! Per-face nu4 = C_b · L⁴ · |D|, clamped to [nu_4_bg, nu_4_max].
+   ! C_b = 0.06 sits at the upper end of MOM6's 0.015-0.06 range.
+   ! nu_4_max set well under explicit-CFL ceiling (~2.7e14 here).
+   smag_ah      = .true.
+   smag_bi_const = 0.06
+   nu_4_bg      = 0.0
+   nu_4_max     = 1.0e12
+   ! Flow-aware lateral closure — MOM6 SMAGORINSKY_KH=True analogue.
+   ! `ah_bg` is derived from `max(ocean_nu_h, ocean_kh_vel_scale·dx)`
+   ! and floors the per-face viscosity; the Smagorinsky term then
+   ! adds (C_S·dx)²·|D| on top, capped at `ah_max`.
+   lateral_closure = "smagorinsky"
+   c_smag      = 0.15
+   kh_vel_scale = 3.0e-3
+   ah_max      = 1.0e4
+   ! bound_kh: this 300x300 grid's actual dx/dy (~8163/7421 m, see
+   ! &grid_nml above) is far finer than the "~50 km" this block's own
+   ! comments assume (copied from a coarser MOM6-parity reference) --
+   ! nu_h=10000 at dt=1200s here gives a viscous CFL of ~0.22, over the
+   ! configure-time stability audit's 0.125 bound
+   ! (rdb_ocean_stability_audit.F90). bound_kh is the correct runtime
+   ! protection; see FINDINGS.md's matching real-world failure.
+   bound_kh    = .true.
+/
+
+&ocean_vmix_nml
+   ! KV_ML_INVZ2 — extra near-surface vertical viscosity (MOM6 default
+   ! 0.01 m^2/s inside HMIX_FIXED=20 m).  Provides the dissipation that
+   ! lets wind stress drive thin surface layers without exciting a
+   ! numerical eigenmode.  No-op when the surface layer is already
+   ! thick relative to HMIX_FIXED — but the addition is concentrated
+   ! near the surface so it matters when the surface layer is thin.
+   kv_ml_invz2 = 0.01
+   hmix_fixed  = 20.0
+   ! DIRECT_STRESS — MOM6 distributes the wind stress over the top
+   ! HMIX_STRESS=20 m.  For our 2-layer config with h_top ~ 1000 m the
+   ! formula collapses to the surface-layer-only branch (bit-identical)
+   ! so leaving it off costs nothing here.  Knob exposed for future
+   ! configs with a thin top layer (e.g. KPP-resolved MLD).
+   direct_stress = .false.
+   hmix_stress = 20.0
+   ! HARMONIC_VISC — vdiff uses harmonic mean of adjacent layer
+   ! thicknesses in the face-thickness denominator.  Matters at thin
+   ! / vanishing layers; for our 2-layer 1000m config it's a small
+   ! effect on the (already small) implicit vdiff coefficients.
+   harmonic_visc = .true.
+   ! DT_THERM ratio — thermo / tracer kernels fire every 2 outer
+   ! steps with dt_eff = 2·dt.  Matches MOM6's DT_THERM=2·DT.  No-op
+   ! when ocean_enable_thermodynamics = .false. (current setup), but
+   ! the knob is wired for when thermodynamics is re-enabled.
+   dt_therm_ratio = 2
+/
+
+&ocean_bt_nml
+   bt_halo = 8
+   ! Split-explicit barotropic — matches MOM6's default mode-split
+   ! integration (DT_BT_FRACTION).  auto_n_inner derives n_inner from
+   ! the gravity-wave CFL each step.  Also engages the per-kernel
+   ! profiler breakdown inside `run_stage_split`.
+   auto_n_inner      = .true.
+   cfl_bt_safety     = 0.65
+
+   ! BEBT velocity-projection coefficient (MOM6 BT_PROJECT_VELOCITY
+   ! analogue).  Non-zero values let the BT substep's η update flux
+   ! anticipate the velocity update later in the substep:
+   !   ubt_trans = (1 + bebt)·u^n − bebt·u^{n-1}
+   ! MOM6's reference value is 0.2; this is what gives MOM6's BT mode
+   ! a faster spin-up response than our pure forward-backward Euler.
+   ! Default 0.0 ⇒ pre-knob FBE behaviour (bit-identical).  Flip to
+   ! 0.2 for the day-10 En A/B against MOM6.
+   bebt               = 0.2
+/
+&vcoord_nml
+   ! ZSTAR_FULL with the layer-2 interface pinned at z = -1000 m
+   ! (zstar_h_surf_target = 1000).  ALE remap restores
+   !   h_surf = min(bathy, 1000)
+   !   h_bed  = max(0,   bathy − 1000)
+   ! at every step, mathematically equivalent to MOM6's NK=2
+   ! isopycnal `COORD_CONFIG="gprime"` for adiabatic flow (no
+   ! diabatic process changes layer densities, so isopycnal-restoring
+   ! and z*-restoring give identical layer thicknesses).
+   vcoord_type             = "zstar_full"
+   zstar_h_surf_target     = 1000.0
+   zstar_h_min             = 1.5e-4
+/
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "double_gyre"
+   dt_out   = 1.0     ! 1 day per frame (time_unit = day above)
+/
+
+&output_nml
+   output_dir     = "./out_double_gyre_mom6"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 1.0     ! days (time_unit = "day")
+/

@@ -1,0 +1,114 @@
+! Flow-past-island — static land-mask NO-NORMAL-FLOW test (CHUNK B).
+!
+! Goal: drive a flow toward an interior LAND block with wind stress and
+! verify the static land mask makes the island a hard, no-normal-flow,
+! free-slip wall.  Companion to island_at_rest (which is the quiescent
+! trap); here the basin is ACTIVELY forced so any leak across the coast
+! shows up immediately.
+!
+! Setup:
+!   * 48 x 48 closed basin @ 5 km (240 km square), f-plane f = 0 so the
+!     only dynamics is wind drive + the land mask.
+!   * topo_config = "island": flat 1000 m basin, central LAND square
+!     (slope_scale = 0.2 ⇒ middle 40 % is land).
+!   * Uniform T/S (no APE) — the flow is purely wind-driven, isolating
+!     the mask behaviour from baroclinic effects.
+!   * Eastward wind stress 0.1 N/m² pushes water against the island's
+!     west face; free-slip lets the tangential jet slide along the coast.
+!
+! Expected outcome (orchestrator GPU check):
+!   * Normal velocity at EVERY land face is 0 to round-off:
+!       max over land u-faces of |u_face_x| <= ~1e-12   (wet_u = 0)
+!       max over land v-faces of |v_face_y| <= ~1e-12   (wet_v = 0)
+!     equivalently: the layer-velocity reset (C4) + masked metrics hold.
+!   * NO mass crosses land: sum(h) over the wet domain conserved to
+!     ~1e-12 relative over the run (every cross-land transport rides a
+!     zeroed face metric).
+!   * The wet-side h_face next to the coast is NOT biased (C2 mirror-h):
+!     no spurious near-coast transport spike at t=0.
+!   * A nonzero normal velocity at a land face, or drifting wet-domain
+!     mass, is a CHUNK-B bug (un-reset velocity / un-mirrored h_face).
+!
+! 48 x 48 x 4 = ~9k cells; runs in seconds.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 48
+   dx     = 5000.0
+   dy     = 5000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 432000.0    ! 5 days
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 0.0
+   wind_stress_x = 0.1
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 4
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   T_init_surface      = 0.0
+   T_init_bottom       = 0.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h    = 50.0        ! light Laplacian smoothing for stability
+   no_slip = .false.     ! free-slip (default) — tangential jet slides along the coast
+/
+
+&ocean_topo_nml
+   topo_config    = "island"
+   max_depth      = 1000.0
+   slope_scale    = 0.2
+   wind_config    = "constant"
+   taux_magnitude = 0.1       ! eastward wind drives water onto the island west face
+   coriolis_beta  = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+   n_inner = 30
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "flow_past_island"
+   dt_out   = 43200.0   ! twice-daily snapshots
+/
+
+&output_nml
+   output_dir     = "./out_flow_past_island"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 43200.0
+/

@@ -1,0 +1,180 @@
+! Polar freeze-up + WIND-DRIVEN EVP DRIFT — sea-ice dynamics validation
+! (SIS2 port PR 5, C-grid EVP rheology), follow-on to
+! polar_freezeup_thermo.nml.
+!
+! Same freeze-up scenario (identical grid/topo/thermo/ice-thermo knobs as
+! polar_freezeup_thermo.nml — see that file's header for the physics
+! rationale), but with a steady EASTWARD wind stress from t=0 and
+! `&ocean_ice_nml dynamics = .true.` turned on.  Ice still has to
+! nucleate from the frazil path first (there is no ice-IC-seeding knob —
+! see the thermo file's header), so this run starts ice-free exactly like
+! the thermo case and asks a second question on top of "does it grow": once
+! ice exists, does the EVP solver respond to wind stress (nonzero u_ice/
+! v_ice) and does it pile up against the east wall (all &ocean_bc_nml
+! edges default to "wall", which satisfies the &ocean_ice_nml
+! dynamics=.true. configure-time envelope requiring every edge to be
+! wall or periodic)?
+!
+! Shorter run than the thermo case (20 days, not 90) — this file's job is
+! to demonstrate MOTION, not to grow ice to 2-3 m.  By day 20 the thermo
+! twin shows ~0.77 m mean thickness, plenty of mass for the EVP ice-
+! strength term to engage (ice-free / very-thin cells contribute ~0
+! strength by construction — see rdb_ice_evp.F90 "Ice margins" docstring
+! — so early drift is close to free-drift, thickening ice should show
+! increasing internal resistance/convergence against the wall).
+!
+! Wind: constant tau_x = +0.05 Pa (eastward), tau_y = 0. The ice-ocean
+! drag coefficient cdw and reference density rho_ocean keep their SIS2
+! defaults (3.24e-3, 1030 kg/m^3); evp_sub_steps keeps the SIS2 default
+! NSTEPS_DYN=432 (ice EVP subcycles run every OUTER step, not gated on
+! the thermo cadence, so this is not free — see run wallclock notes
+! below).
+!
+! Run:
+!   source mac_env.sh
+!   build/rdb validation_examples/ocean/sea_ice/polar_freezeup_dynamics.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 40
+   ny     = 30
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 0.5
+   time_unit    = "day"
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! f-plane, high-latitude (~80N): f = 2*Omega*sin(80deg) ~ 1.435e-4 /s.
+   coriolis_f    = 1.435e-4
+   ! Steady eastward wind stress (Pa) — wind_config="constant" (default)
+   ! reads these two scalars uniformly over the domain.
+   wind_stress_x = 0.05
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 4
+/
+
+&tracer_nml
+   initial_salinity    = 34.0
+   initial_temperature = -1.80    ! just above T_f = -1.836 degC
+/
+
+&ocean_ic_nml
+   alpha_T = 1.7e-4
+   rho_0   = 1027.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   q_heat = -60.0
+/
+
+&ocean_topo_nml
+   topo_config = "flat"
+   max_depth   = 50.0
+   wind_config = "constant"
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   form   = "fv_lite"
+   maxvel = 2.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 500.0
+/
+
+&ocean_bdrag_nml
+   form  = "linear"
+   r     = 2.5e-5
+   hbbl  = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_vmix_nml
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+! All four ocean_bc_nml edges default to "wall" -- required by the
+! &ocean_ice_nml dynamics=.true. configure-time envelope (every edge must
+! be wall or periodic) and gives the ice pack something solid to pile
+! against on the downwind (east) side.
+
+&ocean_ice_nml
+   enable         = .true.
+   ncat           = 5
+   nk_ice         = 2
+   air_temp       = -20.0
+   restore_lambda = 20.0
+   sw_down        = 0.0
+   ! transport=.true. is what lets ice MASS actually redistribute
+   ! (advect) in response to the EVP velocity field -- dynamics alone
+   ! only computes u_ice/v_ice, it does not move m_ice/part_size around.
+   ! Needs ncat>1 (5, ok), enable_thermodynamics=.true. (ok), no
+   ! periodic edges (all wall, ok), single-rank (ok) -- satisfies the
+   ! &ocean_ice_nml transport=.true. configure-time envelope.
+   transport      = .true.
+   dynamics       = .true.
+   evp_sub_steps  = 432
+   ! PR 36: ship SIS2's OWN defaults on this example (the house code
+   ! default is OFF for byte-identity elsewhere -- see &ocean_ice_nml
+   ! cfl_trunc/project_ci docstrings, rdb_config.F90).
+   !   cfl_trunc = 0.5 is a pure numerics backstop and, by arithmetic
+   !     (peak EVP drift ~0.13 m/s vs the transport-CFL bound
+   !     ~8.33 m/s at this dx=10km/dt=600s -- a 64x margin), it CANNOT
+   !     fire in this run; it is present only as the same safety net a
+   !     production configuration would carry, not the fix for the
+   !     downwind pile-up below.
+   !   project_ci = .true. IS live physics wherever ci < 1 (it stiffens
+   !     the rheology as the pack converges) -- expect it to shave the
+   !     APPROACH to the wall. At the wall itself ci has already
+   !     saturated to 1, where project_ci is provably inert (the strength
+   !     is already at its ceiling either way) -- it is not a fix for the
+   !     ~9% downwind mass pile-up, which is the missing ridging
+   !     parameterisation's problem (Tier 3, no PR number).
+   cfl_trunc      = 0.5
+   project_ci     = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "polar_freezeup_dynamics"
+   dt_out   = 0.25     ! 6-hour frames (time_unit = day above)
+/
+
+&output_nml
+   output_dir     = "./out_polar_freezeup_dynamics"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 0.5     ! days
+/

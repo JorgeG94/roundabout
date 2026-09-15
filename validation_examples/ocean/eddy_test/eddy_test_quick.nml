@@ -1,0 +1,81 @@
+! Quicker version of `eddy_test.nml` — 10 days instead of 30, ~10 km
+! resolution instead of 5 km.  Use this to first verify spin-up
+! before the longer eddy-formation run.
+!
+! At 10 km the Rossby radius (~33 km) is ~3 cells across — eddy-
+! permitting but not eddy-resolving.  WBC spin-up should still be
+! visible by day 10 (broadening jet, SSH dipole), but eddy shedding
+! won't be developed yet.  For real eddies use `eddy_test.nml`.
+!
+! Expected wallclock single V100: ~5-7 min for 10 days.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 1024
+   ny     = 1024
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 172800.0    ! 10 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 9.4e-5
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   T_init_surface      = 20.0
+   T_init_bottom       = 5.0
+   initial_salinity    = 35.0
+/
+
+&ocean_topo_nml
+   topo_config       = "flat"
+   max_depth   = 4000.0
+   wind_config       = "2gyre"
+   taux_magnitude    = 0.1
+   coriolis_beta     = 1.76e-11
+   coriolis_y_ref    = 750000.0    ! Mid-domain (1500/2 km)
+/
+
+&ocean_hvisc_nml
+   nu_h        = 1.0e4       ! Munk BL ~80 km — well resolved at 10 km
+/
+
+&ocean_bt_nml
+   n_inner           = 30
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "eddy_quick"
+   dt_out   = 21600.0   ! Every 6 hr — 40 frames
+/
+
+&output_nml
+   output_dir      = "./out_eddy_quick"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 43200.0       ! Every 12 hr
+/

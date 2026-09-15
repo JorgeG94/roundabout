@@ -1,0 +1,127 @@
+! Idealised seamount_auto — Tier-1.5 σ-coord bathymetry bridge test.
+!
+! Goal: validate the ocean dyn-core operators (BPG, Coriolis-adv,
+! continuity, vmix) over a varying-h_layer bathymetry WITHOUT the
+! confounds that `tasman_2km.nml` carries (50× depth ratio, IC
+! stratification feeding APE, closed-basin baroclinic resonance,
+! sponge edge effects).
+!
+! Setup:
+!   * 100 km × 100 km closed basin (50 × 50 cells @ 2 km).
+!   * Single Gaussian seamount_auto centred at (50 km, 50 km):
+!       peak depth = 200 m (top of bump)
+!       basin depth = 4000 m (asymptote far from bump)
+!       half-width = 25 km (gaussian e-folding distance)
+!     Maximum slope ~150 m/km — comparable to a real shelf break.
+!   * 15 σ-layers (matches `eddy_test.nml`).
+!   * **Uniform T = 15 °C, S = 35 PSU** — no stratification, no APE.
+!     Density is horizontally and vertically uniform; the BPG over
+!     uniform ρ + sloping bathy should cancel exactly.
+!   * **f-plane Coriolis at f = 0** — no Coriolis activity from
+!     residual flow.  Eliminates baroclinic-instability resonance
+!     entirely (no APE to feed it anyway).
+!   * No wind, no surface flux, no sponges.  Closed walls.
+!
+! Expected outcome:
+!   *Identically zero motion* for 30 days.  En = 0, max|u| = 0,
+!   SSH = 0 ± machine roundoff.  Any non-zero u, v, η is a σ-coord
+!   numerical artefact in the BPG, Coriolis-adv, or continuity
+!   kernels.  This is the cleanest possible test of those
+!   operators' behaviour under varying h_layer.
+!
+! Diagnostic interpretation:
+!   * En growing exponentially → σ-coord operator bug
+!     (BPG residual, Coriolis-adv PV-flux non-trivially h-weighted,
+!     PPM continuity mass-flux scaling).  Compare to flat-bottom
+!     reference: flat should also stay at zero.
+!   * En stays at zero, but Coriolis on (f = 1e-4): a different
+!     test isolating Coriolis-adv specifically.
+!   * En stays at zero, but stratification on: tests BPG-Jacobian
+!     completeness against the EOS coupling.
+!
+! Expected wallclock single V100: ~30 sec for 30 days (very small
+! domain — 50 × 50 × 15 = 37 500 cells × ~30 ms / step × 8640 steps).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 50
+   ny     = 50
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 300.0       ! 5 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 0.0        ! f-plane f=0 — no Coriolis feedback
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"   ! Production default — same as Tasman
+/
+
+&tracer_nml
+   initial_temperature = 15.0
+   initial_salinity    = 35.0
+   T_init_surface      = 0.0     ! Uniform — no T(z) stratification
+   T_init_bottom       = 0.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"  ! Pin: regression calibrated on this branch
+/
+
+&ocean_topo_nml
+   topo_config       = "seamount"
+   max_depth   = 4000.0    ! Basin depth
+   edge_depth  = 200.0     ! Seamount peak depth
+   slope_scale = 25000.0   ! Gaussian half-width (m)
+   wind_config       = "constant"
+   taux_magnitude    = 0.0
+   coriolis_beta     = 0.0       ! f-plane
+   coriolis_y_ref    = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h        = 0.0       ! No viscosity — pure dyn-core test
+   nu_4        = 0.0       ! No biharmonic either
+/
+
+&ocean_vmix_nml
+   use_closure  = .false.   ! PP81 + KPP off — pure dyn-core test
+   use_kpp      = .false.
+/
+
+&ocean_bt_nml
+   n_inner           = 1
+   auto_n_inner      = .true.        ! dt_inner = 5 s; gravity-wave CFL = 0.49 at H=4000 m
+/
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "seamount_auto"
+   dt_out   = 21600.0  ! 6-hourly snapshots
+/
+
+&output_nml
+   output_dir      = "./out_seamount_auto"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0     ! Daily progress
+/

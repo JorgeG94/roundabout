@@ -1,0 +1,176 @@
+! Neverworld2 — idealized single-basin ocean (Marques et al. 2022, GMD).
+!
+! A Pangaea-style basin spanning a 60 deg lon x 140 deg lat spherical
+! sector (lon 0->60 E, lat 70 S -> 70 N) with a RE-ENTRANT (periodic-x)
+! southern channel: the Drake-Passage analog.  The MOM6-inspired
+! bathymetry (topo_config="neverworld2") carves two meridional continent
+! barriers — South America at the x-edges (which straddle the periodic
+! seam, so the northern seam sits IN land) and Africa mid-basin — that
+! wall the northern wind-driven gyres, plus the Drake/Scotia ridge system
+! that sets the channel sill.  The banded zonal wind
+! (wind_config="neverworld2") is the canonical 3-band westerlies / trades
+! / polar-easterlies profile.
+!
+! This is the v1 GEOMETRY bring-up: temperature-only linear EOS,
+! zstar + ALE remap, KPP boundary layer, the production lateral/bottom
+! closure envelope.  Forcing is WIND-ONLY (no surface heat flux) so the
+! stratified IC spins up wind-driven gyres + an ACC-like channel jet with
+! no spurious uniform convection.  The latitude-banded SST-restoring
+! buoyancy forcing (the paper's T*(lat) + piston velocity) and the
+! 15-layer exponential-thermocline IC are documented fast-follows
+! (the only genuinely new kernel — see local_archive/specs/neverworld2_study.md).
+!
+! Resolution: 1 deg => 60 x 140 cells, nz=12 over H=4000 m, nghost=3
+! (periodic-x needs nghost>=3 for the PPM + biharmonic seam stencil).
+! The 70 S/70 N extent stays well under the spherical |lat|<=90 pole guard
+! even with ghosts.  Set nl_continent_amp=0.0 in &ocean_topo_nml for an
+! aquaplanet-with-channel bring-up (no continents).
+!
+! Run:
+!   cd validation_examples/ocean/neverworld2
+!   # first load your NVHPC + NetCDF toolchain (module load / spack / conda;
+!   # see environments/) -- one toolchain per shell, never stack two
+!   CUDA_VISIBLE_DEVICES=<gpu> ../../../build/rdb neverworld2.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   ! Spherical mode: dx/dy are dlon/dlat in DEGREES; nx/ny are cell counts.
+   nx     = 60
+   ny     = 140
+   dx     = 1.0
+   dy     = 1.0
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = 0.0
+   lat_south       = -70.0
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"
+   omega           = 7.2921e-5
+/
+
+! Re-entrant channel: periodic in x, solid walls north/south.
+&ocean_bc_nml
+   west = "periodic"
+   east = "periodic"
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 900.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4   ! unused under planetary metric f; legacy guard only
+   wind_stress_x = 0.0      ! wind comes from wind_config="neverworld2" below
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 12
+/
+
+&vcoord_nml
+   vcoord_type = "zstar"
+/
+
+&tracer_nml
+   initial_salinity    = 35.0
+   initial_temperature = 10.0
+   ! Linear T(z): 2 degC bed (k=1) -> 12 degC surface (k=nz) over 4000 m.
+   T_init_surface = 12.0
+   T_init_bottom  = 2.0
+/
+
+&ocean_ic_nml
+   alpha_T = 0.2     ! linear-EOS thermal expansion (kg/m^3/K)
+   rho_0   = 1035.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   q_heat = 0.0      ! wind-only spin-up; SST restore is the fast-follow
+/
+
+&ocean_topo_nml
+   topo_config      = "neverworld2"
+   max_depth        = 4000.0
+   nl_continent_amp = 1.0    ! 0.0 => aquaplanet with the southern channel only
+   nl_roughness_amp = 0.05
+   ! Minimum-depth floor (MOM6 MINIMUM_DEPTH analogue).  The formula drives
+   ! the continent/wall cells to 0 (land); the C-grid dyn-core has no robust
+   ! wet/dry path yet, so true land + sub-metre layers blow up.  Flooring
+   ! keeps the basin all-wet (continents become shallow steering shelves).
+   ! Lower = stronger topographic steering but thinner layers (floor/nz).
+   ! 100 m here => strong shelf steering, ~8 m layers, MaxCFL < 0.05;
+   ! the type default is a more conservative 500 m.
+   nl_min_depth     = 100.0
+   wind_config      = "neverworld2"
+   taux_magnitude   = 0.2    ! peak zonal wind stress (Pa), MOM6 default
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   form   = "fv_lite"
+   maxvel = 2.0
+/
+
+&ocean_hvisc_nml
+   nu_h            = 10000.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   kh_vel_scale    = 3.0e-3
+   ah_max          = 1.0e4
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   nu_4_bg         = 0.0
+   nu_4_max        = 1.0e12
+/
+
+&ocean_bdrag_nml
+   form          = "linear"
+   r             = 2.5e-5
+   hbbl          = 10.0
+   bg_vel        = 0.1
+   bbl_thick_min = 0.1
+/
+
+&ocean_vmix_nml
+   use_closure    = .true.
+   use_kpp        = .true.
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+   bebt          = 0.2
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "neverworld2"
+   dt_out   = 1.0
+/
+
+&output_nml
+   output_dir     = "./out_neverworld2"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 0.5
+/

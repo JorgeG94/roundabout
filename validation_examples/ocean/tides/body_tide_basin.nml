@@ -1,0 +1,115 @@
+! ============================================================================
+! Equilibrium body-tide validation — spherical closed basin, single M2.
+!
+! Exercises the C1 equilibrium tide-generating potential (#318) + optional
+! C2 scalar SAL (#309).  The astronomical potential needs real lat/lon, so
+! the grid MUST be spherical — C1 is fail-loud on cartesian.
+!
+! Setup: a 36 deg x 24 deg mid-latitude closed (all-wall) basin, unstratified,
+! flat 4000 m floor, forced ONLY by the M2 equilibrium potential.  The
+! barotropic SSH should co-oscillate at the M2 period (12.4206 h); with no
+! other forcing the response is the equilibrium tide (cm-scale) modulated by
+! the basin's normal modes.
+!
+! Validation: SSH at a probe point oscillates at 12.42 h (extract the peak
+! frequency from the &ocean_diag_nml NetCDF; see README.md).
+!
+! 4 days @ dt = 300 s (~7.7 M2 cycles), dt_out = 0.05 day (~1.2 h) => ~10
+! samples per M2 cycle.  Runs serially on CPU in well under a minute.
+! ============================================================================
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 36          ! dlon cells (spherical: dx = dlon in degrees)
+   ny     = 24          ! dlat cells
+   dx     = 1.0         ! degrees
+   dy     = 1.0
+   nghost = 2           ! closed-wall basin
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"   ! REQUIRED — C1 body tide fail-loud on cartesian
+   lon_west        = 0.0
+   lat_south       = 20.0          ! basin spans 20-44 N (mid-latitude)
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"
+   omega           = 7.2921e-5
+/
+
+&ocean_bc_nml
+   west  = "wall"
+   east  = "wall"
+   south = "wall"
+   north = "wall"
+/
+
+&time_nml
+   t_end        = 10.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4          ! ignored under spherical+planetary; legacy guard
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 2                   ! >1 avoids the nz=1 fused fast path
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"           ! flat basin => no remap
+/
+
+&tracer_nml
+   initial_temperature = 10.0
+   initial_salinity    = 35.0
+   T_init_surface      = 10.0
+   T_init_bottom       = 10.0      ! unstratified => pure barotropic tide
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config = "flat"            ! uniform max_depth, no slope_scale ambiguity
+   max_depth   = 4000.0
+   wind_config = "constant"
+/
+
+&ocean_tides_nml
+   enable          = .true.
+   constituents    = "M2"          ! single-constituent smoke test
+   ref_date        = "2020-01-01"
+   add_nodal       = .false.
+   use_sal         = .false.       ! set .true. + beta_sal ~ 0.09 to exercise C2
+   beta_sal        = 0.0
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "body_tide_basin"
+   dt_out   = 0.05                 ! days (~1.2 h) — resolve the M2 SSH oscillation
+/
+
+&output_nml
+   output_dir     = "./out_body_tide_basin"
+   output_to_file = .true.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 0.5
+/

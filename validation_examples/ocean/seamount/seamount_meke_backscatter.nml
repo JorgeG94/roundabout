@@ -1,0 +1,151 @@
+! Stratified seamount — MEKE backscatter + length-scale + BBL-drag coverage.
+!
+! Purpose (regression coverage, NOT validation): light up the MEKE code the
+! batch-1 seamount_gm_redi_meke case left cold.  That case ran MEKE's core
+! (source / drag / diffusion / kh closure) but with backscatter OFF, the
+! length-scale weights at their inert defaults, and no BBL-drag term.  This
+! case turns all three on:                                    -> rdb_ocean_meke
+!   * harmonic momentum BACKSCATTER (negative viscosity energy return):
+!       meke_ku_closure fills ku = coeff*sqrt(2*E)*Lmix, and
+!       meke_backscatter_apply subtracts a face-average of ku from the
+!       resolved harmonic viscosity (Jansen & Held 2014).
+!   * mixing-length WEIGHTS alpha_deform/alpha_rhines/alpha_grid > 0 exercise
+!       the deformation + Rhines + grid arms of meke_inv_lmix / meke_length_scales.
+!   * BBL drag (use_bbl_drag) adds the resolved bed-layer |u_bed|^2 to the
+!       implicit bottom-drag rate (meke_bbl_speed2; MOM6 drag_rate_visc).
+!
+! Backscatter is FAIL-LOUD: it injects a negative harmonic viscosity that
+! amplifies grid-scale modes, so &configure_ocean requires (a) a flow-aware
+! lateral closure whose ah_face_* the hvisc Laplacian actually consumes, and
+! (b) a biharmonic backstop with a NON-ZERO dissipation coefficient.  Both are
+! wired here: lateral_closure="smagorinsky" (harmonic, fills ah_face) +
+! smag_ah=.true. with the default smag_bi_const=0.06 (biharmonic Smagorinsky
+! backstop, has_biharmonic_backstop face path).  MEKE still requires GM
+! requires slopes, so the whole mesoscale chain rides along.
+!
+! Kept small + short for the regression budget: 96x96 @ 4 km, 20 layers, a
+! handful of outer steps.  The 20->4 C stratification over the seamount feeds
+! the baroclinicity the closures act on.
+!
+! Gent & McWilliams (1990) JPO 20:150; Jansen & Held (2014) Ocean Modelling
+! 80:36 (energetically-consistent backscatter); Marshall & Adcroft (2010)
+! Ocean Modelling 32:188 (MEKE mixing length).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 96
+   ny     = 96
+   dx     = 4000.0
+   dy     = 4000.0
+   nghost = 3
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 20
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config    = "seamount"
+   max_depth      = 4000.0
+   edge_depth     = 200.0
+   slope_scale    = 40000.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+! --- flow-aware harmonic closure (consumes ah_face) + biharmonic backstop --
+&ocean_hvisc_nml
+   nu_h            = 5.0e2         ! background harmonic floor
+   lateral_closure = "smagorinsky" ! harmonic Smag: fills ah_face for backscatter
+   smag_ah         = .true.        ! biharmonic Smag backstop (smag_bi_const=0.06>0)
+   nu_4            = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .true.
+   use_kpp     = .true.
+/
+
+! --- mesoscale lateral-closure stack (MEKE requires GM requires slopes) ----
+&ocean_slopes_nml
+   enable = .true.
+/
+
+&ocean_gm_nml
+   enable         = .true.
+   khth           = 200.0
+   khth_slope_max = 0.01
+/
+
+&ocean_redi_nml
+   enable     = .true.
+   continuous = .true.
+   khtr       = 200.0
+/
+
+! --- MEKE with backscatter + length-scale weights + BBL drag (the target) --
+&ocean_meke_nml
+   enable                    = .true.
+   gmcoeff                   = 0.15      ! PE->MEKE conversion
+   khcoeff                   = 1.0       ! MEKE->Kh scaling
+   damping                   = 1.0e-6    ! linear MEKE dissipation
+   backscatter               = .true.    ! harmonic momentum backscatter (Gap 2)
+   backscatter_visc_coeff_ku = 1.0       ! MOM6 MEKE_VISCOSITY_COEFF_KU (>0 = live)
+   use_bbl_drag              = .true.    ! add resolved |u_bed|^2 to the drag rate
+   cd_scale                  = 0.5       ! bottom/column eddy-velocity ratio (bottomFac2)
+   alpha_deform              = 1.0       ! deformation-scale mixing-length arm
+   alpha_rhines              = 0.2       ! Rhines-scale arm (beta from f_centre)
+   alpha_grid                = 1.0       ! grid-scale arm
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+&ocean_diag_nml
+   enabled = .false.
+/
+
+&output_nml
+   output_dir     = "./out_seamount_meke_backscatter"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/

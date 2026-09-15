@@ -1,0 +1,154 @@
+! Sea-ice ANALYTIC initial condition — the first shipped nml that turns
+! ice on WITHOUT growing it from frazil first (PR 24, `rdb_ice_init`).
+!
+! Every other shipped `&ocean_ice_nml` example (`validation_examples/
+! ocean/sea_ice/polar_freezeup_*.nml`) starts ice-free and has to
+! supercool the surface layer before any ice appears -- there was no way
+! to configure a run that STARTS with a pack. This file demonstrates the
+! new `&ocean_ice_ic_nml` path: `conc_config = "uniform"` seeds a 2 m,
+! 100%-covered pack over the whole (all-wet, f-plane, flat-bottom) domain
+! before the very first step -- `t_ice`/`s_ice` are pushed through the
+! exact enthalpy inversion (`ice_enth_from_ts`) and the mass is binned
+! directly against the already-computed `ice%mh_lim`, so the seeded state
+! is an exact fixed point of `ice_adjust_categories` (the ITD restore is
+! a provable no-op on step 1, not a lucky one).
+!
+! `&ocean_ice_nml dynamics = .true.` is on too, so the SAME steady
+! eastward wind stress used by `polar_freezeup_dynamics.nml` immediately
+! has a live pack to push on -- no frazil-growth spin-up needed. Short
+! run (2 days): the point is "ice exists and moves from step 1", not
+! long-horizon thermodynamics (see the `polar_freezeup_*` files for
+! that).
+!
+! Run:
+!   source mac_env.sh
+!   build/rdb validation_examples/ocean/sea_ice_pack/sea_ice_pack.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 20
+   ny     = 20
+   dx     = 10000.0
+   dy     = 10000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2.0
+   time_unit    = "day"
+   dt_fixed     = 600.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! f-plane, high-latitude (~80N): f = 2*Omega*sin(80deg) ~ 1.435e-4 /s.
+   coriolis_f    = 1.435e-4
+   ! Steady eastward wind stress (Pa) -- same forcing as
+   ! polar_freezeup_dynamics.nml, but the ice IC means it has something
+   ! to push on from t=0.
+   wind_stress_x = 0.05
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 4
+/
+
+&tracer_nml
+   initial_salinity    = 34.0
+   initial_temperature = -1.80
+/
+
+&ocean_ic_nml
+   alpha_T = 1.7e-4
+   rho_0   = 1027.0
+/
+
+&ocean_thermo_nml
+   enable_thermodynamics = .true.
+   q_heat = -60.0
+/
+
+&ocean_topo_nml
+   topo_config = "flat"
+   max_depth   = 50.0
+   wind_config = "constant"
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_pgf_nml
+   form   = "fv_lite"
+   maxvel = 2.0
+/
+
+&ocean_hvisc_nml
+   nu_h = 500.0
+/
+
+&ocean_bdrag_nml
+   form  = "linear"
+   r     = 2.5e-5
+   hbbl  = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_vmix_nml
+   kv_ml_invz2    = 0.01
+   hmix_fixed     = 20.0
+   harmonic_visc  = .true.
+   dt_therm_ratio = 1
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&ocean_bt_nml
+   auto_n_inner  = .true.
+   cfl_bt_safety = 0.65
+/
+
+! All four ocean_bc_nml edges default to "wall" -- required by the
+! &ocean_ice_nml dynamics=.true. configure-time envelope (every edge must
+! be wall or periodic).
+
+&ocean_ice_nml
+   enable         = .true.
+   ncat           = 5
+   nk_ice         = 2
+   air_temp       = -20.0
+   restore_lambda = 20.0
+   sw_down        = 0.0
+   dynamics       = .true.
+   evp_sub_steps  = 432
+/
+
+! The IC itself: a 2 m, fully-covered (conc=1.0) pack everywhere wet,
+! seeded at t=-4 degC / 4 PSU (the SIS2 ICE_TEMPERATURE_IC / ICE_SALINITY_IC
+! defaults) -- host-side, before the first step, no frazil growth.
+&ocean_ice_ic_nml
+   conc_config = "uniform"
+   h_ice       = 2.0
+   conc        = 1.0
+/
+
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "sea_ice_pack"
+   dt_out   = 0.25     ! 6-hour frames (time_unit = day above)
+/
+
+&output_nml
+   output_dir     = "./out_sea_ice_pack"
+   output_to_file = .false.
+/
+
+&logging_nml
+   status_interval = 0.5     ! days
+/

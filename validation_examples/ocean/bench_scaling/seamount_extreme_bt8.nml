@@ -1,0 +1,154 @@
+! Seamount EXTREME benchmark — the pathological barotropic case (deep
+! 4000 m basin => n_inner=65 explicit barotropic substeps/step) with the
+! HEAVY column-physics stack piled on top: EPBL (+ Langmuir) replacing
+! KPP, kappa-shear interior turbulence, dt_therm cadence.  Purpose: probe
+! whether expensive per-column work raises the compute/exchange ratio
+! enough to rescue the scaling of a barotropic-dominated case, i.e. does
+! a deep basin with production physics look like seamount (bad scaling)
+! or benchmark_ale (linear)?  Pairs with seamount_bt8.nml (same geometry,
+! light physics) as the A/B.  bt_halo=8 march-in on.
+!
+! Same geometry as seamount_bench.nml (512×256×30 @ 2 km, Gaussian
+! seamount 4000 m => 200 m, half-width 50 km) but with every realistic
+! physics module turned on:
+!   * Linear T(z) stratification 20 °C → 4 °C  (provides APE)
+!   * f-plane Coriolis at f = 1e-4              (geostrophic balance)
+!   * KPP overlay + PP81 interior closures      (vertical mixing)
+!   * ALE remap on zstar_sigma                  (vertical coord)
+!   * Laplacian horizontal viscosity 500 m²/s   (Munk BL ~30 km)
+!   * Auto-derived n_inner from gravity-wave CFL
+!   * Sponges on all 4 boundaries (15-cell band) (absorb basin modes)
+!   * Diag manager ON, 6-hourly snapshots (exercises the full enter_data
+!     path that the lint fix touched).
+!
+! Bridge between the lean Tier-1.5 seamount and the production Tasman
+! 2 km — same physics stack, smaller domain, no GEBCO real-bathy
+! confound.  Useful for:
+!   * Profile-timer dominance with the full kernel set live
+!   * Throughput at a Tasman-equivalent operating point
+!   * Closed-basin stratified spinup behaviour given strong sponges
+!
+! 5 days @ dt = 300 s = 1440 outer steps.  May or may not survive past
+! day 5-6 depending on how the basin's baroclinic mode interacts with
+! the sponge timescale — that's data too.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 512
+   ny     = 256
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 3   ! 3 (the default): the ocean continuity/tracer PPM 5-point
+                ! stencil needs 3 ghost columns for full-order reconstruction
+                ! at a rank-seam face.  At nghost=2 a decomposed (np>1) run's
+                ! seam face falls to first order and LEAKS heat (a structured
+                ! tracer) while conserving mass/salt — the O4 heat-leak
+                ! postmortem.  Decomposed ocean runs abort below 3.
+/
+
+&time_nml
+   t_end        = 1.0
+   time_unit    = "days"
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = 1.0e-4
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 60
+/
+
+&vcoord_nml
+   vcoord_type = "zstar_sigma"
+/
+
+&tracer_nml
+   initial_temperature = 12.5
+   initial_salinity    = 35.0
+   T_init_surface      = 20.0
+   T_init_bottom       = 4.0
+/
+
+&ocean_tracers_nml
+   ! Register the MOM6-style ideal-age tracer (3rd prognostic tracer):
+   ! 0 at the surface, ages at 1 s/s in the interior.  Passive, so it
+   ! doesn't perturb the dynamics, but it exercises the registry through
+   ! advection / vdiff / ALE remap with a third tracer.
+   enable_ideal_age = .true.
+/
+
+&ocean_coriolis_nml
+   ! Pin to the well-validated enstrophy-conserving kernel.  Tier-1.5
+   ! / quiescent-IC regressions are calibrated against this branch;
+   ! HK is for eddy-resolving production runs (see double_gyre_mom6).
+   form = "sadourny"
+/
+
+&ocean_topo_nml
+   topo_config       = "seamount"
+   max_depth   = 4000.0
+   edge_depth  = 200.0
+   slope_scale = 50000.0
+   wind_config       = "constant"
+   taux_magnitude    = 0.0
+   coriolis_beta     = 0.0
+   coriolis_y_ref    = 0.0
+/
+
+&ocean_hvisc_nml
+   nu_h        = 5.0e2          ! Munk BL ~30 km @ β=0 — wide damping
+   nu_4        = 0.0
+/
+
+&ocean_vmix_nml
+   ! Heavy stack: EPBL (below) replaces the KPP overlay; PP81 interior
+   ! stays underneath, kappa-shear adds interior shear turbulence.
+   use_closure  = .true.
+   use_kpp      = .false.
+   dt_therm_ratio = 2
+/
+&ocean_epbl_nml
+   enable = .true.               ! energetics-based surface PBL
+   use_lt = .true.               ! Langmuir enhancement (LF17)
+/
+&ocean_kappa_shear_nml
+   enable = .true.               ! Jackson-Hallberg-Legg interior shear
+/
+
+&ocean_bt_nml
+   bt_halo = 8
+   auto_n_inner      = .true.
+   cfl_bt_safety     = 0.65
+/
+&boundary_nml
+   bc_west         = "sponge"
+   bc_east         = "sponge"
+   bc_south        = "sponge"
+   bc_north        = "sponge"
+   sponge_width    = 15
+   sponge_strength = 5.0e-4
+/
+
+&ocean_diag_nml
+   enabled  = .false.
+   filename = "seamount_bench_full"
+   dt_out   = 0.25
+/
+
+&output_nml
+   output_dir      = "./out_seamount_bench_full"
+   output_to_file  = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 1.0
+/
