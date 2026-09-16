@@ -326,6 +326,11 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
+    # `use rdb_driver`, which src/CMakeLists.txt only compiles with NetCDF on
+    test_ocean_diag_remap
+    # one case writes a restart, and ocean_state_restart_write is fail-loud
+    # without NetCDF
+    test_ocean_ice_init
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
@@ -607,7 +612,12 @@ foreach(_cand IN LISTS _rdb_python_candidates)
   endif()
 endforeach()
 
-if(NOT TARGET ${main_lib}_shared)
+if(NOT RDB_ENABLE_NETCDF)
+  # The suite exercises the diagnostics path, and engine_configure_diag is
+  # fail-loud on a build without NetCDF. Skipping keeps the NetCDF-off
+  # portability configuration green; the suite runs in every NetCDF build.
+  message(STATUS "Python tests (python/tests): SKIPPED -- RDB_ENABLE_NETCDF=OFF")
+elseif(NOT TARGET ${main_lib}_shared)
   message(STATUS "Python tests (python/tests): SKIPPED -- "
                  "RDB_BUILD_SHARED is OFF, no librdb_core.so to test "
                  "against. Configure with -DRDB_BUILD_SHARED=ON to " "enable.")
