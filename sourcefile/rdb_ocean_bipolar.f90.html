@@ -1,0 +1,1789 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_bipolar.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_bipolar.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">60 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_bipolar.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_bipolar.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_bipolar.html">rdb_ocean_bipolar</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_bipolar.f90.html#src">rdb_ocean_bipolar.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Analytic TRIPOLAR (Murray 1996) bipolar-cap coordinate map.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_bipolarf90EfferentGraph" width="286pt" height="32pt"
+ viewBox="0.00 0.00 286.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 282,-28 282,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_bipolar.f90</title>
+<polygon fill="none" stroke="black" points="278,-24 145,-24 145,0 278,0 278,-24"/>
+<text text-anchor="middle" x="211.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_bipolar.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-24 0,-24 0,0 109,0 109,-24"/>
+<text text-anchor="middle" x="54.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.77,-12C136.32,-12 127.68,-12 119.27,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.14,-8.5 109.14,-12 119.14,-15.5 119.14,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_bipolarf90AfferentGraph" width="641pt" height="409pt"
+ viewBox="0.00 0.00 641.00 408.90" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph" class="graph" transform="scale(0.26 0.26) rotate(0) translate(4 1561.44)">
+<title>sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1561.44 2450,-1561.44 2450,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_bipolar.f90</title>
+<polygon fill="none" stroke="black" points="133,-1346 0,-1346 0,-1322 133,-1322 133,-1346"/>
+<text text-anchor="middle" x="66.5" y="-1331.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_bipolar.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_metrics.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_metrics.f90.html" xlink:title="rdb_ocean_metrics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="305,-1346 169,-1346 169,-1322 305,-1322 305,-1346"/>
+<text text-anchor="middle" x="237" y="-1331.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M168.92,-1334C160.57,-1334 151.98,-1334 143.51,-1334"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="143.25,-1330.5 133.25,-1334 143.25,-1337.5 143.25,-1330.5"/>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_barotropic_coupling.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_barotropic_coupling.f90.html" xlink:title="rdb_barotropic_coupling.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="972.5,-990 809.5,-990 809.5,-966 972.5,-966 972.5,-990"/>
+<text text-anchor="middle" x="891" y="-975.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_coupling.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M809.09,-979.22C713.05,-984.13 551.28,-1003.62 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_coriolis_adv.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_coriolis_adv.f90.html" xlink:title="rdb_coriolis_adv.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="723,-1068 602,-1068 602,-1044 723,-1044 723,-1068"/>
+<text text-anchor="middle" x="662.5" y="-1053.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_coriolis_adv.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M835.32,-990.05C822.75,-993.75 809.65,-998.36 798,-1004 780.23,-1012.59 779.84,-1021.56 762,-1030 752.79,-1034.36 742.74,-1038.07 732.69,-1041.2"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="731.69,-1037.85 723.09,-1044.04 733.67,-1044.56 731.69,-1037.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_bottom_drag.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_bottom_drag.f90.html" xlink:title="rdb_ocean_bottom_drag.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="745,-908 580,-908 580,-884 745,-884 745,-908"/>
+<text text-anchor="middle" x="662.5" y="-893.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bottom_drag.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M868.46,-965.8C843.54,-952.15 800.93,-930.22 762,-917 754.98,-914.62 747.58,-912.44 740.12,-910.48"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="740.86,-907.06 730.31,-908.02 739.16,-913.85 740.86,-907.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_horizontal_viscosity.f90.html" xlink:title="rdb_ocean_horizontal_viscosity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="762,-694 563,-694 563,-670 762,-670 762,-694"/>
+<text text-anchor="middle" x="662.5" y="-679.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_horizontal_viscosity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M859.9,-965.99C839.42,-956.3 813.34,-940.68 798,-919 757.65,-861.98 798.39,-825.63 762,-766 744.84,-737.89 715.05,-714.43 692.71,-699.52"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="694.55,-696.54 684.26,-694.04 690.75,-702.41 694.55,-696.54"/>
+</g>
+<!-- sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_ocean_pressure_force.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_ocean_pressure_force.f90.html" xlink:title="rdb_ocean_pressure_force.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="749.5,-950 575.5,-950 575.5,-926 749.5,-926 749.5,-950"/>
+<text text-anchor="middle" x="662.5" y="-935.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_pressure_force.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge92" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M822.04,-966C796.74,-961.53 767.82,-956.42 741.67,-951.81"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="742.26,-948.35 731.8,-950.06 741.04,-955.25 742.26,-948.35"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="742,-1148 583,-1148 583,-1124 742,-1124 742,-1148"/>
+<text text-anchor="middle" x="662.5" y="-1133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M615.89,-1123.98C599.24,-1119.58 580.27,-1114.57 563,-1110 506.1,-1094.93 485.11,-1045.13 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="945.5,-1268 836.5,-1268 836.5,-1244 945.5,-1244 945.5,-1268"/>
+<text text-anchor="middle" x="891" y="-1253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M836.24,-1244.57C770.05,-1229.42 655.08,-1199.53 563,-1157 501.88,-1128.77 492.32,-1040.69 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_gm.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_gm.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_gm.f90.html" xlink:title="rdb_ocean_gm.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="719.5,-1308 605.5,-1308 605.5,-1284 719.5,-1284 719.5,-1308"/>
+<text text-anchor="middle" x="662.5" y="-1293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_gm.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90</title>
+<path fill="none" stroke="#00ffc8" stroke-dasharray="5,2" d="M836.32,-1265.48C804.43,-1271.11 763.73,-1278.3 729.84,-1284.28"/>
+<polygon fill="#00ffc8" stroke="#00ffc8" points="728.79,-1280.91 719.55,-1286.1 730.01,-1287.81 728.79,-1280.91"/>
+</g>
+<!-- sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_mle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_mle.f90.html" xlink:title="rdb_ocean_mle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="721,-1266 604,-1266 604,-1242 721,-1242 721,-1266"/>
+<text text-anchor="middle" x="662.5" y="-1251.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_mle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M836.32,-1255.53C804.91,-1255.25 764.94,-1254.9 731.35,-1254.6"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="731.18,-1251.1 721.15,-1254.51 731.12,-1258.1 731.18,-1251.1"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M601.63,-1047.35C553.13,-1043.45 484.91,-1045.25 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1739.5,-24 1640.5,-24 1640.5,0 1739.5,0 1739.5,-24"/>
+<text text-anchor="middle" x="1690" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1649.34,-24.09C1611.13,-34.83 1551.49,-49.25 1498.5,-52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1496.5,-52C1284.06,-63.01 1229.67,-61.1 1020,-97 962.31,-106.88 950.53,-127.73 892,-128"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M890,-128C684.72,-123.69 586.14,-69.02 435,-208"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M433,-208C263.77,-364.98 241.08,-1166.92 238.35,-1311.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.84,-1311.84 238.17,-1321.9 241.84,-1311.96 234.84,-1311.84"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ice_init.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ice_init.f90.html" xlink:title="rdb_ice_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="710.5,-180 614.5,-180 614.5,-156 710.5,-156 710.5,-180"/>
+<text text-anchor="middle" x="662.5" y="-165.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M614.26,-163.02C563.74,-160.42 484.26,-164.55 435,-208"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1971.5,-212 1814.5,-212 1814.5,-188 1971.5,-188 1971.5,-212"/>
+<text text-anchor="middle" x="1893" y="-197.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1814.36,-197.8C1684.93,-194.25 1416.88,-187.42 1190,-185 1114.45,-184.19 1095.54,-183.52 1020,-185 1003.74,-185.32 446.92,-196.94 435,-208"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1169,-984 1041,-984 1041,-960 1169,-960 1169,-984"/>
+<text text-anchor="middle" x="1105" y="-969.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1090.16,-959.97C1071.12,-942.58 1037.25,-908.49 1020,-872 982.71,-793.11 1051.12,-734.76 984,-679 869.12,-583.57 784.72,-692.76 663.5,-780"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M661.5,-780C611.23,-814.24 601.49,-827.91 563,-875 495.97,-957 524.74,-1019.76 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M1040.67,-979.02C1032.87,-982.27 1025.67,-986.77 1020,-993 948.3,-1071.8 1054.5,-1150.12 984,-1230 976.44,-1238.57 966.29,-1244.41 955.5,-1248.37"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="954.39,-1245.05 945.89,-1251.38 956.48,-1251.72 954.39,-1245.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_bottom_drag.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_bottom_drag.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M581.43,-908.08C574.97,-910.53 568.73,-913.47 563,-917 485.73,-964.54 512.24,-1028.42 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="959.5,-1188 822.5,-1188 822.5,-1164 959.5,-1164 959.5,-1188"/>
+<text text-anchor="middle" x="891" y="-1173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M830.81,-1163.97C819.5,-1160.38 808.06,-1155.81 798,-1150 778.67,-1138.85 781.78,-1125.32 762,-1115 722.47,-1094.37 707.85,-1100.59 663.5,-1096"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff3600" stroke-dasharray="5,2" d="M822.35,-1164.05C796.92,-1159.56 767.81,-1154.42 741.51,-1149.78"/>
+<polygon fill="#ff3600" stroke="#ff3600" points="742.04,-1146.32 731.58,-1148.02 740.82,-1153.21 742.04,-1146.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1774,-1093 1606,-1093 1606,-1069 1774,-1069 1774,-1093"/>
+<text text-anchor="middle" x="1690" y="-1078.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1681.85,-1093.01C1638.33,-1164.41 1401.11,-1530 1106,-1530 1106,-1530 1106,-1530 890,-1530 687.78,-1530 627.77,-1591.09 435,-1530"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1163,-1026 1047,-1026 1047,-1002 1163,-1002 1163,-1026"/>
+<text text-anchor="middle" x="1105" y="-1011.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1046.71,-1019.76C1037.33,-1022.31 1028.05,-1025.91 1020,-1031 997.46,-1045.24 1007.53,-1066.45 984,-1079 858.15,-1146.15 805.39,-1110.69 663.5,-1096"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_coupling.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_coupling.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1046.91,-1004.31C1024.17,-1000.44 997.57,-995.93 972.91,-991.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="973.28,-988.25 962.84,-990.03 972.11,-995.15 973.28,-988.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff3600" stroke-dasharray="5,2" d="M1046.92,-1022.83C1036.84,-1026.67 1027.27,-1032.17 1020,-1040 971.31,-1092.48 1035.17,-1146.93 984,-1197 954.16,-1226.2 932.45,-1205.68 892,-1216"/>
+<path fill="none" stroke="#ff3600" stroke-dasharray="5,2" d="M890,-1216C849.55,-1226.32 834.89,-1216.56 798,-1197 778.28,-1186.55 781.42,-1172.99 762,-1162 754.51,-1157.76 746.3,-1154.2 737.92,-1151.2"/>
+<polygon fill="#ff3600" stroke="#ff3600" points="739.02,-1147.87 728.42,-1148.05 736.82,-1154.52 739.02,-1147.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M1046.68,-1022.61C1036.62,-1026.47 1027.12,-1032.03 1020,-1040 962.75,-1104.11 1042.04,-1166.61 984,-1230 976.29,-1238.43 966.07,-1244.2 955.25,-1248.14"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="954.14,-1244.82 945.64,-1251.15 956.23,-1251.5 954.14,-1244.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M1046.93,-1005.55C1003.24,-1001.31 942.16,-1000.31 892,-1018"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1046.65,-1008.02C1036.84,-1004.8 1027.43,-1000.02 1020,-993 980.78,-955.91 1017.03,-919.69 984,-877 954.57,-838.96 939.92,-824.22 892,-820"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#12ff00" stroke-dasharray="5,2" d="M1046.6,-1023.69C1036.79,-1027.47 1027.4,-1032.72 1020,-1040 983.33,-1076.08 1021.11,-1114.38 984,-1150 979.44,-1154.37 974.21,-1158.02 968.59,-1161.07"/>
+<polygon fill="#12ff00" stroke="#12ff00" points="967.05,-1157.92 959.51,-1165.36 970.05,-1164.25 967.05,-1157.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90</title>
+<path fill="none" stroke="#00ffc8" stroke-dasharray="5,2" d="M890,-1296C839.21,-1318.38 775.57,-1316.08 728.7,-1309.51"/>
+<polygon fill="#00ffc8" stroke="#00ffc8" points="729.07,-1306.03 718.66,-1308.01 728.03,-1312.95 729.07,-1306.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_hdiff_tracer.f90.html" xlink:title="rdb_ocean_hdiff_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="969.5,-712 812.5,-712 812.5,-688 969.5,-688 969.5,-712"/>
+<text text-anchor="middle" x="891" y="-697.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_hdiff_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1046.95,-1009.41C1036.75,-1006.11 1027.12,-1000.95 1020,-993 940.16,-903.77 1062.48,-816.44 984,-726 981.26,-722.85 978.18,-720.06 974.83,-717.6"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="976.39,-714.45 966.05,-712.14 972.7,-720.4 976.39,-714.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M1046.63,-1009.17C1036.58,-1005.87 1027.09,-1000.78 1020,-993 949.11,-915.24 1056.56,-835.2 984,-759 925.81,-697.9 879.92,-741.21 798,-721 769.14,-713.88 737.16,-704.66 711.64,-696.98"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="712.42,-693.56 701.83,-694.01 710.39,-700.26 712.42,-693.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_isopycnal_slopes.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_isopycnal_slopes.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_isopycnal_slopes.f90.html" xlink:title="rdb_ocean_isopycnal_slopes.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="527,-1426 341,-1426 341,-1402 527,-1402 527,-1426"/>
+<text text-anchor="middle" x="434" y="-1411.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_isopycnal_slopes.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1104.25,-1026.19C1104.64,-1079.17 1098.76,-1291.33 984,-1395 953.02,-1422.99 926.94,-1391.15 892,-1414"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M890,-1414C861.29,-1432.77 662.13,-1426.07 537,-1419.82"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="537.17,-1416.33 527,-1419.32 536.81,-1423.32 537.17,-1416.33"/>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_ke_probe.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_ke_probe.f90.html" xlink:title="rdb_ocean_ke_probe.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="963.5,-1070 818.5,-1070 818.5,-1046 963.5,-1046 963.5,-1070"/>
+<text text-anchor="middle" x="891" y="-1055.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ke_probe.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90</title>
+<path fill="none" stroke="#005bff" stroke-dasharray="5,2" d="M1046.91,-1025.85C1020.15,-1031.4 988.06,-1038.06 960.05,-1043.88"/>
+<polygon fill="#005bff" stroke="#005bff" points="959.01,-1040.52 949.93,-1045.98 960.43,-1047.37 959.01,-1040.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_lateral_mix.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_lateral_mix.f90.html" xlink:title="rdb_ocean_lateral_mix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="512,-644 356,-644 356,-620 512,-620 512,-644"/>
+<text text-anchor="middle" x="434" y="-629.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_lateral_mix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M1046.83,-1009.52C1036.63,-1006.21 1027.04,-1001.02 1020,-993 927.38,-887.39 1074.17,-786.71 984,-679 888.55,-564.98 807.09,-544.36 663.5,-583"/>
+</g>
+<!-- sourcefile~rdb_ocean_meke.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_meke.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_meke.f90.html" xlink:title="rdb_ocean_meke.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="954.5,-1386 827.5,-1386 827.5,-1362 954.5,-1362 954.5,-1386"/>
+<text text-anchor="middle" x="891" y="-1371.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_meke.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_meke.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_meke.f90</title>
+<path fill="none" stroke="#1200ff" stroke-dasharray="5,2" d="M1103.45,-1026.14C1100.58,-1074.51 1083.35,-1255.33 984,-1348 978.2,-1353.41 971.35,-1357.71 964.06,-1361.12"/>
+<polygon fill="#1200ff" stroke="#1200ff" points="962.55,-1357.96 954.62,-1364.98 965.2,-1364.44 962.55,-1357.96"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1091.66,-1026.07C1073.21,-1044.85 1038.59,-1082.97 1020,-1122 989.58,-1185.85 1034.62,-1227.61 984,-1277 954.12,-1306.16 930.21,-1279.17 892,-1296"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M890,-1296C882.59,-1299.27 793.77,-1281.56 729.6,-1268.13"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="730.03,-1264.65 719.53,-1266.02 728.59,-1271.5 730.03,-1264.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge95" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1046.81,-1004.15C1037.51,-1001.31 1028.24,-997.67 1020,-993 1000.31,-981.85 1004.64,-966.27 984,-957 913.64,-925.38 825.68,-922.4 759.72,-926.33"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="759.49,-922.83 749.74,-926.98 759.95,-929.82 759.49,-922.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_redi.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_redi.f90.html" xlink:title="rdb_ocean_redi.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="949.5,-792 832.5,-792 832.5,-768 949.5,-768 949.5,-792"/>
+<text text-anchor="middle" x="891" y="-777.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_redi.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge98" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#b600ff" stroke-dasharray="5,2" d="M1046.86,-1008.95C1036.79,-1005.67 1027.23,-1000.64 1020,-993 961.81,-931.54 1041.24,-868.34 984,-806 977.26,-798.66 968.63,-793.34 959.36,-789.49"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="960.52,-786.18 949.93,-786.1 958.16,-792.77 960.52,-786.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_varmix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_varmix.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_varmix.f90.html" xlink:title="rdb_ocean_varmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="729,-1464 596,-1464 596,-1440 729,-1440 729,-1464"/>
+<text text-anchor="middle" x="662.5" y="-1449.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_varmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge108" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90</title>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M890,-1414C845.54,-1443.07 786.01,-1452.17 739.14,-1454.22"/>
+<polygon fill="#ff006d" stroke="#ff006d" points="738.92,-1450.73 729.04,-1454.56 739.15,-1457.72 738.92,-1450.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_wave_speed.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_wave_speed.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_wave_speed.f90.html" xlink:title="rdb_ocean_wave_speed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="515,-1346 353,-1346 353,-1322 515,-1322 515,-1346"/>
+<text text-anchor="middle" x="434" y="-1331.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_wave_speed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge111" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90</title>
+<path fill="none" stroke="#ff0036" stroke-dasharray="5,2" d="M890,-1216C748.99,-1251.99 699.2,-1181.74 563,-1233 517.3,-1250.2 475.07,-1290.08 452.38,-1314.26"/>
+<polygon fill="#ff0036" stroke="#ff0036" points="449.64,-1312.07 445.46,-1321.81 454.8,-1316.81 449.64,-1312.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_budget_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~rdb_ocean_bt_budget_probe.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/rdb_ocean_bt_budget_probe.f90.html" xlink:title="rdb_ocean_bt_budget_probe.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="984,-910 798,-910 798,-886 984,-886 984,-910"/>
+<text text-anchor="middle" x="891" y="-895.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_budget_probe.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_budget_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge129" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_budget_probe.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1046.75,-1006.62C1037.15,-1003.51 1027.79,-999.14 1020,-993 992.83,-971.59 1010.84,-945.82 984,-924 979.38,-920.24 974.25,-917.03 968.84,-914.28"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="970.07,-910.99 959.51,-910.08 967.19,-917.38 970.07,-910.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2155.5,-272 2022.5,-272 2022.5,-248 2155.5,-248 2155.5,-272"/>
+<text text-anchor="middle" x="2089" y="-257.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1892,-52C1813.52,-13.44 1585.66,-44.95 1498.5,-52"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M2081.1,-247.77C2059.34,-210.51 1987.96,-98.16 1894,-52"/>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1892,-52C1847.16,-29.97 1791.03,-20.07 1749.5,-15.63"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1749.83,-12.14 1739.53,-14.63 1749.14,-19.11 1749.83,-12.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#ecff00" stroke-dasharray="5,2" d="M2074.44,-247.98C2054.25,-230.63 2014.54,-198.51 1976,-179 1783.41,-81.48 1714.38,-90 1498.5,-90 1498.5,-90 1498.5,-90 1306.5,-90 1161.32,-90 1128.13,-124.56 984,-142 892.26,-153.1 785.15,-160.72 720.91,-164.71"/>
+<polygon fill="#ecff00" stroke="#ecff00" points="720.36,-161.24 710.59,-165.35 720.79,-168.23 720.36,-161.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#b6ff00" stroke-dasharray="5,2" d="M2048.74,-247.86C2018.14,-238.39 1975.48,-225.2 1942.7,-215.06"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="1943.46,-211.63 1932.87,-212.02 1941.39,-218.32 1943.46,-211.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M2088.11,-272.08C2088.63,-358.66 2087.14,-884.32 1976,-984 1920.73,-1033.57 1382.72,-1015.88 1308.5,-1014"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1306.5,-1014C1279.6,-1012.32 1214.28,-997.91 1165.45,-986.43"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1166.15,-983 1155.62,-984.11 1164.54,-989.81 1166.15,-983"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M1306.5,-1014C1262.17,-1011.24 1212.22,-1011.23 1173.27,-1011.92"/>
+<polygon fill="#00ff5b" stroke="#00ff5b" points="1173.03,-1008.42 1163.1,-1012.12 1173.16,-1015.42 1173.03,-1008.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1753,-678 1627,-678 1627,-654 1753,-654 1753,-678"/>
+<text text-anchor="middle" x="1690" y="-663.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge100" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ec00ff" stroke-dasharray="5,2" d="M1892,-667C1872.93,-683 1812.68,-680.85 1763.08,-675.82"/>
+<polygon fill="#ec00ff" stroke="#ec00ff" points="1763.32,-672.32 1753,-674.74 1762.57,-679.28 1763.32,-672.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_stability_audit.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_stability_audit.f90.html" xlink:title="rdb_ocean_stability_audit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1190,-218 1020,-218 1020,-194 1190,-194 1190,-218"/>
+<text text-anchor="middle" x="1105" y="-203.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge101" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M2022.43,-256.39C1852.62,-247.06 1398.07,-222.06 1200.2,-211.18"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1200.29,-207.68 1190.12,-210.63 1199.91,-214.67 1200.29,-207.68"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1559,-834 1436,-834 1436,-810 1559,-810 1559,-834"/>
+<text text-anchor="middle" x="1497.5" y="-819.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge106" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M1892,-667C1796.21,-747.33 1653.78,-789.37 1569.12,-808.52"/>
+<polygon fill="#ff00a3" stroke="#ff00a3" points="1568.35,-805.11 1559.34,-810.69 1569.86,-811.94 1568.35,-805.11"/>
+</g>
+<!-- sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_config.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_config.f90.html" xlink:title="rdb_config.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="936.5,-518 845.5,-518 845.5,-494 936.5,-494 936.5,-518"/>
+<text text-anchor="middle" x="891" y="-503.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge122" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2085.88,-272.11C2075.67,-326.69 2026.55,-552.22 1894,-667"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1892,-667C1887.69,-670.73 1696.3,-628.1 1691,-626"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1689,-626C1587.15,-585.51 1654.14,-480.24 1570,-410 1544.27,-388.52 1530.25,-396.74 1498.5,-386"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1496.5,-386C1439.37,-366.68 1283.98,-391.39 1226,-408 1168.29,-424.53 1163.28,-452.05 1106,-470"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node36" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node36"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1976,-975 1810,-975 1810,-951 1976,-951 1976,-975"/>
+<text text-anchor="middle" x="1893" y="-960.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge131" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M2084.89,-272.08C2071.96,-322.33 2020.93,-519.61 1976,-681 1948.92,-778.29 1914.66,-893.85 1900.54,-941.16"/>
+<polygon fill="#003fff" stroke="#003fff" points="1897.12,-940.35 1897.62,-950.93 1903.83,-942.36 1897.12,-940.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node37" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node37"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1761.5,-872 1618.5,-872 1618.5,-848 1761.5,-848 1761.5,-872"/>
+<text text-anchor="middle" x="1690" y="-857.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge134" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1892,-667C1821.35,-726.25 1744.49,-804.25 1709.83,-840.24"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1707.1,-838.02 1702.71,-847.66 1712.16,-842.87 1707.1,-838.02"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node40" class="node">
+<title>sourcefile~rdb_decomp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node40"><a xlink:href="../sourcefile/rdb_decomp.f90.html" xlink:title="rdb_decomp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1358.5,-484 1256.5,-484 1256.5,-460 1358.5,-460 1358.5,-484"/>
+<text text-anchor="middle" x="1307.5" y="-469.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge137" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1496.5,-386C1464.69,-375.24 1378.95,-426.15 1335.11,-454.33"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1333.15,-451.42 1326.67,-459.8 1336.97,-457.3 1333.15,-451.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node41" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node41"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1389,-564 1226,-564 1226,-540 1389,-540 1389,-564"/>
+<text text-anchor="middle" x="1307.5" y="-549.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge142" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1689,-626C1610.32,-594.72 1582.36,-637.69 1498.5,-626"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1496.5,-626C1463.93,-621.46 1454.33,-621.86 1425,-607 1406.67,-597.71 1407.08,-587.76 1389,-578 1381.57,-573.99 1373.42,-570.46 1365.24,-567.42"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1366.27,-564.07 1355.67,-564.05 1363.94,-570.67 1366.27,-564.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node42" class="node">
+<title>sourcefile~rdb_ocean_data_input.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node42"><a xlink:href="../sourcefile/rdb_ocean_data_input.f90.html" xlink:title="rdb_ocean_data_input.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1181.5,-602 1028.5,-602 1028.5,-578 1181.5,-578 1181.5,-602"/>
+<text text-anchor="middle" x="1105" y="-587.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge145" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1496.5,-626C1412.4,-614.28 1389.4,-617.78 1308.5,-592"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1306.5,-592C1270.12,-580.41 1228.11,-578.38 1191.97,-579.85"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1191.75,-576.36 1181.94,-580.35 1192.1,-583.35 1191.75,-576.36"/>
+</g>
+<!-- sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node44" class="node">
+<title>sourcefile~rdb_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node44"><a xlink:href="../sourcefile/rdb_state.f90.html" xlink:title="rdb_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1935.5,-292 1850.5,-292 1850.5,-268 1935.5,-268 1935.5,-292"/>
+<text text-anchor="middle" x="1893" y="-277.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge148" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M2022.32,-266.77C1997.33,-269.35 1969.23,-272.24 1945.71,-274.67"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1945.18,-271.2 1935.6,-275.71 1945.9,-278.17 1945.18,-271.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_gm.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_gm.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M605.25,-1291.83C590.55,-1288.72 575.37,-1283.55 563,-1275 476.48,-1215.22 524.53,-1020.84 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_gm.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_ocean_gm.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M638.11,-1308.18C597.4,-1329.39 513.45,-1373.13 467.25,-1397.2"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="465.51,-1394.16 458.26,-1401.88 468.74,-1400.37 465.51,-1394.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M827.36,-712.04C779.18,-723.56 712.75,-744.56 663.5,-780"/>
+</g>
+<!-- sourcefile~rdb_ocean_horizontal_viscosity.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_horizontal_viscosity.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M642.45,-694.12C620.67,-708.82 585.19,-735.45 563,-766 475.41,-886.61 561.91,-997.82 435,-1076"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M433,-1076C336.4,-1135.51 270.8,-1261.83 247.45,-1312.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.17,-1311.18 243.23,-1321.73 250.54,-1314.06 244.17,-1311.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_horizontal_viscosity.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~rdb_ocean_horizontal_viscosity.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M606.96,-669.96C574.55,-662.81 533.28,-653.7 499.3,-646.19"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="499.98,-642.76 489.46,-644.02 498.47,-649.6 499.98,-642.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_isopycnal_slopes.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_isopycnal_slopes.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M383.19,-1401.96C369.34,-1398.06 354.41,-1393.34 341,-1388 314.98,-1377.63 286.9,-1362.64 266.65,-1351.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="268.34,-1348.01 257.93,-1346.04 264.84,-1354.08 268.34,-1348.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M854.1,-1070.11C809.6,-1083.71 731.32,-1103.02 663.5,-1096"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M661.5,-1096C611.24,-1090.8 477.9,-1049.3 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M818.33,-1057.37C791.21,-1057.13 760.4,-1056.86 733.43,-1056.62"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="733.34,-1053.12 723.31,-1056.53 733.28,-1060.12 733.34,-1053.12"/>
+</g>
+<!-- sourcefile~rdb_ocean_lateral_mix.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_lateral_mix.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.62,-644.18C406.71,-726.65 274.37,-1203.07 244.15,-1311.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="240.71,-1311.18 241.4,-1321.76 247.45,-1313.06 240.71,-1311.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M661.5,-1374C518.94,-1367.77 482.49,-1373.52 341,-1355 327.59,-1353.24 313.31,-1350.75 299.79,-1348.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="300.13,-1344.58 289.63,-1346.02 298.73,-1351.44 300.13,-1344.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90</title>
+<path fill="none" stroke="#00ffc8" stroke-dasharray="5,2" d="M843.88,-1361.88C829.13,-1357.76 812.8,-1352.94 798,-1348 765.11,-1337.02 728.44,-1322.7 701.71,-1311.87"/>
+<polygon fill="#00ffc8" stroke="#00ffc8" points="702.92,-1308.58 692.34,-1308.05 700.28,-1315.07 702.92,-1308.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge109" class="edge">
+<title>sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90</title>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M843.88,-1386.12C829.13,-1390.24 812.8,-1395.06 798,-1400 765.11,-1410.98 728.44,-1425.3 701.71,-1436.13"/>
+<polygon fill="#ff006d" stroke="#ff006d" points="700.28,-1432.93 692.34,-1439.95 702.92,-1439.42 700.28,-1432.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge112" class="edge">
+<title>sourcefile~rdb_ocean_meke.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90</title>
+<path fill="none" stroke="#ff0036" stroke-dasharray="5,2" d="M827.48,-1375.46C781.98,-1376.17 718.89,-1376.42 663.5,-1374"/>
+<path fill="none" stroke="#ff0036" stroke-dasharray="5,2" d="M661.5,-1374C603.27,-1371.46 537.81,-1358.81 492.29,-1348.41"/>
+<polygon fill="#ff0036" stroke="#ff0036" points="492.85,-1344.95 482.32,-1346.09 491.27,-1351.76 492.85,-1344.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_mle.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_mle.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M603.83,-1245.05C589.76,-1241.21 575.25,-1235.76 563,-1228 488.38,-1180.75 510.19,-1029.68 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_pressure_force.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_pressure_force.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M641.46,-950.12C601.91,-974.05 511.06,-1029.14 435,-1076"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M853.1,-767.93C804.69,-754.56 719.36,-739.8 663.5,-780"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1626.78,-655.58C1618.82,-651.84 1611.53,-646.79 1606,-640 1505.25,-516.39 1673.88,-403.99 1570,-283 1368.64,-48.47 1201.11,-128.48 892,-128"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M1496.5,-744C1446.61,-764.91 1058.66,-806.16 1020,-844 969.46,-893.47 1034.62,-949.61 984,-999 954.12,-1028.16 931.37,-1004.11 892,-1018"/>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M890,-1018C875.3,-1023.16 794.12,-1036.18 733.12,-1045.54"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="732.49,-1042.1 723.13,-1047.07 733.54,-1049.02 732.49,-1042.1"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1626.78,-675.64C1503.46,-691.69 1222.48,-712.87 1020,-611 998.34,-600.1 1006.09,-580 984,-570 908.69,-535.91 860.92,-516.38 798,-570 721.25,-635.4 807.09,-703.81 762,-794 744.64,-828.71 711.31,-859.35 688.26,-877.77"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="686.02,-875.08 680.28,-883.99 690.32,-880.6 686.02,-875.08"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M1496.5,-744C1459.29,-760.34 1449.93,-768.9 1425,-801 1401.09,-831.79 1416.04,-852.91 1389,-881 1332.9,-939.29 1293.4,-917.26 1226,-962 1208.41,-973.68 1208.75,-983.29 1190,-993 1184.7,-995.75 1179.02,-998.15 1173.21,-1000.24"/>
+<polygon fill="#00ff5b" stroke="#00ff5b" points="1171.75,-997.03 1163.35,-1003.48 1173.94,-1003.68 1171.75,-997.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M1626.85,-654.98C1618.98,-651.31 1611.7,-646.45 1606,-640 1547.04,-573.32 1630.4,-508.37 1570,-443 1547.69,-418.85 1526.89,-440.59 1498.5,-424"/>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M1496.5,-424C1481.28,-415.1 1207.48,-344.3 1190,-342 1115.09,-332.15 1094.94,-332.37 1020,-342 918.85,-354.99 867.36,-325.24 798,-400 737.46,-465.25 806.21,-519.75 762,-597 745.56,-625.73 715.66,-649.42 693.1,-664.43"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="691.07,-661.58 684.56,-669.94 694.86,-667.46 691.07,-661.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M1626.98,-655.42C1618.99,-651.69 1611.64,-646.7 1606,-640 1528.54,-548.11 1654.82,-457.14 1570,-372 1397,-198.35 1265.05,-324.93 1020,-331 921.24,-333.45 890.39,-307.03 798,-342 640.49,-401.61 498.45,-556.88 451.42,-612.13"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="448.7,-609.91 444.93,-619.82 454.06,-614.43 448.7,-609.91"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge96" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1658.87,-678.04C1621.23,-693.16 1554.9,-720.01 1498.5,-744"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1496.5,-744C1353.04,-805.01 916.19,-577.34 798,-679 716.89,-748.76 835.35,-839.12 762,-917 760.76,-918.31 759.47,-919.55 758.12,-920.73"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="755.89,-918.02 749.85,-926.73 760,-923.69 755.89,-918.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge107" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M1672.9,-678.03C1656.04,-690.72 1628.88,-711.41 1606,-730 1575.57,-754.73 1541.3,-784.38 1519.8,-803.21"/>
+<polygon fill="#ff00a3" stroke="#ff00a3" points="1517.43,-800.63 1512.22,-809.86 1522.05,-805.89 1517.43,-800.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge123" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1496.5,-424C1444.31,-393.58 1275.04,-415.72 1226,-451 1194.35,-473.77 1220.19,-506.33 1190,-531 1160.36,-555.22 1144.22,-547.97 1106,-550"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1104,-550C1073.94,-551.62 998.5,-533.99 946.24,-520.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="947,-517.14 936.44,-518.02 945.24,-523.92 947,-517.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge140" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1629.16,-653.86C1620.78,-650.35 1612.74,-645.83 1606,-640 1578.04,-615.8 1598.52,-588.53 1570,-565 1518.61,-522.6 1484.48,-557.01 1425,-527 1406.66,-517.75 1407.08,-507.76 1389,-498 1381.57,-493.99 1373.42,-490.46 1365.24,-487.42"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1366.27,-484.07 1355.67,-484.05 1363.94,-490.67 1366.27,-484.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1084.99,-193.83C1048.9,-171.93 967.3,-128.12 892,-128"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge124" class="edge">
+<title>sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1095.43,-218.13C1063,-264.02 947.62,-427.3 906.6,-485.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="903.59,-483.53 900.68,-493.72 909.31,-487.57 903.59,-483.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1476.69,-809.9C1460.05,-798.63 1437.12,-780.24 1425,-758 1376.12,-668.31 1458.49,-605.87 1389,-531 1363.99,-504.06 1334.76,-537.73 1308.5,-512"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1306.5,-512C1280.24,-486.27 1253.76,-517.1 1226,-493 1192.84,-464.22 1219.15,-433.84 1190,-401 1161.88,-369.33 1144.97,-372.59 1106,-356"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1104,-356C1068.59,-340.93 1057.08,-345.29 1020,-335 1003.88,-330.53 1000.2,-328.18 984,-324 953.81,-316.22 458.38,-187.38 435,-208"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M1306.5,-976C1274.75,-995.63 1258.2,-981.11 1226,-1000 1206.75,-1011.29 1208.13,-1021.99 1190,-1035 1121.03,-1084.46 1075.31,-1057.62 1020,-1122 987.03,-1160.38 1020.6,-1195.06 984,-1230 976,-1237.63 965.94,-1243.06 955.43,-1246.9"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="954.15,-1243.63 945.69,-1250 956.28,-1250.3 954.15,-1243.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M1104,-858C1048.75,-850.97 1055.41,-908.01 1020,-951 1003.05,-971.58 1006.52,-984.71 984,-999 948.75,-1021.37 931.37,-1004.11 892,-1018"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1104,-858C1009.04,-845.91 987.36,-828.4 892,-820"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M890,-820C815.1,-813.41 732.69,-854.26 690.97,-878.67"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="689.02,-875.77 682.23,-883.9 692.61,-881.78 689.02,-875.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M1489.89,-834.07C1475.22,-859.73 1437.35,-919.99 1389,-952 1357.87,-972.61 1340.25,-956.37 1308.5,-976"/>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M1306.5,-976C1284.51,-989.6 1222.43,-1000.04 1173.11,-1006.51"/>
+<polygon fill="#00ff5b" stroke="#00ff5b" points="1172.6,-1003.05 1163.12,-1007.79 1173.48,-1009.99 1172.6,-1003.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_gm.f90</title>
+<path fill="none" stroke="#00ffc8" stroke-dasharray="5,2" d="M890,-1334C858.48,-1340.85 776.34,-1323.86 720.15,-1310.43"/>
+<polygon fill="#00ffc8" stroke="#00ffc8" points="720.86,-1307.01 710.32,-1308.06 719.22,-1313.81 720.86,-1307.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1480.48,-834.2C1460.38,-848.67 1424.26,-871.96 1389,-881 1266.76,-912.34 1230.67,-877.52 1106,-858"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1104,-858C1057.97,-852.14 1049.22,-832.04 1020,-796 995.7,-766.03 1014.41,-740.75 984,-717 982.37,-715.73 980.67,-714.54 978.92,-713.43"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="980.21,-710.15 969.74,-708.51 976.91,-716.32 980.21,-710.15"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M1306.5,-512C1280.22,-486.3 1257.98,-511.12 1226,-493 1206.04,-481.69 1211.14,-464.93 1190,-456 1029.06,-388.04 932.19,-373.15 798,-485 757.84,-518.48 790.87,-553.41 762,-597 743.5,-624.93 713.38,-649.03 691.31,-664.36"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="689.31,-661.49 682.99,-669.99 693.23,-667.28 689.31,-661.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M890,-1492C744.56,-1485.65 704.23,-1508.31 563,-1473 527.22,-1464.05 489.19,-1445.19 463.97,-1431.18"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="465.39,-1427.97 454.97,-1426.09 461.95,-1434.06 465.39,-1427.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M1104,-356C977.82,-301.61 915.86,-329.37 798,-400 711.42,-451.89 760.31,-554.44 663.5,-583"/>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M661.5,-583C612.78,-597.24 557.06,-609.35 513.08,-617.96"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="512.18,-614.57 503.03,-619.91 513.51,-621.44 512.18,-614.57"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_meke.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_meke.f90</title>
+<path fill="none" stroke="#1200ff" stroke-dasharray="5,2" d="M1492.6,-834.02C1462.47,-925.93 1263.43,-1513.3 1106,-1492"/>
+<path fill="none" stroke="#1200ff" stroke-dasharray="5,2" d="M1104,-1492C1039.56,-1511.07 1044.08,-1430.12 984,-1400 975.63,-1395.8 966.48,-1392.19 957.31,-1389.12"/>
+<polygon fill="#1200ff" stroke="#1200ff" points="958.35,-1385.78 947.76,-1386.1 956.24,-1392.45 958.35,-1385.78"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge91" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1306.5,-976C1275.07,-996.14 1253.47,-974.72 1226,-1000 1193.69,-1029.73 1213.51,-1054.92 1190,-1092 1118.62,-1204.58 1098.72,-1242.1 984,-1310 947.64,-1331.52 932.5,-1321.94 892,-1334"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M890,-1334C848.71,-1342.97 834.81,-1330.75 798,-1310 778.56,-1299.04 781.68,-1285.52 762,-1275 752.44,-1269.89 741.73,-1266.02 730.98,-1263.1"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="731.69,-1259.67 721.14,-1260.67 730.01,-1266.46 731.69,-1259.67"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge97" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1104,-858C968.83,-840.79 920.7,-817.73 798,-877 776.46,-887.4 782.71,-905.03 762,-917 758.74,-918.88 755.34,-920.6 751.83,-922.16"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="750.34,-918.98 742.35,-925.94 752.94,-925.49 750.34,-918.98"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge99" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#b600ff" stroke-dasharray="5,2" d="M1104,-858C1046.57,-849.01 1038.76,-825.5 984,-806 972.76,-802 960.58,-798.19 948.88,-794.79"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="949.76,-791.4 939.18,-792.03 947.84,-798.14 949.76,-791.4"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge110" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_varmix.f90</title>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M1104,-1492C1013.65,-1518.74 986.13,-1496.11 892,-1492"/>
+<path fill="none" stroke="#ff006d" stroke-dasharray="5,2" d="M890,-1492C831.77,-1489.46 766.31,-1476.81 720.79,-1466.41"/>
+<polygon fill="#ff006d" stroke="#ff006d" points="721.35,-1462.95 710.82,-1464.09 719.77,-1469.76 721.35,-1462.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge113" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90</title>
+<path fill="none" stroke="#ff0036" stroke-dasharray="5,2" d="M890,-1334C765.75,-1361 617.86,-1354.04 525.19,-1345.16"/>
+<polygon fill="#ff0036" stroke="#ff0036" points="525.3,-1341.65 515,-1344.16 524.61,-1348.62 525.3,-1341.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge125" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1435.87,-831.11C1354.45,-840.14 1208.21,-844.77 1106,-782"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1104,-782C1065.96,-755.43 1047.07,-757.68 1020,-720 989.49,-677.54 1010.09,-653.31 984,-608 965.2,-575.34 934.55,-544.14 913.85,-525.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="915.94,-522.21 906.18,-518.09 911.25,-527.4 915.94,-522.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge141" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1476.58,-809.96C1459.87,-798.72 1436.9,-780.35 1425,-758 1370.19,-655.02 1463.97,-587.38 1389,-498 1383.44,-491.37 1376.17,-486.41 1368.28,-482.71"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1369.37,-479.38 1358.79,-478.92 1366.77,-485.88 1369.37,-479.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge143" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1476.91,-809.78C1460.41,-798.43 1437.56,-779.99 1425,-758 1384.53,-687.16 1443.28,-638.91 1389,-578 1386.09,-574.73 1382.76,-571.87 1379.16,-569.37"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1380.7,-566.22 1370.31,-564.16 1377.15,-572.25 1380.7,-566.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge146" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1481.06,-809.93C1465.91,-797.7 1442.59,-777.8 1425,-758 1365.14,-690.61 1394.38,-619.37 1308.5,-592"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node43" class="node">
+<title>sourcefile~rdb_ocean_z_init.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node43"><a xlink:href="../sourcefile/rdb_ocean_z_init.f90.html" xlink:title="rdb_ocean_z_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1369.5,-872 1245.5,-872 1245.5,-848 1369.5,-848 1369.5,-872"/>
+<text text-anchor="middle" x="1307.5" y="-857.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_z_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge147" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1437.02,-834.02C1418.24,-837.82 1397.32,-842.05 1377.91,-845.97"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1377.03,-842.58 1367.92,-847.99 1378.42,-849.44 1377.03,-842.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M646.48,-1464.13C610.28,-1491.83 515.28,-1555.44 435,-1530"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M433,-1530C342.2,-1501.22 275,-1399.29 249.37,-1354.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="252.37,-1353.1 244.41,-1346.12 246.28,-1356.55 252.37,-1353.1"/>
+</g>
+<!-- sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_isopycnal_slopes.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M595.99,-1441.01C571.19,-1436.85 542.67,-1432.06 516.58,-1427.69"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="517.15,-1424.23 506.71,-1426.03 515.99,-1431.14 517.15,-1424.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge114" class="edge">
+<title>sourcefile~rdb_ocean_varmix.f90&#45;&gt;sourcefile~rdb_ocean_wave_speed.f90</title>
+<path fill="none" stroke="#ff0036" stroke-dasharray="5,2" d="M638.11,-1439.82C597.4,-1418.61 513.45,-1374.87 467.25,-1350.8"/>
+<polygon fill="#ff0036" stroke="#ff0036" points="468.74,-1347.63 458.26,-1346.12 465.51,-1353.84 468.74,-1347.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_wave_speed.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_wave_speed.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M352.84,-1334C340.45,-1334 327.67,-1334 315.34,-1334"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="315.11,-1330.5 305.11,-1334 315.11,-1337.5 315.11,-1330.5"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M881.4,-518.32C862.74,-545.74 818.54,-614.5 798,-679 759.93,-798.55 817.75,-846.6 762,-959 745.64,-991.98 713.52,-1020.27 690.4,-1037.64"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="688.04,-1035.03 682.03,-1043.75 692.17,-1040.68 688.04,-1035.03"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#ecff00" stroke-dasharray="5,2" d="M881.94,-493.97C848.44,-443.98 719.99,-252.3 677.35,-188.67"/>
+<polygon fill="#ecff00" stroke="#ecff00" points="680.18,-186.6 671.7,-180.24 674.36,-190.49 680.18,-186.6"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M845.1,-508.46C827.98,-511.74 809.77,-518.48 798,-532 720.85,-620.68 813.36,-688.28 762,-794 745.14,-828.71 712,-859.15 688.83,-877.54"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="686.57,-874.87 680.8,-883.76 690.85,-880.41 686.57,-874.87"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M845.05,-511.38C828.91,-515.1 811.4,-521.38 798,-532 772.12,-552.51 782.82,-571.37 762,-597 740.72,-623.19 710.72,-647.77 689.44,-663.69"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="687.17,-661.01 681.18,-669.76 691.31,-666.65 687.17,-661.01"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_lateral_mix.f90</title>
+<path fill="none" stroke="#0024ff" stroke-dasharray="5,2" d="M845.31,-517.79C830.2,-522 813.29,-526.95 798,-532 737.29,-552.05 725.23,-566.39 663.5,-583"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge93" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M860.76,-518.18C839.57,-528.64 812.24,-545.87 798,-570 758.6,-636.76 813.82,-859.34 762,-917 760.64,-918.51 759.2,-919.93 757.7,-921.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="755.61,-918.45 749.62,-927.19 759.75,-924.09 755.61,-918.45"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2293.5,-832 2205.5,-832 2205.5,-808 2293.5,-808 2293.5,-832"/>
+<text text-anchor="middle" x="2249.5" y="-817.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#00ff24" stroke-dasharray="5,2" d="M2248.55,-832.13C2247.97,-871.96 2240.18,-999.32 2166,-1055 2107.86,-1098.64 1905.04,-1094.56 1784.04,-1087.75"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="1784.21,-1084.25 1774.03,-1087.17 1783.81,-1091.24 1784.21,-1084.25"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M2238.37,-832.03C2199.29,-877.05 2052.64,-1033.33 1894,-1041"/>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M1892,-1041C1627.27,-1068.39 1309.99,-1038.42 1173.67,-1022.56"/>
+<polygon fill="#00ff5b" stroke="#00ff5b" points="1173.73,-1019.04 1163.39,-1021.35 1172.91,-1025.99 1173.73,-1019.04"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M2241.24,-807.77C2231.19,-790.36 2213,-757.19 2202,-727 2141.55,-561.16 2104.48,-350.22 2093.47,-282.2"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="2096.91,-281.53 2091.87,-272.2 2089.99,-282.63 2096.91,-281.53"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge102" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M2205.45,-816.07C2173.38,-814.1 2128.64,-813.34 2090,-820"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge117" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2205.35,-812.01C2192.7,-809.85 2178.82,-807.65 2166,-806 2045.64,-790.5 2015.36,-782 1894,-782 1894,-782 1894,-782 1689,-782 1385.59,-782 1278.67,-804.58 1020,-646 969.11,-614.8 926.12,-557.6 905.35,-526.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="908.07,-524.63 899.63,-518.22 902.24,-528.5 908.07,-524.63"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2297,-718 2202,-718 2202,-694 2297,-694 2297,-718"/>
+<text text-anchor="middle" x="2249.5" y="-703.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M2244.1,-693.61C2222.28,-632.21 2125.7,-360.46 2097.66,-281.55"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="2100.96,-280.38 2094.31,-272.12 2094.36,-282.72 2100.96,-280.38"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge103" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M2238.66,-718.33C2215.97,-745.38 2156.81,-808.49 2090,-820"/>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M2088,-820C1990.44,-836.81 1703.68,-829.36 1569.39,-824.71"/>
+<polygon fill="#ff00a3" stroke="#ff00a3" points="1569.33,-821.21 1559.21,-824.35 1569.08,-828.2 1569.33,-821.21"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge118" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2201.76,-706C2133.95,-706 2004.32,-706 1894,-706 1894,-706 1894,-706 1689,-706 1613.92,-706 1080.23,-655.82 1020,-611 989.37,-588.21 1012.91,-557.94 984,-533 973.45,-523.9 959.97,-517.86 946.6,-513.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="947.49,-510.48 936.92,-511.29 945.69,-517.24 947.49,-510.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2446,-718 2333,-718 2333,-694 2446,-694 2446,-718"/>
+<text text-anchor="middle" x="2389.5" y="-703.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff5b" stroke-dasharray="5,2" d="M2088,-1041C2002.19,-1032.55 1979.55,-1030.23 1894,-1041"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M2248.5,-122C2183.17,-89.25 2123.04,-192.23 2099.97,-238.59"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="2096.71,-237.28 2095.5,-247.81 2103.01,-240.34 2096.71,-237.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge119" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2387.97,-693.77C2384.26,-614.61 2358.88,-176.34 2250.5,-122"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2248.5,-122C2072.82,-33.92 2003.07,-142.28 1810,-179 1547.06,-229 1451.94,-182.51 1226,-326 1204.67,-339.55 1210.01,-354.58 1190,-370 1147.19,-402.99 1003.69,-461.96 932.61,-490.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="931.09,-486.98 923.08,-493.91 933.66,-493.49 931.09,-486.98"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge128" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M2332.77,-706C2324.37,-706 2315.69,-706 2307.27,-706"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="2307.15,-702.5 2297.15,-706 2307.15,-709.5 2307.15,-702.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge130" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M2248.5,-1041C2189.11,-1078.88 2160.11,-1047.91 2090,-1041"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M2088,-1041C2025.49,-1034.84 1958.85,-1001.37 1922.22,-980.33"/>
+<polygon fill="#003fff" stroke="#003fff" points="1923.54,-977.04 1913.15,-975.01 1920.01,-983.08 1923.54,-977.04"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge132" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M2388.07,-718.18C2385.55,-769.13 2368.23,-965.91 2250.5,-1041"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M2248.5,-1041C2221.34,-1058.32 2006.48,-952.44 1976,-942 1886.77,-911.45 1865.22,-900.94 1774,-877 1770.63,-876.11 1767.16,-875.25 1763.66,-874.4"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1764.25,-870.94 1753.71,-872.08 1762.66,-877.76 1764.25,-870.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_width.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node38" class="node">
+<title>sourcefile~rdb_ocean_halo_width.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node38"><a xlink:href="../sourcefile/rdb_ocean_halo_width.f90.html" xlink:title="rdb_ocean_halo_width.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2166,-1131 2012,-1131 2012,-1107 2166,-1107 2166,-1131"/>
+<text text-anchor="middle" x="2089" y="-1116.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_width.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_halo_width.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge135" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_halo_width.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M2248.5,-1041C2211.96,-1064.31 2205.1,-1074.3 2166,-1093 2157.96,-1096.85 2149.19,-1100.39 2140.56,-1103.55"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="2139.2,-1100.32 2130.93,-1106.94 2141.52,-1106.92 2139.2,-1100.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M870.38,-910.07C851.59,-921.75 822.55,-940.12 798,-957 758.55,-984.13 714.03,-1017.45 687.4,-1037.69"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="685.24,-1034.93 679.41,-1043.77 689.48,-1040.5 685.24,-1034.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_bottom_drag.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M797.87,-897.19C783.88,-897.06 769.44,-896.94 755.45,-896.81"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="755.38,-893.31 745.35,-896.72 755.32,-900.31 755.38,-893.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_horizontal_viscosity.f90</title>
+<path fill="none" stroke="#00c8ff" stroke-dasharray="5,2" d="M879.06,-885.98C857.39,-862.33 807.17,-808.37 762,-766 736.93,-742.49 706.66,-717.09 686.35,-700.45"/>
+<polygon fill="#00c8ff" stroke="#00c8ff" points="688.53,-697.71 678.57,-694.1 684.1,-703.13 688.53,-697.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge94" class="edge">
+<title>sourcefile~rdb_ocean_bt_budget_probe.f90&#45;&gt;sourcefile~rdb_ocean_pressure_force.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M822.04,-910C796.74,-914.47 767.82,-919.58 741.67,-924.19"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="741.04,-920.75 731.8,-925.94 742.26,-927.65 741.04,-920.75"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge104" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M1836.48,-950.96C1777.93,-937.38 1683.62,-912.96 1606,-881 1577.88,-869.42 1547.66,-852.39 1526.45,-839.6"/>
+<polygon fill="#ff00a3" stroke="#ff00a3" points="1528.02,-836.46 1517.66,-834.23 1524.37,-842.43 1528.02,-836.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge133" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1846.49,-950.94C1834.38,-947.1 1821.48,-942.41 1810,-937 1775.07,-920.53 1738.24,-895.31 1714.97,-878.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1716.87,-875.31 1706.75,-872.16 1712.7,-880.93 1716.87,-875.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge105" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00a3" stroke-dasharray="5,2" d="M1628.72,-847.98C1609.61,-844.16 1588.31,-839.91 1568.57,-835.98"/>
+<polygon fill="#ff00a3" stroke="#ff00a3" points="1569.2,-832.53 1558.71,-834.01 1567.83,-839.4 1569.2,-832.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_width.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_halo_width.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ffa300" stroke-dasharray="5,2" d="M2011.79,-1120.31C1812.03,-1122.94 1256.98,-1125.14 798,-1079 776.83,-1076.87 753.96,-1073.41 733.19,-1069.8"/>
+<polygon fill="#ffa300" stroke="#ffa300" points="733.64,-1066.33 723.18,-1068.03 732.42,-1073.22 733.64,-1066.33"/>
+</g>
+<!-- sourcefile~rdb_config_schema.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node39" class="node">
+<title>sourcefile~rdb_config_schema.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node39"><a xlink:href="../sourcefile/rdb_config_schema.f90.html" xlink:title="rdb_config_schema.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1174.5,-522 1035.5,-522 1035.5,-498 1174.5,-498 1174.5,-522"/>
+<text text-anchor="middle" x="1105" y="-507.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_schema.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge115" class="edge">
+<title>sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1035.46,-508.71C1006.71,-508.16 973.75,-507.54 946.67,-507.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="946.67,-503.53 936.6,-506.84 946.53,-510.53 946.67,-503.53"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge116" class="edge">
+<title>sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1257.8,-484.01C1246.95,-487.69 1235.77,-492.31 1226,-498 1207.24,-508.92 1209.23,-520.93 1190,-531 1156.09,-548.75 1144.22,-547.97 1106,-550"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge120" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1225.96,-548.88C1189.34,-548.06 1145.45,-547.9 1106,-550"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge144" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1243.06,-564.02C1222.85,-567.85 1200.32,-572.12 1179.46,-576.08"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1178.54,-572.69 1169.37,-577.99 1179.85,-579.57 1178.54,-572.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge121" class="edge">
+<title>sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1052.8,-577.97C1041.62,-574.3 1030.11,-569.7 1020,-564 1001.35,-553.49 1002.78,-542.28 984,-532 972.4,-525.65 959.11,-520.73 946.3,-516.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="947.21,-513.59 936.64,-514.32 945.35,-520.34 947.21,-513.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge126" class="edge">
+<title>sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1262.56,-847.92C1220.47,-835.21 1156.13,-812.79 1106,-782"/>
+</g>
+<!-- sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge127" class="edge">
+<title>sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1850.26,-279.09C1742.28,-278.21 1446.83,-285.32 1226,-380 1207.37,-387.99 1206.16,-395.76 1190,-408 1153.02,-436.02 1149.2,-453.05 1106,-470"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1104,-470C1075.44,-478.95 999.52,-490.81 946.75,-498.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="945.92,-495 936.52,-499.89 946.92,-501.93 945.92,-495"/>
+</g>
+<!-- sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node45" class="node">
+<title>sourcefile~rdb_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node45"><a xlink:href="../sourcefile/rdb_halo.f90.html" xlink:title="rdb_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1538,-518 1457,-518 1457,-494 1538,-494 1538,-518"/>
+<text text-anchor="middle" x="1497.5" y="-503.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge136" class="edge">
+<title>sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1456.63,-498.79C1431.08,-494.17 1397.44,-488.08 1368.67,-482.88"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1369.18,-479.42 1358.72,-481.08 1367.94,-486.31 1369.18,-479.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node46" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node46"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1557,-476 1438,-476 1438,-452 1557,-452 1557,-476"/>
+<text text-anchor="middle" x="1497.5" y="-461.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge138" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1437.79,-466.5C1415.84,-467.43 1390.89,-468.49 1368.8,-469.43"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1368.38,-465.95 1358.54,-469.87 1368.68,-472.94 1368.38,-465.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node47" class="node">
+<title>sourcefile~rdb_ocean_restart_io.f90</title>
+<g id="a_sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_node47"><a xlink:href="../sourcefile/rdb_ocean_restart_io.f90.html" xlink:title="rdb_ocean_restart_io.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1570,-598 1425,-598 1425,-574 1570,-574 1570,-598"/>
+<text text-anchor="middle" x="1497.5" y="-583.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_bipolar.f90~~AfferentGraph_edge139" class="edge">
+<title>sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1448.6,-573.85C1440.16,-570.3 1431.89,-565.76 1425,-560 1400.56,-539.55 1413.81,-518 1389,-498 1382.81,-493.01 1375.64,-488.97 1368.18,-485.69"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1369.21,-482.34 1358.62,-481.95 1366.65,-488.86 1369.21,-482.34"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_bipolarf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_bipolarf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Analytic TRIPOLAR (Murray 1996) bipolar-cap coordinate map.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_bipolar</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Pure corner-coordinate generator for the bipolar Arctic cap of a</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! TRIPOLAR ocean grid (Murray 1996, J. Comput. Phys. 126, 251-273).</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! Ordinary lon-lat for `lat &lt;= phi_join`; a conformal BIPOLAR cap for</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! `lat &gt; phi_join`. Two grid poles sit ON the join latitude at antipodal</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! longitudes `lon_pole` and `lon_pole+180`, so the join circle is a</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! coordinate line and the grid is C0-continuous across it.</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! Map: stereographic projection from the south pole</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! (Z = tan((90-lat)/2)*exp(i*lon)), de-rotate by `lon_pole`, Mobius</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!! w = (Zp-A)/(Zp+A) with A = tan((90-phi_join)/2). Conformal coords</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! (mu, xi) = (log|w|, arg w) are orthogonal by construction. The logical</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! parameterisation makes the join a coordinate line and continuous with</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!! the lon-lat grid: i sets mu = log|tan((lam-lon_pole)/2)| (lon = lam on</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!! the join ring); j (s in [0,1]) rotates xi = sgn*(pi/2 + s*pi/2) from</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!! the join (s=0) to the self-conjugate fold line (s=1). Inverse:</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! w = exp(mu+i*xi), Zp = A*(1+w)/(1-w), Z = Zp*exp(i*lon_pole).</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">PI</span><span class="p">,</span><span class="w"> </span><span class="n">DEG2RAD</span><span class="p">,</span><span class="w"> </span><span class="n">RAD2DEG</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="k">   private</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bipolar_corner_latlon</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bipolar_pole_lat</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="k">contains</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="k">   pure subroutine </span><span class="n">bipolar_corner_latlon</span><span class="p">(</span><span class="n">lam_deg</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span><span class="p">,</span><span class="w"> </span><span class="n">lat</span><span class="p">,</span><span class="w"> </span><span class="n">lon</span><span class="p">)</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">      </span><span class="c">!! Map a logical cap location to geographic (lat, lon) in degrees.</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">      </span><span class="c">!!   `lam_deg` : pseudo-longitude (geographic lon at the join ring),</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">      </span><span class="c">!!               any real (wrapped internally); the i-direction.</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">      </span><span class="c">!!   `s`       : cap-row fraction, 0 = join ring (`lat = phi_join`),</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">      </span><span class="c">!!               1 = fold line; the j-direction.</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="c">!!   `phi_join`: join latitude (deg); cap covers lat &gt; phi_join.</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">      </span><span class="c">!!   `lon_pole`: longitude (deg) of the first cap pole; partner at</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="c">!!               `lon_pole + 180`.</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lam_deg</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lat</span><span class="p">,</span><span class="w"> </span><span class="n">lon</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a_focus</span><span class="p">,</span><span class="w"> </span><span class="n">half</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">mu</span><span class="p">,</span><span class="w"> </span><span class="n">xi</span><span class="p">,</span><span class="w"> </span><span class="n">sgn</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wr</span><span class="p">,</span><span class="w"> </span><span class="n">wi</span><span class="p">,</span><span class="w"> </span><span class="n">denr</span><span class="p">,</span><span class="w"> </span><span class="n">deni</span><span class="p">,</span><span class="w"> </span><span class="n">dnorm</span><span class="p">,</span><span class="w"> </span><span class="n">zpr</span><span class="p">,</span><span class="w"> </span><span class="n">zpi</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lpr</span><span class="p">,</span><span class="w"> </span><span class="n">zr</span><span class="p">,</span><span class="w"> </span><span class="n">zi</span><span class="p">,</span><span class="w"> </span><span class="n">rmag</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="n">a_focus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">tan</span><span class="p">(</span><span class="n">DEG2RAD</span><span class="o">*</span><span class="p">(</span><span class="mi">9</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">phi_join</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5_wp</span><span class="p">)</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="c">! mu from the join-continuity relation: lon_join = lon_pole + 2 atan(exp(mu)).</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="n">half</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DEG2RAD</span><span class="o">*</span><span class="p">(</span><span class="n">lam_deg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lon_pole</span><span class="p">)</span><span class="o">*</span><span class="mf">0.5_wp</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">tan</span><span class="p">(</span><span class="n">half</span><span class="p">)</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="k">         </span><span class="n">sgn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">         </span><span class="n">mu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">log</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="k">         </span><span class="n">sgn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0_wp</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">         </span><span class="n">mu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">log</span><span class="p">(</span><span class="o">-</span><span class="n">t</span><span class="p">)</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">         </span><span class="c">! lam == lon_pole (mod 360): a cap pole.  mu -&gt; -inf; clamp finite</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">         </span><span class="c">! so the corner sits arbitrarily close to the pole without an Inf.</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">         </span><span class="n">sgn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">         </span><span class="n">mu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">5</span><span class="mf">0.0_wp</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="c">! xi rotates from the join (sgn*pi/2) to the fold (sgn*pi) as s: 0 -&gt; 1.</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="n">xi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sgn</span><span class="o">*</span><span class="p">(</span><span class="n">PI</span><span class="o">*</span><span class="mf">0.5_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s</span><span class="o">*</span><span class="n">PI</span><span class="o">*</span><span class="mf">0.5_wp</span><span class="p">)</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="c">! w = exp(mu) * exp(i*xi)</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="n">wr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">exp</span><span class="p">(</span><span class="n">mu</span><span class="p">)</span><span class="o">*</span><span class="nb">cos</span><span class="p">(</span><span class="n">xi</span><span class="p">)</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="n">wi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">exp</span><span class="p">(</span><span class="n">mu</span><span class="p">)</span><span class="o">*</span><span class="nb">sin</span><span class="p">(</span><span class="n">xi</span><span class="p">)</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="c">! Zp = A * (1 + w)/(1 - w)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="n">denr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">wr</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="n">deni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">wi</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="n">dnorm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">denr</span><span class="o">*</span><span class="n">denr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">deni</span><span class="o">*</span><span class="n">deni</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dnorm</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">         </span><span class="c">! w == 1 (mu -&gt; +inf): the other pole.  Place at phi_join on the</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">         </span><span class="c">! partner meridian.</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">         </span><span class="n">lat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">phi_join</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">         </span><span class="n">lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lon_pole</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lon</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lon</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">36</span><span class="mf">0.0_wp</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">         </span><span class="k">return</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="k">      end if</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">! (1+w)/(1-w)</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="n">zpr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wr</span><span class="p">)</span><span class="o">*</span><span class="n">denr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wi</span><span class="o">*</span><span class="n">deni</span><span class="p">)</span><span class="o">/</span><span class="n">dnorm</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="n">zpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">wi</span><span class="o">*</span><span class="n">denr</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wr</span><span class="p">)</span><span class="o">*</span><span class="n">deni</span><span class="p">)</span><span class="o">/</span><span class="n">dnorm</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="n">zpr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a_focus</span><span class="o">*</span><span class="n">zpr</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="n">zpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a_focus</span><span class="o">*</span><span class="n">zpi</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">! Z = Zp * exp(i*lon_pole)</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="n">lpr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DEG2RAD</span><span class="o">*</span><span class="n">lon_pole</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="n">zr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zpr</span><span class="o">*</span><span class="nb">cos</span><span class="p">(</span><span class="n">lpr</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">zpi</span><span class="o">*</span><span class="nb">sin</span><span class="p">(</span><span class="n">lpr</span><span class="p">)</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="n">zi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zpr</span><span class="o">*</span><span class="nb">sin</span><span class="p">(</span><span class="n">lpr</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">zpi</span><span class="o">*</span><span class="nb">cos</span><span class="p">(</span><span class="n">lpr</span><span class="p">)</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">! stereographic inverse</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="n">rmag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">zr</span><span class="o">*</span><span class="n">zr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">zi</span><span class="o">*</span><span class="n">zi</span><span class="p">)</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="n">lat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">9</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">RAD2DEG</span><span class="o">*</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="nb">atan</span><span class="p">(</span><span class="n">rmag</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">zr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">zi</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="k">         </span><span class="n">lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lon_pole</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="k">         </span><span class="n">lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RAD2DEG</span><span class="o">*</span><span class="n">atan2</span><span class="p">(</span><span class="n">zi</span><span class="p">,</span><span class="w"> </span><span class="n">zr</span><span class="p">)</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="c">! wrap lon to [-180, 180)</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="n">lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">lon</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mi">36</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">bipolar_corner_latlon</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">   </span><span class="k">pure function </span><span class="n">bipolar_pole_lat</span><span class="p">(</span><span class="n">phi_join</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">lat</span><span class="p">)</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="c">!! Latitude (deg) of the two cap poles — they sit ON the join</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="c">!! latitude, so this is simply `phi_join`.</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">phi_join</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lat</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="n">lat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">phi_join</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">   </span><span class="k">end function </span><span class="n">bipolar_pole_lat</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="k">end module </span><span class="n">rdb_ocean_bipolar</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

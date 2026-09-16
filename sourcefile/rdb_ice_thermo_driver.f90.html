@@ -1,0 +1,1146 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ice_thermo_driver.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ice_thermo_driver.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">176 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_thermo_driver.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ice_thermo_driver.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_thermo_driver.html">rdb_ice_thermo_driver</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ice_thermo_driver.f90.html#src">rdb_ice_thermo_driver.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Driver-facing ice thermodynamics: run the column step, reduce the
+per-(cell,cat) exchange into the ocean-coupling seam diags (PR 3c).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_thermo_driverf90EfferentGraph" width="641pt" height="295pt"
+ viewBox="0.00 0.00 641.00 294.91" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph" class="graph" transform="scale(0.66 0.66) rotate(0) translate(4 442.74)">
+<title>sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-442.74 967,-442.74 967,4 -4,4"/>
+<!-- sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_thermo_driver.f90</title>
+<polygon fill="none" stroke="black" points="963,-214.26 809,-214.26 809,-190.26 963,-190.26 963,-214.26"/>
+<text text-anchor="middle" x="886" y="-199.86" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_thermo_driver.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-351.26 0,-351.26 0,-327.26 109,-327.26 109,-351.26"/>
+<text text-anchor="middle" x="54.5" y="-336.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M700,-419.26C560.98,-468.72 514.88,-405.11 368,-419.26"/>
+</g>
+<!-- sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_eos.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_eos.f90.html" xlink:title="rdb_eos.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="739.5,-174.26 662.5,-174.26 662.5,-150.26 739.5,-150.26 739.5,-174.26"/>
+<text text-anchor="middle" x="701" y="-159.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_eos.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_eos.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M830.09,-190.25C804.46,-184.65 774.24,-178.05 749.6,-172.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="750.27,-169.22 739.75,-170.51 748.77,-176.06 750.27,-169.22"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="406.5,-231.26 327.5,-231.26 327.5,-207.26 406.5,-207.26 406.5,-231.26"/>
+<text text-anchor="middle" x="367" y="-216.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M808.9,-197.43C736.84,-194.01 625.72,-191.67 530,-202.26"/>
+</g>
+<!-- sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ice_column.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ice_column.f90.html" xlink:title="rdb_ice_column.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="588.5,-368.26 469.5,-368.26 469.5,-344.26 588.5,-344.26 588.5,-368.26"/>
+<text text-anchor="middle" x="529" y="-353.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M880.1,-214.44C863.05,-254.82 801.82,-383.74 702,-419.26"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M700,-419.26C646.65,-438.24 584.32,-399.42 551.98,-374.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="554.08,-371.87 544.06,-368.42 549.74,-377.36 554.08,-371.87"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ice_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ice_state.f90.html" xlink:title="rdb_ice_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="754,-291.26 648,-291.26 648,-267.26 754,-267.26 754,-291.26"/>
+<text text-anchor="middle" x="701" y="-276.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M856.41,-214.29C825.07,-227.47 774.66,-248.68 740.02,-263.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="738.55,-260.08 730.69,-267.18 741.27,-266.53 738.55,-260.08"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="773,-92.26 629,-92.26 629,-68.26 773,-68.26 773,-92.26"/>
+<text text-anchor="middle" x="701" y="-77.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M866.78,-190.11C834.31,-168.46 766.3,-123.12 728.59,-97.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="730.4,-94.99 720.14,-92.35 726.52,-100.81 730.4,-94.99"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M690.73,-174.46C673.95,-195.43 636.23,-237.68 593,-254.26 499.61,-290.07 466.46,-276.9 368,-259.26"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M366,-259.26C296.1,-248.1 272.15,-209.33 208,-239.26"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M662.31,-173.9C628.16,-183.78 576.26,-197.14 530,-202.26"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M528,-202.26C490.83,-206.37 448.78,-210.83 417.12,-214.15"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="416.39,-210.7 406.81,-215.23 417.12,-217.67 416.39,-210.7"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="584.5,-132.26 473.5,-132.26 473.5,-108.26 584.5,-108.26 584.5,-132.26"/>
+<text text-anchor="middle" x="529" y="-117.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M662.27,-152.93C640.61,-147.58 612.93,-140.74 588.5,-134.71"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="589.16,-131.27 578.62,-132.27 587.48,-138.06 589.16,-131.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="593,-174.26 465,-174.26 465,-150.26 593,-150.26 593,-174.26"/>
+<text text-anchor="middle" x="529" y="-159.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M662.27,-162.26C644.95,-162.26 623.79,-162.26 603.51,-162.26"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="603.34,-158.76 593.34,-162.26 603.34,-165.76 603.34,-158.76"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M327.49,-217.68C294.33,-217.79 245.96,-221.55 208,-239.26"/>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M507.72,-368.54C478.22,-385.37 421.19,-414.13 368,-419.26"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M366,-419.26C296.1,-425.99 277.1,-431.79 208,-419.26"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_enthalpy.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_enthalpy.f90.html" xlink:title="rdb_ice_enthalpy.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="269,-351.26 145,-351.26 145,-327.26 269,-327.26 269,-351.26"/>
+<text text-anchor="middle" x="207" y="-336.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M469.27,-346.75C439.08,-342.69 401.66,-338.94 368,-339.26"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ice_mass.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ice_mass.f90.html" xlink:title="rdb_ice_mass.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="420.5,-391.26 313.5,-391.26 313.5,-367.26 420.5,-367.26 420.5,-391.26"/>
+<text text-anchor="middle" x="367" y="-376.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M469.33,-364.69C456.73,-366.5 443.38,-368.42 430.63,-370.25"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="429.98,-366.81 420.58,-371.7 430.97,-373.74 429.98,-366.81"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ice_optics.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ice_optics.f90.html" xlink:title="rdb_ice_optics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="422.5,-311.26 311.5,-311.26 311.5,-287.26 422.5,-287.26 422.5,-311.26"/>
+<text text-anchor="middle" x="367" y="-296.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M494.07,-344.17C469.99,-335.59 437.47,-324 411.49,-314.75"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="412.48,-311.39 401.88,-311.33 410.13,-317.98 412.48,-311.39"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M661.66,-291.3C627.52,-301.13 576,-313.78 530,-316.26"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M528,-316.26C498.08,-317.86 492.96,-303.02 465,-292.26 422.5,-275.9 412.82,-267.29 368,-259.26"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M528,-240.26C491.59,-229.22 448.78,-223.98 416.61,-221.5"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="416.79,-218 406.56,-220.79 416.29,-224.99 416.79,-218"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M675.52,-291.38C653.95,-301.96 621.59,-317.56 593,-330.26 585.47,-333.6 577.37,-337.05 569.57,-340.3"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="568.17,-337.1 560.26,-344.15 570.84,-343.57 568.17,-337.1"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M528,-316.26C456.26,-320.11 439.84,-338.59 368,-339.26"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M366,-339.26C337.66,-339.52 306.47,-339.57 279.34,-339.54"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="279.16,-336.04 269.15,-339.52 279.15,-343.04 279.16,-336.04"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="429,-149.26 305,-149.26 305,-125.26 429,-125.26 429,-149.26"/>
+<text text-anchor="middle" x="367" y="-134.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M647.81,-269.22C613.92,-262.23 568.98,-252.07 530,-240.26"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M528,-240.26C472.46,-223.43 417.81,-181.2 388.97,-156.35"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="391.04,-153.5 381.21,-149.54 386.42,-158.77 391.04,-153.5"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M686.05,-68.09C658.26,-45.21 593.25,1.79 530,-0.26"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M528,-0.26C454.74,-2.62 432.04,-4.59 368,-40.26"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M366,-40.26C267.34,-95.21 310.34,-191.51 208,-239.26"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M206,-239.26C157.56,-261.85 106.94,-298.66 78.49,-320.76"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="76.1,-318.19 70.4,-327.11 80.43,-323.69 76.1,-318.19"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M628.77,-69.9C579.27,-66.36 513.71,-69.27 465,-99.26 438.84,-115.36 447.99,-134.11 429,-158.26 417.15,-173.32 401.9,-188.56 389.62,-200.05"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="387.04,-197.67 382.04,-207.01 391.77,-202.82 387.04,-197.67"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M648.99,-92.26C630.76,-96.55 610.02,-101.43 591.02,-105.9"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="590.2,-102.5 581.26,-108.19 591.8,-109.31 590.2,-102.5"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M528,-0.26C498.77,-1.2 489.34,-3.04 465,-19.26 444.91,-32.64 404.35,-86.65 382.58,-116.75"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="379.72,-114.73 376.73,-124.9 385.4,-118.82 379.72,-114.73"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="573.5,-52.26 484.5,-52.26 484.5,-28.26 573.5,-28.26 573.5,-52.26"/>
+<text text-anchor="middle" x="529" y="-37.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M648.99,-68.25C628.4,-63.41 604.62,-57.81 583.76,-52.91"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="584.32,-49.44 573.78,-50.56 582.71,-56.25 584.32,-49.44"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M144.79,-339.26C136.45,-339.26 127.89,-339.26 119.51,-339.26"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="119.41,-335.76 109.41,-339.26 119.41,-342.76 119.41,-335.76"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M332.16,-391.34C293.21,-404.61 231.6,-423.53 208,-419.26"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M206,-419.26C156.66,-410.31 106.69,-378.15 78.55,-357.43"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="80.64,-354.62 70.54,-351.41 76.43,-360.21 80.64,-354.62"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M318.59,-367.25C301.95,-363.04 283.07,-358.26 265.68,-353.86"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="266.2,-350.38 255.64,-351.32 264.48,-357.16 266.2,-350.38"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M337.34,-287.16C293.49,-268.82 214.13,-236.39 208,-239.26"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M318.59,-311.26C301.95,-315.47 283.07,-320.25 265.68,-324.65"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="264.48,-321.35 255.64,-327.19 266.2,-328.13 264.48,-321.35"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M350.25,-149.53C322.76,-170.46 263.63,-213.31 208,-239.26"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M484.39,-29.32C450.49,-23.3 403.43,-20.52 368,-40.26"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M485.42,-52.28C477.93,-55.86 470.72,-60.43 465,-66.26 434.24,-97.59 453.03,-121.51 429,-158.26 418.64,-174.09 403.65,-189.15 391.13,-200.35"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="388.58,-197.92 383.32,-207.11 393.17,-203.21 388.58,-197.92"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M494.6,-52.3C484.83,-56.28 474.29,-61.04 465,-66.26 437.74,-81.56 409.16,-103.27 390.15,-118.65"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="387.89,-115.97 382.37,-125.02 392.32,-121.39 387.89,-115.97"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ice_thermo_driverf90EfferentGraph = svgPanZoom('#sourcefilerdb_ice_thermo_driverf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_thermo_driverf90AfferentGraph" width="611pt" height="112pt"
+ viewBox="0.00 0.00 611.00 112.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 108)">
+<title>sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-108 607,-108 607,4 -4,4"/>
+<!-- sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_thermo_driver.f90</title>
+<polygon fill="none" stroke="black" points="154,-64 0,-64 0,-40 154,-40 154,-64"/>
+<text text-anchor="middle" x="77" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_thermo_driver.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="323,-64 190,-64 190,-40 323,-40 323,-64"/>
+<text text-anchor="middle" x="256.5" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M189.91,-52C181.53,-52 172.86,-52 164.22,-52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.11,-48.5 154.11,-52 164.11,-55.5 164.11,-48.5"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="450.5,-104 362.5,-104 362.5,-80 450.5,-80 450.5,-104"/>
+<text text-anchor="middle" x="406.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M362.29,-80.32C346.61,-76.08 328.68,-71.24 312.13,-66.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="312.61,-63.27 302.04,-64.04 310.78,-70.03 312.61,-63.27"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="454,-24 359,-24 359,0 454,0 454,-24"/>
+<text text-anchor="middle" x="406.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M361.1,-24C345.65,-28.17 328.15,-32.9 311.99,-37.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="310.87,-33.95 302.13,-39.94 312.7,-40.71 310.87,-33.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603,-44 490,-44 490,-20 603,-20 603,-44"/>
+<text text-anchor="middle" x="546.5" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M489.97,-35.86C445.49,-38.95 382.61,-43.31 333.47,-46.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="332.93,-43.25 323.2,-47.44 333.42,-50.24 332.93,-43.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_thermo_driver.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M489.77,-23.92C481.37,-22.71 472.69,-21.45 464.27,-20.23"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="464.55,-16.73 454.15,-18.76 463.54,-23.66 464.55,-16.73"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Driver-facing ice thermodynamics: run the column step, reduce the</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!! per-(cell,cat) exchange into the ocean-coupling seam diags (PR 3c).</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="k">module </span><span class="n">rdb_ice_thermo_driver</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! Bridges ice_thermo_columns (PR 3a) into the ocean-coupling seam:</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! runs the column, then reduces h2o_ocn_to_ice/h2o_ice_to_ocn/heat_to_ocn</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! over categories into the per-cell heat_flux_diag/m_melt_diag and the</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! net-melt salt contribution added into salt_flux_diag.</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!!   Q_heat  = sum_cat(heat_to_ocn)/dt_therm - fb        [W/m^2, +down]</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!!   m_net   = sum_cat(h2o_ocn_to_ice - h2o_ice_to_ocn)  [kg/m^2, +freeze]</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!!   salt   += m_net*(s_surf - ICE_BULK_SALINITY)/dt_therm  (ADD, not set)</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!!   sw_thru_diag = sum_cat(sw_thru)                     [W/m^2, +down]</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! PR 31: `sw_thru` (the shortwave penetrating the ice to the water) is</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!! now reduced to the per-cell `sw_thru_diag` and coupled to the ocean</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! by `ice_ocean_sw_flux` (`rdb_ice_ocean_coupler`).  It is DELIBERATELY</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! kept OUT of the `heat_flux_diag` sum above — `heat_flux_diag` carries</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!! only the NON-shortwave heat; the coupler delivers the shortwave via a</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!! separate path (the `q_sw` component, or a direct `Q_heat` add) so the</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!! energy reaches `Q_heat` exactly once in either component mode.</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! **Ordering contract** (driver-enforced, see rdb_driver.F90): this</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! module must run AFTER `ice_frazil_uptake` in the thermo-cadence</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! block. `ice_frazil_uptake_impl` OVERWRITES `salt_flux_diag` at loop</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!! top (unconditional zero, then a gated write) — this module's</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! reduction kernel ADDS its net-melt term on top of that write, never</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! zeroing `salt_flux_diag` itself. `heat_flux_diag`/`m_melt_diag` ARE</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! zeroed unconditionally here (this module owns them outright).</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!! **fb double-count guard**: the column already folds `fb` into</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="c">!! `bmelt` (rdb_ice_column TRAP #3) and reports `heat_to_ocn`/</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="c">!! `h2o_ice_to_ocn` net of that. The only place `fb` re-enters the</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="c">!! energy accounting is the `Q_heat` formula above — never add it</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="c">!! anywhere else.</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="c">!! Reads the sst/s_surf/tfw sample seam filled by</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="c">!! `rdb_ice_basal_flux%ice_compute_basal_flux` earlier in the same</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="c">!! thermo-cadence block (one sample, reused — see that module's</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="c">!! docstring).</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="c">!! **PR 4a multicat dispatch**: `ncat == 1` runs the EXISTING</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="c">!! `ice_thermo_driver_reduce_impl` byte-for-byte UNCHANGED (bit-identity</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="c">!! contract). `ncat &gt; 1` additionally fills `ice%fb_part_sum` — the</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="c">!! fb-charged ice-cover-fraction snapshot — in a small DC kernel BEFORE</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">   </span><span class="c">!! `ice_thermo_columns` runs (using the SAME entry gate the column</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="c">!! itself uses, `m_ice(i,j,c) &gt; ICE_RHO_ICE*H_VANISHED`, evaluated</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">   </span><span class="c">!! PRE-column so a category that melts out entirely this step is still</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">   </span><span class="c">!! counted in the weight it was actually charged `fb` under — counting</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="c">!! POST-column would leak `part*fb*dt_therm` of energy from the books</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">   </span><span class="c">!! for exactly that category), then dispatches to</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">   </span><span class="c">!! `ice_thermo_driver_reduce_multicat_impl`, which part-weights the</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">   </span><span class="c">!! per-category sums and subtracts `fb_part_sum*fb` (rather than the</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">   </span><span class="c">!! bare `fb` the ncat==1 path subtracts) from the heat diag.</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">   </span><span class="c">!! **PR 26 snowfall**: when `ice%has_snowfall`, `ice_snow_part_ocn_</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">   </span><span class="c">!! fill_impl` runs (same PRE-column-snapshot contract and reasoning as</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">   </span><span class="c">!! `ice_fb_part_sum_fill_impl` — a category that melts out this window</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="c">!! must still be counted in the cover it actually caught snow under)</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">   </span><span class="c">!! for BOTH `ncat==1` and `ncat&gt;1` (unlike `fb_part_sum`, which is</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">   </span><span class="c">!! `ncat&gt;1`-only: at `ncat==1` the ice-free share is a binary 0/1, not</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">   </span><span class="c">!! a part-weighted sum, so there is no "skip at ncat==1" case here).</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="c">!! `ice%atm_fprec` is threaded into `ice_thermo_columns` unconditionally</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">   </span><span class="c">!! (harmless zeros when `has_snowfall` is false). The two reduce impls</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">   </span><span class="c">!! above are NOT touched by PR 26 — the ocean-bound share is delivered</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">   </span><span class="c">!! separately by `rdb_ice_snow%ice_snowfall_ocean_share`, called by the</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">   </span><span class="c">!! driver AFTER this step (mandated order, `rdb_driver.F90`).</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">   </span><span class="c">!! **PR 27 snow-ice flooding**: `ice%snow_ice` is threaded into</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="c">!! `ice_thermo_columns` as `do_snow_ice` unconditionally (harmless</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">   </span><span class="c">!! `.false.` when the knob is off); the flood is entirely</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="c">!! column-internal (SIS2's `ice_resize_SIS2`, no ocean mass/heat/salt</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">   </span><span class="c">!! exchange — see `rdb_ice_mass%ice_snow_ice_flood`'s docstring) and</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">   </span><span class="c">!! therefore does NOT enter the `Q_heat`/`m_net`/`salt` reduction</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">   </span><span class="c">!! above; `ice%snow_to_ice` is filled but not yet reduced/coupled</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">   </span><span class="c">!! (same "filled, not consumed" contract as `sw_thru`).</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_eos</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">eos_t</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ice_column</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ice_thermo_columns</span><span class="p">,</span><span class="w"> </span><span class="n">ICE_BULK_SALINITY</span><span class="p">,</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ice_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_sea_ice_t</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="k">   private</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice_thermo_driver_step</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="k">contains</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="k">   pure subroutine </span><span class="n">ice_thermo_driver_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">)</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!! Outer shim (outer-shim + flat-impl pattern): `ms`/`eos` are</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="c">!! accepted for call-site parity with the other thermo-cadence</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! kernels (`ice_compute_basal_flux`, `ice_frazil_uptake`) even</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! though this step reads its ocean-surface sample from the</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="c">!! `ice%sst_seam`/`ssurf_seam`/`tfw_seam` scratch (filled by</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! `ice_compute_basal_flux` earlier in the same window) rather</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!! than re-deriving it from `ms`/`eos` directly — `eos` is unused</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">!! here but kept in the signature so a future revision that DOES</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="c">!! need a fresh EOS evaluation does not have to change every call</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="c">!! site.</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sea_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="c">!! Effective thermo timestep (s) — `ocean_dyn_t%therm_dt(dt)`.</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="k">associate</span><span class="w"> </span><span class="p">(</span><span class="n">unused</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">eos</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="k">end associate</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="k">         call </span><span class="n">ice_fb_part_sum_fill_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fb_part_sum</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">                                        </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">has_snowfall</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="k">         call </span><span class="n">ice_snow_part_ocn_fill_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">                                          </span><span class="n">ice</span><span class="p">%</span><span class="n">snow_part_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">                                          </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="k">      call </span><span class="n">ice_thermo_columns</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">nk_ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">snow_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">atm_sf0</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">atm_dsfdt</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">atm_sw_dn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">atm_fprec</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tfw_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sst_seam</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tsurf_out</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">                              </span><span class="n">ice</span><span class="p">%</span><span class="n">snow_to_ice</span><span class="p">)</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="k">         call </span><span class="n">ice_thermo_driver_reduce_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">                                            </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="k">         call </span><span class="n">ice_thermo_driver_reduce_multicat_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">fb_part_sum</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">                                                     </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="k">   end subroutine </span><span class="n">ice_thermo_driver_step</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_fb_part_sum_fill_impl</span><span class="p">(</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">                                             </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">!! Fill `fb_part_sum(i,j) = Σ_c part_size(i,j,c)` restricted to</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!! categories passing the column's OWN entry gate</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="c">!! (`m_ice(i,j,c) &gt; ICE_RHO_ICE*H_VANISHED`) — MUST run BEFORE</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="c">!! `ice_thermo_columns` mutates `m_ice` (module docstring). Device</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="c">!! kernel over PHYSICAL cells, inner `if`/serial `do cat` — never a</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="c">!! masked `do concurrent` header.</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="c">!! arrays that use them.</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">         </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="k">            do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="k">                  </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">               </span><span class="k">end if</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="k">            end do</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="k">         end if</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="k">      end do</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="k">   end subroutine </span><span class="n">ice_fb_part_sum_fill_impl</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_snow_part_ocn_fill_impl</span><span class="p">(</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">snow_part_ocn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">                                               </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="c">!! PR 26: fill `snow_part_ocn(i,j)` — the ice-FREE share of the cell</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="c">!! that a uniform snowfall lands on with no ice underneath — under</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="c">!! the SAME PRE-column-snapshot contract as `ice_fb_part_sum_fill_</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="c">!! impl` (module docstring, this module docstring's PR-26</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="c">!! paragraph): MUST run BEFORE `ice_thermo_columns` mutates `m_ice`,</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="c">!! using the column's OWN entry gate</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="c">!! (`m_ice(i,j,c) &gt; ICE_RHO_ICE*H_VANISHED`).</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="c">!! Two-mode dispatch (`rdb_ice_state`'s per-CELL vs per-ICE-AREA</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="c">!! convention, load-bearing): at `ncat==1` (legacy lumped, `part_size`</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="c">!! never maintained) the ice-free share is BINARY — 0 if the cell's</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="c">!! one category has ice, 1 if it does not (`ice_cell_concentration_</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="c">!! impl`'s own `ci = 1 iff m_ice(1) &gt; 0` convention, mirrored here).</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="c">!! At `ncat&gt;1` (SIS2 ITD, `part_size` live) it is `1 -</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="c">!! Σ_{c : gate passes} part_size(c)`, clamped at 0 (categories that</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="c">!! fail the gate but still carry `part_size&gt;0` — SIS2's orphan-snow</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">!! trap, PLAN_PR26_snowfall.md §11.1 — count toward the ocean share,</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">!! never toward the column). The `ncat` branch is loop-invariant</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="c">!! (same for every cell this call) so it stays INSIDE the one `do</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="c">!! concurrent` (`dc-uniform-case` — splitting it would double the</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">      </span><span class="c">!! launch count for no benefit).</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">      </span><span class="c">!! arrays that use them. Inner `if`/serial `do cat` — never a</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">      </span><span class="c">!! masked `do concurrent` header.</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">snow_part_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cover</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">cover</span><span class="p">)</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">         </span><span class="n">snow_part_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">ncat</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="k">                  </span><span class="n">snow_part_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">               </span><span class="k">else</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="k">                  </span><span class="n">snow_part_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">               </span><span class="k">end if</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="k">            else</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="k">               </span><span class="n">cover</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">               </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="k">                     </span><span class="n">cover</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cover</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">                  </span><span class="k">end if</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="k">               end do</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="k">               </span><span class="n">snow_part_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cover</span><span class="p">)</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="k">         end if</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="k">      end do</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="k">   end subroutine </span><span class="n">ice_snow_part_ocn_fill_impl</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_thermo_driver_reduce_impl</span><span class="p">(</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">                                                 </span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">                                                 </span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">                                                 </span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">                                                 </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="c">!! Device kernel over PHYSICAL cells (ghosts excluded). Reduces the</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">      </span><span class="c">!! per-category column outputs into the per-cell coupling diags.</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">      </span><span class="c">!! `heat_flux_diag`/`sw_thru_diag`/`m_melt_diag` are zeroed</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="c">!! unconditionally at loop top (this module owns them outright);</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="c">!! `salt_flux_diag` is NOT zeroed — `ice_frazil_uptake` (which runs</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="c">!! first this window, see the module docstring) already zeroed +</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="c">!! wrote it, and this kernel ADDS its net-melt contribution on top,</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="c">!! gated on wet to avoid land noise (an unwetted cell adds exactly 0).</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="c">!! PR 31: `sw_thru_diag(i,j) = Σ_cat sw_thru(i,j,cat)` (W/m^2, +down)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">      </span><span class="c">!! — the lumped ncat==1 reduction (no part-weight, matching</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="c">!! `heat_flux_diag`). It is written to its OWN field, NEVER folded</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="c">!! into `heat_flux_diag`: `heat_flux_diag` stays the non-shortwave</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="c">!! heat share, and `ice_ocean_sw_flux` delivers `sw_thru_diag` to</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="c">!! `Q_heat` exactly once (see that routine for the no-double-count</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">      </span><span class="c">!! argument across both component modes).</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="c">!! ICE-FREE CELLS ARE A CLEAN NO-OP: on an ice-free wet cell the column</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="c">!! zeroes all its per-cat outputs (h2o_*/heat_to_ocn = 0), and</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="c">!! `ice_compute_basal_flux` gates `fb = 0` there (no ice base ⇒ no basal</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="c">!! flux — the same ice-presence threshold the column uses). So</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="c">!! `heat_flux_diag = 0/dt - 0 = 0`, `m_melt_diag = 0`, and the net-melt</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">      </span><span class="c">!! salt add is `0*(...) = 0`. The whole open-ocean surface therefore sees</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="c">!! Q_heat = Q_salt = 0 from the ice path, as physics requires.</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">      </span><span class="c">!! arrays that use them. Inner `if`/serial `do cat` — never a</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">      </span><span class="c">!! masked `do concurrent` header.</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sum_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sum_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_sw</span><span class="p">,</span><span class="w"> </span><span class="n">m_net</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sum_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_sw</span><span class="p">,</span><span class="w"> </span><span class="n">m_net</span><span class="p">)</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">         </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">         </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">         </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="k">            </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">            </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">            </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">            </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">            </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">               </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">               </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">               </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">               </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="k">            </span><span class="n">m_net</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_ice</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">            </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_ocn</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="w">            </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_heat</span><span class="o">/</span><span class="n">dt_therm</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">            </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_sw</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">            </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="w">                                   </span><span class="o">+</span><span class="w"> </span><span class="n">m_net</span><span class="o">*</span><span class="p">(</span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_BULK_SALINITY</span><span class="p">)</span><span class="o">/</span><span class="n">dt_therm</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="k">      end do</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="k">   end subroutine </span><span class="n">ice_thermo_driver_reduce_impl</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_thermo_driver_reduce_multicat_impl</span><span class="p">(</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">                                                          </span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">                                                          </span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">                                                          </span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">                                                          </span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">                                                          </span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">                                                          </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">      </span><span class="c">!! ncat&gt;1 SIS2 ITD-mode reduce (module docstring). Same zero/gate/</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">      </span><span class="c">!! ordering contract as `ice_thermo_driver_reduce_impl` — the only</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">      </span><span class="c">!! change is PART-WEIGHTING the per-category sums (the column's</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">      </span><span class="c">!! `h2o_*`/`heat_to_ocn`/`sw_thru` outputs are per unit ICE-COVERED</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">      </span><span class="c">!! area in this mode, so a per-cell total needs the `part_size`</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">      </span><span class="c">!! weight) and subtracting `fb_part_sum*fb` instead of the bare `fb`</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">      </span><span class="c">!! the ncat==1 path subtracts (`fb` is a per-cell flux; `fb_part_sum`</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">      </span><span class="c">!! is the fraction of the cell it was actually charged against —</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">      </span><span class="c">!! see the module docstring and `rdb_ice_state%fb_part_sum`).</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">      </span><span class="c">!! PR 31: `sw_thru_diag(i,j) = Σ_cat part_size(i,j,cat)*sw_thru(i,j,cat)`</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">      </span><span class="c">!! (W/m^2, +down) — the area-weighted twin of the ncat==1 reduce's</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="c">!! lumped sum, matching `heat_to_ocn`'s own part-weighting here.</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="c">!! Same OWN-field / never-folded-into-`heat_flux_diag` contract as</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="c">!! the ncat==1 path.</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">      </span><span class="c">!! arrays that use them. Inner `if`/serial `do cat` — never a</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">      </span><span class="c">!! masked `do concurrent` header.</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-357" name="ln-357" href="#ln-357"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-358" name="ln-358" href="#ln-358"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-362" name="ln-362" href="#ln-362"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-363" name="ln-363" href="#ln-363"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a>
+<a id="ln-369" name="ln-369" href="#ln-369"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-370" name="ln-370" href="#ln-370"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sum_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sum_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_sw</span><span class="p">,</span><span class="w"> </span><span class="n">m_net</span>
+<a id="ln-371" name="ln-371" href="#ln-371"></a>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sum_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sum_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sum_sw</span><span class="p">,</span><span class="w"> </span><span class="n">m_net</span><span class="p">)</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="w">         </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a><span class="w">         </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-381" name="ln-381" href="#ln-381"></a><span class="w">         </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a><span class="k">            </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">            </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a><span class="w">            </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-386" name="ln-386" href="#ln-386"></a><span class="w">            </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">            </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="w">               </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="o">*</span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">               </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="o">*</span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a><span class="w">               </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_heat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="o">*</span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="w">               </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_sw</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="o">*</span><span class="n">sw_thru</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="k">            </span><span class="n">m_net</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ocn</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_ice</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">            </span><span class="n">m_melt_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_ice</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_ocn</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="w">            </span><span class="n">heat_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_heat</span><span class="o">/</span><span class="n">dt_therm</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fb_part_sum</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">fb</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">            </span><span class="n">sw_thru_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_sw</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="w">            </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a><span class="w">                                   </span><span class="o">+</span><span class="w"> </span><span class="n">m_net</span><span class="o">*</span><span class="p">(</span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_BULK_SALINITY</span><span class="p">)</span><span class="o">/</span><span class="n">dt_therm</span>
+<a id="ln-399" name="ln-399" href="#ln-399"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="k">      end do</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a><span class="k">   end subroutine </span><span class="n">ice_thermo_driver_reduce_multicat_impl</span>
+<a id="ln-402" name="ln-402" href="#ln-402"></a>
+<a id="ln-403" name="ln-403" href="#ln-403"></a><span class="k">end module </span><span class="n">rdb_ice_thermo_driver</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

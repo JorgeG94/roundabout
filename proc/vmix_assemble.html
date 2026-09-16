@@ -1,0 +1,1129 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>vmix_assemble &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>vmix_assemble
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">41 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_vmix.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_vmix.f90.html'>rdb_ocean_vmix.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></li>
+            <li class="breadcrumb-item active" aria-current="page">vmix_assemble</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/vmix_assemble.html#variable-bad_count">bad_count</a>
+            <a class="list-group-item" href="../proc/vmix_assemble.html#variable-it~52">it</a>
+            <a class="list-group-item" href="../proc/vmix_assemble.html#variable-nx~409">nx</a>
+            <a class="list-group-item" href="../proc/vmix_assemble.html#variable-ny~409">ny</a>
+            <a class="list-group-item" href="../proc/vmix_assemble.html#variable-nz~381">nz</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/vmix_assemble.html#src">vmix_assemble</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine vmix_assemble(grid, this, ms, geolat, status)  
+</h2>
+    
+
+    <p>The single downstream gate of the vmix diffusivity assembly —
+the <code>set_diffusivity</code>-style stage that every interior and
+overlay closure feeds into before vdiff consumes kv/kt/ks.</p>
+<p>CONTRACT.  Every interior / overlay closure CONTRIBUTES into
+<code>kv</code> / <code>kt</code> / <code>ks</code> upstream of this call: PP81 writes the
+interior background + Richardson term, KPP / EPBL overlay (max
+or add), kappa-shear merges additively, KV_ML_INVZ2 augments
+the surface band.  <code>vmix_assemble</code> is the SINGLE place the
+assembled fields are gated.  Future Area-C contributors (tidal
+mixing, double-diffusion, geothermal-adjacent floors, depth-
+varying background profiles) plug in as additional upstream
+contributors — they do NOT add their own floor/clip; they rely
+on this stage.  Applied here, in order, on interior interfaces
+k = 2..nz (the boundary interfaces k=1/bed and k=nz+1/surface
+stay at the closed-BC zero, untouched):
+  (a) optional debug-gated negative/NaN guard (<code>vmix_guard</code>,
+      default off) — runs FIRST, on the raw closure output before
+      any floor or clip.  The guard must see raw values because the
+      subsequent clip would launder NaN/negatives: NVHPC -O2
+      evaluates min(max(NaN, bg), huge) to bg, converting NaN
+      diffusivities into silent plausible mixing.  With <code>status</code>
+      present the routine returns a non-zero code (testable path);
+      without it a tripped guard <code>error stop</code>s.
+  (b) background floors — <code>kv ≥ kv_bg</code>, <code>kt ≥ kt_bg</code>,
+      <code>ks ≥ ks_bg</code>.  Defaults match <code>pp81_nu_bg</code> / <code>pp81_kappa_bg</code>
+      (structural invariant set in <code>init</code>) so the floor is a no-op
+      for the shipped closure path (bit-identical).  This is the
+      single place the constant background is enforced going forward.
+      Two MUTUALLY EXCLUSIVE opt-in variants replace the scalar
+      floor: <code>bkgnd_profile</code> (Bryan-Lewis per-interface <code>kd_bg</code>
+      field, kv floor = <code>bkgnd_prandtl·kd_bg</code>) and <code>bkgnd_henyey</code>
+      (Henyey latitude factor on the scalar tracer floors,
+      <code>max(bkgnd_kd_min, kt_bg·L(phi))</code>).  Configure refuses both
+      at once, so this dispatch is a three-way <code>if/else if/else</code>.
+  (c) ceilings — <code>kv ≤ kv_max</code>, <code>kt,ks ≤ kd_max</code>.  Defaults
+      <code>huge(1.0)</code> ⇒ no clip ⇒ bit-identical.
+  (d) optional 1-2-1 horizontal smoothing of kv/kt/ks at interfaces
+      (<code>kd_smooth_iterations</code>, default 0 = off).  Wet-mask aware:
+      contributions from dry neighbours are excluded and the stencil
+      weight is renormalised over wet cells only; a dry centre column
+      is left unchanged.  NOTE: under future MPI, multi-pass
+      smoothing requires nghost &gt;= kd_smooth_iterations and a halo
+      refresh between passes; with nghost = 2 only 1-2 passes are
+      safe without the refresh.</p>
+<p><code>ks</code> is derived from <code>kt</code> by <code>vmix_split_kd_heat_salt</code>, called
+upstream of this gate (after the last kv/kt contributor), and
+consumed by <code>vdiff_apply_tracers</code> (salinity + every passive
+tracer).  It equals <code>kt</code> until a double-diffusion contributor
+lands (PR-33).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~234"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~457"></span>
+              type(<a href='../type/ocean_vmix_t.html'>ocean_vmix_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~133"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolat~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolat</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+                <p>T-point geographic latitude (degN, <code>ocean_metrics_t%geolatT</code> —
+the T stagger specifically; <code>geolatBu</code> is corner-shaped
+<code>(nx+1, ny+1)</code> and is NOT interchangeable here).  Explicit-shape
+so the value flows into <code>vmix_assemble_clip_henyey_impl</code>&rsquo;s
+<code>do concurrent</code> without a descriptor walk.  Only read when
+<code>bkgnd_henyey</code>.  Required in that case —
+absent then <code>error stop</code>s (a caller forgot to thread <code>metrics</code>
+through).  Every production call site (<code>vmix_apply_in_stage</code>)
+has <code>metrics</code> in scope and always passes it; test harnesses that
+never enable <code>bkgnd_henyey</code> may omit it.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-status~60"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>status</strong></td>
+            <td>
+                <p>0 = ok; 1 = guard tripped (negative or NaN K).  Only
+written when <code>vmix_guard</code> is on.  When absent and the guard
+trips, the routine <code>error stop</code>s instead.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_assemble~~CallsGraph Pages: 1 -->
+<svg id="procvmix_assembleCallsGraph" width="501pt" height="284pt"
+ viewBox="0.00 0.00 501.00 284.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_assemble~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 280)">
+<title>proc~~vmix_assemble~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-280 497,-280 497,4 -4,4"/>
+<!-- proc~vmix_assemble -->
+<g id="proc~~vmix_assemble~~CallsGraph_node1" class="node">
+<title>proc~vmix_assemble</title>
+<polygon fill="none" stroke="black" points="94,-150 0,-150 0,-126 94,-126 94,-150"/>
+<text text-anchor="middle" x="47" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_assemble</text>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node2" class="node">
+<title>proc~vmix_assemble_clip_henyey_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node2"><a xlink:href="../proc/vmix_assemble_clip_henyey_impl.html" xlink:title="vmix_assemble_clip_henyey_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="321,-276 130,-276 130,-252 321,-252 321,-276"/>
+<text text-anchor="middle" x="225.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_henyey_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge1" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl</title>
+<path fill="none" stroke="#ff0000" d="M53.95,-150.31C65.39,-172.57 92.65,-219.41 130,-243 132.77,-244.75 135.67,-246.35 138.66,-247.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="137.29,-251.05 147.86,-251.86 140.1,-244.64 137.29,-251.05"/>
+</g>
+<!-- proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node3" class="node">
+<title>proc~vmix_assemble_clip_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node3"><a xlink:href="../proc/vmix_assemble_clip_impl.html" xlink:title="vmix_assemble_clip_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="299,-234 152,-234 152,-210 299,-210 299,-234"/>
+<text text-anchor="middle" x="225.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge2" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl</title>
+<path fill="none" stroke="#ff0000" d="M60.18,-150.18C75.26,-164.54 102.35,-188.09 130,-201 134.64,-203.17 139.51,-205.12 144.5,-206.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="143.61,-210.26 154.2,-210 145.76,-203.59 143.61,-210.26"/>
+</g>
+<!-- proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node4" class="node">
+<title>proc~vmix_assemble_clip_profile_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node4"><a xlink:href="../proc/vmix_assemble_clip_profile_impl.html" xlink:title="vmix_assemble_clip_profile_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.5,-192 132.5,-192 132.5,-168 318.5,-168 318.5,-192"/>
+<text text-anchor="middle" x="225.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_profile_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge3" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl</title>
+<path fill="none" stroke="#ff0000" d="M93.91,-150.03C105.65,-153.04 118.28,-156.2 130,-159 139.34,-161.23 149.22,-163.52 158.93,-165.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="158.44,-169.19 168.97,-167.97 159.98,-162.36 158.44,-169.19"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node5" class="node">
+<title>proc~vmix_bkgnd_fill_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node5"><a xlink:href="../proc/vmix_bkgnd_fill_impl.html" xlink:title="vmix_bkgnd_fill_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="287,-108 164,-108 164,-84 287,-84 287,-108"/>
+<text text-anchor="middle" x="225.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_bkgnd_fill_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge4" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl</title>
+<path fill="none" stroke="#ff0000" d="M93.91,-125.97C105.65,-122.96 118.28,-119.8 130,-117 139.34,-114.77 149.22,-112.48 158.93,-110.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="159.98,-113.64 168.97,-108.03 158.44,-106.81 159.98,-113.64"/>
+</g>
+<!-- proc~vmix_guard_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node6" class="node">
+<title>proc~vmix_guard_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node6"><a xlink:href="../proc/vmix_guard_impl.html" xlink:title="vmix_guard_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="277,-24 174,-24 174,0 277,0 277,-24"/>
+<text text-anchor="middle" x="225.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_guard_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge5" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl</title>
+<path fill="none" stroke="#ff0000" d="M53.95,-125.69C65.39,-103.43 92.65,-56.59 130,-33 140.21,-26.55 152.14,-22.07 164.02,-18.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.99,-22.32 173.94,-16.65 163.41,-15.5 164.99,-22.32"/>
+</g>
+<!-- proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_assemble~~CallsGraph_node7" class="node">
+<title>proc~vmix_resolve_kd_min</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node7"><a xlink:href="../proc/vmix_resolve_kd_min.html" xlink:title="vmix_resolve_kd_min">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="288,-66 163,-66 163,-42 288,-42 288,-66"/>
+<text text-anchor="middle" x="225.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_resolve_kd_min</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge6" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min</title>
+<path fill="none" stroke="#ff0000" d="M60.18,-125.82C75.26,-111.46 102.35,-87.91 130,-75 137.31,-71.59 145.2,-68.72 153.19,-66.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="154.27,-69.64 162.96,-63.58 152.39,-62.89 154.27,-69.64"/>
+</g>
+<!-- proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node8" class="node">
+<title>proc~vmix_smooth_121_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node8"><a xlink:href="../proc/vmix_smooth_121_impl.html" xlink:title="vmix_smooth_121_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="294,-150 157,-150 157,-126 294,-126 294,-150"/>
+<text text-anchor="middle" x="225.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_smooth_121_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge7" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl</title>
+<path fill="none" stroke="#ff0000" d="M94.37,-138C110.34,-138 128.69,-138 146.47,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.86,-141.5 156.86,-138 146.86,-134.5 146.86,-141.5"/>
+</g>
+<!-- local -->
+<g id="proc~~vmix_assemble~~CallsGraph_node9" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="452,-150 398,-150 398,-126 452,-126 452,-150"/>
+<text text-anchor="middle" x="425" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;local -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge8" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M300.78,-251.86C307.82,-249.43 314.68,-246.51 321,-243 358.98,-221.91 391.96,-182.49 409.82,-158.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="412.67,-160.44 415.7,-150.29 407,-156.34 412.67,-160.44"/>
+</g>
+<!-- proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_node10" class="node">
+<title>proc~henyey_lat_factor_impl</title>
+<g id="a_proc~~vmix_assemble~~CallsGraph_node10"><a xlink:href="../proc/henyey_lat_factor_impl.html" xlink:title="henyey_lat_factor_impl">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="493,-276 357,-276 357,-252 493,-252 493,-276"/>
+<text text-anchor="middle" x="425" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">henyey_lat_factor_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge9" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl</title>
+<path fill="none" stroke="#ff0000" d="M321.2,-264C329.79,-264 338.41,-264 346.82,-264"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="346.95,-267.5 356.95,-264 346.95,-260.5 346.95,-267.5"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl&#45;&gt;local -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge10" class="edge">
+<title>proc~vmix_bkgnd_fill_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff91" d="M283.1,-108.04C316.85,-115.21 358.68,-124.11 387.97,-130.34"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="387.26,-133.76 397.77,-132.42 388.71,-126.92 387.26,-133.76"/>
+</g>
+<!-- reduce -->
+<g id="proc~~vmix_assemble~~CallsGraph_node11" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="452,-24 398,-24 398,0 452,0 452,-24"/>
+<text text-anchor="middle" x="425" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~vmix_guard_impl&#45;&gt;reduce -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge11" class="edge">
+<title>proc~vmix_guard_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#0091ff" d="M277.1,-12C311.56,-12 356.36,-12 387.39,-12"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="387.75,-15.5 397.75,-12 387.75,-8.5 387.75,-15.5"/>
+</g>
+<!-- proc~vmix_smooth_121_impl&#45;&gt;local -->
+<g id="proc~~vmix_assemble~~CallsGraph_edge12" class="edge">
+<title>proc~vmix_smooth_121_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff00da" d="M294.19,-138C325.4,-138 361.22,-138 387.31,-138"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="387.51,-141.5 397.51,-138 387.51,-134.5 387.51,-141.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_assemble~~CalledByGraph Pages: 1 -->
+<svg id="procvmix_assembleCalledByGraph" width="641pt" height="59pt"
+ viewBox="0.00 0.00 641.00 59.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_assemble~~CalledByGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 70)">
+<title>proc~~vmix_assemble~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 800,-70 800,4 -4,4"/>
+<!-- proc~vmix_assemble -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node1" class="node">
+<title>proc~vmix_assemble</title>
+<polygon fill="none" stroke="black" points="796,-45 702,-45 702,-21 796,-21 796,-45"/>
+<text text-anchor="middle" x="749" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_assemble</text>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node2" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node2"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="666,-45 544,-45 544,-21 666,-21 666,-45"/>
+<text text-anchor="middle" x="605" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_assemble -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge1" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_assemble</title>
+<path fill="none" stroke="#ff0000" d="M666.22,-33C674.71,-33 683.41,-33 691.82,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="691.91,-36.5 701.91,-33 691.91,-29.5 691.91,-36.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="494.5,-66 429.5,-66 429.5,-42 494.5,-42 494.5,-66"/>
+<text text-anchor="middle" x="462" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M494.64,-49.29C506.34,-47.55 520.11,-45.49 533.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.46,-46.9 543.84,-41.96 533.43,-39.97 534.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node4" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node4"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="508,-24 416,-24 416,0 508,0 508,-24"/>
+<text text-anchor="middle" x="462" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M508,-18.7C516.32,-19.94 525.18,-21.26 534.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="533.58,-26.05 543.99,-24.06 534.61,-19.13 533.58,-26.05"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="366.5,-66 268.5,-66 268.5,-42 366.5,-42 366.5,-66"/>
+<text text-anchor="middle" x="317.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M366.74,-54C383.7,-54 402.6,-54 419,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="419.37,-57.5 429.37,-54 419.37,-50.5 419.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-24 255,-24 255,0 380,0 380,-24"/>
+<text text-anchor="middle" x="317.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M380.17,-12C388.73,-12 397.47,-12 405.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="405.99,-15.5 415.99,-12 405.99,-8.5 405.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-38.85C231.29,-40.75 245.1,-42.89 258.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="258.05,-48.45 268.47,-46.53 259.13,-41.53 258.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M219.11,-27.15C227.15,-25.9 235.91,-24.54 244.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="245.44,-26.6 254.78,-21.6 244.36,-19.68 245.44,-26.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~vmix_assemble~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_assemble~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_assembleCalledByGraph = svgPanZoom('#procvmix_assembleCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bad_count"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bad_count</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~52"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~409"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~409"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~381"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">vmix_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">geolat</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The single downstream gate of the vmix diffusivity assembly —</span>
+<span class="w">      </span><span class="c">!! the `set_diffusivity`-style stage that every interior and</span>
+<span class="w">      </span><span class="c">!! overlay closure feeds into before vdiff consumes kv/kt/ks.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! CONTRACT.  Every interior / overlay closure CONTRIBUTES into</span>
+<span class="w">      </span><span class="c">!! `kv` / `kt` / `ks` upstream of this call: PP81 writes the</span>
+<span class="w">      </span><span class="c">!! interior background + Richardson term, KPP / EPBL overlay (max</span>
+<span class="w">      </span><span class="c">!! or add), kappa-shear merges additively, KV_ML_INVZ2 augments</span>
+<span class="w">      </span><span class="c">!! the surface band.  `vmix_assemble` is the SINGLE place the</span>
+<span class="w">      </span><span class="c">!! assembled fields are gated.  Future Area-C contributors (tidal</span>
+<span class="w">      </span><span class="c">!! mixing, double-diffusion, geothermal-adjacent floors, depth-</span>
+<span class="w">      </span><span class="c">!! varying background profiles) plug in as additional upstream</span>
+<span class="w">      </span><span class="c">!! contributors — they do NOT add their own floor/clip; they rely</span>
+<span class="w">      </span><span class="c">!! on this stage.  Applied here, in order, on interior interfaces</span>
+<span class="w">      </span><span class="c">!! k = 2..nz (the boundary interfaces k=1/bed and k=nz+1/surface</span>
+<span class="w">      </span><span class="c">!! stay at the closed-BC zero, untouched):</span>
+<span class="w">      </span><span class="c">!!   (a) optional debug-gated negative/NaN guard (`vmix_guard`,</span>
+<span class="w">      </span><span class="c">!!       default off) — runs FIRST, on the raw closure output before</span>
+<span class="w">      </span><span class="c">!!       any floor or clip.  The guard must see raw values because the</span>
+<span class="w">      </span><span class="c">!!       subsequent clip would launder NaN/negatives: NVHPC -O2</span>
+<span class="w">      </span><span class="c">!!       evaluates min(max(NaN, bg), huge) to bg, converting NaN</span>
+<span class="w">      </span><span class="c">!!       diffusivities into silent plausible mixing.  With `status`</span>
+<span class="w">      </span><span class="c">!!       present the routine returns a non-zero code (testable path);</span>
+<span class="w">      </span><span class="c">!!       without it a tripped guard `error stop`s.</span>
+<span class="w">      </span><span class="c">!!   (b) background floors — `kv ≥ kv_bg`, `kt ≥ kt_bg`,</span>
+<span class="w">      </span><span class="c">!!       `ks ≥ ks_bg`.  Defaults match `pp81_nu_bg` / `pp81_kappa_bg`</span>
+<span class="w">      </span><span class="c">!!       (structural invariant set in `init`) so the floor is a no-op</span>
+<span class="w">      </span><span class="c">!!       for the shipped closure path (bit-identical).  This is the</span>
+<span class="w">      </span><span class="c">!!       single place the constant background is enforced going forward.</span>
+<span class="w">      </span><span class="c">!!       Two MUTUALLY EXCLUSIVE opt-in variants replace the scalar</span>
+<span class="w">      </span><span class="c">!!       floor: `bkgnd_profile` (Bryan-Lewis per-interface `kd_bg`</span>
+<span class="w">      </span><span class="c">!!       field, kv floor = `bkgnd_prandtl·kd_bg`) and `bkgnd_henyey`</span>
+<span class="w">      </span><span class="c">!!       (Henyey latitude factor on the scalar tracer floors,</span>
+<span class="w">      </span><span class="c">!!       `max(bkgnd_kd_min, kt_bg·L(phi))`).  Configure refuses both</span>
+<span class="w">      </span><span class="c">!!       at once, so this dispatch is a three-way `if/else if/else`.</span>
+<span class="w">      </span><span class="c">!!   (c) ceilings — `kv ≤ kv_max`, `kt,ks ≤ kd_max`.  Defaults</span>
+<span class="w">      </span><span class="c">!!       `huge(1.0)` ⇒ no clip ⇒ bit-identical.</span>
+<span class="w">      </span><span class="c">!!   (d) optional 1-2-1 horizontal smoothing of kv/kt/ks at interfaces</span>
+<span class="w">      </span><span class="c">!!       (`kd_smooth_iterations`, default 0 = off).  Wet-mask aware:</span>
+<span class="w">      </span><span class="c">!!       contributions from dry neighbours are excluded and the stencil</span>
+<span class="w">      </span><span class="c">!!       weight is renormalised over wet cells only; a dry centre column</span>
+<span class="w">      </span><span class="c">!!       is left unchanged.  NOTE: under future MPI, multi-pass</span>
+<span class="w">      </span><span class="c">!!       smoothing requires nghost &gt;= kd_smooth_iterations and a halo</span>
+<span class="w">      </span><span class="c">!!       refresh between passes; with nghost = 2 only 1-2 passes are</span>
+<span class="w">      </span><span class="c">!!       safe without the refresh.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `ks` is derived from `kt` by `vmix_split_kd_heat_salt`, called</span>
+<span class="w">      </span><span class="c">!! upstream of this gate (after the last kv/kt contributor), and</span>
+<span class="w">      </span><span class="c">!! consumed by `vdiff_apply_tracers` (salinity + every passive</span>
+<span class="w">      </span><span class="c">!! tracer).  It equals `kt` until a double-diffusion contributor</span>
+<span class="w">      </span><span class="c">!! lands (PR-33).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vmix_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">geolat</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! T-point geographic latitude (degN, `ocean_metrics_t%geolatT` —</span>
+<span class="w">         </span><span class="c">!! the T stagger specifically; `geolatBu` is corner-shaped</span>
+<span class="w">         </span><span class="c">!! `(nx+1, ny+1)` and is NOT interchangeable here).  Explicit-shape</span>
+<span class="w">         </span><span class="c">!! so the value flows into `vmix_assemble_clip_henyey_impl`'s</span>
+<span class="w">         </span><span class="c">!! `do concurrent` without a descriptor walk.  Only read when</span>
+<span class="w">         </span><span class="c">!! `bkgnd_henyey`.  Required in that case —</span>
+<span class="w">         </span><span class="c">!! absent then `error stop`s (a caller forgot to thread `metrics`</span>
+<span class="w">         </span><span class="c">!! through).  Every production call site (`vmix_apply_in_stage`)</span>
+<span class="w">         </span><span class="c">!! has `metrics` in scope and always passes it; test harnesses that</span>
+<span class="w">         </span><span class="c">!! never enable `bkgnd_henyey` may omit it.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">status</span>
+<span class="w">         </span><span class="c">!! 0 = ok; 1 = guard tripped (negative or NaN K).  Only</span>
+<span class="w">         </span><span class="c">!! written when `vmix_guard` is on.  When absent and the guard</span>
+<span class="w">         </span><span class="c">!! trips, the routine `error stop`s instead.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">it</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bad_count</span>
+
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">status</span><span class="p">))</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+
+<span class="w">      </span><span class="c">! (a) optional negative/NaN guard — BEFORE clip so laundering</span>
+<span class="w">      </span><span class="c">! (NaN→bg via min/max) cannot suppress a real closure error.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">vmix_guard</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">vmix_guard_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="n">bad_count</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bad_count</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">status</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               error stop</span><span class="w"> </span><span class="s2">"vmix_assemble: negative or NaN diffusivity detected"</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! (b)+(c) floors + ceilings on interior interfaces.  One DC over</span>
+<span class="w">      </span><span class="c">! (i,j,k) with explicit-shape args via the _impl helper (assumed-</span>
+<span class="w">      </span><span class="c">! shape dummies in a do concurrent make NVHPC walk descriptors</span>
+<span class="w">      </span><span class="c">! per launch).  Two floor paths:</span>
+<span class="w">      </span><span class="c">!   * default (bkgnd_profile off): the SCALAR kv_bg/kt_bg/ks_bg</span>
+<span class="w">      </span><span class="c">!     floor exactly as before — bit-identical.</span>
+<span class="w">      </span><span class="c">!   * C7 Bryan-Lewis on: fill the per-interface kd_bg depth profile</span>
+<span class="w">      </span><span class="c">!     from the current column thicknesses (correct under any vcoord)</span>
+<span class="w">      </span><span class="c">!     and floor with that field; kv floor = bkgnd_prandtl * kd_bg.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_profile</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">vmix_bkgnd_fill_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_bg</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_kd_sfc</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_kd_deep</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_z0</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_delta</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">vmix_assemble_clip_profile_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">this</span><span class="p">%</span><span class="n">kd_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_prandtl</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">this</span><span class="p">%</span><span class="n">kv_max</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_max</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_henyey</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! C7 Henyey: the latitude factor scales the SCALAR kt_bg/ks_bg</span>
+<span class="w">         </span><span class="c">! floors, floored at `bkgnd_kd_min` — see the `bkgnd_henyey`</span>
+<span class="w">         </span><span class="c">! docstring + `henyey_lat_factor_impl` for the exact form.  This</span>
+<span class="w">         </span><span class="c">! branch is unreachable together with `bkgnd_profile`: the two are</span>
+<span class="w">         </span><span class="c">! mutually exclusive (configure refuses both), so the factor never</span>
+<span class="w">         </span><span class="c">! touches the Bryan-Lewis deep asymptote.</span>
+<span class="w">         </span><span class="c">!</span>
+<span class="w">         </span><span class="c">! `geolat` is required here — a caller that turned this knob on but</span>
+<span class="w">         </span><span class="c">! never threaded `metrics%geolatT` through is a wiring bug, not a</span>
+<span class="w">         </span><span class="c">! silent no-op.  Deliberately a SEPARATE `_impl` from the plain</span>
+<span class="w">         </span><span class="c">! scalar clip (rather than one routine with optional Henyey args):</span>
+<span class="w">         </span><span class="c">! with no `present()` inside the kernel there is no way for a</span>
+<span class="w">         </span><span class="c">! partially-supplied argument list to degrade into a silent no-op,</span>
+<span class="w">         </span><span class="c">! and the default path's routine body is literally unchanged from</span>
+<span class="w">         </span><span class="c">! before Henyey existed.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">geolat</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            error stop</span><span class="w"> </span><span class="s2">"vmix_assemble: bkgnd_henyey requires the geolat "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="s2">"argument (thread ocean_metrics_t%geolatT through the caller)"</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">vmix_assemble_clip_henyey_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">this</span><span class="p">%</span><span class="n">kv_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks_bg</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">this</span><span class="p">%</span><span class="n">kv_max</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_max</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_henyey_n0_2omega</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_henyey_max_lat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">vmix_resolve_kd_min</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">bkgnd_kd_min</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                                 </span><span class="n">this</span><span class="p">%</span><span class="n">kt_bg</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">geolat</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">vmix_assemble_clip_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">this</span><span class="p">%</span><span class="n">kv_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks_bg</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">this</span><span class="p">%</span><span class="n">kv_max</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_max</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! (d) optional 1-2-1 horizontal smoothing of kv / kt.  scratch is a</span>
+<span class="w">      </span><span class="c">! persistent slot buffer mapped in enter_data — no lazy attach.</span>
+<span class="w">      </span><span class="c">! Wet-mask aware: dry neighbours are excluded, stencil renormalised.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_smooth_iterations</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_smooth_iterations</span>
+<span class="w">            </span><span class="k">call </span><span class="n">vmix_smooth_121_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">smooth_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">vmix_smooth_121_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">smooth_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">vmix_smooth_121_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">smooth_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">vmix_assemble</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

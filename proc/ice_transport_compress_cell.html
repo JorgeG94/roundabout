@@ -1,0 +1,844 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_transport_compress_cell &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_transport_compress_cell
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">89 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_transport.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_transport.f90.html'>rdb_ice_transport.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_transport.html'>rdb_ice_transport</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_transport_compress_cell</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-c~22">c</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-excess~2">excess</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-f~2">f</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-l~4">l</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-mca_c">mca_c</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-mca_old~6">mca_old</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-mnew~3">mnew</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-msnew~3">msnew</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-msnow_c">msnow_c</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-part_sum~4">part_sum</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-ratio~2">ratio</a>
+            <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#variable-trans~2">trans</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_transport_compress_cell.html#src">ice_transport_compress_cell</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine ice_transport_compress_cell(part_size, m_ice, m_snow, enth_ice, enth_snow, sal_ice, mh_lim, ncat, nk, ok)  
+</h2>
+    
+
+    <p>KEEP IN SYNC with <code>ice_compress_cell_inline</code> (the DEVICE production
+twin, directly above). Same excess/ratio/compaction algorithm; this
+HOST twin exists only as the directly unit-testable seam (small
+standalone per-cell arrays, no <code>!$acc routine seq</code>), while the
+device twin takes full device-present arrays + a scalar <code>(i,j)</code>
+index. Any change to the compaction logic here MUST be mirrored
+there (the fused device path is what production runs).</p>
+<p>SIS2 <code>compress_ice</code> (<code>SIS_transport.F90:898-1100</code>), no-ridge
+default, ponds dropped — single-CELL kernel (public: directly
+unit-testable, SPEC §7 test 3).  <code>part_size(0:ncat)</code>,
+<code>m_ice</code>/<code>m_snow</code>/<code>enth_snow</code> <code>(ncat)</code>, <code>enth_ice</code>/<code>sal_ice</code>
+<code>(ncat, nk)</code>.  <code>part_size(0)</code> may be negative on entry (the
+open-water deficit from Phase 3); no-op (returns <code>ok=.true.</code>)
+when it is already <code>&gt;= 0</code>.</p>
+<p>HOST-ONLY test entry point (no <code>!$acc routine seq</code> — this is
+deliberately NOT called from device kernels; a dummy-<code>ncat</code>-sized
+automatic array (<code>mca_c</code>/<code>msnow_c</code> below) is fine on the host but
+would violate the fixed-size-locals rule for a device routine).
+The PRODUCTION per-cell body is <code>ice_compress_cell_inline</code>
+(device-safe: full arrays + scalar <code>(i,j)</code> index, no per-category
+<code>mca_c</code>/<code>msnow_c</code> snapshot).  The two are CONSERVING +
+SIS2-roundoff-equivalent, but NOT bitwise identical across
+CHAINED cascades: this host body carries a pre-materialized
+<code>mca_c(ncat)</code> array (SIS2&rsquo;s own running array), whereas the
+device body recomputes <code>mca_this = part*m_ice</code> fresh per
+iteration — after a c-1 -&gt; c transfer they differ at round-off,
+though both conserve <code>Σ_c part*m</code> exactly.  On a SINGLE transfer
+(the unit-test hand-check inputs) they ARE bit-identical and
+reproduce the Python prototype exactly.  Duplicated rather than
+shared, per CLAUDE.md &ldquo;duplicate explicitly&rdquo;.</p>
+<p>Documented divergence (D8): the tracer merge is done INSIDE the
+thinnest-first cascade at each transfer site, whereas SIS2 defers
+it to <code>advect_tracers_thicker</code> AFTER the category k-loop
+(<code>SIS_tracer_advect.F90</code>) — equivalent to round-off since each
+boundary is visited once in a fixed order with running masses
+(same argument as the PR-4a <code>ice_adjust_categories</code> merge).</p>
+<p>Algorithm (thinnest-first, <code>c = 1..ncat-1</code>):
+  <code>excess = -part_size(0)</code>; <code>part_size(0) = 0</code>.
+  <code>mca_c(c) = part_size(c)*m_ice(c)</code>, <code>msnow_c(c) =
+  part_size(c)*m_snow(c)</code> (the CAS-absent branch, SIS2 <code>:986-992</code>
+  — recomputed here, not reused from Phase 2&rsquo;s <code>mca_ice</code>; SIS2
+  documents the same roundoff freedom, <code>:986</code>).
+  Per category <code>c</code> (while <code>excess &gt; 0 .and. mca_c(c) &gt; 0</code>):
+    <code>ratio = m_ice(c)/mh_lim(c+1)</code>.
+    If <code>part_size(c)*(1-ratio) &gt;= excess</code>: IN-PLACE compaction —
+      <code>f = part_size(c)/(part_size(c)-excess)</code>;
+      <code>m_ice(c) *= f</code>; <code>m_snow(c) *= f</code>; <code>part_size(c) -= excess</code>;
+      <code>excess = 0</code>.
+    Else: <code>excess -= part_size(c)*(1-ratio)</code>; if
+      <code>mca_c(c) &gt; MASS_NEGLECT_ICE_TRANSPORT</code>: transfer c -&gt; c+1
+      (<code>part_size(c+1) += part_size(c)*ratio</code>; mass-weighted
+      merge of <code>mca_c</code>, <code>msnow_c</code>, mass-weighted tracer merge of
+      <code>enth_ice</code>/<code>sal_ice</code>/<code>enth_snow</code>; three-branch thickness
+      underflow guard on <code>m_ice(c+1)</code>/<code>part_size(c+1)</code>); zero
+      category <code>c</code>.
+  Top category (<code>c = ncat</code>): if <code>excess &gt; 0</code>, consistency check
+  (<code>part_size(ncat) &lt;= 1 .and. excess &gt; 2*ncat*epsilon</code> =&gt; FATAL
+  in SIS2; here <code>ok = .false.</code>), else in-place compaction (same
+  formula, no transfer branch).
+  Cell epilogue: <code>part_size(0) = max(1 - Sum_c part_size(c), 0)</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-part_size~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>part_size</strong>(0:ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice</strong>(ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow</strong>(ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice</strong>(ncat,nk)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_snow~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_snow</strong>(ncat,1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice</strong>(ncat,nk)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mh_lim~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mh_lim</strong>(ncat+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncat~21"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncat</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ok~12"></span>
+              logical,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ok</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~22"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-excess~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>excess</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-l~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mca_c"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mca_c</strong>(ncat)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mca_old~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mca_old</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mnew~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mnew</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-msnew~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>msnew</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-msnow_c"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>msnow_c</strong>(ncat)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-part_sum~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>part_sum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ratio~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ratio</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trans~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>trans</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_transport_compress_cell</span><span class="p">(</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="n">mh_lim</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! KEEP IN SYNC with `ice_compress_cell_inline` (the DEVICE production</span>
+<span class="w">      </span><span class="c">!! twin, directly above). Same excess/ratio/compaction algorithm; this</span>
+<span class="w">      </span><span class="c">!! HOST twin exists only as the directly unit-testable seam (small</span>
+<span class="w">      </span><span class="c">!! standalone per-cell arrays, no `!$acc routine seq`), while the</span>
+<span class="w">      </span><span class="c">!! device twin takes full device-present arrays + a scalar `(i,j)`</span>
+<span class="w">      </span><span class="c">!! index. Any change to the compaction logic here MUST be mirrored</span>
+<span class="w">      </span><span class="c">!! there (the fused device path is what production runs).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! SIS2 `compress_ice` (`SIS_transport.F90:898-1100`), no-ridge</span>
+<span class="w">      </span><span class="c">!! default, ponds dropped — single-CELL kernel (public: directly</span>
+<span class="w">      </span><span class="c">!! unit-testable, SPEC §7 test 3).  `part_size(0:ncat)`,</span>
+<span class="w">      </span><span class="c">!! `m_ice`/`m_snow`/`enth_snow` `(ncat)`, `enth_ice`/`sal_ice`</span>
+<span class="w">      </span><span class="c">!! `(ncat, nk)`.  `part_size(0)` may be negative on entry (the</span>
+<span class="w">      </span><span class="c">!! open-water deficit from Phase 3); no-op (returns `ok=.true.`)</span>
+<span class="w">      </span><span class="c">!! when it is already `&gt;= 0`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! HOST-ONLY test entry point (no `!$acc routine seq` — this is</span>
+<span class="w">      </span><span class="c">!! deliberately NOT called from device kernels; a dummy-`ncat`-sized</span>
+<span class="w">      </span><span class="c">!! automatic array (`mca_c`/`msnow_c` below) is fine on the host but</span>
+<span class="w">      </span><span class="c">!! would violate the fixed-size-locals rule for a device routine).</span>
+<span class="w">      </span><span class="c">!! The PRODUCTION per-cell body is `ice_compress_cell_inline`</span>
+<span class="w">      </span><span class="c">!! (device-safe: full arrays + scalar `(i,j)` index, no per-category</span>
+<span class="w">      </span><span class="c">!! `mca_c`/`msnow_c` snapshot).  The two are CONSERVING +</span>
+<span class="w">      </span><span class="c">!! SIS2-roundoff-equivalent, but NOT bitwise identical across</span>
+<span class="w">      </span><span class="c">!! CHAINED cascades: this host body carries a pre-materialized</span>
+<span class="w">      </span><span class="c">!! `mca_c(ncat)` array (SIS2's own running array), whereas the</span>
+<span class="w">      </span><span class="c">!! device body recomputes `mca_this = part*m_ice` fresh per</span>
+<span class="w">      </span><span class="c">!! iteration — after a c-1 -&gt; c transfer they differ at round-off,</span>
+<span class="w">      </span><span class="c">!! though both conserve `Σ_c part*m` exactly.  On a SINGLE transfer</span>
+<span class="w">      </span><span class="c">!! (the unit-test hand-check inputs) they ARE bit-identical and</span>
+<span class="w">      </span><span class="c">!! reproduce the Python prototype exactly.  Duplicated rather than</span>
+<span class="w">      </span><span class="c">!! shared, per CLAUDE.md "duplicate explicitly".</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Documented divergence (D8): the tracer merge is done INSIDE the</span>
+<span class="w">      </span><span class="c">!! thinnest-first cascade at each transfer site, whereas SIS2 defers</span>
+<span class="w">      </span><span class="c">!! it to `advect_tracers_thicker` AFTER the category k-loop</span>
+<span class="w">      </span><span class="c">!! (`SIS_tracer_advect.F90`) — equivalent to round-off since each</span>
+<span class="w">      </span><span class="c">!! boundary is visited once in a fixed order with running masses</span>
+<span class="w">      </span><span class="c">!! (same argument as the PR-4a `ice_adjust_categories` merge).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Algorithm (thinnest-first, `c = 1..ncat-1`):</span>
+<span class="w">      </span><span class="c">!!   `excess = -part_size(0)`; `part_size(0) = 0`.</span>
+<span class="w">      </span><span class="c">!!   `mca_c(c) = part_size(c)*m_ice(c)`, `msnow_c(c) =</span>
+<span class="w">      </span><span class="c">!!   part_size(c)*m_snow(c)` (the CAS-absent branch, SIS2 `:986-992`</span>
+<span class="w">      </span><span class="c">!!   — recomputed here, not reused from Phase 2's `mca_ice`; SIS2</span>
+<span class="w">      </span><span class="c">!!   documents the same roundoff freedom, `:986`).</span>
+<span class="w">      </span><span class="c">!!   Per category `c` (while `excess &gt; 0 .and. mca_c(c) &gt; 0`):</span>
+<span class="w">      </span><span class="c">!!     `ratio = m_ice(c)/mh_lim(c+1)`.</span>
+<span class="w">      </span><span class="c">!!     If `part_size(c)*(1-ratio) &gt;= excess`: IN-PLACE compaction —</span>
+<span class="w">      </span><span class="c">!!       `f = part_size(c)/(part_size(c)-excess)`;</span>
+<span class="w">      </span><span class="c">!!       `m_ice(c) *= f`; `m_snow(c) *= f`; `part_size(c) -= excess`;</span>
+<span class="w">      </span><span class="c">!!       `excess = 0`.</span>
+<span class="w">      </span><span class="c">!!     Else: `excess -= part_size(c)*(1-ratio)`; if</span>
+<span class="w">      </span><span class="c">!!       `mca_c(c) &gt; MASS_NEGLECT_ICE_TRANSPORT`: transfer c -&gt; c+1</span>
+<span class="w">      </span><span class="c">!!       (`part_size(c+1) += part_size(c)*ratio`; mass-weighted</span>
+<span class="w">      </span><span class="c">!!       merge of `mca_c`, `msnow_c`, mass-weighted tracer merge of</span>
+<span class="w">      </span><span class="c">!!       `enth_ice`/`sal_ice`/`enth_snow`; three-branch thickness</span>
+<span class="w">      </span><span class="c">!!       underflow guard on `m_ice(c+1)`/`part_size(c+1)`); zero</span>
+<span class="w">      </span><span class="c">!!       category `c`.</span>
+<span class="w">      </span><span class="c">!!   Top category (`c = ncat`): if `excess &gt; 0`, consistency check</span>
+<span class="w">      </span><span class="c">!!   (`part_size(ncat) &lt;= 1 .and. excess &gt; 2*ncat*epsilon` =&gt; FATAL</span>
+<span class="w">      </span><span class="c">!!   in SIS2; here `ok = .false.`), else in-place compaction (same</span>
+<span class="w">      </span><span class="c">!!   formula, no transfer branch).</span>
+<span class="w">      </span><span class="c">!!   Cell epilogue: `part_size(0) = max(1 - Sum_c part_size(c), 0)`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_snow</span><span class="p">(</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mh_lim</span><span class="p">(</span><span class="n">ncat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ok</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">l</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">excess</span><span class="p">,</span><span class="w"> </span><span class="n">ratio</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">part_sum</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">ncat</span><span class="p">),</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mca_old</span><span class="p">,</span><span class="w"> </span><span class="n">trans</span><span class="p">,</span><span class="w"> </span><span class="n">mnew</span><span class="p">,</span><span class="w"> </span><span class="n">msnew</span>
+
+<span class="w">      </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">excess</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">part_size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="w">      </span><span class="n">part_size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<span class="w">         </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">         </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="k">      do </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">excess</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">ratio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">/</span><span class="n">mh_lim</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ratio</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">excess</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">excess</span><span class="p">)</span>
+<span class="w">               </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">f</span>
+<span class="w">               </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">f</span>
+<span class="w">               </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">excess</span>
+<span class="w">               </span><span class="n">excess</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">excess</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">excess</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ratio</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">MASS_NEGLECT_ICE_TRANSPORT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">ratio</span>
+<span class="w">                  </span><span class="n">mca_old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">trans</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">MASS_NEGLECT_ICE_TRANSPORT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">trans</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">mca_old</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">mh_lim</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                     </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mh_lim</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">else</span>
+<span class="k">                     </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">                  </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">else</span>
+<span class="k">                     </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">                  </span><span class="n">mnew</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">trans</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">mca_old</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">trans</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">mnew</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     do </span><span class="n">l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span>
+<span class="w">                        </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">trans</span><span class="o">*</span><span class="n">enth_ice</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">mca_old</span><span class="o">*</span><span class="n">enth_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">))</span><span class="o">/</span><span class="n">mnew</span>
+<span class="w">                        </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">trans</span><span class="o">*</span><span class="n">sal_ice</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">mca_old</span><span class="o">*</span><span class="n">sal_ice</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">l</span><span class="p">))</span><span class="o">/</span><span class="n">mnew</span>
+<span class="w">                     </span><span class="k">end do</span>
+<span class="k">                  end if</span>
+<span class="k">                  </span><span class="n">msnew</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">msnew</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">enth_snow</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="n">msnew</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">))</span><span class="o">*</span><span class="n">enth_snow</span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="o">+</span><span class="w"> </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">enth_snow</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="o">/</span><span class="n">msnew</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">               end if</span>
+<span class="k">               </span><span class="n">mca_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">msnow_c</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">      end do</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">excess</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ncat</span>
+<span class="w">         </span><span class="c">! Same top-category fail-loud as `ice_compress_cell_inline`,</span>
+<span class="w">         </span><span class="c">! incl. the `part(ncat) &lt;= excess` negative-or-zero-denominator guard</span>
+<span class="w">         </span><span class="c">! (the `==` tie is the exact zero-denominator divide).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">excess</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="kt">real</span><span class="p">(</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="nb">epsilon</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">             </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">excess</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="k">         end if</span>
+<span class="k">         </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">excess</span><span class="p">)</span>
+<span class="w">         </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">f</span>
+<span class="w">         </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">f</span>
+<span class="w">         </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">excess</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      </span><span class="n">part_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<span class="w">         </span><span class="n">part_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_sum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      </span><span class="n">part_size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">part_sum</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_transport_compress_cell</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1457 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_frazil_uptake_multicat_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_frazil_uptake_multicat_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">62 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_frazil_uptake.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_frazil_uptake.f90.html'>rdb_ice_frazil_uptake.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_frazil_uptake.html'>rdb_ice_frazil_uptake</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_frazil_uptake_multicat_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-cat~4">cat</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-enth_ice_col~3">enth_ice_col</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-frazil_col">frazil_col</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-h~77">h</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-i~362">i</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-i_hi~16">i_hi</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-i_lo~16">i_lo</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-i_part">i_part</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-j~324">j</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-j_hi~19">j_hi</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-j_lo~20">j_lo</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-k_merge">k_merge</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-m_frozen_pt~2">m_frozen_pt</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-m_ice_pt~3">m_ice_pt</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-m_snow_pt~3">m_snow_pt</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-s_surf~5">s_surf</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-sal_ice_col~3">sal_ice_col</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-salt_to_ice_pt~2">salt_to_ice_pt</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-sst~6">sst</a>
+            <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#variable-tfw~6">tfw</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_frazil_uptake_multicat_impl.html#src">ice_frazil_uptake_multicat_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine ice_frazil_uptake_multicat_impl(hTr_T, hTr_S, h_layer, wet_mask, eos, frazil_heat, part_size, m_ice, m_snow, enth_ice, sal_ice, m_frozen_diag, salt_flux_diag, dt_therm, nghost, ncat, nk, nz, nx, ny)  
+</h2>
+    
+
+    <p>ncat&gt;1 SIS2 ITD-mode frazil spend. Port of SIS2
+<code>SIS_slow_thermo.F90:1121-1146 + 1181-1186</code> (non-filling mode —
+SIS2&rsquo;s default <code>SIS2_FILLING_FRAZIL=.true.</code> thin-category fill is
+DEFERRED, see module docstring). Per banked cell (same
+wet/non-vanished/bank&gt;0 gate as <code>ice_frazil_uptake_impl</code>):
+  1. k_merge scan (SIS2:1124-1129): first category <code>c</code> with
+     <code>part(0) + part(c) &gt; 0.01</code>; falls back to <code>k_merge = 1</code> if
+     no category qualifies (SIS2&rsquo;s <code>k_merge</code> default).
+  2. Open-water annexation (SIS2:1131-1145): if <code>part(0) &gt; 0</code>,
+     dilute category <code>k_merge</code>&rsquo;s thickness at CONSTANT MASS —
+     <code>m_ice(k_merge)</code>/<code>m_snow(k_merge)</code> scale by
+     <code>part(k_merge)/(part(k_merge)+part(0))</code>, <code>part(k_merge)</code>
+     absorbs all of <code>part(0)</code>, <code>part(0)</code> -&gt; 0. <code>enth</code>/<code>sal</code> are
+     per-MASS intensive — untouched by an area-only dilution.
+  3. Per-ice-area spend (SIS2:1181-1186):
+     <code>frazil_col = frazil_heat/part(k_merge)</code> (J per m² of
+     category area; the denominator is &gt; 0 by construction —
+     either an occupied category was found, or step 2 just grew
+     <code>part(k_merge)</code> from the Σpart=1 invariant), then the SAME
+     UNCHANGED <code>ice_frazil_uptake_column</code> spends it on category
+     <code>k_merge</code>&rsquo;s column.
+  4. Diags (per cell, part-weighted back to CELL-area units to
+     match the ncat==1 diag convention that the couplers and
+     <code>rdb_ice_thermo_driver</code> consume): <code>m_frozen_diag =
+     part(k_merge)*m_frozen_pt</code>; <code>salt_flux_diag =
+     part(k_merge)*(m_frozen_pt*s_surf - salt_to_ice_pt)/dt_therm</code>;
+     <code>frazil_heat</code> reset to 0 (fully spent). Both diags are
+     zeroed UNCONDITIONALLY at loop top, same contract as
+     <code>ice_frazil_uptake_impl</code>.</p>
+<p>Decl-order: all integer dims declared before the explicit-shape
+arrays that use them. Inner <code>if</code> gate only, serial <code>do cat</code> scan
+for k_merge — never a masked <code>do concurrent</code> header.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_t~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_T</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_s~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_S</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~78"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~21"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~32"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-frazil_heat~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>frazil_heat</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-part_size~10"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>part_size</strong>(nx,ny,0:ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow</strong>(nx,ny,ncat)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice</strong>(nx,ny,ncat,nk)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice</strong>(nx,ny,ncat,nk)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_frozen_diag~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_frozen_diag</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-salt_flux_diag~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>salt_flux_diag</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_therm~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_therm</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~62"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncat~30"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncat</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~313"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~329"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~329"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_frazil_uptake_multicat_impl~~CallsGraph Pages: 1 -->
+<svg id="procice_frazil_uptake_multicat_implCallsGraph" width="530pt" height="179pt"
+ viewBox="0.00 0.00 530.00 179.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 175)">
+<title>proc~~ice_frazil_uptake_multicat_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-175 526,-175 526,4 -4,4"/>
+<!-- proc~ice_frazil_uptake_multicat_impl -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node1" class="node">
+<title>proc~ice_frazil_uptake_multicat_impl</title>
+<polygon fill="none" stroke="black" points="179,-129 0,-129 0,-105 179,-105 179,-129"/>
+<text text-anchor="middle" x="89.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_frazil_uptake_multicat_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="315.5,-171 261.5,-171 261.5,-147 315.5,-147 315.5,-171"/>
+<text text-anchor="middle" x="288.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ice_frazil_uptake_multicat_impl&#45;&gt;local -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge1" class="edge">
+<title>proc~ice_frazil_uptake_multicat_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M146.95,-129.04C180.47,-136.18 221.98,-145.03 251.18,-151.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="250.82,-154.76 261.33,-153.42 252.28,-147.91 250.82,-154.76"/>
+</g>
+<!-- proc~eos_freezing_point -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node3" class="node">
+<title>proc~eos_freezing_point</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node3"><a xlink:href="../proc/eos_freezing_point.html" xlink:title="eos_freezing_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="344.5,-129 232.5,-129 232.5,-105 344.5,-105 344.5,-129"/>
+<text text-anchor="middle" x="288.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_freezing_point</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge2" class="edge">
+<title>proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M179.2,-117C193.61,-117 208.29,-117 222.01,-117"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="222.3,-120.5 232.3,-117 222.3,-113.5 222.3,-120.5"/>
+</g>
+<!-- proc~ice_frazil_uptake_column -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node4" class="node">
+<title>proc~ice_frazil_uptake_column</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node4"><a xlink:href="../proc/ice_frazil_uptake_column.html" xlink:title="ice_frazil_uptake_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="362,-87 215,-87 215,-63 362,-63 362,-87"/>
+<text text-anchor="middle" x="288.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~ice_frazil_uptake_column -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge3" class="edge">
+<title>proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~ice_frazil_uptake_column</title>
+<path fill="none" stroke="#ff0000" d="M146.95,-104.96C170.14,-100.02 197.15,-94.26 221.26,-89.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="221.99,-92.55 231.04,-87.04 220.53,-85.7 221.99,-92.55"/>
+</g>
+<!-- proc~ice_enth_from_ts -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node5" class="node">
+<title>proc~ice_enth_from_ts</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node5"><a xlink:href="../proc/ice_enth_from_ts.html" xlink:title="ice_enth_from_ts">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="511,-150 409,-150 409,-126 511,-126 511,-150"/>
+<text text-anchor="middle" x="460" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enth_from_ts</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_column&#45;&gt;proc~ice_enth_from_ts -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge4" class="edge">
+<title>proc~ice_frazil_uptake_column&#45;&gt;proc~ice_enth_from_ts</title>
+<path fill="none" stroke="#0000ff" d="M337.28,-87.02C345.64,-89.64 354.17,-92.64 362,-96 379.02,-103.3 381.16,-109.28 398,-117 402.06,-118.86 406.34,-120.65 410.66,-122.35"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="409.56,-125.67 420.15,-125.91 412.02,-119.12 409.56,-125.67"/>
+</g>
+<!-- proc~ice_enthalpy_liquid -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node6" class="node">
+<title>proc~ice_enthalpy_liquid</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node6"><a xlink:href="../proc/ice_enthalpy_liquid.html" xlink:title="ice_enthalpy_liquid">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="517.5,-108 402.5,-108 402.5,-84 517.5,-84 517.5,-108"/>
+<text text-anchor="middle" x="460" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enthalpy_liquid</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_column&#45;&gt;proc~ice_enthalpy_liquid -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge5" class="edge">
+<title>proc~ice_frazil_uptake_column&#45;&gt;proc~ice_enthalpy_liquid</title>
+<path fill="none" stroke="#0000ff" d="M362.37,-84.03C372.29,-85.26 382.43,-86.51 392.24,-87.73"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="391.96,-91.22 402.32,-88.98 392.82,-84.27 391.96,-91.22"/>
+</g>
+<!-- proc~ice_rebalance_layers -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node7" class="node">
+<title>proc~ice_rebalance_layers</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node7"><a xlink:href="../proc/ice_rebalance_layers.html" xlink:title="ice_rebalance_layers">
+<polygon fill="#d9534f" stroke="#d9534f" points="522,-66 398,-66 398,-42 522,-42 522,-66"/>
+<text text-anchor="middle" x="460" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_rebalance_layers</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_column&#45;&gt;proc~ice_rebalance_layers -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge6" class="edge">
+<title>proc~ice_frazil_uptake_column&#45;&gt;proc~ice_rebalance_layers</title>
+<path fill="none" stroke="#0000ff" d="M362.37,-65.97C370.79,-64.93 379.37,-63.87 387.77,-62.83"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="388.4,-66.27 397.9,-61.57 387.54,-59.33 388.4,-66.27"/>
+</g>
+<!-- proc~ice_t_freeze -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node8" class="node">
+<title>proc~ice_t_freeze</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_node8"><a xlink:href="../proc/ice_t_freeze.html" xlink:title="ice_t_freeze">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="498,-24 422,-24 422,0 498,0 498,-24"/>
+<text text-anchor="middle" x="460" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_t_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_column&#45;&gt;proc~ice_t_freeze -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CallsGraph_edge7" class="edge">
+<title>proc~ice_frazil_uptake_column&#45;&gt;proc~ice_t_freeze</title>
+<path fill="none" stroke="#0000ff" d="M319.78,-62.92C341.48,-54.36 371.44,-42.71 398,-33 403.06,-31.15 408.38,-29.25 413.67,-27.39"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="414.83,-30.7 423.12,-24.1 412.52,-24.09 414.83,-30.7"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph Pages: 1 -->
+<svg id="procice_frazil_uptake_multicat_implCalledByGraph" width="641pt" height="67pt"
+ viewBox="0.00 0.00 641.00 67.38" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph" class="graph" transform="scale(0.91 0.91) rotate(0) translate(4 70)">
+<title>proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 700,-70 700,4 -4,4"/>
+<!-- proc~ice_frazil_uptake_multicat_impl -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node1" class="node">
+<title>proc~ice_frazil_uptake_multicat_impl</title>
+<polygon fill="none" stroke="black" points="696,-45 517,-45 517,-21 696,-21 696,-45"/>
+<text text-anchor="middle" x="606.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_frazil_uptake_multicat_impl</text>
+</g>
+<!-- proc~ice_frazil_uptake -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node2" class="node">
+<title>proc~ice_frazil_uptake</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node2"><a xlink:href="../proc/ice_frazil_uptake.html" xlink:title="ice_frazil_uptake">
+<polygon fill="#d9534f" stroke="#d9534f" points="481,-45 379,-45 379,-21 481,-21 481,-45"/>
+<text text-anchor="middle" x="430" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl</title>
+<path fill="none" stroke="#ff0000" d="M481,-33C489.2,-33 497.94,-33 506.83,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="506.92,-36.5 516.92,-33 506.92,-29.5 506.92,-36.5"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node3" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node3"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-45 245,-45 245,-21 343,-21 343,-45"/>
+<text text-anchor="middle" x="294" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake</title>
+<path fill="none" stroke="#ff0000" d="M343.38,-33C351.58,-33 360.2,-33 368.67,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.89,-36.5 378.89,-33 368.89,-29.5 368.89,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M209.19,-45.94C217.5,-44.66 226.14,-43.32 234.58,-42.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.39,-45.44 244.74,-40.45 234.32,-38.52 235.39,-45.44"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M204.57,-19.34C214.33,-20.85 224.72,-22.46 234.81,-24.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.35,-27.49 244.77,-25.55 235.42,-20.57 234.35,-27.49"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_frazil_uptake_multicat_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_frazil_uptake_multicat_implCalledByGraph = svgPanZoom('#procice_frazil_uptake_multicat_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cat~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice_col~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice_col</strong>(ICE_NK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-frazil_col"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>frazil_col</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~77"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~362"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_hi~16"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_lo~16"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_part"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_part</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~324"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_hi~19"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_lo~20"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_merge"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_merge</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_frozen_pt~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_frozen_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice_pt~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow_pt~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_surf~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_surf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice_col~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice_col</strong>(ICE_NK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-salt_to_ice_pt~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>salt_to_ice_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sst~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sst</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tfw~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tfw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_frazil_uptake_multicat_impl</span><span class="p">(</span><span class="n">hTr_T</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_S</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">frazil_heat</span><span class="p">,</span><span class="w"> </span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">m_frozen_diag</span><span class="p">,</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! ncat&gt;1 SIS2 ITD-mode frazil spend. Port of SIS2</span>
+<span class="w">      </span><span class="c">!! `SIS_slow_thermo.F90:1121-1146 + 1181-1186` (non-filling mode —</span>
+<span class="w">      </span><span class="c">!! SIS2's default `SIS2_FILLING_FRAZIL=.true.` thin-category fill is</span>
+<span class="w">      </span><span class="c">!! DEFERRED, see module docstring). Per banked cell (same</span>
+<span class="w">      </span><span class="c">!! wet/non-vanished/bank&gt;0 gate as `ice_frazil_uptake_impl`):</span>
+<span class="w">      </span><span class="c">!!   1. k_merge scan (SIS2:1124-1129): first category `c` with</span>
+<span class="w">      </span><span class="c">!!      `part(0) + part(c) &gt; 0.01`; falls back to `k_merge = 1` if</span>
+<span class="w">      </span><span class="c">!!      no category qualifies (SIS2's `k_merge` default).</span>
+<span class="w">      </span><span class="c">!!   2. Open-water annexation (SIS2:1131-1145): if `part(0) &gt; 0`,</span>
+<span class="w">      </span><span class="c">!!      dilute category `k_merge`'s thickness at CONSTANT MASS —</span>
+<span class="w">      </span><span class="c">!!      `m_ice(k_merge)`/`m_snow(k_merge)` scale by</span>
+<span class="w">      </span><span class="c">!!      `part(k_merge)/(part(k_merge)+part(0))`, `part(k_merge)`</span>
+<span class="w">      </span><span class="c">!!      absorbs all of `part(0)`, `part(0)` -&gt; 0. `enth`/`sal` are</span>
+<span class="w">      </span><span class="c">!!      per-MASS intensive — untouched by an area-only dilution.</span>
+<span class="w">      </span><span class="c">!!   3. Per-ice-area spend (SIS2:1181-1186):</span>
+<span class="w">      </span><span class="c">!!      `frazil_col = frazil_heat/part(k_merge)` (J per m² of</span>
+<span class="w">      </span><span class="c">!!      category area; the denominator is &gt; 0 by construction —</span>
+<span class="w">      </span><span class="c">!!      either an occupied category was found, or step 2 just grew</span>
+<span class="w">      </span><span class="c">!!      `part(k_merge)` from the Σpart=1 invariant), then the SAME</span>
+<span class="w">      </span><span class="c">!!      UNCHANGED `ice_frazil_uptake_column` spends it on category</span>
+<span class="w">      </span><span class="c">!!      `k_merge`'s column.</span>
+<span class="w">      </span><span class="c">!!   4. Diags (per cell, part-weighted back to CELL-area units to</span>
+<span class="w">      </span><span class="c">!!      match the ncat==1 diag convention that the couplers and</span>
+<span class="w">      </span><span class="c">!!      `rdb_ice_thermo_driver` consume): `m_frozen_diag =</span>
+<span class="w">      </span><span class="c">!!      part(k_merge)*m_frozen_pt`; `salt_flux_diag =</span>
+<span class="w">      </span><span class="c">!!      part(k_merge)*(m_frozen_pt*s_surf - salt_to_ice_pt)/dt_therm`;</span>
+<span class="w">      </span><span class="c">!!      `frazil_heat` reset to 0 (fully spent). Both diags are</span>
+<span class="w">      </span><span class="c">!!      zeroed UNCONDITIONALLY at loop top, same contract as</span>
+<span class="w">      </span><span class="c">!!      `ice_frazil_uptake_impl`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<span class="w">      </span><span class="c">!! arrays that use them. Inner `if` gate only, serial `do cat` scan</span>
+<span class="w">      </span><span class="c">!! for k_merge — never a masked `do concurrent` header.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_T</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_S</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">frazil_heat</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_frozen_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">i_part</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_frozen_pt</span><span class="p">,</span><span class="w"> </span><span class="n">salt_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">frazil_col</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="n">ICE_NK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="n">ICE_NK_MAX</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">i_part</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                    </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                    </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_frozen_pt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                    </span><span class="n">salt_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">frazil_col</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                    </span><span class="n">enth_ice_col</span><span class="p">,</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">)</span>
+<span class="w">         </span><span class="n">m_frozen_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">frazil_heat</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">sst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr_T</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="o">/</span><span class="n">h</span>
+<span class="w">            </span><span class="n">s_surf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr_S</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="o">/</span><span class="n">h</span>
+<span class="w">            </span><span class="n">tfw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos_freezing_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+
+<span class="w">            </span><span class="c">! ---- 1. k_merge scan (SIS2:1124-1129) ----</span>
+<span class="w">            </span><span class="n">k_merge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.01_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">k_merge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cat</span>
+<span class="w">                  </span><span class="k">exit</span>
+<span class="k">               end if</span>
+<span class="k">            end do</span>
+
+<span class="w">            </span><span class="c">! ---- 2. Open-water annexation (SIS2:1131-1145) ----</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">i_part</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span>
+<span class="w">               </span><span class="n">m_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">m_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="o">*</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">))</span><span class="o">*</span><span class="n">i_part</span>
+<span class="w">               </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="o">*</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">))</span><span class="o">*</span><span class="n">i_part</span>
+<span class="w">               </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="w">               </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+
+<span class="w">            </span><span class="c">! ---- 3. Per-ice-area spend (SIS2:1181-1186) ----</span>
+<span class="w">            </span><span class="n">frazil_col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">frazil_heat</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">/</span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span>
+
+<span class="w">            </span><span class="n">m_snow_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span>
+<span class="w">            </span><span class="n">m_ice_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span>
+<span class="w">            </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+<span class="w">            </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+
+<span class="w">            </span><span class="k">call </span><span class="n">ice_frazil_uptake_column</span><span class="p">(</span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">frazil_col</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">),</span><span class="w"> </span><span class="n">m_frozen_pt</span><span class="p">,</span><span class="w"> </span><span class="n">salt_to_ice_pt</span><span class="p">)</span>
+
+<span class="w">            </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice_pt</span>
+<span class="w">            </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+<span class="w">            </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+
+<span class="w">            </span><span class="c">! ---- 4. Diags (per cell) ----</span>
+<span class="w">            </span><span class="n">m_frozen_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="o">*</span><span class="n">m_frozen_pt</span>
+<span class="w">            </span><span class="n">salt_flux_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">part_size</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_merge</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="o">*</span><span class="p">(</span><span class="n">m_frozen_pt</span><span class="o">*</span><span class="n">s_surf</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">salt_to_ice_pt</span><span class="p">)</span><span class="o">/</span><span class="n">dt_therm</span>
+<span class="w">            </span><span class="n">frazil_heat</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">ice_frazil_uptake_multicat_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

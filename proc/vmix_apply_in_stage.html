@@ -1,0 +1,2466 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>vmix_apply_in_stage &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>vmix_apply_in_stage
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for procedures.">123 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_dyn.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_dyn.f90.html'>rdb_ocean_dyn.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></li>
+            <li class="breadcrumb-item active" aria-current="page">vmix_apply_in_stage</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-do_remnant~3">do_remnant</a>
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-do_tracers">do_tracers</a>
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-epbl_active">epbl_active</a>
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-kshear_active">kshear_active</a>
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-tidal_active">tidal_active</a>
+            <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#variable-vertex_kv">vertex_kv</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/vmix_apply_in_stage.html#src">vmix_apply_in_stage</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, apply_tracers, metrics)  
+</h2>
+    
+
+    <p>Bundle the per-stage vmix closure / KPP overlay / KV_ML_INVZ2 /
+assembly gate / vdiff dispatch into one routine so the run_stage
+drivers can call <code>vmix_apply_in_stage(grid, dyn, vmix, vd, ss,
+ms, dt, sf)</code> instead of carrying 30 lines of nested if-branching.</p>
+<p>Closure chain (all upstream CONTRIBUTORS into kv/kt):
+  PP81 interior → KPP overlay XOR EPBL merge → kappa-shear
+  additive merge → tidal-mixing additive merge → KV_ML_INVZ2
+  surface band → convective adjustment (Brunt-Vaisala trigger,
+  interior-only, masked below the active KPP/EPBL boundary
+  layer) → <strong>vmix_split_kd_heat_salt</strong> (derives ks from kt; NOT a
+  contributor, must stay last) → <strong>vmix_assemble</strong> (the single
+  downstream gate: background floors, kv_max/kd_max ceilings,
+  optional smoothing, optional guard — applies to kv, kt, AND ks)
+  → vdiff.</p>
+<p>Logic preserved verbatim from the prior in-driver dispatch:
+  - When <code>vmix%use_closure</code> is true: optional PP81 / KPP
+    overlay populate <code>vmix%kv</code>/<code>vmix%kt</code>, then vdiff reads
+    them; KPP non-local γ is applied after the tracer vdiff
+    solve when thermodynamics are active.
+  - When <code>vmix%use_closure</code> is false: vdiff uses its scalar
+    <code>K_v_*</code> defaults — kv_source not passed.
+  - Tracer vdiff + KPP non-local fire only when
+    <code>enable_thermodynamics .and. is_thermo_step()</code>.</p>
+<p>Profiler regions are emitted from here uniformly (the prior
+run_stage path had no profiler regions around vmix; the
+split path did — now both share the same labels).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~153"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dyn~6"></span>
+              type(<a href='../type/ocean_dyn_t.html'>ocean_dyn_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dyn</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmix~3"></span>
+              type(<a href='../type/ocean_vmix_t.html'>ocean_vmix_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmix</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vd~3"></span>
+              type(<a href='../type/ocean_vdiff_t.html'>ocean_vdiff_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vd</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~10"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bd~5"></span>
+              type(<a href='../type/ocean_bottom_drag_t.html'>ocean_bottom_drag_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bd</strong></td>
+            <td>
+                <p>Bottom-drag slot — supplies the bed-layer Rayleigh-rate field
+<code>lambda_bot_u/v</code> for the implicit-drag vdiff fold.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~75"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~79"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stage~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stage</strong></td>
+            <td>
+                <p>RK2 stage (1 or 2): the EPBL/kappa-shear COLUMN SOLVES fire
+only at stage 1 of a thermo step (their kd is
+stage-invariant by design — recomputing at stage 2 doubled
+the closure cost for no accuracy: 19.6%% of GPU time was
+kappa-shear at 2x cadence).  The merges still run EVERY
+stage (PP81 rewrites kv/kt per stage).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~11"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epbl~3"></span>
+              type(<a href='../type/ocean_epbl_t.html'>ocean_epbl_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epbl</strong></td>
+            <td>
+                <p>EPBL slot.  When present and enabled, replaces the KPP
+overlay (configure enforces the mutual exclusion):
+<code>epbl_compute</code> refreshes <code>kd_int</code> at thermo cadence and
+the merge into <code>vmix%kv</code> / <code>vmix%kt</code> runs every stage
+(PP81 rewrites those arrays each stage).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kshear~3"></span>
+              type(<a href='../type/ocean_kappa_shear_t.html'>ocean_kappa_shear_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kshear</strong></td>
+            <td>
+                <p>Kappa-shear interior closure slot.  When present and enabled,
+<code>kappa_shear_compute</code> refreshes <code>kd_int</code> at thermo cadence and
+the additive merge into <code>vmix%kv</code> / <code>vmix%kt</code> runs every stage.
+Coexists with KPP / EPBL (no mutual exclusion).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmix_tidal~3"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmix_tidal</strong></td>
+            <td>
+                <p>St-Laurent/Simmons tidal-mixing interior closure slot.  When
+present and enabled, <code>tidal_mixing_compute</code> refreshes <code>kd_int</code>
+at thermo cadence and the additive merge into <code>vmix%kv</code> /
+<code>vmix%kt</code> runs every stage.  Coexists with KPP / EPBL /
+kappa-shear (no mutual exclusion).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_work~27"></span>
+              type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_work</strong></td>
+            <td>
+                <p>The BT-corrector workstate — supplies <code>visc_rem_u/v</code> as the
+vdiff kernel&rsquo;s OUTPUT.  Present only from <code>run_stage_split</code>
+(the unsplit path has no BT correction to consume it).  When
+present AND <code>bt_work%bt_correction_visc_rem</code>, the viscous
+remnant γ is (re)computed here, at step 9 of the CURRENT
+stage — the BT corrector at step 7 of the NEXT stage reads
+it, a one-stage (Δt/2) lag (see the step-9 call site below).
+Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-apply_tracers"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>apply_tracers</strong></td>
+            <td>
+                <p><code>.false.</code> = momentum-only: skip the tracer vdiff + KPP
+non-local applies regardless of the thermo gate.  The pred_corr
+PREDICTOR passes this — MOM6&rsquo;s predictor applies
+<code>vertvisc(up, dt_pred)</code> to the provisional velocity (so the
+spurious grounded-layer accelerations are absorbed BEFORE
+continuity forms <code>u_av</code>) but never touches tracers.
+Default <code>.true.</code> = historical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~43"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                <p>Metrics slot — supplies the halo-valid wet masks
+(<code>wet_T</code>/<code>wet_u</code>/<code>wet_v</code>) the kappa-shear VERTEX form&rsquo;s
+corner gather needs, and <code>metrics%geolatT</code> — the C7 Henyey
+latitude factor&rsquo;s only spatial input, forwarded to
+<code>vmix_assemble</code> (unread when <code>bkgnd_henyey</code> is off).
+Optional so the split_rk2/legacy call shapes stay valid; both
+consumers fail loud when their knob is on and the slot is
+absent — <code>kappa_shear_compute</code> for <code>at_vertex</code>, and
+<code>vmix_assemble</code> for <code>bkgnd_henyey</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_apply_in_stage~~CallsGraph Pages: 1 -->
+<svg id="procvmix_apply_in_stageCallsGraph" width="641pt" height="821pt"
+ viewBox="0.00 0.00 641.00 820.71" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_apply_in_stage~~CallsGraph" class="graph" transform="scale(0.59 0.59) rotate(0) translate(4 1398)">
+<title>proc~~vmix_apply_in_stage~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1398 1091,-1398 1091,4 -4,4"/>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node1" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<polygon fill="none" stroke="black" points="122,-710 0,-710 0,-686 122,-686 122,-710"/>
+<text text-anchor="middle" x="61" y="-695.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_apply_in_stage</text>
+</g>
+<!-- error -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node2" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="548.5,-730 494.5,-730 494.5,-706 548.5,-706 548.5,-730"/>
+<text text-anchor="middle" x="521.5" y="-715.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;error -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge1" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M122.41,-700.64C219.03,-704.85 405.41,-712.98 484.07,-716.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="484.29,-719.92 494.43,-716.86 484.59,-712.93 484.29,-719.92"/>
+</g>
+<!-- proc~epbl_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node3" class="node">
+<title>proc~epbl_compute</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node3"><a xlink:href="../proc/epbl_compute.html" xlink:title="epbl_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="318,-1166 230,-1166 230,-1142 318,-1142 318,-1166"/>
+<text text-anchor="middle" x="274" y="-1151.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge2" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute</title>
+<path fill="none" stroke="#ff0000" d="M62.13,-710.3C63.25,-760.33 73.13,-951.66 158,-1074 177.63,-1102.3 210.73,-1123.77 236.39,-1137.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.97,-1140.51 245.47,-1141.93 238.15,-1134.27 234.97,-1140.51"/>
+</g>
+<!-- proc~epbl_merge_into_kv_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node4" class="node">
+<title>proc~epbl_merge_into_kv_kt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node4"><a xlink:href="../proc/epbl_merge_into_kv_kt.html" xlink:title="epbl_merge_into_kv_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="341,-1022 207,-1022 207,-998 341,-998 341,-1022"/>
+<text text-anchor="middle" x="274" y="-1007.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_merge_into_kv_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~epbl_merge_into_kv_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge3" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~epbl_merge_into_kv_kt</title>
+<path fill="none" stroke="#ff0000" d="M61.94,-710.3C62.42,-755.37 70.53,-912.84 158,-989 168.94,-998.53 182.75,-1004.37 196.95,-1007.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.33,-1011.29 206.83,-1009.89 197.74,-1004.44 196.33,-1011.29"/>
+</g>
+<!-- proc~kappa_shear_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node5" class="node">
+<title>proc~kappa_shear_compute</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node5"><a xlink:href="../proc/kappa_shear_compute.html" xlink:title="kappa_shear_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="340.5,-980 207.5,-980 207.5,-956 340.5,-956 340.5,-980"/>
+<text text-anchor="middle" x="274" y="-965.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge4" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#ff0000" d="M62.7,-710.23C65.71,-751.02 81.28,-883.46 158,-947 169.24,-956.31 183.24,-962.04 197.56,-965.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197,-968.94 207.49,-967.51 198.4,-962.08 197,-968.94"/>
+</g>
+<!-- proc~kappa_shear_merge_into_kv_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node6" class="node">
+<title>proc~kappa_shear_merge_into_kv_kt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node6"><a xlink:href="../proc/kappa_shear_merge_into_kv_kt.html" xlink:title="kappa_shear_merge_into_kv_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.5,-938 184.5,-938 184.5,-914 363.5,-914 363.5,-938"/>
+<text text-anchor="middle" x="274" y="-923.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_merge_into_kv_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_merge_into_kv_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge5" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_merge_into_kv_kt</title>
+<path fill="none" stroke="#ff0000" d="M63.73,-710.2C69.54,-746.39 91.9,-853.85 158,-905 163.16,-908.99 168.84,-912.32 174.83,-915.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.87,-918.46 184.45,-918.95 176.49,-911.97 173.87,-918.46"/>
+</g>
+<!-- proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node7" class="node">
+<title>proc~ocean_dyn_is_thermo_step</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node7"><a xlink:href="../proc/ocean_dyn_is_thermo_step.html" xlink:title="ocean_dyn_t%ocean_dyn_is_thermo_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="390,-896 158,-896 158,-872 390,-872 390,-896"/>
+<text text-anchor="middle" x="274" y="-881.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_t%ocean_dyn_is_thermo_step</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge6" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M65.29,-710.39C74.29,-741.64 102.4,-823.95 158,-863 160.18,-864.53 162.44,-865.96 164.76,-867.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="163.51,-870.59 174.02,-871.98 166.68,-864.34 163.51,-870.59"/>
+</g>
+<!-- proc~ocean_dyn_therm_dt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node8" class="node">
+<title>proc~ocean_dyn_therm_dt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node8"><a xlink:href="../proc/ocean_dyn_therm_dt.html" xlink:title="ocean_dyn_t%ocean_dyn_therm_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="374,-854 174,-854 174,-830 374,-830 374,-854"/>
+<text text-anchor="middle" x="274" y="-839.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_t%ocean_dyn_therm_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_therm_dt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge7" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_therm_dt</title>
+<path fill="none" stroke="#ff0000" d="M67.67,-710.18C80.11,-735.42 112.35,-793.37 158,-821 161,-822.82 164.12,-824.48 167.32,-826.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="166,-829.25 176.57,-829.96 168.75,-822.81 166,-829.25"/>
+</g>
+<!-- proc~profiler_start -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node9" class="node">
+<title>proc~profiler_start</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node9"><a xlink:href="../proc/profiler_start.html" xlink:title="profiler_start">
+<polygon fill="#d9534f" stroke="#d9534f" points="314,-812 234,-812 234,-788 314,-788 314,-812"/>
+<text text-anchor="middle" x="274" y="-797.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_start</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~profiler_start -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge8" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~profiler_start</title>
+<path fill="none" stroke="#ff0000" d="M72.43,-710.15C88.73,-728.27 122.1,-762.07 158,-779 178.43,-788.64 202.83,-793.86 223.89,-796.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="223.58,-800.18 233.92,-797.9 224.41,-793.23 223.58,-800.18"/>
+</g>
+<!-- proc~profiler_stop -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node10" class="node">
+<title>proc~profiler_stop</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node10"><a xlink:href="../proc/profiler_stop.html" xlink:title="profiler_stop">
+<polygon fill="#d9534f" stroke="#d9534f" points="313.5,-770 234.5,-770 234.5,-746 313.5,-746 313.5,-770"/>
+<text text-anchor="middle" x="274" y="-755.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_stop</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~profiler_stop -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge9" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~profiler_stop</title>
+<path fill="none" stroke="#ff0000" d="M93.26,-710.12C111.88,-717.08 136.09,-725.67 158,-732 179.63,-738.25 203.91,-743.93 224.56,-748.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="223.87,-751.81 234.38,-750.46 225.32,-744.96 223.87,-751.81"/>
+</g>
+<!-- proc~tidal_mixing_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node11" class="node">
+<title>proc~tidal_mixing_compute</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node11"><a xlink:href="../proc/tidal_mixing_compute.html" xlink:title="tidal_mixing_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="339,-1065 209,-1065 209,-1041 339,-1041 339,-1065"/>
+<text text-anchor="middle" x="274" y="-1050.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~tidal_mixing_compute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge10" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~tidal_mixing_compute</title>
+<path fill="none" stroke="#ff0000" d="M63.79,-710.18C72.05,-764.69 108.22,-985.58 158,-1031 169.33,-1041.34 183.98,-1047.49 199,-1051.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.4,-1054.48 208.89,-1053 199.77,-1047.62 198.4,-1054.48"/>
+</g>
+<!-- proc~tidal_mixing_merge_into_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node12" class="node">
+<title>proc~tidal_mixing_merge_into_kt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node12"><a xlink:href="../proc/tidal_mixing_merge_into_kt.html" xlink:title="tidal_mixing_merge_into_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="353,-690 195,-690 195,-666 353,-666 353,-690"/>
+<text text-anchor="middle" x="274" y="-675.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_merge_into_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~tidal_mixing_merge_into_kt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge11" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~tidal_mixing_merge_into_kt</title>
+<path fill="none" stroke="#ff0000" d="M122.18,-692.3C141.74,-690.44 163.87,-688.34 185.02,-686.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="185.36,-689.82 194.99,-685.39 184.7,-682.85 185.36,-689.82"/>
+</g>
+<!-- proc~vdiff_apply_momentum -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node13" class="node">
+<title>proc~vdiff_apply_momentum</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node13"><a xlink:href="../proc/vdiff_apply_momentum.html" xlink:title="vdiff_apply_momentum">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-604 205,-604 205,-580 343,-580 343,-604"/>
+<text text-anchor="middle" x="274" y="-589.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_apply_momentum</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge12" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum</title>
+<path fill="none" stroke="#ff0000" d="M72.13,-685.93C88.29,-667.52 121.79,-632.72 158,-615 169.4,-609.42 182.07,-605.19 194.71,-601.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="195.87,-605.32 204.81,-599.64 194.28,-598.5 195.87,-605.32"/>
+</g>
+<!-- proc~vdiff_apply_tracers -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node14" class="node">
+<title>proc~vdiff_apply_tracers</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node14"><a xlink:href="../proc/vdiff_apply_tracers.html" xlink:title="vdiff_apply_tracers">
+<polygon fill="#d9534f" stroke="#d9534f" points="330.5,-648 217.5,-648 217.5,-624 330.5,-624 330.5,-648"/>
+<text text-anchor="middle" x="274" y="-633.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_apply_tracers</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_tracers -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge13" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_tracers</title>
+<path fill="none" stroke="#ff0000" d="M86.3,-685.83C105.38,-676.72 132.83,-664.57 158,-657 173.77,-652.26 191.1,-648.41 207.42,-645.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.19,-648.79 217.42,-643.58 206.96,-641.89 208.19,-648.79"/>
+</g>
+<!-- proc~vmix_add_kv_ml_invz2 -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node15" class="node">
+<title>proc~vmix_add_kv_ml_invz2</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node15"><a xlink:href="../proc/vmix_add_kv_ml_invz2.html" xlink:title="vmix_add_kv_ml_invz2">
+<polygon fill="#d9534f" stroke="#d9534f" points="340.5,-495 207.5,-495 207.5,-471 340.5,-471 340.5,-495"/>
+<text text-anchor="middle" x="274" y="-480.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_add_kv_ml_invz2</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_add_kv_ml_invz2 -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge14" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_add_kv_ml_invz2</title>
+<path fill="none" stroke="#ff0000" d="M64.61,-685.79C72.42,-652.41 98.79,-558.98 158,-512 169.47,-502.9 183.44,-496.62 197.63,-492.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.74,-495.62 207.46,-489.6 196.9,-488.87 198.74,-495.62"/>
+</g>
+<!-- proc~vmix_apply_convection -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node16" class="node">
+<title>proc~vmix_apply_convection</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node16"><a xlink:href="../proc/vmix_apply_convection.html" xlink:title="vmix_apply_convection">
+<polygon fill="#d9534f" stroke="#d9534f" points="342,-363 206,-363 206,-339 342,-339 342,-363"/>
+<text text-anchor="middle" x="274" y="-348.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_convection</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_convection -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge15" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_convection</title>
+<path fill="none" stroke="#ff0000" d="M61.51,-685.74C60.3,-637.76 62.69,-461.04 158,-374 168.63,-364.29 182.15,-358.2 196.17,-354.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.95,-357.86 205.92,-352.22 195.39,-351.04 196.95,-357.86"/>
+</g>
+<!-- proc~vmix_apply_kpp_overlay -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node17" class="node">
+<title>proc~vmix_apply_kpp_overlay</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node17"><a xlink:href="../proc/vmix_apply_kpp_overlay.html" xlink:title="vmix_apply_kpp_overlay">
+<polygon fill="#d9534f" stroke="#d9534f" points="345,-87 203,-87 203,-63 345,-63 345,-87"/>
+<text text-anchor="middle" x="274" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_kpp_overlay</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_kpp_overlay -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge16" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_kpp_overlay</title>
+<path fill="none" stroke="#ff0000" d="M61.51,-685.77C59.66,-626.06 57.63,-360.7 158,-180 178.76,-142.63 217.75,-111.36 244.53,-92.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="246.75,-95.65 253.1,-87.17 242.84,-89.84 246.75,-95.65"/>
+</g>
+<!-- proc~vmix_apply_nonlocal_tendencies -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node18" class="node">
+<title>proc~vmix_apply_nonlocal_tendencies</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node18"><a xlink:href="../proc/vmix_apply_nonlocal_tendencies.html" xlink:title="vmix_apply_nonlocal_tendencies">
+<polygon fill="#d9534f" stroke="#d9534f" points="367.5,-407 180.5,-407 180.5,-383 367.5,-383 367.5,-407"/>
+<text text-anchor="middle" x="274" y="-392.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_nonlocal_tendencies</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_nonlocal_tendencies -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge17" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_apply_nonlocal_tendencies</title>
+<path fill="none" stroke="#ff0000" d="M62.08,-685.77C63.08,-641.65 72.82,-489.46 158,-416 162.03,-412.53 166.43,-409.54 171.1,-406.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.84,-410.04 180.37,-402.58 169.83,-403.72 172.84,-410.04"/>
+</g>
+<!-- proc~vmix_assemble -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node19" class="node">
+<title>proc~vmix_assemble</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node19"><a xlink:href="../proc/vmix_assemble.html" xlink:title="vmix_assemble">
+<polygon fill="#d9534f" stroke="#d9534f" points="321,-213 227,-213 227,-189 321,-189 321,-213"/>
+<text text-anchor="middle" x="274" y="-198.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_assemble -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge18" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_assemble</title>
+<path fill="none" stroke="#ff0000" d="M63.09,-685.81C67.82,-637.79 89.43,-458.06 158,-330 182,-285.18 224.62,-243.17 250.69,-219.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="253.01,-222.51 258.21,-213.28 248.39,-217.25 253.01,-222.51"/>
+</g>
+<!-- proc~vmix_compute_pp81 -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node20" class="node">
+<title>proc~vmix_compute_pp81</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node20"><a xlink:href="../proc/vmix_compute_pp81.html" xlink:title="vmix_compute_pp81">
+<polygon fill="#d9534f" stroke="#d9534f" points="335.5,-545 212.5,-545 212.5,-521 335.5,-521 335.5,-545"/>
+<text text-anchor="middle" x="274" y="-530.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_compute_pp81</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_compute_pp81 -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge19" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_compute_pp81</title>
+<path fill="none" stroke="#ff0000" d="M67.89,-685.92C80.74,-660.82 113.73,-602.7 158,-571 171.73,-561.17 188.17,-553.76 204.26,-548.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.77,-551.43 214.21,-545.03 203.62,-544.76 205.77,-551.43"/>
+</g>
+<!-- proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node21" class="node">
+<title>proc~vmix_split_kd_heat_salt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node21"><a xlink:href="../proc/vmix_split_kd_heat_salt.html" xlink:title="vmix_split_kd_heat_salt">
+<polygon fill="#d9534f" stroke="#d9534f" points="342,-449 206,-449 206,-425 342,-425 342,-449"/>
+<text text-anchor="middle" x="274" y="-434.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_kd_heat_salt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge20" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_split_kd_heat_salt</title>
+<path fill="none" stroke="#ff0000" d="M63.05,-685.95C67.15,-646.91 85.56,-522.93 158,-462 168.76,-452.95 182.04,-446.96 195.71,-443.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.86,-446.36 205.71,-440.53 195.15,-439.57 196.86,-446.36"/>
+</g>
+<!-- proc~epbl_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node26" class="node">
+<title>proc~epbl_column_kernel</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node26"><a xlink:href="../proc/epbl_column_kernel.html" xlink:title="epbl_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="581.5,-1226 461.5,-1226 461.5,-1202 581.5,-1202 581.5,-1226"/>
+<text text-anchor="middle" x="521.5" y="-1211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_compute&#45;&gt;proc~epbl_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge21" class="edge">
+<title>proc~epbl_compute&#45;&gt;proc~epbl_column_kernel</title>
+<path fill="none" stroke="#ff4c00" d="M318.04,-1164.52C357.8,-1174.24 417.22,-1188.76 461.42,-1199.56"/>
+<polygon fill="#ff4c00" stroke="#ff4c00" points="460.62,-1202.97 471.17,-1201.94 462.28,-1196.17 460.62,-1202.97"/>
+</g>
+<!-- proc~kappa_shear_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node30" class="node">
+<title>proc~kappa_shear_column_kernel</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node30"><a xlink:href="../proc/kappa_shear_column_kernel.html" xlink:title="kappa_shear_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="604,-1024 439,-1024 439,-1000 604,-1000 604,-1024"/>
+<text text-anchor="middle" x="521.5" y="-1009.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge22" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel</title>
+<path fill="none" stroke="#ffe500" d="M340.79,-979.79C372.32,-985.44 410.31,-992.25 443.21,-998.15"/>
+<polygon fill="#ffe500" stroke="#ffe500" points="442.79,-1001.63 453.25,-999.95 444.02,-994.74 442.79,-1001.63"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node31" class="node">
+<title>proc~kappa_shear_vertex_kernel</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node31"><a xlink:href="../proc/kappa_shear_vertex_kernel.html" xlink:title="kappa_shear_vertex_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="600.5,-982 442.5,-982 442.5,-958 600.5,-958 600.5,-982"/>
+<text text-anchor="middle" x="521.5" y="-967.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_vertex_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge23" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel</title>
+<path fill="none" stroke="#ffe500" d="M340.79,-968.54C368.86,-968.76 402.04,-969.03 432.2,-969.28"/>
+<polygon fill="#ffe500" stroke="#ffe500" points="432.28,-972.78 442.31,-969.36 432.33,-965.78 432.28,-972.78"/>
+</g>
+<!-- proc~kappa_shear_vertex_scatter -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node32" class="node">
+<title>proc~kappa_shear_vertex_scatter</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node32"><a xlink:href="../proc/kappa_shear_vertex_scatter.html" xlink:title="kappa_shear_vertex_scatter">
+<polygon fill="#d9534f" stroke="#d9534f" points="602,-940 441,-940 441,-916 602,-916 602,-940"/>
+<text text-anchor="middle" x="521.5" y="-925.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_vertex_scatter</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_scatter -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge24" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_scatter</title>
+<path fill="none" stroke="#ffe500" d="M340.79,-957.28C370.27,-952.48 405.37,-946.76 436.71,-941.65"/>
+<polygon fill="#ffe500" stroke="#ffe500" points="437.43,-945.08 446.73,-940.02 436.3,-938.17 437.43,-945.08"/>
+</g>
+<!-- proc~find_or_create_region -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node28" class="node">
+<title>proc~find_or_create_region</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node28"><a xlink:href="../proc/find_or_create_region.html" xlink:title="find_or_create_region">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="585,-898 458,-898 458,-874 585,-874 585,-898"/>
+<text text-anchor="middle" x="521.5" y="-883.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">find_or_create_region</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~find_or_create_region -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge25" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~find_or_create_region</title>
+<path fill="none" stroke="#00ff19" d="M314.1,-800.47C337.52,-802.31 367.1,-807.49 390,-821 411.76,-833.84 404.48,-851.75 426,-865 432.82,-869.2 440.37,-872.56 448.15,-875.25"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="447.12,-878.6 457.71,-878.22 449.19,-871.91 447.12,-878.6"/>
+</g>
+<!-- proc~get_wall_time -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node29" class="node">
+<title>proc~get_wall_time</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node29"><a xlink:href="../proc/get_wall_time.html" xlink:title="get_wall_time">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="564,-814 479,-814 479,-790 564,-790 564,-814"/>
+<text text-anchor="middle" x="521.5" y="-799.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">get_wall_time</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~get_wall_time -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge26" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#00ff19" d="M314.17,-800.32C355.96,-800.66 422.35,-801.2 468.49,-801.58"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="468.56,-805.08 478.59,-801.66 468.62,-798.08 468.56,-805.08"/>
+</g>
+<!-- proc~nvtx_range_push -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node34" class="node">
+<title>proc~nvtx_range_push</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node34"><a xlink:href="../proc/nvtx_range_push.html" xlink:title="nvtx_range_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="573,-856 470,-856 470,-832 573,-832 573,-856"/>
+<text text-anchor="middle" x="521.5" y="-841.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_push</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~nvtx_range_push -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge27" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~nvtx_range_push</title>
+<path fill="none" stroke="#00ff19" d="M314.17,-807.02C353.44,-814.06 414.44,-824.99 459.94,-833.15"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="459.52,-836.63 469.98,-834.95 460.76,-829.74 459.52,-836.63"/>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~get_wall_time -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge28" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#00ff66" d="M313.63,-764.92C355.52,-772.43 422.6,-784.45 468.96,-792.76"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="468.35,-796.21 478.81,-794.53 469.59,-789.32 468.35,-796.21"/>
+</g>
+<!-- proc~nvtx_range_pop -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node33" class="node">
+<title>proc~nvtx_range_pop</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node33"><a xlink:href="../proc/nvtx_range_pop.html" xlink:title="nvtx_range_pop">
+<polygon fill="#d9534f" stroke="#d9534f" points="570,-772 473,-772 473,-748 570,-748 570,-772"/>
+<text text-anchor="middle" x="521.5" y="-757.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_pop</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~nvtx_range_pop -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge29" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~nvtx_range_pop</title>
+<path fill="none" stroke="#00ff66" d="M313.63,-758.31C353.68,-758.64 416.74,-759.15 462.72,-759.53"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="462.81,-763.03 472.84,-759.61 462.87,-756.03 462.81,-763.03"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node35" class="node">
+<title>proc~tidal_mixing_column_kernel</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node35"><a xlink:href="../proc/tidal_mixing_column_kernel.html" xlink:title="tidal_mixing_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="602,-1066 441,-1066 441,-1042 602,-1042 602,-1066"/>
+<text text-anchor="middle" x="521.5" y="-1051.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~tidal_mixing_compute&#45;&gt;proc~tidal_mixing_column_kernel -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge30" class="edge">
+<title>proc~tidal_mixing_compute&#45;&gt;proc~tidal_mixing_column_kernel</title>
+<path fill="none" stroke="#00ffb2" d="M339.18,-1053.26C367.13,-1053.38 400.38,-1053.51 430.72,-1053.63"/>
+<polygon fill="#00ffb2" stroke="#00ffb2" points="430.88,-1057.13 440.89,-1053.68 430.9,-1050.13 430.88,-1057.13"/>
+</g>
+<!-- proc~diffuse_velocity_columns_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node25" class="node">
+<title>proc~diffuse_velocity_columns_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node25"><a xlink:href="../proc/diffuse_velocity_columns_impl.html" xlink:title="diffuse_velocity_columns_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="608.5,-562 434.5,-562 434.5,-538 608.5,-538 608.5,-562"/>
+<text text-anchor="middle" x="521.5" y="-547.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diffuse_velocity_columns_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge31" class="edge">
+<title>proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl</title>
+<path fill="none" stroke="#00b2ff" d="M343.06,-580.36C373.15,-575.21 408.75,-569.12 440.14,-563.75"/>
+<polygon fill="#00b2ff" stroke="#00b2ff" points="440.9,-567.17 450.17,-562.03 439.72,-560.27 440.9,-567.17"/>
+</g>
+<!-- proc~fill_kv_scalar_buf -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node27" class="node">
+<title>proc~fill_kv_scalar_buf</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node27"><a xlink:href="../proc/fill_kv_scalar_buf.html" xlink:title="fill_kv_scalar_buf">
+<polygon fill="#d9534f" stroke="#d9534f" points="573,-604 470,-604 470,-580 573,-580 573,-604"/>
+<text text-anchor="middle" x="521.5" y="-589.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_kv_scalar_buf</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_momentum&#45;&gt;proc~fill_kv_scalar_buf -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge32" class="edge">
+<title>proc~vdiff_apply_momentum&#45;&gt;proc~fill_kv_scalar_buf</title>
+<path fill="none" stroke="#00b2ff" d="M343.06,-592C379.61,-592 424.29,-592 459.67,-592"/>
+<polygon fill="#00b2ff" stroke="#00b2ff" points="459.86,-595.5 469.86,-592 459.86,-588.5 459.86,-595.5"/>
+</g>
+<!-- proc~vdiff_apply_tracers&#45;&gt;error -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge33" class="edge">
+<title>proc~vdiff_apply_tracers&#45;&gt;error</title>
+<path fill="none" stroke="#0066ff" d="M330.74,-638.78C350.43,-641.63 372.1,-647.01 390,-657 410.88,-668.66 405.34,-684.94 426,-697 443.68,-707.32 465.92,-712.57 484.38,-715.24"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="484.12,-718.74 494.48,-716.51 484.99,-711.79 484.12,-718.74"/>
+</g>
+<!-- proc~apply_factored_tracer -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node23" class="node">
+<title>proc~apply_factored_tracer</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node23"><a xlink:href="../proc/apply_factored_tracer.html" xlink:title="apply_factored_tracer">
+<polygon fill="#d9534f" stroke="#d9534f" points="586,-646 457,-646 457,-622 586,-622 586,-646"/>
+<text text-anchor="middle" x="521.5" y="-631.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_factored_tracer</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_tracers&#45;&gt;proc~apply_factored_tracer -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge34" class="edge">
+<title>proc~vdiff_apply_tracers&#45;&gt;proc~apply_factored_tracer</title>
+<path fill="none" stroke="#0066ff" d="M330.71,-635.55C364.98,-635.27 409.3,-634.91 446.49,-634.6"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="446.81,-638.1 456.78,-634.52 446.75,-631.1 446.81,-638.1"/>
+</g>
+<!-- proc~build_factorize_tracer_matrix -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node24" class="node">
+<title>proc~build_factorize_tracer_matrix</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node24"><a xlink:href="../proc/build_factorize_tracer_matrix.html" xlink:title="build_factorize_tracer_matrix">
+<polygon fill="#d9534f" stroke="#d9534f" points="605.5,-688 437.5,-688 437.5,-664 605.5,-664 605.5,-688"/>
+<text text-anchor="middle" x="521.5" y="-673.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build_factorize_tracer_matrix</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_tracers&#45;&gt;proc~build_factorize_tracer_matrix -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge35" class="edge">
+<title>proc~vdiff_apply_tracers&#45;&gt;proc~build_factorize_tracer_matrix</title>
+<path fill="none" stroke="#0066ff" d="M330.71,-645.08C362,-650.17 401.67,-656.64 436.64,-662.34"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="436.42,-665.85 446.85,-664 437.54,-658.94 436.42,-665.85"/>
+</g>
+<!-- proc~vdiff_apply_tracers&#45;&gt;proc~fill_kv_scalar_buf -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge36" class="edge">
+<title>proc~vdiff_apply_tracers&#45;&gt;proc~fill_kv_scalar_buf</title>
+<path fill="none" stroke="#0066ff" d="M330.71,-626.02C369.1,-619.13 420.11,-609.99 459.58,-602.92"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="460.39,-606.33 469.61,-601.12 459.15,-599.44 460.39,-606.33"/>
+</g>
+<!-- local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node22" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="748,-542 694,-542 694,-518 748,-518 748,-542"/>
+<text text-anchor="middle" x="721" y="-527.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~vmix_add_kv_ml_invz2&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge37" class="edge">
+<title>proc~vmix_add_kv_ml_invz2&#45;&gt;local</title>
+<path fill="none" stroke="#0019ff" d="M340.66,-489.94C435.6,-499.96 608.05,-518.18 683.27,-526.12"/>
+<polygon fill="#0019ff" stroke="#0019ff" points="683.33,-529.65 693.64,-527.22 684.06,-522.68 683.33,-529.65"/>
+</g>
+<!-- proc~vmix_convection_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node40" class="node">
+<title>proc~vmix_convection_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node40"><a xlink:href="../proc/vmix_convection_impl.html" xlink:title="vmix_convection_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="586.5,-360 456.5,-360 456.5,-336 586.5,-336 586.5,-360"/>
+<text text-anchor="middle" x="521.5" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_convection_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_convection&#45;&gt;proc~vmix_convection_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge38" class="edge">
+<title>proc~vmix_apply_convection&#45;&gt;proc~vmix_convection_impl</title>
+<path fill="none" stroke="#3200ff" d="M342.08,-350.18C374.38,-349.79 413.19,-349.31 446.36,-348.91"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="446.5,-352.4 456.46,-348.78 446.42,-345.41 446.5,-352.4"/>
+</g>
+<!-- proc~vmix_kpp_overlay_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node42" class="node">
+<title>proc~vmix_kpp_overlay_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node42"><a xlink:href="../proc/vmix_kpp_overlay_impl.html" xlink:title="vmix_kpp_overlay_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="589.5,-24 453.5,-24 453.5,0 589.5,0 589.5,-24"/>
+<text text-anchor="middle" x="521.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_kpp_overlay_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_kpp_overlay&#45;&gt;proc~vmix_kpp_overlay_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge39" class="edge">
+<title>proc~vmix_apply_kpp_overlay&#45;&gt;proc~vmix_kpp_overlay_impl</title>
+<path fill="none" stroke="#7f00ff" d="M316.18,-62.91C346.45,-54.19 388.65,-42.34 426,-33 435.14,-30.72 444.8,-28.43 454.32,-26.24"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="455.19,-29.63 464.17,-24.01 453.64,-22.81 455.19,-29.63"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node36" class="node">
+<title>proc~vmix_assemble_clip_henyey_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node36"><a xlink:href="../proc/vmix_assemble_clip_henyey_impl.html" xlink:title="vmix_assemble_clip_henyey_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="617,-108 426,-108 426,-84 617,-84 617,-108"/>
+<text text-anchor="middle" x="521.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_henyey_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge40" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl</title>
+<path fill="none" stroke="#ff00e5" d="M292.76,-188.86C320.17,-170.67 374.96,-136.39 426,-117 431.98,-114.73 438.27,-112.67 444.65,-110.8"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="445.99,-114.06 454.71,-108.04 444.14,-107.32 445.99,-114.06"/>
+</g>
+<!-- proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node37" class="node">
+<title>proc~vmix_assemble_clip_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node37"><a xlink:href="../proc/vmix_assemble_clip_impl.html" xlink:title="vmix_assemble_clip_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="595,-318 448,-318 448,-294 595,-294 595,-318"/>
+<text text-anchor="middle" x="521.5" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge41" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl</title>
+<path fill="none" stroke="#ff00e5" d="M292.76,-213.14C320.17,-231.33 374.96,-265.61 426,-285 431.98,-287.27 438.27,-289.33 444.65,-291.2"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="444.14,-294.68 454.71,-293.96 445.99,-287.94 444.14,-294.68"/>
+</g>
+<!-- proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node38" class="node">
+<title>proc~vmix_assemble_clip_profile_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node38"><a xlink:href="../proc/vmix_assemble_clip_profile_impl.html" xlink:title="vmix_assemble_clip_profile_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="614.5,-276 428.5,-276 428.5,-252 614.5,-252 614.5,-276"/>
+<text text-anchor="middle" x="521.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_profile_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge42" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl</title>
+<path fill="none" stroke="#ff00e5" d="M316.18,-213.09C346.45,-221.81 388.65,-233.66 426,-243 435.14,-245.28 444.8,-247.57 454.32,-249.76"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="453.64,-253.19 464.17,-251.99 455.19,-246.37 453.64,-253.19"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node39" class="node">
+<title>proc~vmix_bkgnd_fill_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node39"><a xlink:href="../proc/vmix_bkgnd_fill_impl.html" xlink:title="vmix_bkgnd_fill_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="583,-192 460,-192 460,-168 583,-168 583,-192"/>
+<text text-anchor="middle" x="521.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_bkgnd_fill_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge43" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl</title>
+<path fill="none" stroke="#ff00e5" d="M321.18,-197.05C357.36,-193.95 408.33,-189.6 449.67,-186.06"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="450.02,-189.54 459.68,-185.2 449.42,-182.57 450.02,-189.54"/>
+</g>
+<!-- proc~vmix_guard_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node41" class="node">
+<title>proc~vmix_guard_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node41"><a xlink:href="../proc/vmix_guard_impl.html" xlink:title="vmix_guard_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="573,-66 470,-66 470,-42 573,-42 573,-66"/>
+<text text-anchor="middle" x="521.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_guard_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge44" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl</title>
+<path fill="none" stroke="#ff00e5" d="M285.75,-188.74C308.76,-163.3 365.64,-104.68 426,-75 436.6,-69.79 448.51,-65.85 460.21,-62.89"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="461,-66.3 469.95,-60.62 459.42,-59.48 461,-66.3"/>
+</g>
+<!-- proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node43" class="node">
+<title>proc~vmix_resolve_kd_min</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node43"><a xlink:href="../proc/vmix_resolve_kd_min.html" xlink:title="vmix_resolve_kd_min">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="584,-234 459,-234 459,-210 584,-210 584,-234"/>
+<text text-anchor="middle" x="521.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_resolve_kd_min</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge45" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min</title>
+<path fill="none" stroke="#ff00e5" d="M321.18,-204.95C357.11,-208.02 407.61,-212.34 448.79,-215.87"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="448.51,-219.35 458.77,-216.72 449.1,-212.38 448.51,-219.35"/>
+</g>
+<!-- proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node44" class="node">
+<title>proc~vmix_smooth_121_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node44"><a xlink:href="../proc/vmix_smooth_121_impl.html" xlink:title="vmix_smooth_121_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="590,-150 453,-150 453,-126 590,-126 590,-150"/>
+<text text-anchor="middle" x="521.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_smooth_121_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge46" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl</title>
+<path fill="none" stroke="#ff00e5" d="M316.18,-188.91C346.45,-180.19 388.65,-168.34 426,-159 435.14,-156.72 444.8,-154.43 454.32,-152.24"/>
+<polygon fill="#ff00e5" stroke="#ff00e5" points="455.19,-155.63 464.17,-150.01 453.64,-148.81 455.19,-155.63"/>
+</g>
+<!-- proc~vmix_compute_pp81&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge47" class="edge">
+<title>proc~vmix_compute_pp81&#45;&gt;local</title>
+<path fill="none" stroke="#ff0098" d="M335.61,-531.03C363.18,-530.23 396.24,-529.39 426,-529 510.88,-527.88 532.11,-528.59 617,-529 639.13,-529.11 663.94,-529.34 683.66,-529.56"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="683.71,-533.06 693.75,-529.67 683.79,-526.06 683.71,-533.06"/>
+</g>
+<!-- proc~vmix_split_ddiff_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node45" class="node">
+<title>proc~vmix_split_ddiff_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node45"><a xlink:href="../proc/vmix_split_ddiff_impl.html" xlink:title="vmix_split_ddiff_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="583,-402 460,-402 460,-378 583,-378 583,-402"/>
+<text text-anchor="middle" x="521.5" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_ddiff_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge48" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_impl</title>
+<path fill="none" stroke="#ff004c" d="M341.92,-424.97C357.7,-422.08 374.45,-418.97 390,-416 409.9,-412.2 431.47,-407.95 451.25,-404.01"/>
+<polygon fill="#ff004c" stroke="#ff004c" points="451.98,-407.44 461.1,-402.04 450.6,-400.57 451.98,-407.44"/>
+</g>
+<!-- proc~vmix_split_kd_heat_salt_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node46" class="node">
+<title>proc~vmix_split_kd_heat_salt_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node46"><a xlink:href="../proc/vmix_split_kd_heat_salt_impl.html" xlink:title="vmix_split_kd_heat_salt_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="604,-444 439,-444 439,-420 604,-420 604,-444"/>
+<text text-anchor="middle" x="521.5" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_kd_heat_salt_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_kd_heat_salt_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge49" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_kd_heat_salt_impl</title>
+<path fill="none" stroke="#ff004c" d="M342.08,-435.63C368.75,-435.09 399.87,-434.46 428.58,-433.87"/>
+<polygon fill="#ff004c" stroke="#ff004c" points="428.7,-437.37 438.62,-433.67 428.55,-430.37 428.7,-437.37"/>
+</g>
+<!-- proc~apply_factored_tracer&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge50" class="edge">
+<title>proc~apply_factored_tracer&#45;&gt;local</title>
+<path fill="none" stroke="#ff3d00" d="M586.13,-624.08C596.72,-621.25 607.38,-617.63 617,-613 650.1,-597.07 682.05,-568.64 701.36,-549.55"/>
+<polygon fill="#ff3d00" stroke="#ff3d00" points="704.05,-551.82 708.6,-542.25 699.07,-546.89 704.05,-551.82"/>
+</g>
+<!-- proc~build_factorize_tracer_matrix&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge51" class="edge">
+<title>proc~build_factorize_tracer_matrix&#45;&gt;local</title>
+<path fill="none" stroke="#ff7a00" d="M600.32,-663.81C606.2,-661.38 611.84,-658.47 617,-655 640.33,-639.32 635.46,-624.96 653,-603 668.13,-584.06 686.9,-563.86 700.72,-549.51"/>
+<polygon fill="#ff7a00" stroke="#ff7a00" points="703.38,-551.81 707.84,-542.2 698.36,-546.93 703.38,-551.81"/>
+</g>
+<!-- proc~face_thick -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node53" class="node">
+<title>proc~face_thick</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node53"><a xlink:href="../proc/face_thick.html" xlink:title="face_thick">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="754.5,-636 687.5,-636 687.5,-612 754.5,-612 754.5,-636"/>
+<text text-anchor="middle" x="721" y="-621.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">face_thick</text>
+</a>
+</g>
+</g>
+<!-- proc~build_factorize_tracer_matrix&#45;&gt;proc~face_thick -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge52" class="edge">
+<title>proc~build_factorize_tracer_matrix&#45;&gt;proc~face_thick</title>
+<path fill="none" stroke="#ff7a00" d="M579.88,-663.96C592.17,-661.18 605.05,-658.12 617,-655 637.06,-649.76 659.1,-643.23 677.62,-637.52"/>
+<polygon fill="#ff7a00" stroke="#ff7a00" points="678.73,-640.84 687.24,-634.53 676.65,-634.16 678.73,-640.84"/>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge53" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ffb700" d="M608.55,-541.29C634.87,-538.62 662.42,-535.83 683.54,-533.69"/>
+<polygon fill="#ffb700" stroke="#ffb700" points="684.06,-537.16 693.66,-532.67 683.36,-530.19 684.06,-537.16"/>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;proc~face_thick -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge54" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;proc~face_thick</title>
+<path fill="none" stroke="#ffb700" d="M587.18,-562.05C597.29,-564.6 607.52,-567.57 617,-571 643.24,-580.49 671.29,-595.26 691.49,-606.8"/>
+<polygon fill="#ffb700" stroke="#ffb700" points="689.77,-609.85 700.18,-611.85 693.28,-603.8 689.77,-609.85"/>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge55" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#fff400" d="M534.12,-1201.84C555.05,-1179.09 598.59,-1127.61 617,-1075 686.49,-876.42 569.26,-796.01 653,-603 662.3,-581.56 680.6,-562.32 695.72,-548.98"/>
+<polygon fill="#fff400" stroke="#fff400" points="698.36,-551.34 703.72,-542.2 693.83,-546 698.36,-551.34"/>
+</g>
+<!-- proc~eos_specvol_derivs -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node47" class="node">
+<title>proc~eos_specvol_derivs</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node47"><a xlink:href="../proc/eos_specvol_derivs.html" xlink:title="eos_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="940,-1106 825,-1106 825,-1082 940,-1082 940,-1106"/>
+<text text-anchor="middle" x="882.5" y="-1091.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge56" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#fff400" d="M581.73,-1203.49C648.41,-1191.2 752.23,-1170.56 789,-1155 814.58,-1144.17 840.72,-1126.16 858.66,-1112.5"/>
+<polygon fill="#fff400" stroke="#fff400" points="861.03,-1115.1 866.77,-1106.2 856.73,-1109.57 861.03,-1115.1"/>
+</g>
+<!-- proc~epbl_find_mstar -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node48" class="node">
+<title>proc~epbl_find_mstar</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node48"><a xlink:href="../proc/epbl_find_mstar.html" xlink:title="epbl_find_mstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="769.5,-1268 672.5,-1268 672.5,-1244 769.5,-1244 769.5,-1268"/>
+<text text-anchor="middle" x="721" y="-1253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_find_mstar</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge57" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar</title>
+<path fill="none" stroke="#fff400" d="M579.1,-1226.04C605.27,-1231.6 636.32,-1238.2 662.59,-1243.79"/>
+<polygon fill="#fff400" stroke="#fff400" points="661.9,-1247.22 672.41,-1245.88 663.36,-1240.38 661.9,-1247.22"/>
+</g>
+<!-- proc~epbl_lf17_la -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node49" class="node">
+<title>proc~epbl_lf17_la</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node49"><a xlink:href="../proc/epbl_lf17_la.html" xlink:title="epbl_lf17_la">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="759,-1226 683,-1226 683,-1202 759,-1202 759,-1226"/>
+<text text-anchor="middle" x="721" y="-1211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_la</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge58" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la</title>
+<path fill="none" stroke="#fff400" d="M581.76,-1214C610.87,-1214 645.48,-1214 672.78,-1214"/>
+<polygon fill="#fff400" stroke="#fff400" points="672.86,-1217.5 682.86,-1214 672.86,-1210.5 672.86,-1217.5"/>
+</g>
+<!-- proc~epbl_lf17_wave_state -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node50" class="node">
+<title>proc~epbl_lf17_wave_state</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node50"><a xlink:href="../proc/epbl_lf17_wave_state.html" xlink:title="epbl_lf17_wave_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="784,-1146 658,-1146 658,-1122 784,-1122 784,-1146"/>
+<text text-anchor="middle" x="721" y="-1131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_wave_state</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge59" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state</title>
+<path fill="none" stroke="#fff400" d="M551.19,-1201.91C577.59,-1190.85 617.84,-1174.1 653,-1160 661.41,-1156.63 670.45,-1153.07 679.08,-1149.72"/>
+<polygon fill="#fff400" stroke="#fff400" points="680.53,-1152.91 688.58,-1146.03 678,-1146.38 680.53,-1152.91"/>
+</g>
+<!-- proc~epbl_lt_enhance -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node51" class="node">
+<title>proc~epbl_lt_enhance</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node51"><a xlink:href="../proc/epbl_lt_enhance.html" xlink:title="epbl_lt_enhance">
+<polygon fill="#d9534f" stroke="#d9534f" points="771,-1394 671,-1394 671,-1370 771,-1370 771,-1394"/>
+<text text-anchor="middle" x="721" y="-1379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lt_enhance</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge60" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance</title>
+<path fill="none" stroke="#fff400" d="M530.01,-1226.28C547.8,-1254.37 595.41,-1323.74 653,-1361 655.63,-1362.7 658.4,-1364.27 661.27,-1365.72"/>
+<polygon fill="#fff400" stroke="#fff400" points="660.1,-1369.03 670.66,-1369.95 662.98,-1362.65 660.1,-1369.03"/>
+</g>
+<!-- proc~epbl_mixlen_shape -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node52" class="node">
+<title>proc~epbl_mixlen_shape</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node52"><a xlink:href="../proc/epbl_mixlen_shape.html" xlink:title="epbl_mixlen_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="778.5,-1352 663.5,-1352 663.5,-1328 778.5,-1328 778.5,-1352"/>
+<text text-anchor="middle" x="721" y="-1337.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_mixlen_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge61" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape</title>
+<path fill="none" stroke="#fff400" d="M534.33,-1226.15C555.99,-1247.74 604.27,-1292.97 653,-1319 656.53,-1320.88 660.25,-1322.63 664.06,-1324.24"/>
+<polygon fill="#fff400" stroke="#fff400" points="663.07,-1327.61 673.66,-1327.98 665.61,-1321.09 663.07,-1327.61"/>
+</g>
+<!-- proc~sw_pe_cost_shape -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node61" class="node">
+<title>proc~sw_pe_cost_shape</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node61"><a xlink:href="../proc/sw_pe_cost_shape.html" xlink:title="sw_pe_cost_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="775.5,-1310 666.5,-1310 666.5,-1286 775.5,-1286 775.5,-1310"/>
+<text text-anchor="middle" x="721" y="-1295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_pe_cost_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge62" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape</title>
+<path fill="none" stroke="#fff400" d="M545.15,-1226.19C570.82,-1239.71 614.17,-1261.64 653,-1277 658.03,-1278.99 663.33,-1280.92 668.65,-1282.75"/>
+<polygon fill="#fff400" stroke="#fff400" points="667.62,-1286.1 678.21,-1285.94 669.83,-1279.46 667.62,-1286.1"/>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge63" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#14ff00" d="M604.35,-1001.43C609.04,-998.6 613.33,-995.16 617,-991 674.25,-926.03 617.89,-682.15 653,-603 662.48,-581.64 680.76,-562.39 695.84,-549.03"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="698.47,-551.39 703.81,-542.24 693.93,-546.06 698.47,-551.39"/>
+</g>
+<!-- proc~ks_precompute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node56" class="node">
+<title>proc~ks_precompute</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node56"><a xlink:href="../proc/ks_precompute.html" xlink:title="ks_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="768,-982 674,-982 674,-958 768,-958 768,-982"/>
+<text text-anchor="middle" x="721" y="-967.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~ks_precompute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge64" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~ks_precompute</title>
+<path fill="none" stroke="#14ff00" d="M579.1,-999.96C605.68,-994.31 637.28,-987.59 663.81,-981.95"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="664.65,-985.35 673.71,-979.84 663.2,-978.5 664.65,-985.35"/>
+</g>
+<!-- proc~ks_solve_column -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node57" class="node">
+<title>proc~ks_solve_column</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node57"><a xlink:href="../proc/ks_solve_column.html" xlink:title="ks_solve_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="772,-940 670,-940 670,-916 772,-916 772,-940"/>
+<text text-anchor="middle" x="721" y="-925.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_solve_column</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge65" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#14ff00" d="M598,-999.95C604.65,-997.49 611.09,-994.55 617,-991 638.08,-978.35 632.48,-962.53 653,-949 655.56,-947.31 658.27,-945.75 661.07,-944.31"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="662.62,-947.45 670.25,-940.11 659.7,-941.08 662.62,-947.45"/>
+</g>
+<!-- proc~massless_build_maps -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node58" class="node">
+<title>proc~massless_build_maps</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node58"><a xlink:href="../proc/massless_build_maps.html" xlink:title="massless_build_maps">
+<polygon fill="#d9534f" stroke="#d9534f" points="784.5,-898 657.5,-898 657.5,-874 784.5,-874 784.5,-898"/>
+<text text-anchor="middle" x="721" y="-883.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_build_maps</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_build_maps -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge66" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_build_maps</title>
+<path fill="none" stroke="#14ff00" d="M603.43,-999.79C608.28,-997.34 612.86,-994.43 617,-991 648.27,-965.07 622.86,-934.23 653,-907 654.34,-905.79 655.74,-904.65 657.21,-903.58"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="659.41,-906.33 666.11,-898.12 655.76,-900.36 659.41,-906.33"/>
+</g>
+<!-- proc~massless_interp_back -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node59" class="node">
+<title>proc~massless_interp_back</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node59"><a xlink:href="../proc/massless_interp_back.html" xlink:title="massless_interp_back">
+<polygon fill="#d9534f" stroke="#d9534f" points="785,-1066 657,-1066 657,-1042 785,-1042 785,-1066"/>
+<text text-anchor="middle" x="721" y="-1051.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_interp_back</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_interp_back -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge67" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_interp_back</title>
+<path fill="none" stroke="#14ff00" d="M579.1,-1024.04C602.34,-1028.98 629.42,-1034.74 653.59,-1039.88"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="652.89,-1043.31 663.4,-1041.96 654.34,-1036.46 652.89,-1043.31"/>
+</g>
+<!-- proc~massless_merge_fields -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node60" class="node">
+<title>proc~massless_merge_fields</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node60"><a xlink:href="../proc/massless_merge_fields.html" xlink:title="massless_merge_fields">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.5,-1024 653.5,-1024 653.5,-1000 788.5,-1000 788.5,-1024"/>
+<text text-anchor="middle" x="721" y="-1009.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_merge_fields</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_merge_fields -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge68" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_merge_fields</title>
+<path fill="none" stroke="#14ff00" d="M604.26,-1012C617.15,-1012 630.45,-1012 643.22,-1012"/>
+<polygon fill="#14ff00" stroke="#14ff00" points="643.34,-1015.5 653.34,-1012 643.34,-1008.5 643.34,-1015.5"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge69" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#00ff28" d="M600.8,-961.33C606.88,-958.18 612.42,-954.14 617,-949 668.43,-891.29 621.26,-673.49 653,-603 662.65,-581.56 681.1,-562.2 696.2,-548.82"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="698.83,-551.17 704.16,-542.02 694.28,-545.85 698.83,-551.17"/>
+</g>
+<!-- proc~ks_gather_corner -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node55" class="node">
+<title>proc~ks_gather_corner</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node55"><a xlink:href="../proc/ks_gather_corner.html" xlink:title="ks_gather_corner">
+<polygon fill="#d9534f" stroke="#d9534f" points="773.5,-856 668.5,-856 668.5,-832 773.5,-832 773.5,-856"/>
+<text text-anchor="middle" x="721" y="-841.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_gather_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge70" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner</title>
+<path fill="none" stroke="#00ff28" d="M600.68,-959.12C606.54,-956.41 612.08,-953.08 617,-949 648.27,-923.07 622.86,-892.23 653,-865 654.98,-863.21 657.11,-861.58 659.35,-860.08"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="661.45,-862.92 668.45,-854.97 658.02,-856.81 661.45,-862.92"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge71" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute</title>
+<path fill="none" stroke="#00ff28" d="M600.56,-970C621.68,-970 644.11,-970 663.77,-970"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="663.78,-973.5 673.78,-970 663.78,-966.5 663.78,-973.5"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge72" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#00ff28" d="M579.1,-957.96C604.35,-952.59 634.14,-946.26 659.81,-940.8"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="660.74,-944.18 669.79,-938.68 659.28,-937.33 660.74,-944.18"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge73" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps</title>
+<path fill="none" stroke="#00ff28" d="M598,-957.95C604.65,-955.49 611.09,-952.55 617,-949 638.08,-936.35 632.48,-920.53 653,-907 655.56,-905.31 658.27,-903.75 661.07,-902.31"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="662.62,-905.45 670.25,-898.11 659.7,-899.08 662.62,-905.45"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge74" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back</title>
+<path fill="none" stroke="#00ff28" d="M598,-982.05C604.65,-984.51 611.09,-987.45 617,-991 638.08,-1003.65 632.48,-1019.47 653,-1033 655.56,-1034.69 658.27,-1036.25 661.07,-1037.69"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="659.7,-1040.92 670.25,-1041.89 662.62,-1034.55 659.7,-1040.92"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge75" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields</title>
+<path fill="none" stroke="#00ff28" d="M579.1,-982.04C602.34,-986.98 629.42,-992.74 653.59,-997.88"/>
+<polygon fill="#00ff28" stroke="#00ff28" points="652.89,-1001.31 663.4,-999.96 654.34,-994.46 652.89,-1001.31"/>
+</g>
+<!-- proc~kappa_shear_vertex_scatter&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge76" class="edge">
+<title>proc~kappa_shear_vertex_scatter&#45;&gt;local</title>
+<path fill="none" stroke="#00ff66" d="M602.05,-918.56C607.62,-915.53 612.72,-911.74 617,-907 662.62,-856.54 624.63,-664.83 653,-603 662.81,-581.63 681.24,-562.27 696.3,-548.86"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="698.92,-551.22 704.23,-542.05 694.37,-545.91 698.92,-551.22"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge77" class="edge">
+<title>proc~tidal_mixing_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#00e0ff" d="M602.23,-1044.72C607.76,-1041.66 612.8,-1037.81 617,-1033 680.07,-960.77 614.51,-690.83 653,-603 662.38,-581.6 680.67,-562.35 695.77,-549"/>
+<polygon fill="#00e0ff" stroke="#00e0ff" points="698.41,-551.36 703.76,-542.22 693.87,-546.03 698.41,-551.36"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge78" class="edge">
+<title>proc~tidal_mixing_column_kernel&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#00e0ff" d="M591.1,-1066.05C611.02,-1069.28 632.84,-1072.54 653,-1075 707.19,-1081.6 768.89,-1086.58 814.5,-1089.79"/>
+<polygon fill="#00e0ff" stroke="#00e0ff" points="814.35,-1093.28 824.56,-1090.48 814.83,-1086.3 814.35,-1093.28"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge79" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00a3ff" d="M605.4,-108.23C609.6,-110.7 613.51,-113.6 617,-117 674.38,-172.92 708.45,-430.41 717.53,-507.89"/>
+<polygon fill="#00a3ff" stroke="#00a3ff" points="714.07,-508.43 718.69,-517.97 721.03,-507.63 714.07,-508.43"/>
+</g>
+<!-- proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node54" class="node">
+<title>proc~henyey_lat_factor_impl</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node54"><a xlink:href="../proc/henyey_lat_factor_impl.html" xlink:title="henyey_lat_factor_impl">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="789,-108 653,-108 653,-84 789,-84 789,-108"/>
+<text text-anchor="middle" x="721" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">henyey_lat_factor_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge80" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl</title>
+<path fill="none" stroke="#00a3ff" d="M617.2,-96C625.79,-96 634.41,-96 642.82,-96"/>
+<polygon fill="#00a3ff" stroke="#00a3ff" points="642.95,-99.5 652.95,-96 642.95,-92.5 642.95,-99.5"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge81" class="edge">
+<title>proc~vmix_bkgnd_fill_impl&#45;&gt;local</title>
+<path fill="none" stroke="#1400ff" d="M583.01,-183.73C595.44,-187 607.59,-192.36 617,-201 708.3,-284.88 719.29,-448.43 720.15,-507.79"/>
+<polygon fill="#1400ff" stroke="#1400ff" points="716.65,-507.95 720.21,-517.93 723.65,-507.9 716.65,-507.95"/>
+</g>
+<!-- proc~vmix_convection_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge82" class="edge">
+<title>proc~vmix_convection_impl&#45;&gt;local</title>
+<path fill="none" stroke="#5100ff" d="M586.87,-355.17C597.55,-358.31 608.05,-362.74 617,-369 667.28,-404.15 698.65,-472.5 712.21,-507.76"/>
+<polygon fill="#5100ff" stroke="#5100ff" points="709.09,-509.41 715.84,-517.57 715.65,-506.98 709.09,-509.41"/>
+</g>
+<!-- reduce -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node63" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="748,-66 694,-66 694,-42 748,-42 748,-66"/>
+<text text-anchor="middle" x="721" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~vmix_guard_impl&#45;&gt;reduce -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge83" class="edge">
+<title>proc~vmix_guard_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#8e00ff" d="M573.1,-54C607.56,-54 652.36,-54 683.39,-54"/>
+<polygon fill="#8e00ff" stroke="#8e00ff" points="683.75,-57.5 693.75,-54 683.75,-50.5 683.75,-57.5"/>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge84" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;local</title>
+<path fill="none" stroke="#cc00ff" d="M589.97,-16.95C600.07,-20.36 609.57,-25.46 617,-33 651.33,-67.82 703.57,-415.93 716.84,-507.84"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="713.38,-508.34 718.27,-517.74 720.31,-507.35 713.38,-508.34"/>
+</g>
+<!-- proc~sw_transmission -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node62" class="node">
+<title>proc~sw_transmission</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node62"><a xlink:href="../proc/sw_transmission.html" xlink:title="sw_transmission">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="770.5,-24 671.5,-24 671.5,0 770.5,0 770.5,-24"/>
+<text text-anchor="middle" x="721" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge85" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission</title>
+<path fill="none" stroke="#cc00ff" d="M589.64,-12C612.91,-12 638.81,-12 661.34,-12"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="661.44,-15.5 671.44,-12 661.44,-8.5 661.44,-15.5"/>
+</g>
+<!-- proc~vmix_smooth_121_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge86" class="edge">
+<title>proc~vmix_smooth_121_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff00b7" d="M590.04,-143.54C600,-146.9 609.44,-151.83 617,-159 668.89,-208.25 706.01,-434.51 716.79,-507.34"/>
+<polygon fill="#ff00b7" stroke="#ff00b7" points="713.39,-508.27 718.29,-517.67 720.31,-507.27 713.39,-508.27"/>
+</g>
+<!-- proc~vmix_split_ddiff_impl&#45;&gt;local -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge87" class="edge">
+<title>proc~vmix_split_ddiff_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff007a" d="M583.17,-397.47C594.92,-400.55 606.75,-404.89 617,-411 658.14,-435.55 691.24,-482.29 708.02,-509.31"/>
+<polygon fill="#ff007a" stroke="#ff007a" points="705.09,-511.23 713.26,-517.98 711.08,-507.61 705.09,-511.23"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node69" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node69"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="1083,-1106 980,-1106 980,-1082 1083,-1082 1083,-1106"/>
+<text text-anchor="middle" x="1031.5" y="-1091.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge88" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff0000" d="M940.33,-1094C949.83,-1094 959.71,-1094 969.31,-1094"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="969.58,-1097.5 979.58,-1094 969.58,-1090.5 969.58,-1097.5"/>
+</g>
+<!-- proc~one_m_exp_x -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node68" class="node">
+<title>proc~one_m_exp_x</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node68"><a xlink:href="../proc/one_m_exp_x.html" xlink:title="one_m_exp_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="924.5,-1226 840.5,-1226 840.5,-1202 924.5,-1202 924.5,-1226"/>
+<text text-anchor="middle" x="882.5" y="-1211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">one_m_exp_x</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge89" class="edge">
+<title>proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x</title>
+<path fill="none" stroke="#ffb300" d="M759.4,-1214C780.48,-1214 807.12,-1214 830.13,-1214"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="830.42,-1217.5 840.42,-1214 830.42,-1210.5 830.42,-1217.5"/>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge90" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#0078ff" d="M772.24,-939.41C778.21,-941.99 783.97,-945.15 789,-949 791.88,-951.21 843.73,-1033.69 868.52,-1073.25"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="865.64,-1075.25 873.91,-1081.87 871.57,-1071.54 865.64,-1075.25"/>
+</g>
+<!-- proc~ks_adaptive_dt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node64" class="node">
+<title>proc~ks_adaptive_dt</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node64"><a xlink:href="../proc/ks_adaptive_dt.html" xlink:title="ks_adaptive_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="928,-919 837,-919 837,-895 928,-895 928,-919"/>
+<text text-anchor="middle" x="882.5" y="-904.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_adaptive_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge91" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt</title>
+<path fill="none" stroke="#0078ff" d="M772.03,-921.41C789.37,-919.13 808.89,-916.56 826.6,-914.23"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="827.32,-917.66 836.78,-912.89 826.41,-910.72 827.32,-917.66"/>
+</g>
+<!-- proc~ks_find_kappa_tke -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node65" class="node">
+<title>proc~ks_find_kappa_tke</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node65"><a xlink:href="../proc/ks_find_kappa_tke.html" xlink:title="ks_find_kappa_tke">
+<polygon fill="#d9534f" stroke="#d9534f" points="937,-961 828,-961 828,-937 937,-937 937,-961"/>
+<text text-anchor="middle" x="882.5" y="-946.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_find_kappa_tke</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge92" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke</title>
+<path fill="none" stroke="#0078ff" d="M772.03,-934.59C786.43,-936.48 802.34,-938.58 817.46,-940.57"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="817.41,-944.09 827.78,-941.93 818.32,-937.15 817.41,-944.09"/>
+</g>
+<!-- proc~ks_projected_state -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node66" class="node">
+<title>proc~ks_projected_state</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node66"><a xlink:href="../proc/ks_projected_state.html" xlink:title="ks_projected_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="1087,-899 976,-899 976,-875 1087,-875 1087,-899"/>
+<text text-anchor="middle" x="1031.5" y="-884.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_projected_state</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge93" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#0078ff" d="M765.42,-915.96C773.38,-913.31 781.53,-910.3 789,-907 805.94,-899.52 807.12,-890.83 825,-886 870.88,-873.6 924.65,-874.37 965.69,-877.97"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="965.54,-881.47 975.83,-878.94 966.21,-874.5 965.54,-881.47"/>
+</g>
+<!-- proc~ks_src_func -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_node67" class="node">
+<title>proc~ks_src_func</title>
+<g id="a_proc~~vmix_apply_in_stage~~CallsGraph_node67"><a xlink:href="../proc/ks_src_func.html" xlink:title="ks_src_func">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1068,-961 995,-961 995,-937 1068,-937 1068,-961"/>
+<text text-anchor="middle" x="1031.5" y="-946.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_src_func</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge94" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#0078ff" d="M765.42,-940.04C773.38,-942.69 781.53,-945.7 789,-949 805.94,-956.48 807.12,-965.17 825,-970 878.84,-984.56 943.12,-973.67 985.27,-962.89"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="986.2,-966.27 994.96,-960.31 984.4,-959.5 986.2,-966.27"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge95" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#ff0000" d="M928,-900.95C939.87,-899.33 952.94,-897.55 965.66,-895.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="966.32,-899.26 975.76,-894.45 965.38,-892.33 966.32,-899.26"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge96" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#ff0000" d="M925.62,-919.04C944.26,-924.36 966.22,-930.63 985.21,-936.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="984.26,-939.43 994.84,-938.81 986.18,-932.7 984.26,-939.43"/>
+</g>
+<!-- proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_apply_in_stage~~CallsGraph_edge97" class="edge">
+<title>proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#ffff00" d="M937.4,-949C952.98,-949 969.83,-949 984.85,-949"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="984.92,-952.5 994.92,-949 984.92,-945.5 984.92,-952.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_apply_in_stageCallsGraph = svgPanZoom('#procvmix_apply_in_stageCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_apply_in_stage~~CalledByGraph Pages: 1 -->
+<svg id="procvmix_apply_in_stageCalledByGraph" width="641pt" height="61pt"
+ viewBox="0.00 0.00 641.00 61.05" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph" class="graph" transform="scale(0.82 0.82) rotate(0) translate(4 70)">
+<title>proc~~vmix_apply_in_stage~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 773,-70 773,4 -4,4"/>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node1" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<polygon fill="none" stroke="black" points="769,-45 647,-45 647,-21 769,-21 769,-45"/>
+<text text-anchor="middle" x="708" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_apply_in_stage</text>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node2" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node2"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.5,-66 532.5,-66 532.5,-42 597.5,-42 597.5,-66"/>
+<text text-anchor="middle" x="565" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge1" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M597.64,-49.29C609.34,-47.55 623.11,-45.49 636.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="637.46,-46.9 646.84,-41.96 636.43,-39.97 637.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node3" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node3"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-24 519,-24 519,0 611,0 611,-24"/>
+<text text-anchor="middle" x="565" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M611,-18.7C619.32,-19.94 628.18,-21.26 637.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="636.58,-26.05 646.99,-24.06 637.61,-19.13 636.58,-26.05"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-66 371.5,-66 371.5,-42 469.5,-42 469.5,-66"/>
+<text text-anchor="middle" x="420.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M469.74,-54C486.7,-54 505.6,-54 522,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="522.37,-57.5 532.37,-54 522.37,-50.5 522.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-24 358,-24 358,0 483,0 483,-24"/>
+<text text-anchor="middle" x="420.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M483.17,-12C491.73,-12 500.47,-12 508.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="508.99,-15.5 518.99,-12 508.99,-8.5 508.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node6" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node6"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-38.85C334.29,-40.75 348.1,-42.89 361.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="361.05,-48.45 371.47,-46.53 362.13,-41.53 361.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M322.11,-27.15C330.15,-25.9 338.91,-24.54 347.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.44,-26.6 357.78,-21.6 347.36,-19.68 348.44,-26.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_node9" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~vmix_apply_in_stage~~CalledByGraph_node9"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~vmix_apply_in_stage~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_apply_in_stageCalledByGraph = svgPanZoom('#procvmix_apply_in_stageCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_remnant~3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_remnant</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_tracers"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_tracers</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epbl_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epbl_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kshear_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kshear_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tidal_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tidal_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vertex_kv"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vertex_kv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">vmix_apply_in_stage</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">bd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">apply_tracers</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Bundle the per-stage vmix closure / KPP overlay / KV_ML_INVZ2 /</span>
+<span class="w">      </span><span class="c">!! assembly gate / vdiff dispatch into one routine so the run_stage</span>
+<span class="w">      </span><span class="c">!! drivers can call `vmix_apply_in_stage(grid, dyn, vmix, vd, ss,</span>
+<span class="w">      </span><span class="c">!! ms, dt, sf)` instead of carrying 30 lines of nested if-branching.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Closure chain (all upstream CONTRIBUTORS into kv/kt):</span>
+<span class="w">      </span><span class="c">!!   PP81 interior → KPP overlay XOR EPBL merge → kappa-shear</span>
+<span class="w">      </span><span class="c">!!   additive merge → tidal-mixing additive merge → KV_ML_INVZ2</span>
+<span class="w">      </span><span class="c">!!   surface band → convective adjustment (Brunt-Vaisala trigger,</span>
+<span class="w">      </span><span class="c">!!   interior-only, masked below the active KPP/EPBL boundary</span>
+<span class="w">      </span><span class="c">!!   layer) → **vmix_split_kd_heat_salt** (derives ks from kt; NOT a</span>
+<span class="w">      </span><span class="c">!!   contributor, must stay last) → **vmix_assemble** (the single</span>
+<span class="w">      </span><span class="c">!!   downstream gate: background floors, kv_max/kd_max ceilings,</span>
+<span class="w">      </span><span class="c">!!   optional smoothing, optional guard — applies to kv, kt, AND ks)</span>
+<span class="w">      </span><span class="c">!!   → vdiff.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Logic preserved verbatim from the prior in-driver dispatch:</span>
+<span class="w">      </span><span class="c">!!   - When `vmix%use_closure` is true: optional PP81 / KPP</span>
+<span class="w">      </span><span class="c">!!     overlay populate `vmix%kv`/`vmix%kt`, then vdiff reads</span>
+<span class="w">      </span><span class="c">!!     them; KPP non-local γ is applied after the tracer vdiff</span>
+<span class="w">      </span><span class="c">!!     solve when thermodynamics are active.</span>
+<span class="w">      </span><span class="c">!!   - When `vmix%use_closure` is false: vdiff uses its scalar</span>
+<span class="w">      </span><span class="c">!!     `K_v_*` defaults — kv_source not passed.</span>
+<span class="w">      </span><span class="c">!!   - Tracer vdiff + KPP non-local fire only when</span>
+<span class="w">      </span><span class="c">!!     `enable_thermodynamics .and. is_thermo_step()`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Profiler regions are emitted from here uniformly (the prior</span>
+<span class="w">      </span><span class="c">!! run_stage path had no profiler regions around vmix; the</span>
+<span class="w">      </span><span class="c">!! split path did — now both share the same labels).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_dyn_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dyn</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vmix_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmix</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vdiff_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vd</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_stress_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ss</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_bottom_drag_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bd</span>
+<span class="w">         </span><span class="c">!! Bottom-drag slot — supplies the bed-layer Rayleigh-rate field</span>
+<span class="w">         </span><span class="c">!! `lambda_bot_u/v` for the implicit-drag vdiff fold.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stage</span>
+<span class="w">         </span><span class="c">!! RK2 stage (1 or 2): the EPBL/kappa-shear COLUMN SOLVES fire</span>
+<span class="w">         </span><span class="c">!! only at stage 1 of a thermo step (their kd is</span>
+<span class="w">         </span><span class="c">!! stage-invariant by design — recomputing at stage 2 doubled</span>
+<span class="w">         </span><span class="c">!! the closure cost for no accuracy: 19.6%% of GPU time was</span>
+<span class="w">         </span><span class="c">!! kappa-shear at 2x cadence).  The merges still run EVERY</span>
+<span class="w">         </span><span class="c">!! stage (PP81 rewrites kv/kt per stage).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_epbl_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">epbl</span>
+<span class="w">         </span><span class="c">!! EPBL slot.  When present and enabled, replaces the KPP</span>
+<span class="w">         </span><span class="c">!! overlay (configure enforces the mutual exclusion):</span>
+<span class="w">         </span><span class="c">!! `epbl_compute` refreshes `kd_int` at thermo cadence and</span>
+<span class="w">         </span><span class="c">!! the merge into `vmix%kv` / `vmix%kt` runs every stage</span>
+<span class="w">         </span><span class="c">!! (PP81 rewrites those arrays each stage).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_kappa_shear_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kshear</span>
+<span class="w">         </span><span class="c">!! Kappa-shear interior closure slot.  When present and enabled,</span>
+<span class="w">         </span><span class="c">!! `kappa_shear_compute` refreshes `kd_int` at thermo cadence and</span>
+<span class="w">         </span><span class="c">!! the additive merge into `vmix%kv` / `vmix%kt` runs every stage.</span>
+<span class="w">         </span><span class="c">!! Coexists with KPP / EPBL (no mutual exclusion).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmix_tidal</span>
+<span class="w">         </span><span class="c">!! St-Laurent/Simmons tidal-mixing interior closure slot.  When</span>
+<span class="w">         </span><span class="c">!! present and enabled, `tidal_mixing_compute` refreshes `kd_int`</span>
+<span class="w">         </span><span class="c">!! at thermo cadence and the additive merge into `vmix%kv` /</span>
+<span class="w">         </span><span class="c">!! `vmix%kt` runs every stage.  Coexists with KPP / EPBL /</span>
+<span class="w">         </span><span class="c">!! kappa-shear (no mutual exclusion).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">barotropic_workstate_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_work</span>
+<span class="w">         </span><span class="c">!! The BT-corrector workstate — supplies `visc_rem_u/v` as the</span>
+<span class="w">         </span><span class="c">!! vdiff kernel's OUTPUT.  Present only from `run_stage_split`</span>
+<span class="w">         </span><span class="c">!! (the unsplit path has no BT correction to consume it).  When</span>
+<span class="w">         </span><span class="c">!! present AND `bt_work%bt_correction_visc_rem`, the viscous</span>
+<span class="w">         </span><span class="c">!! remnant γ is (re)computed here, at step 9 of the CURRENT</span>
+<span class="w">         </span><span class="c">!! stage — the BT corrector at step 7 of the NEXT stage reads</span>
+<span class="w">         </span><span class="c">!! it, a one-stage (Δt/2) lag (see the step-9 call site below).</span>
+<span class="w">         </span><span class="c">!! Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.</span>
+
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">apply_tracers</span>
+<span class="w">         </span><span class="c">!! `.false.` = momentum-only: skip the tracer vdiff + KPP</span>
+<span class="w">         </span><span class="c">!! non-local applies regardless of the thermo gate.  The pred_corr</span>
+<span class="w">         </span><span class="c">!! PREDICTOR passes this — MOM6's predictor applies</span>
+<span class="w">         </span><span class="c">!! `vertvisc(up, dt_pred)` to the provisional velocity (so the</span>
+<span class="w">         </span><span class="c">!! spurious grounded-layer accelerations are absorbed BEFORE</span>
+<span class="w">         </span><span class="c">!! continuity forms `u_av`) but never touches tracers.</span>
+<span class="w">         </span><span class="c">!! Default `.true.` = historical.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">         </span><span class="c">!! Metrics slot — supplies the halo-valid wet masks</span>
+<span class="w">         </span><span class="c">!! (`wet_T`/`wet_u`/`wet_v`) the kappa-shear VERTEX form's</span>
+<span class="w">         </span><span class="c">!! corner gather needs, and `metrics%geolatT` — the C7 Henyey</span>
+<span class="w">         </span><span class="c">!! latitude factor's only spatial input, forwarded to</span>
+<span class="w">         </span><span class="c">!! `vmix_assemble` (unread when `bkgnd_henyey` is off).</span>
+<span class="w">         </span><span class="c">!! Optional so the split_rk2/legacy call shapes stay valid; both</span>
+<span class="w">         </span><span class="c">!! consumers fail loud when their knob is on and the slot is</span>
+<span class="w">         </span><span class="c">!! absent — `kappa_shear_compute` for `at_vertex`, and</span>
+<span class="w">         </span><span class="c">!! `vmix_assemble` for `bkgnd_henyey`.</span>
+
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">epbl_active</span><span class="p">,</span><span class="w"> </span><span class="n">kshear_active</span><span class="p">,</span><span class="w"> </span><span class="n">tidal_active</span><span class="p">,</span><span class="w"> </span><span class="n">do_remnant</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_tracers</span><span class="p">,</span><span class="w"> </span><span class="n">vertex_kv</span>
+
+<span class="w">      </span><span class="n">do_tracers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">apply_tracers</span><span class="p">))</span><span class="w"> </span><span class="n">do_tracers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">apply_tracers</span>
+<span class="w">      </span><span class="n">epbl_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">epbl</span><span class="p">))</span><span class="w"> </span><span class="n">epbl_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">kshear_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">kshear</span><span class="p">))</span><span class="w"> </span><span class="n">kshear_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! Vertex kappa-shear routes its viscosity corner-&gt;face: the</span>
+<span class="w">      </span><span class="c">! momentum vdiff gets `kd_corner` as `kv_corner_source` (scaled by</span>
+<span class="w">      </span><span class="c">! prandtl_turb) and the cell-centred kv merge is suppressed inside</span>
+<span class="w">      </span><span class="c">! `kappa_shear_merge_into_kv_kt` (MOM6 zeroes the tracer-point</span>
+<span class="w">      </span><span class="c">! Kv_shear when VERTEX_SHEAR is on — no double-count).</span>
+<span class="w">      </span><span class="n">vertex_kv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">kshear</span><span class="p">))</span><span class="w"> </span><span class="n">vertex_kv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kshear_active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">kshear</span><span class="p">%</span><span class="n">at_vertex</span>
+<span class="w">      </span><span class="n">tidal_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">vmix_tidal</span><span class="p">))</span><span class="w"> </span><span class="n">tidal_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">do_remnant</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">bt_work</span><span class="p">))</span><span class="w"> </span><span class="n">do_remnant</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_correction_visc_rem</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">use_closure</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">profiler_start</span><span class="p">(</span><span class="s2">"ocean_vmix_compute"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">interior_closure</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VMIX_INTERIOR_PP81</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vmix_compute_pp81</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="w">            </span><span class="c">! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are</span>
+<span class="w">            </span><span class="c">! reserved-but-unwired (no kernel).  Selecting one would leave</span>
+<span class="w">            </span><span class="c">! kv/kt with NO interior mixing.  There is no namelist key for</span>
+<span class="w">            </span><span class="c">! interior_closure today, so this is defence-in-depth for the</span>
+<span class="w">            </span><span class="c">! next code/config consumer that sets it.</span>
+<span class="w">            </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: the selected interior closure "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"has no kernel (only VMIX_INTERIOR_PP81 is implemented; "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"VMIX_INTERIOR_LARGE94/CVMIX are reserved-but-unwired) — "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"running it would leave kv/kt with no interior mixing"</span><span class="p">)</span>
+<span class="w">            </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: unimplemented vmix interior closure"</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">use_kpp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: KPP requires the surface-flux slot (sf)"</span><span class="p">)</span>
+<span class="w">               </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: use_kpp requires the surface-flux slot (sf)"</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            call </span><span class="n">vmix_apply_kpp_overlay</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"</span><span class="p">)</span>
+<span class="w">               </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">()</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">stage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">epbl_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span><span class="w"> </span><span class="n">sf</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            call </span><span class="n">epbl_merge_into_kv_kt</span><span class="p">(</span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">kshear_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">()</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">stage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">kshear</span><span class="p">%</span><span class="n">at_vertex</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">! Vertex form needs the halo-valid wet masks for the</span>
+<span class="w">                  </span><span class="c">! corner gather; fail-loud inside if metrics is absent.</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">metrics</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: kappa-shear at_vertex "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="s2">"requires the metrics slot (wet masks)"</span><span class="p">)</span>
+<span class="w">                     </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: at_vertex needs metrics"</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">                  call </span><span class="n">kappa_shear_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">wet_t</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">wet_v</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_v</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  call </span><span class="n">kappa_shear_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">            call </span><span class="n">kappa_shear_merge_into_kv_kt</span><span class="p">(</span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">tidal_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">()</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">stage</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">tidal_mixing_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            call </span><span class="n">tidal_mixing_merge_into_kt</span><span class="p">(</span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">vmix_add_kv_ml_invz2</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">conv_enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! Brunt-Vaisala-triggered convective adjustment.  A CONTRIBUTOR</span>
+<span class="w">            </span><span class="c">! (max() floor), so it must run BEFORE vmix_assemble -- see the</span>
+<span class="w">            </span><span class="c">! rdb_ocean_vmix module docstring for the D1-D4 divergences from</span>
+<span class="w">            </span><span class="c">! MOM6's MOM_CVMix_conv.  Masks against the live BL depth of</span>
+<span class="w">            </span><span class="c">! whichever surface scheme is active this stage.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">vmix_apply_convection</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               call </span><span class="n">vmix_apply_convection</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="w">         </span><span class="c">! `vmix_split_kd_heat_salt` is NOT a contributor -- it must be</span>
+<span class="w">         </span><span class="c">! the LAST statement before `vmix_assemble`, always.  Any future</span>
+<span class="w">         </span><span class="c">! PR adding a kv/kt contributor (e.g. convective adjustment)</span>
+<span class="w">         </span><span class="c">! inserts ABOVE this line, never below it -- ks is derived from</span>
+<span class="w">         </span><span class="c">! whatever kt holds at this point, so a contributor placed after</span>
+<span class="w">         </span><span class="c">! the split silently never reaches ks.</span>
+<span class="w">         </span><span class="k">call </span><span class="n">vmix_split_kd_heat_salt</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Single downstream assembly gate: background floors, kv_max/kd_max</span>
+<span class="w">         </span><span class="c">! ceilings, optional 1-2-1 smoothing, optional negative/NaN guard.</span>
+<span class="w">         </span><span class="c">! Defaults reproduce the pre-assembly chain bit-for-bit.  Gates kv,</span>
+<span class="w">         </span><span class="c">! kt, AND ks.  `geolat` rides on the optional metrics slot (the C7</span>
+<span class="w">         </span><span class="c">! Henyey latitude factor's only spatial input) — forwarded when the</span>
+<span class="w">         </span><span class="c">! caller threaded metrics through, omitted otherwise.  Omitting it</span>
+<span class="w">         </span><span class="c">! is safe: vmix_assemble fails loud if `bkgnd_henyey` is on and</span>
+<span class="w">         </span><span class="c">! geolat is absent, so a caller that forgot cannot silently lose</span>
+<span class="w">         </span><span class="c">! the latitude factor.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">metrics</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vmix_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">geolat</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">geolatT</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">vmix_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">profiler_stop</span><span class="p">(</span><span class="s2">"ocean_vmix_compute"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">profiler_start</span><span class="p">(</span><span class="s2">"ocean_vdiff_apply"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vertex_kv</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! Corner Kv seam: same calls + the corner viscosity source.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kv_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">visc_rem_u</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">,</span><span class="w"> </span><span class="n">visc_rem_v</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">kv_corner_source</span><span class="o">=</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">kv_corner_prandtl</span><span class="o">=</span><span class="n">kshear</span><span class="p">%</span><span class="n">prandtl_turb</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kv_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">kv_corner_source</span><span class="o">=</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">kv_corner_prandtl</span><span class="o">=</span><span class="n">kshear</span><span class="p">%</span><span class="n">prandtl_turb</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kv_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">visc_rem_u</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">,</span><span class="w"> </span><span class="n">visc_rem_v</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kv_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">do_tracers</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vdiff_apply_tracers</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">kt_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">ks_source</span><span class="o">=</span><span class="n">vmix</span><span class="p">%</span><span class="n">ks</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">use_kpp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">vmix_apply_nonlocal_tendencies</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">         call </span><span class="n">profiler_stop</span><span class="p">(</span><span class="s2">"ocean_vdiff_apply"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">profiler_start</span><span class="p">(</span><span class="s2">"ocean_vdiff_apply"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">visc_rem_u</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">,</span><span class="w"> </span><span class="n">visc_rem_v</span><span class="o">=</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">vdiff_apply_momentum</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">tau_u</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_v</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_u</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">lambda_bot_v</span><span class="o">=</span><span class="n">bd</span><span class="p">%</span><span class="n">lambda_bot_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="o">=</span><span class="n">ss</span><span class="p">%</span><span class="n">rho0</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">do_tracers</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vdiff_apply_tracers</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">profiler_stop</span><span class="p">(</span><span class="s2">"ocean_vdiff_apply"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">vmix_apply_in_stage</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

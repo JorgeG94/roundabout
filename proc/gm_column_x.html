@@ -1,0 +1,1228 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>gm_column_x &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>gm_column_x
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">47 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_gm.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_gm.f90.html'>rdb_ocean_gm.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_gm.html'>rdb_ocean_gm</a></li>
+            <li class="breadcrumb-item active" aria-current="page">gm_column_x</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-h_frac_d">h_frac_d</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-havl">havL</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-havr">havR</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-i~463">i</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-iw~3">iw</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-j~395">j</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-k~316">k</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-ka~5">ka</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-kb~6">kb</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-kh~3">kh</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-rsuml">rsumL</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-rsumr">rsumR</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-s2r">s2r</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-sfn_est">sfn_est</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-sfn_in_h">sfn_in_h</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-sfn_safe">sfn_safe</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-sfn_unlim">sfn_unlim</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-slope~6">slope</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-uhd_k">uhd_k</a>
+            <a class="list-group-item" href="../proc/gm_column_x.html#variable-uhtot">uhtot</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/gm_column_x.html#src">gm_column_x</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, dy_cu, areaT, h_layer, slope_x, khth_u, uhD)  
+</h2>
+    
+
+    <p>u-face GM streamfunction + bolus-transport column recurrence.
+Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).
+Bottom-up sweep: interior interfaces Kr=2 (bed-most) -&gt; nz
+(surface-most), uhtot=0 at the bed; the surface BC (Sfn=0 at
+Kr=nz+1) is closed after the loop by <code>uhD(nz)=-uhtot</code>, giving
+<code>Sum_k uhD=0</code> exactly.  Interface Kr straddles ka=Kr (above) and
+kb=Kr-1 (below) and fills LAYER kb; the rsum bound keys on ka, the
+donor <code>h_frac</code> and per-layer cap on kb.</p>
+<p>DIVERGENCE (MOM6 nk_linear): MOM6&rsquo;s <code>thickness_diffuse_full</code>
+sets <code>nk_linear = max(GV%nkml, 1)</code>; in
+ALE mode <code>GV%nkml = 0</code>, so MOM6 always runs <code>nk_linear = 1</code> and it
+is NOT a namelist parameter — its top layer always takes a linear
+return-flow closure (comment: &ldquo;Balance the deeper flow with a
+return flow uniformly distributed though the remaining
+near-surface layers&rdquo;; MOM6 is top-down, k=1=surface, so
+<code>k &lt;= nk_linear</code> selects the SURFACE region).  Roundabout is
+bottom-up (k=1=bed, CLAUDE.md); this column&rsquo;s <code>kb = k - 1</code> is the
+layer BELOW the interface (bed side), so <code>kb &lt;= nk_linear</code> would
+select the BED-most layers — porting MOM6&rsquo;s <code>nk_linear=1</code> as
+written would put its SURFACE return-flow region at the SEABED.
+The dead <code>nk_linear</code> field + its <code>else</code> branch here were removed
+(PR-8) rather than wired: with the field permanently 0 (the only
+value ever set), <code>kb &gt; nk_linear</code> was always true for every valid
+<code>kb &gt;= 1</code>, so the limited path below ran unconditionally and the
+deleted branch never executed.  Adding a correct surface linear
+return-flow region is a live, unrecorded physics divergence from
+MOM6&rsquo;s default GM — it changes GM answers and needs its own PR +
+an analytical test (Psi -&gt; 0 through the top layer), not a
+same-PR wire-up.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~394"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~394"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~367"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_smax2~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_smax2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i4dt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i4dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cu~10"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cu</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-areat~27"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>areaT</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~93"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope_x~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope_x</strong>(nx+1,ny,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_u~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_u</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhd~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhD</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~gm_column_x~~CallsGraph Pages: 1 -->
+<svg id="procgm_column_xCallsGraph" width="198pt" height="74pt"
+ viewBox="0.00 0.00 198.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~gm_column_x~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~gm_column_x~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 194,-70 194,4 -4,4"/>
+<!-- proc~gm_column_x -->
+<g id="proc~~gm_column_x~~CallsGraph_node1" class="node">
+<title>proc~gm_column_x</title>
+<polygon fill="none" stroke="black" points="86,-45 0,-45 0,-21 86,-21 86,-45"/>
+<text text-anchor="middle" x="43" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">gm_column_x</text>
+</g>
+<!-- local -->
+<g id="proc~~gm_column_x~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="183,-66 129,-66 129,-42 183,-42 183,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~gm_column_x&#45;&gt;local -->
+<g id="proc~~gm_column_x~~CallsGraph_edge1" class="edge">
+<title>proc~gm_column_x&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M86.28,-41C97.03,-43.03 108.49,-45.2 118.9,-47.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="118.43,-50.64 128.9,-49.06 119.73,-43.76 118.43,-50.64"/>
+</g>
+<!-- proc~gm_h_frac -->
+<g id="proc~~gm_column_x~~CallsGraph_node3" class="node">
+<title>proc~gm_h_frac</title>
+<g id="a_proc~~gm_column_x~~CallsGraph_node3"><a xlink:href="../proc/gm_h_frac.html" xlink:title="gm_h_frac">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="190,-24 122,-24 122,0 190,0 190,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_h_frac</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_column_x&#45;&gt;proc~gm_h_frac -->
+<g id="proc~~gm_column_x~~CallsGraph_edge2" class="edge">
+<title>proc~gm_column_x&#45;&gt;proc~gm_h_frac</title>
+<path fill="none" stroke="#ff0000" d="M86.28,-25C94.64,-23.42 103.43,-21.76 111.82,-20.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="112.63,-23.58 121.81,-18.28 111.33,-16.7 112.63,-23.58"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~gm_column_x~~CalledByGraph Pages: 1 -->
+<svg id="procgm_column_xCalledByGraph" width="641pt" height="57pt"
+ viewBox="0.00 0.00 641.00 56.81" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~gm_column_x~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 70)">
+<title>proc~~gm_column_x~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 831,-70 831,4 -4,4"/>
+<!-- proc~gm_column_x -->
+<g id="proc~~gm_column_x~~CalledByGraph_node1" class="node">
+<title>proc~gm_column_x</title>
+<polygon fill="none" stroke="black" points="827,-45 741,-45 741,-21 827,-21 827,-45"/>
+<text text-anchor="middle" x="784" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">gm_column_x</text>
+</g>
+<!-- proc~gm_compute_impl -->
+<g id="proc~~gm_column_x~~CalledByGraph_node2" class="node">
+<title>proc~gm_compute_impl</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node2"><a xlink:href="../proc/gm_compute_impl.html" xlink:title="gm_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="705,-45 594,-45 594,-21 705,-21 705,-45"/>
+<text text-anchor="middle" x="649.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_impl&#45;&gt;proc~gm_column_x -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge1" class="edge">
+<title>proc~gm_compute_impl&#45;&gt;proc~gm_column_x</title>
+<path fill="none" stroke="#ff0000" d="M705.16,-33C713.57,-33 722.24,-33 730.6,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="730.61,-36.5 740.61,-33 730.61,-29.5 730.61,-36.5"/>
+</g>
+<!-- proc~gm_compute_transports -->
+<g id="proc~~gm_column_x~~CalledByGraph_node3" class="node">
+<title>proc~gm_compute_transports</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node3"><a xlink:href="../proc/gm_compute_transports.html" xlink:title="gm_compute_transports">
+<polygon fill="#d9534f" stroke="#d9534f" points="558,-45 416,-45 416,-21 558,-21 558,-45"/>
+<text text-anchor="middle" x="487" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_compute_transports</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_transports&#45;&gt;proc~gm_compute_impl -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge2" class="edge">
+<title>proc~gm_compute_transports&#45;&gt;proc~gm_compute_impl</title>
+<path fill="none" stroke="#ff0000" d="M558.4,-33C566.69,-33 575.12,-33 583.34,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="583.6,-36.5 593.6,-33 583.6,-29.5 583.6,-36.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~gm_column_x~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-45 255,-45 255,-21 380,-21 380,-45"/>
+<text text-anchor="middle" x="317.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~gm_compute_transports -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~gm_compute_transports</title>
+<path fill="none" stroke="#ff0000" d="M380.39,-33C388.7,-33 397.31,-33 405.88,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="405.89,-36.5 415.89,-33 405.89,-29.5 405.89,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~gm_column_x~~CalledByGraph_node5" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node5"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-33C227.15,-33 235.91,-33 244.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.78,-36.5 254.78,-33 244.78,-29.5 244.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~gm_column_x~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~gm_column_x~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~gm_column_x~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~gm_column_x~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocgm_column_xCalledByGraph = svgPanZoom('#procgm_column_xCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_frac_d"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_frac_d</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-havl"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>havL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-havr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>havR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~463"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-iw~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~395"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~316"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ka~5"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ka</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kh~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kh</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsuml"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsumL</strong>(NZ_STACK_MAX+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsumr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsumR</strong>(NZ_STACK_MAX+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s2r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s2r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sfn_est"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sfn_est</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sfn_in_h"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sfn_in_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sfn_safe"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sfn_safe</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sfn_unlim"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sfn_unlim</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhd_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhd_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhtot"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhtot</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">gm_column_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i_smax2</span><span class="p">,</span><span class="w"> </span><span class="n">i4dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">slope_x</span><span class="p">,</span><span class="w"> </span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="n">uhD</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! u-face GM streamfunction + bolus-transport column recurrence.</span>
+<span class="w">      </span><span class="c">!! Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).</span>
+<span class="w">      </span><span class="c">!! Bottom-up sweep: interior interfaces Kr=2 (bed-most) -&gt; nz</span>
+<span class="w">      </span><span class="c">!! (surface-most), uhtot=0 at the bed; the surface BC (Sfn=0 at</span>
+<span class="w">      </span><span class="c">!! Kr=nz+1) is closed after the loop by `uhD(nz)=-uhtot`, giving</span>
+<span class="w">      </span><span class="c">!! `Sum_k uhD=0` exactly.  Interface Kr straddles ka=Kr (above) and</span>
+<span class="w">      </span><span class="c">!! kb=Kr-1 (below) and fills LAYER kb; the rsum bound keys on ka, the</span>
+<span class="w">      </span><span class="c">!! donor `h_frac` and per-layer cap on kb.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! DIVERGENCE (MOM6 nk_linear): MOM6's `thickness_diffuse_full`</span>
+<span class="w">      </span><span class="c">!! sets `nk_linear = max(GV%nkml, 1)`; in</span>
+<span class="w">      </span><span class="c">!! ALE mode `GV%nkml = 0`, so MOM6 always runs `nk_linear = 1` and it</span>
+<span class="w">      </span><span class="c">!! is NOT a namelist parameter — its top layer always takes a linear</span>
+<span class="w">      </span><span class="c">!! return-flow closure (comment: "Balance the deeper flow with a</span>
+<span class="w">      </span><span class="c">!! return flow uniformly distributed though the remaining</span>
+<span class="w">      </span><span class="c">!! near-surface layers"; MOM6 is top-down, k=1=surface, so</span>
+<span class="w">      </span><span class="c">!! `k &lt;= nk_linear` selects the SURFACE region).  Roundabout is</span>
+<span class="w">      </span><span class="c">!! bottom-up (k=1=bed, CLAUDE.md); this column's `kb = k - 1` is the</span>
+<span class="w">      </span><span class="c">!! layer BELOW the interface (bed side), so `kb &lt;= nk_linear` would</span>
+<span class="w">      </span><span class="c">!! select the BED-most layers — porting MOM6's `nk_linear=1` as</span>
+<span class="w">      </span><span class="c">!! written would put its SURFACE return-flow region at the SEABED.</span>
+<span class="w">      </span><span class="c">!! The dead `nk_linear` field + its `else` branch here were removed</span>
+<span class="w">      </span><span class="c">!! (PR-8) rather than wired: with the field permanently 0 (the only</span>
+<span class="w">      </span><span class="c">!! value ever set), `kb &gt; nk_linear` was always true for every valid</span>
+<span class="w">      </span><span class="c">!! `kb &gt;= 1`, so the limited path below ran unconditionally and the</span>
+<span class="w">      </span><span class="c">!! deleted branch never executed.  Adding a correct surface linear</span>
+<span class="w">      </span><span class="c">!! return-flow region is a live, unrecorded physics divergence from</span>
+<span class="w">      </span><span class="c">!! MOM6's default GM — it changes GM answers and needs its own PR +</span>
+<span class="w">      </span><span class="c">!! an analytical test (Psi -&gt; 0 through the top layer), not a</span>
+<span class="w">      </span><span class="c">!! same-PR wire-up.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_smax2</span><span class="p">,</span><span class="w"> </span><span class="n">i4dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dy_cu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">areaT</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">khth_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uhD</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">iw</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">havL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">havR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rsumL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">rsumR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uhtot</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">s2r</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_unlim</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_safe</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_est</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_in_h</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_frac_d</span><span class="p">,</span><span class="w"> </span><span class="n">uhd_k</span><span class="p">,</span><span class="w"> </span><span class="n">kh</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">iw</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">havL</span><span class="p">,</span><span class="w"> </span><span class="n">havR</span><span class="p">,</span><span class="w"> </span><span class="n">rsumL</span><span class="p">,</span><span class="w"> </span><span class="n">rsumR</span><span class="p">,</span><span class="w"> </span><span class="n">uhtot</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">s2r</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">sfn_unlim</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_safe</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_est</span><span class="p">,</span><span class="w"> </span><span class="n">sfn_in_h</span><span class="p">,</span><span class="w"> </span><span class="n">h_frac_d</span><span class="p">,</span><span class="w"> </span><span class="n">uhd_k</span><span class="p">,</span><span class="w"> </span><span class="n">kh</span><span class="p">)</span>
+<span class="w">         </span><span class="n">iw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">kh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">khth_u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! Per-layer availability + cumulative rsum from the SURFACE down:</span>
+<span class="w">         </span><span class="c">! rsum*(k) = Sum_{k'=k}^{nz} h_avail(k') (mass above interface k).</span>
+<span class="w">         </span><span class="n">rsumL</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">rsumR</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="n">havL</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">i4dt</span><span class="o">*</span><span class="n">areaT</span><span class="p">(</span><span class="n">iw</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">iw</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">),</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">havR</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">i4dt</span><span class="o">*</span><span class="n">areaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">),</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">rsumL</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rsumL</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">havL</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">rsumR</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rsumR</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">havR</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! Sweep interior interfaces bed-most (Kr=2) -&gt; surface-most (Kr=nz).</span>
+<span class="w">         </span><span class="n">uhtot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w">       </span><span class="c">! k is the interface index Kr</span>
+<span class="w">            </span><span class="n">ka</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span><span class="w">           </span><span class="c">! layer above interface (surface side)</span>
+<span class="w">            </span><span class="n">kb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w">       </span><span class="c">! layer below interface (bed side) -&gt; uhD(kb)</span>
+<span class="w">            </span><span class="n">slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slope_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">s2r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slope</span><span class="o">*</span><span class="n">slope</span><span class="o">*</span><span class="n">i_smax2</span>
+<span class="w">            </span><span class="n">sfn_unlim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">kh</span><span class="o">*</span><span class="n">dy_cu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="o">*</span><span class="n">slope</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">uhtot</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">h_frac_d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gm_h_frac</span><span class="p">(</span><span class="n">havL</span><span class="p">(</span><span class="n">kb</span><span class="p">),</span><span class="w"> </span><span class="n">rsumL</span><span class="p">(</span><span class="n">kb</span><span class="p">))</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">h_frac_d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gm_h_frac</span><span class="p">(</span><span class="n">havR</span><span class="p">(</span><span class="n">kb</span><span class="p">),</span><span class="w"> </span><span class="n">rsumR</span><span class="p">(</span><span class="n">kb</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">sfn_safe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uhtot</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_frac_d</span><span class="p">)</span>
+<span class="w">            </span><span class="n">sfn_est</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">sfn_unlim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s2r</span><span class="o">*</span><span class="n">sfn_safe</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s2r</span><span class="p">)</span>
+<span class="w">            </span><span class="c">! Mass above interface Kr bounds the streamfunction.</span>
+<span class="w">            </span><span class="n">sfn_in_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">sfn_est</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="n">rsumL</span><span class="p">(</span><span class="n">ka</span><span class="p">)),</span><span class="w"> </span><span class="n">rsumR</span><span class="p">(</span><span class="n">ka</span><span class="p">))</span>
+<span class="w">            </span><span class="n">uhd_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">sfn_in_h</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">uhtot</span><span class="p">,</span><span class="w"> </span><span class="n">havL</span><span class="p">(</span><span class="n">kb</span><span class="p">)),</span><span class="w"> </span><span class="o">-</span><span class="n">havR</span><span class="p">(</span><span class="n">kb</span><span class="p">))</span>
+<span class="w">            </span><span class="n">uhD</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uhd_k</span>
+<span class="w">            </span><span class="n">uhtot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uhtot</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">uhd_k</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="w">         </span><span class="c">! Surface BC (Sfn=0 above layer nz): close the column so Sum=0.</span>
+<span class="w">         </span><span class="n">uhD</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">uhtot</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">gm_column_x</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

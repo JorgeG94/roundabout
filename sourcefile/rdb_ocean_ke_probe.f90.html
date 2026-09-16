@@ -1,0 +1,1260 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_ke_probe.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_ke_probe.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">174 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_ke_probe.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_ke_probe.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_ke_probe.html">rdb_ocean_ke_probe</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_ke_probe.f90.html#src">rdb_ocean_ke_probe.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Per-segment layer-KE attribution probe (&ldquo;kediag&rdquo; rebuilt).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_ke_probef90EfferentGraph" width="641pt" height="328pt"
+ viewBox="0.00 0.00 641.00 327.84" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph" class="graph" transform="scale(0.65 0.65) rotate(0) translate(4 500.3)">
+<title>sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-500.3 982,-500.3 982,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_ke_probe.f90</title>
+<polygon fill="none" stroke="black" points="978,-279.98 833,-279.98 833,-255.98 978,-255.98 978,-279.98"/>
+<text text-anchor="middle" x="905.5" y="-265.58" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_ke_probe.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="110,-141.98 1,-141.98 1,-117.98 110,-117.98 110,-141.98"/>
+<text text-anchor="middle" x="55.5" y="-127.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M735.5,-429.98C663.91,-448.71 641.15,-413.54 569,-429.98"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_coriolis_adv.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_coriolis_adv.f90.html" xlink:title="rdb_coriolis_adv.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="797,-279.98 676,-279.98 676,-255.98 797,-255.98 797,-279.98"/>
+<text text-anchor="middle" x="736.5" y="-265.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_coriolis_adv.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_coriolis_adv.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M832.71,-267.98C824.29,-267.98 815.7,-267.98 807.31,-267.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="807.19,-264.48 797.19,-267.98 807.19,-271.48 807.19,-264.48"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="253,-99.98 174,-99.98 174,-75.98 253,-75.98 253,-99.98"/>
+<text text-anchor="middle" x="213.5" y="-85.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M900.33,-255.94C885.72,-215.98 832.51,-88.02 737.5,-47.98"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M735.5,-47.98C569.11,22.13 346.51,-40.96 255.69,-72.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="254.31,-69.29 246.04,-75.92 256.64,-75.89 254.31,-69.29"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="640,-99.98 496,-99.98 496,-75.98 640,-75.98 640,-99.98"/>
+<text text-anchor="middle" x="568" y="-85.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M735.5,-47.98C713.12,-38.55 651.47,-57.46 609.81,-72.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="608.41,-69.15 600.2,-75.86 610.8,-75.73 608.41,-69.15"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_metrics.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_metrics.f90.html" xlink:title="rdb_ocean_metrics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="456,-301.98 320,-301.98 320,-277.98 456,-277.98 456,-301.98"/>
+<text text-anchor="middle" x="388" y="-287.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M897.92,-280.12C878.72,-313.87 818.96,-407.83 737.5,-429.98"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M735.5,-429.98C686.9,-443.2 685.64,-390.28 640,-368.98 577.97,-340.03 502.56,-317.91 450.69,-304.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="451.52,-301.14 440.96,-302.06 449.79,-307.92 451.52,-301.14"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M730.92,-280.11C719.83,-307.81 688.78,-376.03 640,-410.98 613.45,-430.01 600.85,-422.73 569,-429.98"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M567,-429.98C489.87,-447.56 466.49,-414.05 389,-429.98"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M713.47,-255.87C682.39,-239.71 623.38,-212.37 569,-205.98"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M567,-205.98C526.73,-201.26 428.1,-176.69 389,-165.98"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M387,-165.98C354.87,-157.19 344.67,-158.94 316,-141.98 297.32,-130.94 298.77,-119.88 280,-108.98 274.58,-105.84 268.63,-103.1 262.59,-100.73"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="263.69,-97.4 253.09,-97.31 261.32,-103.99 263.69,-97.4"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M724.32,-255.89C696.12,-225.41 621.9,-145.17 587.27,-107.74"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="589.49,-104.99 580.13,-100.02 584.36,-109.74 589.49,-104.99"/>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M567,-205.98C512.19,-199.55 510.62,-246.99 460,-268.98 455.33,-271.01 450.41,-272.92 445.42,-274.69"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="444.16,-271.42 435.8,-277.92 446.39,-278.05 444.16,-271.42"/>
+</g>
+<!-- sourcefile~rdb_barotropic_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_barotropic_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_barotropic_state.f90.html" xlink:title="rdb_barotropic_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="460,-217.98 316,-217.98 316,-193.98 460,-193.98 460,-217.98"/>
+<text text-anchor="middle" x="388" y="-203.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_barotropic_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_barotropic_state.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M567,-205.98C535.56,-202.29 500.79,-201.56 470.38,-202"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="470.18,-198.5 460.25,-202.19 470.31,-205.5 470.18,-198.5"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="275.5,-141.98 151.5,-141.98 151.5,-117.98 275.5,-117.98 275.5,-141.98"/>
+<text text-anchor="middle" x="213.5" y="-127.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M387,-165.98C353.98,-156.95 316.88,-148.93 285.56,-142.77"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="286.09,-139.31 275.61,-140.84 284.76,-146.18 286.09,-139.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_porous.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_porous.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_porous.f90.html" xlink:title="rdb_ocean_porous.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="634.5,-401.98 501.5,-401.98 501.5,-377.98 634.5,-377.98 634.5,-401.98"/>
+<text text-anchor="middle" x="568" y="-387.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_porous.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_porous.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_ocean_porous.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M718.93,-280.13C689.51,-301.69 628.02,-346.74 593.63,-371.94"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="591.5,-369.16 585.51,-377.89 595.64,-374.8 591.5,-369.16"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~rdb_scratch_3d.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/rdb_scratch_3d.f90.html" xlink:title="rdb_scratch_3d.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="446,-259.98 330,-259.98 330,-235.98 446,-235.98 446,-259.98"/>
+<text text-anchor="middle" x="388" y="-245.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_scratch_3d.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_scratch_3d.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_coriolis_adv.f90&#45;&gt;sourcefile~rdb_scratch_3d.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M567,-205.98C554.63,-204.53 490.61,-220.63 442.86,-233.31"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="441.7,-230 432.94,-235.96 443.51,-236.76 441.7,-230"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M173.94,-98.37C154.93,-103.48 131.69,-109.74 110.91,-115.34"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="110,-111.96 101.25,-117.94 111.82,-118.72 110,-111.96"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M212.5,-9.98C179.93,-18.44 170.89,-24.28 147,-47.98 124.66,-70.16 135.02,-88.64 111,-108.98 109.46,-110.29 107.83,-111.51 106.14,-112.67"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="104.1,-109.81 97.22,-117.86 107.63,-115.85 104.1,-109.81"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M530.01,-100.07C494.35,-110.82 438.65,-125.25 389,-127.98"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M387,-127.98C363.27,-129.29 305.29,-114.43 263.08,-102.45"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="263.83,-99.03 253.26,-99.64 261.91,-105.76 263.83,-99.03"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="111,-99.98 0,-99.98 0,-75.98 111,-75.98 111,-99.98"/>
+<text text-anchor="middle" x="55.5" y="-85.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M545.71,-75.92C490.48,-46.21 338.29,25.6 214.5,-9.98"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M212.5,-9.98C163.89,-22.61 112.8,-51.61 82.83,-70.47"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="80.77,-67.63 74.24,-75.97 84.55,-73.53 80.77,-67.63"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M387,-127.98C353.82,-129.81 317,-130.43 285.92,-130.55"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="285.61,-127.05 275.62,-130.57 285.62,-134.05 285.61,-127.05"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node16" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node16"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="432.5,-99.98 343.5,-99.98 343.5,-75.98 432.5,-75.98 432.5,-99.98"/>
+<text text-anchor="middle" x="388" y="-85.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M495.88,-87.98C478.16,-87.98 459.45,-87.98 442.72,-87.98"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="442.59,-84.48 432.59,-87.98 442.59,-91.48 442.59,-84.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M370.62,-302.11C329.5,-330.96 219.94,-397.76 147,-348.98 79.55,-303.88 62.31,-198.28 57.95,-152.17"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="61.43,-151.73 57.12,-142.05 54.45,-152.3 61.43,-151.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M327.16,-277.8C323.04,-275.36 319.25,-272.46 316,-268.98 266.2,-215.77 329.2,-162.76 280,-108.98 275.29,-103.83 269.31,-99.94 262.9,-97"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="263.87,-93.62 253.28,-93.33 261.38,-100.17 263.87,-93.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M333.55,-277.86C327.39,-275.41 321.39,-272.48 316,-268.98 295.37,-255.62 298.95,-242.65 280,-226.98 227.52,-183.61 199.48,-194.36 147,-150.98 128.05,-135.32 131.08,-123.17 111,-108.98 108.79,-107.42 106.44,-105.95 104.01,-104.58"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="105.47,-101.4 94.97,-100.02 102.32,-107.65 105.47,-101.4"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_io_netcdf.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_io_netcdf.f90.html" xlink:title="rdb_io_netcdf.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="266.5,-259.98 160.5,-259.98 160.5,-235.98 266.5,-235.98 266.5,-259.98"/>
+<text text-anchor="middle" x="213.5" y="-245.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_io_netcdf.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_io_netcdf.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M337.57,-277.95C317.72,-273.12 294.67,-267.5 273.92,-262.45"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="274.48,-258.99 263.94,-260.02 272.83,-265.79 274.48,-258.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M329.72,-277.83C324.78,-275.4 320.11,-272.48 316,-268.98 287.85,-245.01 301.55,-224.03 280,-193.98 267.95,-177.19 251.25,-160.94 237.72,-149.02"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="239.65,-146.06 229.78,-142.2 235.08,-151.37 239.65,-146.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_bipolar.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_bipolar.f90.html" xlink:title="rdb_ocean_bipolar.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="280,-461.98 147,-461.98 147,-437.98 280,-437.98 280,-461.98"/>
+<text text-anchor="middle" x="213.5" y="-447.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M381.03,-302C367.11,-328.83 329.84,-393.97 280,-428.98 277.74,-430.57 275.36,-432.04 272.89,-433.41"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="271.12,-430.37 263.65,-437.89 274.18,-436.67 271.12,-430.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_fold.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_fold.f90.html" xlink:title="rdb_ocean_fold.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="272,-419.98 155,-419.98 155,-395.98 272,-395.98 272,-419.98"/>
+<text text-anchor="middle" x="213.5" y="-405.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_fold.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_fold.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M375.52,-302.19C356.97,-321.33 318.57,-358.65 280,-381.98 274.02,-385.6 267.45,-388.9 260.85,-391.84"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="259.08,-388.78 251.22,-395.88 261.8,-395.24 259.08,-388.78"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="277.5,-339.98 149.5,-339.98 149.5,-315.98 277.5,-315.98 277.5,-339.98"/>
+<text text-anchor="middle" x="213.5" y="-325.58" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M332.42,-302.01C315.51,-305.73 296.7,-309.88 279.17,-313.74"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="278.03,-310.4 269.02,-315.97 279.54,-317.24 278.03,-310.4"/>
+</g>
+<!-- sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M334.08,-193.9C285.45,-182.79 211.35,-165.82 147,-150.98 137.67,-148.83 127.8,-146.55 118.14,-144.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="118.71,-140.85 108.18,-142 117.13,-147.67 118.71,-140.85"/>
+</g>
+<!-- sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M338.8,-193.95C330.57,-190.39 322.58,-185.82 316,-179.98 289.55,-156.49 306.93,-131.94 280,-108.98 274.87,-104.61 268.82,-101.15 262.5,-98.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="263.73,-95.12 253.13,-94.87 261.26,-101.67 263.73,-95.12"/>
+</g>
+<!-- sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_barotropic_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M349.08,-193.98C338.17,-190.02 326.42,-185.27 316,-179.98 298.85,-171.28 297.03,-164.91 280,-155.98 273.07,-152.35 265.51,-148.91 258.07,-145.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="259.35,-142.53 248.77,-142.02 256.72,-149.02 259.35,-142.53"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M174.44,-235.96C165.08,-232.19 155.36,-227.53 147,-221.98 116.78,-201.93 88.59,-170.46 71.95,-150.02"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="74.53,-147.63 65.55,-142 69.05,-152 74.53,-147.63"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M166.58,-235.87C159.32,-232.34 152.42,-227.8 147,-221.98 111.05,-183.44 147.15,-147.35 111,-108.98 109.96,-107.88 108.85,-106.83 107.69,-105.83"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="109.57,-102.88 99.36,-100.03 105.56,-108.62 109.57,-102.88"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M151.29,-129.98C141.11,-129.98 130.53,-129.98 120.29,-129.98"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="120.19,-126.48 110.19,-129.98 120.19,-133.48 120.19,-126.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M158.77,-437.81C154.45,-435.39 150.43,-432.47 147,-428.98 69.43,-350.13 58.02,-207.15 56.58,-152.26"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="60.08,-152.16 56.41,-142.22 53.08,-152.28 60.08,-152.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_fold.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M167.09,-395.87C159.69,-392.33 152.61,-387.79 147,-381.98 82.68,-315.5 63.67,-200.1 58.4,-152.01"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="61.88,-151.66 57.4,-142.05 54.91,-152.35 61.88,-151.66"/>
+</g>
+<!-- sourcefile~rdb_ocean_porous.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_porous.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M513.25,-402.07C477.94,-410 430.72,-420.61 389,-429.98"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M387,-429.98C281.42,-453.7 232.77,-536.96 147,-470.98 95.38,-431.28 67.07,-222.22 58.96,-152.58"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="62.4,-151.84 57.8,-142.3 55.45,-152.63 62.4,-151.84"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M336.41,-260C318.68,-263.66 298.56,-267.18 280,-268.98 221.17,-274.7 198.96,-297.16 147,-268.98 101.06,-244.07 74.77,-184.63 63.36,-152.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="66.54,-150.6 60.06,-142.23 59.9,-152.82 66.54,-150.6"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M335.36,-235.89C328.64,-233.41 322.01,-230.46 316,-226.98 311.23,-224.22 262.47,-176.88 234.31,-149.38"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="236.56,-146.69 226.97,-142.2 231.67,-151.69 236.56,-146.69"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M356.16,-75.9C308.79,-59.34 216.35,-35.09 147,-66.98 124.66,-77.26 131.08,-94.8 111,-108.98 108.79,-110.55 106.44,-112.01 104.01,-113.39"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="102.32,-110.32 94.97,-117.95 105.47,-116.57 102.32,-110.32"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M343.47,-87.98C319,-87.98 288.38,-87.98 263.12,-87.98"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="263.02,-84.48 253.02,-87.98 263.02,-91.48 263.02,-84.48"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~EfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M343.47,-98.58C322.34,-103.73 296.64,-109.98 273.76,-115.56"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="272.7,-112.21 263.81,-117.98 274.35,-119.01 272.7,-112.21"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_ke_probef90EfferentGraph = svgPanZoom('#sourcefilerdb_ocean_ke_probef90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_ke_probef90AfferentGraph" width="641pt" height="128pt"
+ viewBox="0.00 0.00 641.00 128.46" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 255.32)">
+<title>sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-255.32 1290,-255.32 1290,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_ke_probe.f90</title>
+<polygon fill="none" stroke="black" points="145,-166.32 0,-166.32 0,-142.32 145,-142.32 145,-166.32"/>
+<text text-anchor="middle" x="72.5" y="-151.92" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_ke_probe.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="297,-166.32 181,-166.32 181,-142.32 297,-142.32 297,-166.32"/>
+<text text-anchor="middle" x="239" y="-151.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M180.93,-154.32C172.66,-154.32 164.01,-154.32 155.37,-154.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.25,-150.82 145.25,-154.32 155.25,-157.82 155.25,-150.82"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1133.5,-185.32 1045.5,-185.32 1045.5,-161.32 1133.5,-161.32 1133.5,-185.32"/>
+<text text-anchor="middle" x="1089.5" y="-170.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M562.5,-213.32C489.16,-201.92 469.14,-222.6 395.5,-213.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1006,-147.32 873,-147.32 873,-123.32 1006,-123.32 1006,-147.32"/>
+<text text-anchor="middle" x="939.5" y="-132.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1045.29,-162.22C1030.24,-158.36 1013.13,-153.96 997.15,-149.86"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="997.94,-146.45 987.38,-147.35 996.2,-153.23 997.94,-146.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="456,-127.32 333,-127.32 333,-103.32 456,-103.32 456,-127.32"/>
+<text text-anchor="middle" x="394.5" y="-112.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1045.16,-182.95C955.19,-201.56 741.77,-238.5 564.5,-213.32"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M562.5,-213.32C503.29,-204.11 445.57,-160.22 415.97,-134.4"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="418.19,-131.68 408.39,-127.64 413.53,-136.91 418.19,-131.68"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1286,-107.32 1173,-107.32 1173,-83.32 1286,-83.32 1286,-107.32"/>
+<text text-anchor="middle" x="1229.5" y="-92.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1220.71,-107.33C1206.57,-128.18 1174.63,-171.06 1137,-194.32 1059.65,-242.12 1031.43,-251.32 940.5,-251.32 940.5,-251.32 940.5,-251.32 753,-251.32 636.51,-251.32 607.68,-241.02 492,-227.32 448.96,-222.22 438.5,-218.73 395.5,-213.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1088.5,-95.32C1051.04,-97.8 1009.93,-109.69 980.56,-119.87"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="979.33,-116.59 971.07,-123.24 981.67,-123.19 979.33,-116.59"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1137,-67.32 1042,-67.32 1042,-43.32 1137,-43.32 1137,-67.32"/>
+<text text-anchor="middle" x="1089.5" y="-52.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1187.1,-83.32C1173.03,-79.24 1157.14,-74.63 1142.37,-70.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1142.93,-66.87 1132.35,-67.45 1140.98,-73.59 1142.93,-66.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="837,-67.32 671,-67.32 671,-43.32 837,-43.32 837,-67.32"/>
+<text text-anchor="middle" x="754" y="-52.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1172.71,-93.64C1147.57,-93.31 1117.51,-93.52 1090.5,-95.32"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1088.5,-95.32C1022.87,-99.67 1006.18,-98.85 940.5,-95.32"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M938.5,-95.32C891.78,-92.81 839.77,-80.54 803.09,-70.25"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="803.75,-66.79 793.17,-67.4 801.82,-73.52 803.75,-66.79"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="635,-67.32 492,-67.32 492,-43.32 635,-43.32 635,-67.32"/>
+<text text-anchor="middle" x="563.5" y="-52.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M938.5,-95.32C819.48,-88.92 789.14,-92.1 671,-76.32 657.25,-74.48 642.59,-71.96 628.7,-69.31"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="629.22,-65.84 618.74,-67.36 627.88,-72.71 629.22,-65.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M753,-135.32C712.38,-133.64 435.85,-218.34 395.5,-213.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="626.5,-147.32 500.5,-147.32 500.5,-123.32 626.5,-123.32 626.5,-147.32"/>
+<text text-anchor="middle" x="563.5" y="-132.92" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M753,-135.32C714.63,-133.31 671.8,-133.14 636.68,-133.55"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="636.47,-130.05 626.52,-133.69 636.57,-137.05 636.47,-130.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M753,-135.32C699.8,-132.53 688.06,-119 635,-114.32 571.69,-108.73 555.55,-113.99 492,-114.32 483.69,-114.36 474.98,-114.42 466.33,-114.5"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="466.21,-111 456.24,-114.59 466.27,-118 466.21,-111"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M907.05,-123.21C896.21,-118.94 884.03,-114.02 873,-109.32 844.77,-97.27 813.17,-82.75 789.78,-71.8"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="791.15,-68.58 780.61,-67.5 788.18,-74.92 791.15,-68.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M872.64,-136.98C837.66,-137.44 793.97,-137.36 755,-135.32"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M753,-135.32C714.82,-133.32 704.84,-127.11 671,-109.32 653.06,-99.88 652.72,-91.16 635,-81.32 628.18,-77.53 620.71,-74.09 613.25,-71.05"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="614.46,-67.77 603.87,-67.41 611.93,-74.29 614.46,-67.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M526.6,-147.45C515.39,-151.53 503.06,-156.33 492,-161.32 447.59,-181.35 443.85,-219.34 395.5,-213.32"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M393.5,-213.32C348.76,-207.75 300.81,-186.6 270.63,-171.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.97,-167.96 261.49,-166.44 268.74,-174.17 271.97,-167.96"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M500.32,-127.87C489.24,-126.54 477.63,-125.15 466.33,-123.8"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="466.42,-120.28 456.07,-122.57 465.58,-127.24 466.42,-120.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M346.19,-127.34C330.73,-131.27 313.38,-135.67 297.26,-139.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="296.25,-136.42 287.42,-142.27 297.97,-143.2 296.25,-136.42"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1065.39,-67.34C1057.79,-71.53 1049.4,-76.41 1042,-81.32 1025.11,-92.52 1023.6,-99.25 1006,-109.32 999.65,-112.95 992.69,-116.3 985.75,-119.31"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="984.27,-116.14 976.37,-123.19 986.95,-122.61 984.27,-116.14"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1043.73,-43.3C952.46,-20.67 738.77,22.71 564.5,-15.32"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M562.5,-15.32C530.91,-22.73 520.77,-19.31 492,-34.32 461.29,-50.34 431.64,-77.54 413.5,-95.95"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="410.88,-93.62 406.46,-103.25 415.92,-98.48 410.88,-93.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M714.51,-43.24C668.04,-29.35 592.61,-9.18 564.5,-15.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M670.87,-55.32C662.41,-55.32 653.81,-55.32 645.36,-55.32"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="645.14,-51.82 635.14,-55.32 645.14,-58.82 645.14,-51.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_ke_probe.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M528.71,-67.46C502.7,-76.8 466.59,-89.78 438.52,-99.86"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="437.19,-96.62 428.96,-103.3 439.55,-103.21 437.19,-96.62"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_ke_probef90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_ke_probef90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Per-segment layer-KE attribution probe ("kediag" rebuilt).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_ke_probe</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Rebuild of the transient per-term KE attribution meter used to</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! localise the split-corrector anti-damping term</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! (LAGRANGIAN_PGF_BUG.md §R).  Samples the h-weighted layer</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! kinetic energy between the split stage's tendency applies and</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! prints `KE_ATTR` rows: the dKE between consecutive samples IS the</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! energy injected/removed by the segment just executed, so one</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! instrumented run names the anti-damping term directly.</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! Three regions per sample, one device pass (three `reduction(+:)`</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! accumulators):</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!   full — all physical cells;</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!!   rim  — cells within `rim_band` of any physical wall (the slow</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!!          exponential is rim-trapped);</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!   east — cells within `east_band` of the east wall (the mode-1</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!          internal Kelvin wave is wall-trapped there).</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! Gated by `&amp;ocean_bt_nml debug_ke_attr` with an optional</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! `[ke_attr_start_step, ke_attr_end_step]` outer-step window.</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! Default off ⇒ bit-identical (untaken branches only).  Single-rank</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! debug tool: no halo reduction — multi-rank sums are per-rank.</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ocean_metrics</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_metrics_t</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_coriolis_adv</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">coriolis_adv_t</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="k">   private</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke_probe_t</span><span class="p">,</span><span class="w"> </span><span class="n">ke_probe_sample</span><span class="p">,</span><span class="w"> </span><span class="n">ke_probe_active</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke_probe_coradv_split</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke_probe_t</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="c">!! Config + running state for the KE attribution meter.  Lives on</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">      </span><span class="c">!! `ocean_dyn_t`; host-only (never device-mapped).</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">         </span><span class="c">!! Master gate — `&amp;ocean_bt_nml debug_ke_attr`.</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">         </span><span class="c">!! First outer step to sample (0 = from the start).</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">end_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">         </span><span class="c">!! Last outer step to sample (0 = no upper bound).</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rim_band</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">         </span><span class="c">!! Rim-region width in cells (distance from any physical wall).</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">east_band</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">         </span><span class="c">!! East-wall band width in cells (the Kelvin-wave region; 16</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">         </span><span class="c">!! covers the ~6-cell internal-radius wall trapping).</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">have_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">         </span><span class="c">!! .true. once a sample has landed; first row prints dKE = KE.</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">header_done</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">         </span><span class="c">!! Column-header row emitted.</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">prev_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">prev_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">prev_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">         </span><span class="c">!! KE at the previous sample, per region.</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="k">end type </span><span class="n">ke_probe_t</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="k">contains</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="k">   pure function </span><span class="n">ke_probe_active</span><span class="p">(</span><span class="n">probe</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">active</span><span class="p">)</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="c">!! Gate: enabled AND inside the step window.</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ke_probe_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">probe</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">step</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">enable</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">start_step</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">step</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">start_step</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">end_step</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">step</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">end_step</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">   </span><span class="k">end function </span><span class="n">ke_probe_active</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ke_probe_sample</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="c">!! Sample the three-region layer KE and print the attribution row.</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! Call AFTER the segment being attributed; the printed dKE is</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="c">!! "this sample minus the previous one" — i.e. the segment's</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="c">!! energy contribution.  Drains all device queues first so the</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="c">!! async velocity-apply chain (queue 1) has landed.</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ke_probe_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">probe</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">label</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">         </span><span class="c">!! Segment tag, e.g. "coriolis_adv", "bt_correction".</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="n">step</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d_full</span><span class="p">,</span><span class="w"> </span><span class="n">d_rim</span><span class="p">,</span><span class="w"> </span><span class="n">d_east</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ke_probe_active</span><span class="p">(</span><span class="n">probe</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!$acc wait</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="k">call </span><span class="n">ke_regions_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">                           </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">                           </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">                           </span><span class="n">probe</span><span class="p">%</span><span class="n">rim_band</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">east_band</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">                           </span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span><span class="p">)</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">probe</span><span class="p">%</span><span class="n">have_prev</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="k">         </span><span class="n">d_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_full</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_full</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">         </span><span class="n">d_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_rim</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_rim</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">         </span><span class="n">d_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_east</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_east</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="k">         </span><span class="n">d_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_full</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="n">d_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_rim</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">         </span><span class="n">d_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_east</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">header_done</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="k">         write</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s2">"(a)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"# KE_ATTR columns: step stage segment "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">            </span><span class="s2">"dKE_full KE_full dKE_rim KE_rim dKE_east KE_east   [m3/s2]"</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">         </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s2">"(a)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"# dKE = energy injected (+) / removed (-) by the segment just run"</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">         </span><span class="n">probe</span><span class="p">%</span><span class="n">header_done</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="k">      write</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s2">"(a,1x,i6,1x,a,i1,1x,a16,6(1x,es13.5))"</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">         </span><span class="s2">"KE_ATTR"</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="s2">"s"</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="nb">adjustl</span><span class="p">(</span><span class="n">label</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">         </span><span class="n">d_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">d_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">d_east</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_full</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_rim</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="n">probe</span><span class="p">%</span><span class="n">prev_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_east</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="n">probe</span><span class="p">%</span><span class="n">have_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ke_probe_sample</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ke_probe_coradv_split</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">cor</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="c">!! Sub-attribute the coriolis_adv segment: split the just-applied</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="c">!! tendency into its PV-flux part and its −∇KE part and print each</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="c">!! part's work integral per region (`KE_ATTR_PV` rows).  Call</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="c">!! immediately AFTER `coriolis_adv_apply_tendencies` (and after</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">      </span><span class="c">!! the "coriolis_adv" KE_ATTR sample).</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="c">!! Method: the kernel left `pv_flux_*` = F_tot = F_pv − ∇KE and</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="c">!! `ke_centre` in its scratch buffers.  Per face,</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="c">!! F_ke = −∇KE (recomputed from ke_centre), F_pv = F_tot − F_ke,</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="c">!! and the work of each part over the apply is</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="c">!! `W_part = h_face · u_mid · dt · F_part` with</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="c">!! u_mid = u_new − ½·dt·F_tot (u_new is the post-apply face</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="c">!! velocity), so W_pv + W_ke equals the segment's dKE up to the</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="c">!! face/cell weighting convention (a few % — use the split, not</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="c">!! the sum, as the signal).</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">coriolis_adv_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cor</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ke_probe_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">probe</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="n">step</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ke_probe_active</span><span class="p">(</span><span class="n">probe</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!$acc wait</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="k">call </span><span class="n">coradv_split_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">                             </span><span class="n">cor</span><span class="p">%</span><span class="n">pv_flux_x</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">cor</span><span class="p">%</span><span class="n">pv_flux_y</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">                             </span><span class="n">cor</span><span class="p">%</span><span class="n">ke_centre</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">                             </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">                             </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">                             </span><span class="n">probe</span><span class="p">%</span><span class="n">rim_band</span><span class="p">,</span><span class="w"> </span><span class="n">probe</span><span class="p">%</span><span class="n">east_band</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">                             </span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">                             </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span><span class="p">)</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="s2">"(a,1x,i6,1x,a,i1,6(1x,es13.5))"</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">         </span><span class="s2">"KE_ATTR_PV"</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="s2">"s"</span><span class="p">,</span><span class="w"> </span><span class="n">stage</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">         </span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ke_probe_coradv_split</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">coradv_split_impl</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">fx</span><span class="p">,</span><span class="w"> </span><span class="n">fy</span><span class="p">,</span><span class="w"> </span><span class="n">kec</span><span class="p">,</span><span class="w"> </span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">                                </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">                                </span><span class="n">rim_w</span><span class="p">,</span><span class="w"> </span><span class="n">east_w</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">                                </span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">                                </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span><span class="p">)</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="c">!! Device pass: per-face PV/∇KE work split, three regions.</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="c">!! Faces attributed to their west/south cell's region mask.</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rim_w</span><span class="p">,</span><span class="w"> </span><span class="n">east_w</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fx</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fy</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kec</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idxCu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">idyCv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_face</span><span class="p">,</span><span class="w"> </span><span class="n">f_tot</span><span class="p">,</span><span class="w"> </span><span class="n">f_ke</span><span class="p">,</span><span class="w"> </span><span class="n">f_pv</span><span class="p">,</span><span class="w"> </span><span class="n">u_mid</span><span class="p">,</span><span class="w"> </span><span class="n">w_pv</span><span class="p">,</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">in_rim</span><span class="p">,</span><span class="w"> </span><span class="n">in_east</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="n">wpv_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="n">wpv_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="n">wpv_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="n">wke_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="n">wke_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="n">wke_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">! u-faces: interior faces i in [i_lo+1, i_hi]; region from the</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">! west cell (i-1 ≥ i_lo).</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">         </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span><span class="p">,</span><span class="w"> </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span><span class="p">)</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">         </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">         </span><span class="n">f_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fx</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">         </span><span class="n">f_ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">kec</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kec</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">         </span><span class="n">f_pv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f_tot</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">f_ke</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">         </span><span class="n">u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_tot</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">         </span><span class="n">w_pv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">u_mid</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_pv</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">         </span><span class="n">w_ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">u_mid</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_ke</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">         </span><span class="n">wpv_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_full</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">         </span><span class="n">wke_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_full</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">         </span><span class="n">in_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">                   </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">j_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="p">)</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">         </span><span class="n">in_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">east_w</span><span class="p">)</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">in_rim</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="k">            </span><span class="n">wpv_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_rim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">            </span><span class="n">wke_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_rim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">in_east</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="k">            </span><span class="n">wpv_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_east</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">            </span><span class="n">wke_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_east</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">      end do</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="c">! v-faces: interior faces j in [j_lo+1, j_hi]; region from the</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="w">      </span><span class="c">! south cell.</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">         </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">wpv_full</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wpv_east</span><span class="p">,</span><span class="w"> </span><span class="n">wke_full</span><span class="p">,</span><span class="w"> </span><span class="n">wke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">wke_east</span><span class="p">)</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">         </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">         </span><span class="n">f_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fy</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">         </span><span class="n">f_ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">kec</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kec</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">         </span><span class="n">f_pv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f_tot</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">f_ke</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">         </span><span class="n">u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_tot</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">         </span><span class="n">w_pv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">u_mid</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_pv</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">         </span><span class="n">w_ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">u_mid</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">f_ke</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">         </span><span class="n">wpv_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_full</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">         </span><span class="n">wke_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_full</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">         </span><span class="n">in_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">                   </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">j_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="p">)</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">         </span><span class="n">in_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">east_w</span><span class="p">)</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">in_rim</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="k">            </span><span class="n">wpv_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_rim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">            </span><span class="n">wke_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_rim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">in_east</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="k">            </span><span class="n">wpv_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wpv_east</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_pv</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">            </span><span class="n">wke_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wke_east</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">w_ke</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="k">      end do</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="k">   end subroutine </span><span class="n">coradv_split_impl</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ke_regions_impl</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">                              </span><span class="n">rim_w</span><span class="p">,</span><span class="w"> </span><span class="n">east_w</span><span class="p">,</span><span class="w"> </span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span><span class="p">)</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="c">!! h-weighted layer KE over the three regions, one device pass.</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="c">!! Per cell: KE = Σ_k [ ¼(h_W·u_W² + h_E·u_E²) + ¼(h_S·v_S² + h_N·v_N²) ]</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="c">!! with h_face the centred face thickness (m³/s² per unit area;</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="c">!! uniform-Δx Cartesian, so the area factor is a constant and is</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="c">!! dropped — attribution only needs a consistent measure).</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">      </span><span class="c">!! Explicit OpenACC reduction — a `sum()` intrinsic on a</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="c">!! present-mapped array silently runs host-side under NVHPC</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="c">!! non-managed mode and returns the stale host shadow.</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rim_w</span><span class="p">,</span><span class="w"> </span><span class="n">east_w</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_w</span><span class="p">,</span><span class="w"> </span><span class="n">h_e</span><span class="p">,</span><span class="w"> </span><span class="n">h_s</span><span class="p">,</span><span class="w"> </span><span class="n">h_n</span><span class="p">,</span><span class="w"> </span><span class="n">ke_cell</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="n">ke_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="n">ke_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">      </span><span class="n">ke_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">ke_full</span><span class="p">,</span><span class="w"> </span><span class="n">ke_rim</span><span class="p">,</span><span class="w"> </span><span class="n">ke_east</span><span class="p">)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">         </span><span class="n">h_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">         </span><span class="n">h_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">         </span><span class="n">h_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">         </span><span class="n">h_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">         </span><span class="n">ke_cell</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.25_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_w</span><span class="o">*</span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">                            </span><span class="n">h_e</span><span class="o">*</span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">u</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">                   </span><span class="mf">0.25_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_s</span><span class="o">*</span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">                            </span><span class="n">h_n</span><span class="o">*</span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">         </span><span class="n">ke_full</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_full</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ke_cell</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">             </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j_lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">j_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rim_w</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="k">            </span><span class="n">ke_rim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_rim</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ke_cell</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">i_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">east_w</span><span class="p">)</span><span class="w"> </span><span class="n">ke_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ke_east</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ke_cell</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="k">   end subroutine </span><span class="n">ke_regions_impl</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="k">end module </span><span class="n">rdb_ocean_ke_probe</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

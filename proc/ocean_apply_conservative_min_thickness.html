@@ -1,0 +1,1096 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_apply_conservative_min_thickness &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_apply_conservative_min_thickness
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">23 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_min_thickness.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_min_thickness.f90.html'>rdb_ocean_min_thickness.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_min_thickness.html'>rdb_ocean_min_thickness</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_apply_conservative_min_thickness</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#variable-n_grounded">n_grounded</a>
+            <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#variable-nx~109">nx</a>
+            <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#variable-ny~109">ny</a>
+            <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#variable-nz~107">nz</a>
+            <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#variable-t~12">t</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_apply_conservative_min_thickness.html#src">ocean_apply_conservative_min_thickness</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_apply_conservative_min_thickness(grid, ms, h_new, grounded_mask, h_floor)  
+</h2>
+    
+
+    <p>Apply the conservative minimum-thickness adjustment in place on <code>ms</code>.</p>
+<p><code>h_new</code> is caller-owned device-resident scratch shaped
+<code>(nx_total, ny_total, nz_ml)</code> (a <code>scratch_3d_buffer_t%data</code> slot);
+<code>grounded_mask</code> is <code>(nx_total, ny_total, 1)</code> scratch (<code>ct%mt_grounded</code>).
+On grounded columns <code>h_new</code> receives the floor-only target thickness;
+non-grounded columns are never written (their target ≡ h_old).</p>
+<p>Order (each step a separate device launch so the h_old reads all
+complete before h_layer is overwritten):
+  0. build the 2D grounded mask + global count (ONE coalesced pass);
+     count == 0 ⇒ return — the entire adjustment is a byte-no-op.
+  1. build the target field h_new on grounded columns,
+  2. remap every tracer   (h_old -&gt; h_new) on grounded columns,
+  3. remap the face velocities (h_old -&gt; h_new) on active faces,
+  4. h_layer := h_new on grounded columns.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~73"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~28"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new</strong>(grid%nx_total,grid%ny_total,ms%nz_ml)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grounded_mask"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grounded_mask</strong>(grid%nx_total,grid%ny_total,1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_floor~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_floor</strong></td>
+            <td>
+                <p>Minimum layer thickness (m); the isopycnal <code>angstrom_h</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_apply_conservative_min_thickness~~CallsGraph Pages: 1 -->
+<svg id="prococean_apply_conservative_min_thicknessCallsGraph" width="641pt" height="181pt"
+ viewBox="0.00 0.00 641.00 181.07" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph" class="graph" transform="scale(0.56 0.56) rotate(0) translate(4 320)">
+<title>proc~~ocean_apply_conservative_min_thickness~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-320 1143,-320 1143,4 -4,4"/>
+<!-- proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node1" class="node">
+<title>proc~ocean_apply_conservative_min_thickness</title>
+<polygon fill="none" stroke="black" points="234,-211 0,-211 0,-187 234,-187 234,-211"/>
+<text text-anchor="middle" x="117" y="-196.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_apply_conservative_min_thickness</text>
+</g>
+<!-- proc~assign_h_layer -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node2" class="node">
+<title>proc~assign_h_layer</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node2"><a xlink:href="../proc/assign_h_layer.html" xlink:title="assign_h_layer">
+<polygon fill="#d9534f" stroke="#d9534f" points="387,-316 296,-316 296,-292 387,-292 387,-316"/>
+<text text-anchor="middle" x="341.5" y="-301.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">assign_h_layer</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~assign_h_layer -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~assign_h_layer</title>
+<path fill="none" stroke="#ff0000" d="M137,-211.26C165.14,-229.01 219.95,-262.01 270,-283 275.15,-285.16 280.6,-287.2 286.1,-289.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="285.39,-292.54 295.99,-292.33 287.57,-285.89 285.39,-292.54"/>
+</g>
+<!-- proc~build_grounded_mask -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node3" class="node">
+<title>proc~build_grounded_mask</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node3"><a xlink:href="../proc/build_grounded_mask.html" xlink:title="build_grounded_mask">
+<polygon fill="#d9534f" stroke="#d9534f" points="406,-232 277,-232 277,-208 406,-208 406,-232"/>
+<text text-anchor="middle" x="341.5" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build_grounded_mask</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~build_grounded_mask -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~build_grounded_mask</title>
+<path fill="none" stroke="#ff0000" d="M234.14,-209.96C245.12,-211 256.04,-212.03 266.47,-213.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="266.43,-216.52 276.72,-213.98 267.09,-209.56 266.43,-216.52"/>
+</g>
+<!-- proc~build_target_field -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node4" class="node">
+<title>proc~build_target_field</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node4"><a xlink:href="../proc/build_target_field.html" xlink:title="build_target_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="394,-274 289,-274 289,-250 394,-250 394,-274"/>
+<text text-anchor="middle" x="341.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build_target_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~build_target_field -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~build_target_field</title>
+<path fill="none" stroke="#ff0000" d="M160.64,-211.07C196.89,-221.34 249.1,-236.12 287.94,-247.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="287.43,-250.61 298.01,-249.97 289.34,-243.88 287.43,-250.61"/>
+</g>
+<!-- proc~remap_tracer_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node5" class="node">
+<title>proc~remap_tracer_grounded</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node5"><a xlink:href="../proc/remap_tracer_grounded.html" xlink:title="remap_tracer_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="412,-190 271,-190 271,-166 412,-166 412,-190"/>
+<text text-anchor="middle" x="341.5" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_tracer_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded</title>
+<path fill="none" stroke="#ff0000" d="M234.14,-188.04C243.15,-187.19 252.12,-186.34 260.81,-185.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="261.24,-189 270.87,-184.57 260.58,-182.03 261.24,-189"/>
+</g>
+<!-- proc~remap_x_face_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node6" class="node">
+<title>proc~remap_x_face_grounded</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node6"><a xlink:href="../proc/remap_x_face_grounded.html" xlink:title="remap_x_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="413,-148 270,-148 270,-124 413,-124 413,-148"/>
+<text text-anchor="middle" x="341.5" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded</title>
+<path fill="none" stroke="#ff0000" d="M160.64,-186.93C196.89,-176.66 249.1,-161.88 287.94,-150.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="289.34,-154.12 298.01,-148.03 287.43,-147.39 289.34,-154.12"/>
+</g>
+<!-- proc~remap_y_face_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node7" class="node">
+<title>proc~remap_y_face_grounded</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node7"><a xlink:href="../proc/remap_y_face_grounded.html" xlink:title="remap_y_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="413,-106 270,-106 270,-82 413,-82 413,-106"/>
+<text text-anchor="middle" x="341.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded</title>
+<path fill="none" stroke="#ff0000" d="M137,-186.74C165.14,-168.99 219.95,-135.99 270,-115 274.81,-112.98 279.88,-111.08 285,-109.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="286.47,-112.49 294.86,-106.03 284.27,-105.85 286.47,-112.49"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node8" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="561,-190 507,-190 507,-166 561,-166 561,-190"/>
+<text text-anchor="middle" x="534" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~build_grounded_mask&#45;&gt;local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge7" class="edge">
+<title>proc~build_grounded_mask&#45;&gt;local</title>
+<path fill="none" stroke="#ffff00" d="M397.09,-207.96C429.21,-200.88 468.92,-192.13 497.1,-185.91"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="497.92,-189.32 506.93,-183.75 496.41,-182.48 497.92,-189.32"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node11" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="561,-232 507,-232 507,-208 561,-208 561,-232"/>
+<text text-anchor="middle" x="534" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~build_grounded_mask&#45;&gt;reduce -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge8" class="edge">
+<title>proc~build_grounded_mask&#45;&gt;reduce</title>
+<path fill="none" stroke="#ffff00" d="M406.2,-220C436.3,-220 471.13,-220 496.66,-220"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="497,-223.5 507,-220 497,-216.5 497,-223.5"/>
+</g>
+<!-- proc~build_target_field&#45;&gt;local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge9" class="edge">
+<title>proc~build_target_field&#45;&gt;local</title>
+<path fill="none" stroke="#00ff00" d="M394.11,-250.42C400.73,-247.86 407.22,-244.76 413,-241 433.62,-227.61 428.09,-211.93 449,-199 463.23,-190.2 480.97,-185.09 496.47,-182.11"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="497.5,-185.49 506.78,-180.38 496.34,-178.59 497.5,-185.49"/>
+</g>
+<!-- proc~min_thickness_target_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node9" class="node">
+<title>proc~min_thickness_target_column</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node9"><a xlink:href="../proc/min_thickness_target_column.html" xlink:title="min_thickness_target_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="619,-274 449,-274 449,-250 619,-250 619,-274"/>
+<text text-anchor="middle" x="534" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">min_thickness_target_column</text>
+</a>
+</g>
+</g>
+<!-- proc~build_target_field&#45;&gt;proc~min_thickness_target_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge10" class="edge">
+<title>proc~build_target_field&#45;&gt;proc~min_thickness_target_column</title>
+<path fill="none" stroke="#00ff00" d="M394.05,-262C407.88,-262 423.28,-262 438.65,-262"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="438.73,-265.5 448.73,-262 438.73,-258.5 438.73,-265.5"/>
+</g>
+<!-- proc~remap_tracer_grounded&#45;&gt;local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge11" class="edge">
+<title>proc~remap_tracer_grounded&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M412.08,-178C440.79,-178 472.85,-178 496.74,-178"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="496.77,-181.5 506.77,-178 496.77,-174.5 496.77,-181.5"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node10" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node10"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="580,-148 488,-148 488,-124 580,-124 580,-148"/>
+<text text-anchor="middle" x="534" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_tracer_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge12" class="edge">
+<title>proc~remap_tracer_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M397.09,-165.96C422.42,-160.38 452.48,-153.75 477.88,-148.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="478.71,-151.55 487.72,-145.98 477.21,-144.72 478.71,-151.55"/>
+</g>
+<!-- proc~remap_x_face_grounded&#45;&gt;local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge13" class="edge">
+<title>proc~remap_x_face_grounded&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M397.09,-148.04C429.21,-155.12 468.92,-163.87 497.1,-170.09"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="496.41,-173.52 506.93,-172.25 497.92,-166.68 496.41,-173.52"/>
+</g>
+<!-- proc~remap_x_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge14" class="edge">
+<title>proc~remap_x_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#0000ff" d="M413.16,-136C434.44,-136 457.48,-136 477.62,-136"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="477.86,-139.5 487.86,-136 477.86,-132.5 477.86,-139.5"/>
+</g>
+<!-- proc~remap_y_face_grounded&#45;&gt;local -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge15" class="edge">
+<title>proc~remap_y_face_grounded&#45;&gt;local</title>
+<path fill="none" stroke="#ff00ff" d="M395.21,-106.01C401.45,-108.49 407.54,-111.45 413,-115 433.62,-128.39 428.09,-144.07 449,-157 463.23,-165.8 480.97,-170.91 496.47,-173.89"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="496.34,-177.41 506.78,-175.62 497.5,-170.51 496.34,-177.41"/>
+</g>
+<!-- proc~remap_y_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge16" class="edge">
+<title>proc~remap_y_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff00ff" d="M397.09,-106.04C422.42,-111.62 452.48,-118.25 477.88,-123.85"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="477.21,-127.28 487.72,-126.02 478.71,-120.45 477.21,-127.28"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node12" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node12"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.5,-230 664.5,-230 664.5,-206 785.5,-206 785.5,-230"/>
+<text text-anchor="middle" x="725" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ffff" d="M580.09,-142.14C593.28,-145.26 607.28,-149.95 619,-157 639.5,-169.33 634.82,-184.16 655,-197 657.75,-198.75 660.65,-200.36 663.64,-201.84"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="662.29,-205.07 672.85,-205.91 665.12,-198.66 662.29,-205.07"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node13" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node13"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1139,-148 1021,-148 1021,-124 1139,-124 1139,-148"/>
+<text text-anchor="middle" x="1080" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ffff" d="M580.45,-136C675.91,-136 897.75,-136 1010.53,-136"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1010.77,-139.5 1020.77,-136 1010.77,-132.5 1010.77,-139.5"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node14" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node14"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="968.5,-108 847.5,-108 847.5,-84 968.5,-84 968.5,-108"/>
+<text text-anchor="middle" x="908" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M580,-130.61C602.52,-127.94 630.19,-124.73 655,-122 716.56,-115.23 786.63,-108.05 837.23,-102.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="837.8,-106.41 847.4,-101.92 837.1,-99.44 837.8,-106.41"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node15" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node15"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="795,-188 655,-188 655,-164 795,-164 795,-188"/>
+<text text-anchor="middle" x="725" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ffff" d="M580.27,-145.58C603.31,-150.46 631.77,-156.48 657.27,-161.88"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="656.74,-165.34 667.25,-163.99 658.19,-158.49 656.74,-165.34"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node16" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node16"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.5,-67 664.5,-67 664.5,-43 785.5,-43 785.5,-67"/>
+<text text-anchor="middle" x="725" y="-52.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ffff" d="M561.59,-123.98C585.84,-113.08 622.7,-96.68 655,-83 664.46,-78.99 674.7,-74.77 684.33,-70.86"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="685.73,-74.07 693.69,-67.07 683.11,-67.58 685.73,-74.07"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff66" d="M960.01,-108C978.24,-112.29 998.98,-117.17 1017.98,-121.64"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1017.2,-125.05 1027.74,-123.94 1018.8,-118.24 1017.2,-125.05"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M795.08,-169.97C847.32,-165.19 920.76,-158 985,-150 993.36,-148.96 1002.11,-147.78 1010.79,-146.55"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1011.49,-149.99 1020.89,-145.1 1010.5,-143.06 1011.49,-149.99"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge26" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#cc00ff" d="M779.33,-67.08C799.58,-71.67 822.84,-76.94 843.92,-81.71"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="843.22,-85.14 853.74,-83.94 844.76,-78.31 843.22,-85.14"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node17" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node17"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="965.5,-24 850.5,-24 850.5,0 965.5,0 965.5,-24"/>
+<text text-anchor="middle" x="908" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge24" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#cc00ff" d="M776.9,-42.91C798.58,-37.76 824.03,-31.71 846.65,-26.34"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="847.56,-29.72 856.48,-24 845.94,-22.91 847.56,-29.72"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node18" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CallsGraph_node18"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="985,-66 831,-66 831,-42 985,-42 985,-66"/>
+<text text-anchor="middle" x="908" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CallsGraph_edge25" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#cc00ff" d="M785.52,-54.67C796.87,-54.61 808.96,-54.54 820.94,-54.48"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="820.99,-57.98 830.97,-54.42 820.95,-50.98 820.99,-57.98"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_apply_conservative_min_thicknessCallsGraph = svgPanZoom('#prococean_apply_conservative_min_thicknessCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_apply_conservative_min_thickness~~CalledByGraph Pages: 1 -->
+<svg id="prococean_apply_conservative_min_thicknessCalledByGraph" width="641pt" height="50pt"
+ viewBox="0.00 0.00 641.00 50.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph" class="graph" transform="scale(0.68 0.68) rotate(0) translate(4 70)">
+<title>proc~~ocean_apply_conservative_min_thickness~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 941,-70 941,4 -4,4"/>
+<!-- proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node1" class="node">
+<title>proc~ocean_apply_conservative_min_thickness</title>
+<polygon fill="none" stroke="black" points="937,-45 703,-45 703,-21 937,-21 937,-45"/>
+<text text-anchor="middle" x="820" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_apply_conservative_min_thickness</text>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node2" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node2"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="667,-45 544,-45 544,-21 667,-21 667,-45"/>
+<text text-anchor="middle" x="605.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge1" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness</title>
+<path fill="none" stroke="#ff0000" d="M667.11,-33C675.31,-33 683.96,-33 692.8,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="692.84,-36.5 702.84,-33 692.84,-29.5 692.84,-36.5"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node3" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node3"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="508,-45 416,-45 416,-21 508,-21 508,-45"/>
+<text text-anchor="middle" x="462" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#ff0000" d="M508.16,-33C516.3,-33 524.96,-33 533.62,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="533.76,-36.5 543.76,-33 533.76,-29.5 533.76,-36.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-45 255,-45 255,-21 380,-21 380,-45"/>
+<text text-anchor="middle" x="317.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff0000" d="M380.17,-33C388.73,-33 397.47,-33 405.9,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="405.99,-36.5 415.99,-33 405.99,-29.5 405.99,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node5" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node5"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-33C227.15,-33 235.91,-33 244.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.78,-36.5 254.78,-33 244.78,-29.5 244.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_apply_conservative_min_thickness~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_apply_conservative_min_thicknessCalledByGraph = svgPanZoom('#prococean_apply_conservative_min_thicknessCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_grounded"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_grounded</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~109"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~109"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~107"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~12"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_apply_conservative_min_thickness</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">h_floor</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Apply the conservative minimum-thickness adjustment in place on `ms`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `h_new` is caller-owned device-resident scratch shaped</span>
+<span class="w">      </span><span class="c">!! `(nx_total, ny_total, nz_ml)` (a `scratch_3d_buffer_t%data` slot);</span>
+<span class="w">      </span><span class="c">!! `grounded_mask` is `(nx_total, ny_total, 1)` scratch (`ct%mt_grounded`).</span>
+<span class="w">      </span><span class="c">!! On grounded columns `h_new` receives the floor-only target thickness;</span>
+<span class="w">      </span><span class="c">!! non-grounded columns are never written (their target ≡ h_old).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Order (each step a separate device launch so the h_old reads all</span>
+<span class="w">      </span><span class="c">!! complete before h_layer is overwritten):</span>
+<span class="w">      </span><span class="c">!!   0. build the 2D grounded mask + global count (ONE coalesced pass);</span>
+<span class="w">      </span><span class="c">!!      count == 0 ⇒ return — the entire adjustment is a byte-no-op.</span>
+<span class="w">      </span><span class="c">!!   1. build the target field h_new on grounded columns,</span>
+<span class="w">      </span><span class="c">!!   2. remap every tracer   (h_old -&gt; h_new) on grounded columns,</span>
+<span class="w">      </span><span class="c">!!   3. remap the face velocities (h_old -&gt; h_new) on active faces,</span>
+<span class="w">      </span><span class="c">!!   4. h_layer := h_new on grounded columns.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_floor</span>
+<span class="w">         </span><span class="c">!! Minimum layer thickness (m); the isopycnal `angstrom_h`.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">n_grounded</span>
+
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">build_grounded_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">h_floor</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">n_grounded</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_grounded</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      call </span><span class="n">build_target_field</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">h_floor</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">            call </span><span class="n">remap_tracer_grounded</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      call </span><span class="n">remap_x_face_grounded</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">remap_y_face_grounded</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">assign_h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">grounded_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_apply_conservative_min_thickness</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

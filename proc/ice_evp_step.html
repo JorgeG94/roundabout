@@ -1,0 +1,1352 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_evp_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_evp_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">22 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_evp.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_evp.f90.html'>rdb_ice_evp.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_evp.html'>rdb_ice_evp</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_evp_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_evp_step.html#variable-nx~344">nx</a>
+            <a class="list-group-item" href="../proc/ice_evp_step.html#variable-ny~344">ny</a>
+            <a class="list-group-item" href="../proc/ice_evp_step.html#variable-nz~338">nz</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_evp_step.html#src">ice_evp_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ice_evp_step(grid, metrics, f_corner, ice, ms, dt_slow, par, periodic_x, periodic_y, dt_transport, n_trunc)  
+</h2>
+    
+
+    <p>Gathers <code>mis</code>/<code>mice</code>/<code>ci</code> from the category state (mode-branched,
+mirrors PR 4b&rsquo;s IST-&gt;CAS dispatch), pulls the one-step-lagged
+ocean surface velocity, and calls <code>ice_evp_dynamics</code> on
+<code>ice%u_ice/v_ice/str_d/str_t/str_s/fxoc/fyoc</code>.  No-op when the
+ice slot is not live or <code>dynamics</code> is off (defence-in-depth; the
+driver already gates this call on <code>ice%dynamics</code>).</p>
+<p>DEVIATION from SPEC §4.1&rsquo;s literal signature: <code>par</code> is an
+explicit argument here (the spec&rsquo;s shim signature omits it, but
+the shim has no other route to <code>&amp;ocean_ice_nml</code> — the driver
+builds <code>par</code> ONCE via <code>ice_evp_params_from_config</code> and passes it
+into every call, which is both cheaper and clearer than a hidden
+module-level singleton).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~205"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~60"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_corner</strong>(:,:)</td>
+            <td>
+                <p>Coriolis parameter at corners, shape (nx+1,ny+1) (<code>coriolis_adv_t%f_corner</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice~15"></span>
+              type(<a href='../type/ocean_sea_ice_t.html'>ocean_sea_ice_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ice</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~115"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_slow"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_slow</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-par~3"></span>
+              type(<a href='../type/ice_evp_params_t.html'>ice_evp_params_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>par</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x~6"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_y~6"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_y</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_transport"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_transport</strong></td>
+            <td>
+                <p>PR 36: the dt the TRANSPORT step will actually consume
+(<code>ocean_dyn%therm_dt(dt)</code>), NOT this call&rsquo;s <code>dt_slow</code> — EVP
+runs every outer step, transport at thermo cadence. Absent =&gt;
+<code>dt_slow</code> (read only when <code>par%cfl_trunc &gt; 0</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_trunc"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_trunc</strong></td>
+            <td>
+                <p>PR 36: count of ice-bearing faces the final CFL clip touched
+(<code>0</code> when <code>par%cfl_trunc &lt;= 0</code>). Mirrors <code>ice_transport_step</code>&rsquo;s
+<code>ok</code> idiom — the caller (driver) logs, this module does not.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_evp_step~~CallsGraph Pages: 1 -->
+<svg id="procice_evp_stepCallsGraph" width="641pt" height="761pt"
+ viewBox="0.00 0.00 641.00 760.90" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_evp_step~~CallsGraph" class="graph" transform="scale(0.73 0.73) rotate(0) translate(4 1033.48)">
+<title>proc~~ice_evp_step~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1033.48 870,-1033.48 870,4 -4,4"/>
+<!-- proc~ice_evp_step -->
+<g id="proc~~ice_evp_step~~CallsGraph_node1" class="node">
+<title>proc~ice_evp_step</title>
+<polygon fill="none" stroke="black" points="81,-545 0,-545 0,-521 81,-521 81,-545"/>
+<text text-anchor="middle" x="40.5" y="-530.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_evp_step</text>
+</g>
+<!-- proc~ice_cell_concentration_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node2" class="node">
+<title>proc~ice_cell_concentration_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node2"><a xlink:href="../proc/ice_cell_concentration_impl.html" xlink:title="ice_cell_concentration_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="422,-796 262,-796 262,-772 422,-772 422,-796"/>
+<text text-anchor="middle" x="342" y="-781.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cell_concentration_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_step&#45;&gt;proc~ice_cell_concentration_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge1" class="edge">
+<title>proc~ice_evp_step&#45;&gt;proc~ice_cell_concentration_impl</title>
+<path fill="none" stroke="#ff0000" d="M55.95,-545.11C104.17,-585.52 259.86,-716 318.44,-765.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="316.44,-767.98 326.35,-771.72 320.93,-762.62 316.44,-767.98"/>
+</g>
+<!-- proc~ice_evp_dynamics -->
+<g id="proc~~ice_evp_step~~CallsGraph_node3" class="node">
+<title>proc~ice_evp_dynamics</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node3"><a xlink:href="../proc/ice_evp_dynamics.html" xlink:title="ice_evp_dynamics">
+<polygon fill="#d9534f" stroke="#d9534f" points="226,-525 117,-525 117,-501 226,-501 226,-525"/>
+<text text-anchor="middle" x="171.5" y="-510.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge2" class="edge">
+<title>proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics</title>
+<path fill="none" stroke="#ff0000" d="M81.26,-526.84C89.34,-525.58 98.04,-524.23 106.73,-522.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="107.53,-526.31 116.87,-521.31 106.45,-519.39 107.53,-526.31"/>
+</g>
+<!-- local -->
+<g id="proc~~ice_evp_step~~CallsGraph_node4" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="801,-629 747,-629 747,-605 801,-605 801,-629"/>
+<text text-anchor="middle" x="774" y="-614.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ice_cell_concentration_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge3" class="edge">
+<title>proc~ice_cell_concentration_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M345.18,-796.02C352.72,-833.69 381.59,-949.63 458,-995 529.84,-1037.66 578.16,-1043.78 646,-995 764.76,-909.62 774,-707.7 773.6,-639.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="777.09,-639.31 773.45,-629.36 770.09,-639.41 777.09,-639.31"/>
+</g>
+<!-- proc~ice_evp_dynamics_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node5" class="node">
+<title>proc~ice_evp_dynamics_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node5"><a xlink:href="../proc/ice_evp_dynamics_impl.html" xlink:title="ice_evp_dynamics_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="411,-524 273,-524 273,-500 411,-500 411,-524"/>
+<text text-anchor="middle" x="342" y="-509.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge4" class="edge">
+<title>proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl</title>
+<path fill="none" stroke="#00ffff" d="M226.28,-512.68C237.87,-512.61 250.34,-512.54 262.65,-512.46"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="262.95,-515.96 272.93,-512.4 262.91,-508.96 262.95,-515.96"/>
+</g>
+<!-- proc~evp_average_stress_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node6" class="node">
+<title>proc~evp_average_stress_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node6"><a xlink:href="../proc/evp_average_stress_impl.html" xlink:title="evp_average_stress_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="624.5,-276 479.5,-276 479.5,-252 624.5,-252 624.5,-276"/>
+<text text-anchor="middle" x="552" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_average_stress_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_average_stress_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge5" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_average_stress_impl</title>
+<path fill="none" stroke="#00ffff" d="M345.36,-499.83C353.45,-461.58 383.78,-342.84 458,-285 461.8,-282.04 465.93,-279.48 470.28,-277.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="471.74,-280.46 479.47,-273.21 468.9,-274.05 471.74,-280.46"/>
+</g>
+<!-- proc~evp_build_masks_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node7" class="node">
+<title>proc~evp_build_masks_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node7"><a xlink:href="../proc/evp_build_masks_impl.html" xlink:title="evp_build_masks_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="617.5,-398 486.5,-398 486.5,-374 617.5,-374 617.5,-398"/>
+<text text-anchor="middle" x="552" y="-383.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_build_masks_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_build_masks_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge6" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_build_masks_impl</title>
+<path fill="none" stroke="#00ffff" d="M352.62,-499.75C370.74,-477.58 412.22,-430.89 458,-407 463.92,-403.91 470.27,-401.28 476.79,-399.03"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="477.93,-402.34 486.41,-396 475.82,-395.66 477.93,-402.34"/>
+</g>
+<!-- proc~evp_copy_u_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node8" class="node">
+<title>proc~evp_copy_u_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node8"><a xlink:href="../proc/evp_copy_u_impl.html" xlink:title="evp_copy_u_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="603.5,-234 500.5,-234 500.5,-210 603.5,-210 603.5,-234"/>
+<text text-anchor="middle" x="552" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_copy_u_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_copy_u_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge7" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_copy_u_impl</title>
+<path fill="none" stroke="#00ffff" d="M344.33,-499.79C349.68,-457.11 373.51,-313.37 458,-243 467.24,-235.3 478.73,-230.28 490.44,-227.04"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="491.36,-230.42 500.29,-224.72 489.75,-223.61 491.36,-230.42"/>
+</g>
+<!-- proc~evp_fill_cell_fields_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node9" class="node">
+<title>proc~evp_fill_cell_fields_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node9"><a xlink:href="../proc/evp_fill_cell_fields_impl.html" xlink:title="evp_fill_cell_fields_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="620,-192 484,-192 484,-168 620,-168 620,-192"/>
+<text text-anchor="middle" x="552" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_fill_cell_fields_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_fill_cell_fields_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge8" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_fill_cell_fields_impl</title>
+<path fill="none" stroke="#00ffff" d="M343.55,-499.91C346.35,-453.38 362.95,-284.26 458,-201 462.82,-196.78 468.31,-193.35 474.16,-190.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="475.65,-193.75 483.59,-186.74 473.01,-187.27 475.65,-193.75"/>
+</g>
+<!-- proc~evp_mi_face_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node10" class="node">
+<title>proc~evp_mi_face_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node10"><a xlink:href="../proc/evp_mi_face_impl.html" xlink:title="evp_mi_face_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="606,-150 498,-150 498,-126 606,-126 606,-150"/>
+<text text-anchor="middle" x="552" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_mi_face_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_mi_face_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge9" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_mi_face_impl</title>
+<path fill="none" stroke="#00ffff" d="M342.95,-499.73C343.46,-449.18 352.47,-255.16 458,-159 466.42,-151.33 477.04,-146.26 488.06,-142.96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="488.97,-146.33 497.81,-140.48 487.25,-139.55 488.97,-146.33"/>
+</g>
+<!-- proc~evp_pres_mice_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node11" class="node">
+<title>proc~evp_pres_mice_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node11"><a xlink:href="../proc/evp_pres_mice_impl.html" xlink:title="evp_pres_mice_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="612,-482 492,-482 492,-458 612,-458 612,-482"/>
+<text text-anchor="middle" x="552" y="-467.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_pres_mice_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_pres_mice_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge10" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_pres_mice_impl</title>
+<path fill="none" stroke="#00ffff" d="M402.6,-499.96C427.3,-494.98 456.1,-489.16 481.73,-483.99"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="482.64,-487.37 491.75,-481.96 481.25,-480.51 482.64,-487.37"/>
+</g>
+<!-- proc~evp_project_ci_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node12" class="node">
+<title>proc~evp_project_ci_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node12"><a xlink:href="../proc/evp_project_ci_impl.html" xlink:title="evp_project_ci_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="610.5,-986 493.5,-986 493.5,-962 610.5,-962 610.5,-986"/>
+<text text-anchor="middle" x="552" y="-971.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_project_ci_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_project_ci_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge11" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_project_ci_impl</title>
+<path fill="none" stroke="#00ffff" d="M347.38,-524.13C360.26,-560.14 398.57,-669.73 422,-763 442.94,-846.36 398.29,-891.18 458,-953 464.99,-960.23 473.89,-965.22 483.42,-968.61"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="482.51,-971.99 493.1,-971.5 484.51,-965.28 482.51,-971.99"/>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node13" class="node">
+<title>proc~evp_q_and_mi_ratio_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node13"><a xlink:href="../proc/evp_q_and_mi_ratio_impl.html" xlink:title="evp_q_and_mi_ratio_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="625.5,-440 478.5,-440 478.5,-416 625.5,-416 625.5,-440"/>
+<text text-anchor="middle" x="552" y="-425.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_q_and_mi_ratio_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_q_and_mi_ratio_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge12" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_q_and_mi_ratio_impl</title>
+<path fill="none" stroke="#00ffff" d="M361.35,-499.83C383.42,-485.71 422.02,-462.61 458,-449 463.99,-446.73 470.3,-444.67 476.69,-442.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="478.06,-446.06 486.77,-440.03 476.2,-439.31 478.06,-446.06"/>
+</g>
+<!-- proc~evp_sh_dd_dt_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node14" class="node">
+<title>proc~evp_sh_dd_dt_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node14"><a xlink:href="../proc/evp_sh_dd_dt_impl.html" xlink:title="evp_sh_dd_dt_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="608,-108 496,-108 496,-84 608,-84 608,-108"/>
+<text text-anchor="middle" x="552" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_sh_dd_dt_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_dd_dt_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge13" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_dd_dt_impl</title>
+<path fill="none" stroke="#00ffff" d="M342.47,-499.81C340.82,-445.84 341.72,-226.37 458,-117 465.77,-109.7 475.51,-104.74 485.75,-101.41"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="486.95,-104.71 495.67,-98.69 485.1,-97.96 486.95,-104.71"/>
+</g>
+<!-- proc~evp_sh_ds_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node15" class="node">
+<title>proc~evp_sh_ds_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node15"><a xlink:href="../proc/evp_sh_ds_impl.html" xlink:title="evp_sh_ds_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="599.5,-902 504.5,-902 504.5,-878 599.5,-878 599.5,-902"/>
+<text text-anchor="middle" x="552" y="-887.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_sh_ds_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_ds_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge14" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_ds_impl</title>
+<path fill="none" stroke="#00ffff" d="M346.83,-524.17C366.42,-586.37 454.58,-865.88 458,-869 467.93,-878.08 480.93,-883.51 494.05,-886.69"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="493.56,-890.16 504.05,-888.71 494.95,-883.3 493.56,-890.16"/>
+</g>
+<!-- proc~evp_str_s_relax_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node16" class="node">
+<title>proc~evp_str_s_relax_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node16"><a xlink:href="../proc/evp_str_s_relax_impl.html" xlink:title="evp_str_s_relax_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="612.5,-818 491.5,-818 491.5,-794 612.5,-794 612.5,-818"/>
+<text text-anchor="middle" x="552" y="-803.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_str_s_relax_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_str_s_relax_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge15" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_str_s_relax_impl</title>
+<path fill="none" stroke="#00ffff" d="M344.24,-524.09C349.3,-567.01 372.43,-713.35 458,-785 464.82,-790.71 472.88,-794.95 481.36,-798.09"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="480.47,-801.48 491.06,-801.17 482.59,-794.81 480.47,-801.48"/>
+</g>
+<!-- proc~evp_stress_relax_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node17" class="node">
+<title>proc~evp_stress_relax_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node17"><a xlink:href="../proc/evp_stress_relax_impl.html" xlink:title="evp_stress_relax_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="615.5,-66 488.5,-66 488.5,-42 615.5,-42 615.5,-66"/>
+<text text-anchor="middle" x="552" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_stress_relax_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_stress_relax_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge16" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_stress_relax_impl</title>
+<path fill="none" stroke="#00ffff" d="M344.52,-499.69C352.71,-435.22 393.66,-137.12 458,-75 463.93,-69.28 471.06,-64.99 478.72,-61.79"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="480,-65.05 488.26,-58.4 477.66,-58.45 480,-65.05"/>
+</g>
+<!-- proc~evp_truncate_final_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node18" class="node">
+<title>proc~evp_truncate_final_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node18"><a xlink:href="../proc/evp_truncate_final_impl.html" xlink:title="evp_truncate_final_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="621.5,-318 482.5,-318 482.5,-294 621.5,-294 621.5,-318"/>
+<text text-anchor="middle" x="552" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_truncate_final_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_final_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge17" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_final_impl</title>
+<path fill="none" stroke="#00ffff" d="M347.25,-499.76C359.2,-467.18 396.31,-377.68 458,-332 463.22,-328.14 468.98,-324.85 475.01,-322.05"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="476.77,-325.11 484.66,-318.04 474.09,-318.64 476.77,-325.11"/>
+</g>
+<!-- proc~evp_truncate_velocity_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node19" class="node">
+<title>proc~evp_truncate_velocity_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node19"><a xlink:href="../proc/evp_truncate_velocity_impl.html" xlink:title="evp_truncate_velocity_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="630.5,-734 473.5,-734 473.5,-710 630.5,-710 630.5,-734"/>
+<text text-anchor="middle" x="552" y="-719.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_truncate_velocity_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_velocity_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge18" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_velocity_impl</title>
+<path fill="none" stroke="#00ffff" d="M346.61,-524.04C357.41,-557.83 392.81,-654.15 458,-701 460.12,-702.52 462.33,-703.94 464.61,-705.25"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="463.21,-708.47 473.72,-709.83 466.36,-702.21 463.21,-708.47"/>
+</g>
+<!-- proc~evp_u_momentum_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node20" class="node">
+<title>proc~evp_u_momentum_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node20"><a xlink:href="../proc/evp_u_momentum_impl.html" xlink:title="evp_u_momentum_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="622,-692 482,-692 482,-668 622,-668 622,-692"/>
+<text text-anchor="middle" x="552" y="-677.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_u_momentum_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_u_momentum_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge19" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_u_momentum_impl</title>
+<path fill="none" stroke="#00ffff" d="M348.81,-524.19C363.07,-552.7 402.7,-623.98 458,-659 462.43,-661.81 467.19,-664.24 472.13,-666.35"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="471.21,-669.75 481.81,-670.02 473.7,-663.2 471.21,-669.75"/>
+</g>
+<!-- proc~evp_v_momentum_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node21" class="node">
+<title>proc~evp_v_momentum_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node21"><a xlink:href="../proc/evp_v_momentum_impl.html" xlink:title="evp_v_momentum_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="621.5,-650 482.5,-650 482.5,-626 621.5,-626 621.5,-650"/>
+<text text-anchor="middle" x="552" y="-635.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_v_momentum_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_v_momentum_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge20" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_v_momentum_impl</title>
+<path fill="none" stroke="#00ffff" d="M352.62,-524.25C370.74,-546.42 412.22,-593.11 458,-617 462.65,-619.43 467.57,-621.57 472.63,-623.48"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="471.89,-626.92 482.49,-626.83 474.15,-620.3 471.89,-626.92"/>
+</g>
+<!-- proc~evp_wrap_corner_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node22" class="node">
+<title>proc~evp_wrap_corner_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node22"><a xlink:href="../proc/evp_wrap_corner_impl.html" xlink:title="evp_wrap_corner_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="618.5,-24 485.5,-24 485.5,0 618.5,0 618.5,-24"/>
+<text text-anchor="middle" x="552" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_wrap_corner_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_wrap_corner_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge21" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_wrap_corner_impl</title>
+<path fill="none" stroke="#00ffff" d="M344.2,-499.88C351.11,-432.23 388.14,-101.92 458,-33 463.07,-28 469.06,-24.09 475.51,-21.04"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="477.26,-24.11 485.26,-17.16 474.67,-17.61 477.26,-24.11"/>
+</g>
+<!-- proc~evp_zero_massless_velocity_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node23" class="node">
+<title>proc~evp_zero_massless_velocity_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node23"><a xlink:href="../proc/evp_zero_massless_velocity_impl.html" xlink:title="evp_zero_massless_velocity_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="646,-608 458,-608 458,-584 646,-584 646,-608"/>
+<text text-anchor="middle" x="552" y="-593.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zero_massless_velocity_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_massless_velocity_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge22" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_massless_velocity_impl</title>
+<path fill="none" stroke="#00ffff" d="M361.35,-524.17C383.42,-538.29 422.02,-561.39 458,-575 463.99,-577.27 470.3,-579.33 476.69,-581.2"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="476.2,-584.69 486.77,-583.97 478.06,-577.94 476.2,-584.69"/>
+</g>
+<!-- proc~evp_zero_stress_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node24" class="node">
+<title>proc~evp_zero_stress_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node24"><a xlink:href="../proc/evp_zero_stress_impl.html" xlink:title="evp_zero_stress_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="614,-944 490,-944 490,-920 614,-920 614,-944"/>
+<text text-anchor="middle" x="552" y="-929.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zero_stress_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_stress_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge23" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_stress_impl</title>
+<path fill="none" stroke="#00ffff" d="M347.15,-524.19C359.41,-560.36 396.19,-670.37 422,-763 440.17,-828.21 409.74,-863.53 458,-911 464.19,-917.09 471.75,-921.57 479.86,-924.83"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="478.99,-928.23 489.58,-928.14 481.24,-921.61 478.99,-928.23"/>
+</g>
+<!-- proc~evp_zeta_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_node25" class="node">
+<title>proc~evp_zeta_impl</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node25"><a xlink:href="../proc/evp_zeta_impl.html" xlink:title="evp_zeta_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="596,-566 508,-566 508,-542 596,-542 596,-566"/>
+<text text-anchor="middle" x="552" y="-551.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zeta_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zeta_impl -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge24" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zeta_impl</title>
+<path fill="none" stroke="#00ffff" d="M402.6,-524.04C432.67,-530.11 468.83,-537.41 497.93,-543.28"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="497.42,-546.75 507.91,-545.3 498.8,-539.89 497.42,-546.75"/>
+</g>
+<!-- proc~ice_limit_stresses -->
+<g id="proc~~ice_evp_step~~CallsGraph_node26" class="node">
+<title>proc~ice_limit_stresses</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node26"><a xlink:href="../proc/ice_limit_stresses.html" xlink:title="ice_limit_stresses">
+<polygon fill="#d9534f" stroke="#d9534f" points="604,-524 500,-524 500,-500 604,-500 604,-524"/>
+<text text-anchor="middle" x="552" y="-509.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_limit_stresses</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ice_limit_stresses -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge25" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ice_limit_stresses</title>
+<path fill="none" stroke="#00ffff" d="M411.11,-512C436.4,-512 464.93,-512 489.59,-512"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="489.9,-515.5 499.9,-512 489.9,-508.5 489.9,-515.5"/>
+</g>
+<!-- proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_node27" class="node">
+<title>proc~ocean_periodic_wrap_centre_2d</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node27"><a xlink:href="../proc/ocean_periodic_wrap_centre_2d.html" xlink:title="ocean_periodic_wrap_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="866,-379 682,-379 682,-355 866,-355 866,-379"/>
+<text text-anchor="middle" x="774" y="-364.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge26" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d</title>
+<path fill="none" stroke="#00ffff" d="M347.95,-499.85C360.83,-470.11 398.58,-393.96 458,-365 541.65,-324.24 653.25,-338.54 718.7,-352.72"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="718.28,-356.21 728.8,-354.99 719.81,-349.38 718.28,-356.21"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_node28" class="node">
+<title>proc~ocean_periodic_wrap_face_x_2d</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node28"><a xlink:href="../proc/ocean_periodic_wrap_face_x_2d.html" xlink:title="ocean_periodic_wrap_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="644,-860 460,-860 460,-836 644,-836 644,-860"/>
+<text text-anchor="middle" x="552" y="-845.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge27" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d</title>
+<path fill="none" stroke="#00ffff" d="M346.68,-524.15C363.52,-579.44 433.47,-805.42 458,-827 459.37,-828.2 460.79,-829.34 462.26,-830.42"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="460.79,-833.63 471.13,-835.94 464.49,-827.68 460.79,-833.63"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_node29" class="node">
+<title>proc~ocean_periodic_wrap_face_y_2d</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node29"><a xlink:href="../proc/ocean_periodic_wrap_face_y_2d.html" xlink:title="ocean_periodic_wrap_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="644,-776 460,-776 460,-752 644,-752 644,-776"/>
+<text text-anchor="middle" x="552" y="-761.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge28" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d</title>
+<path fill="none" stroke="#00ffff" d="M345.24,-524.1C353.03,-562.72 382.76,-683.94 458,-743 459.8,-744.41 461.67,-745.73 463.61,-746.97"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="462.03,-750.09 472.47,-751.85 465.41,-743.96 462.03,-750.09"/>
+</g>
+<!-- proc~evp_build_masks_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge29" class="edge">
+<title>proc~evp_build_masks_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff3f00" d="M617.93,-393.56C627.93,-396.67 637.67,-401 646,-407 680.77,-432.06 739.33,-547.43 762.81,-595.69"/>
+<polygon fill="#ff3f00" stroke="#ff3f00" points="759.76,-597.43 767.27,-604.91 766.07,-594.38 759.76,-597.43"/>
+</g>
+<!-- proc~evp_build_masks_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge30" class="edge">
+<title>proc~evp_build_masks_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d</title>
+<path fill="none" stroke="#ff3f00" d="M617.52,-380.43C634.53,-378.96 653.3,-377.34 671.74,-375.75"/>
+<polygon fill="#ff3f00" stroke="#ff3f00" points="672.28,-379.21 681.94,-374.86 671.67,-372.24 672.28,-379.21"/>
+</g>
+<!-- proc~evp_pres_mice_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge31" class="edge">
+<title>proc~evp_pres_mice_impl&#45;&gt;local</title>
+<path fill="none" stroke="#bfff00" d="M612.36,-478.19C623.95,-481.22 635.7,-485.35 646,-491 694.41,-517.55 736.82,-567.98 758.23,-596.33"/>
+<polygon fill="#bfff00" stroke="#bfff00" points="755.66,-598.74 764.42,-604.7 761.29,-594.58 755.66,-598.74"/>
+</g>
+<!-- proc~evp_project_ci_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge32" class="edge">
+<title>proc~evp_project_ci_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M610.75,-970.07C623.5,-966.87 636.13,-961.58 646,-953 743.7,-868.04 766.46,-699.89 771.58,-639.36"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="775.09,-639.29 772.36,-629.05 768.11,-638.76 775.09,-639.29"/>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge33" class="edge">
+<title>proc~evp_q_and_mi_ratio_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3fff00" d="M625.63,-439.05C632.81,-441.7 639.74,-444.96 646,-449 703.86,-486.31 745.31,-559.63 763.19,-595.79"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="760.11,-597.46 767.6,-604.95 766.41,-594.42 760.11,-597.46"/>
+</g>
+<!-- proc~ice_evp_mi_ratio_point -->
+<g id="proc~~ice_evp_step~~CallsGraph_node30" class="node">
+<title>proc~ice_evp_mi_ratio_point</title>
+<g id="a_proc~~ice_evp_step~~CallsGraph_node30"><a xlink:href="../proc/ice_evp_mi_ratio_point.html" xlink:title="ice_evp_mi_ratio_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="841,-440 707,-440 707,-416 841,-416 841,-440"/>
+<text text-anchor="middle" x="774" y="-425.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_mi_ratio_point</text>
+</a>
+</g>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl&#45;&gt;proc~ice_evp_mi_ratio_point -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge34" class="edge">
+<title>proc~evp_q_and_mi_ratio_impl&#45;&gt;proc~ice_evp_mi_ratio_point</title>
+<path fill="none" stroke="#3fff00" d="M625.65,-428C648.43,-428 673.64,-428 696.68,-428"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="696.74,-431.5 706.74,-428 696.74,-424.5 696.74,-431.5"/>
+</g>
+<!-- proc~evp_sh_ds_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge35" class="edge">
+<title>proc~evp_sh_ds_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff3f" d="M599.5,-887.54C615.57,-884.73 632.82,-879.29 646,-869 723.36,-808.59 757.42,-688.39 768.57,-638.98"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="772.03,-639.56 770.72,-629.05 765.19,-638.08 772.03,-639.56"/>
+</g>
+<!-- proc~evp_str_s_relax_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge36" class="edge">
+<title>proc~evp_str_s_relax_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff7f" d="M612.55,-799.06C624.25,-795.95 635.98,-791.46 646,-785 703.86,-747.69 745.31,-674.37 763.19,-638.21"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="766.41,-639.58 767.6,-629.05 760.11,-636.54 766.41,-639.58"/>
+</g>
+<!-- proc~evp_truncate_final_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge37" class="edge">
+<title>proc~evp_truncate_final_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M581,-318.17C601.34,-328.21 628.28,-344.18 646,-365 672.33,-395.93 664.31,-412.44 682,-449 708.19,-503.12 742.91,-564.82 760.95,-596.24"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="757.96,-598.06 765.99,-604.97 764.03,-594.56 757.96,-598.06"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ice_evp_step~~CallsGraph_node31" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="801,-318 747,-318 747,-294 801,-294 801,-318"/>
+<text text-anchor="middle" x="774" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~evp_truncate_final_impl&#45;&gt;reduce -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge38" class="edge">
+<title>proc~evp_truncate_final_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#00ffff" d="M621.7,-306C659.71,-306 705.41,-306 736.57,-306"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="736.95,-309.5 746.95,-306 736.95,-302.5 736.95,-309.5"/>
+</g>
+<!-- proc~evp_truncate_velocity_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge39" class="edge">
+<title>proc~evp_truncate_velocity_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00bfff" d="M619.98,-709.96C628.89,-707.47 637.78,-704.51 646,-701 685.59,-684.11 726.19,-654.73 750.5,-635.58"/>
+<polygon fill="#00bfff" stroke="#00bfff" points="752.77,-638.25 758.39,-629.27 748.4,-632.78 752.77,-638.25"/>
+</g>
+<!-- proc~evp_u_momentum_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge40" class="edge">
+<title>proc~evp_u_momentum_impl&#45;&gt;local</title>
+<path fill="none" stroke="#007fff" d="M610.27,-667.99C622.14,-665.24 634.52,-662.19 646,-659 677.21,-650.34 712.12,-638.65 737.42,-629.8"/>
+<polygon fill="#007fff" stroke="#007fff" points="738.69,-633.06 746.96,-626.44 736.36,-626.46 738.69,-633.06"/>
+</g>
+<!-- proc~evp_v_momentum_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge41" class="edge">
+<title>proc~evp_v_momentum_impl&#45;&gt;local</title>
+<path fill="none" stroke="#003fff" d="M621.7,-631.44C659.88,-627.8 705.81,-623.41 736.98,-620.44"/>
+<polygon fill="#003fff" stroke="#003fff" points="737.33,-623.92 746.95,-619.49 736.66,-616.95 737.33,-623.92"/>
+</g>
+<!-- proc~evp_zero_massless_velocity_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge42" class="edge">
+<title>proc~evp_zero_massless_velocity_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3f00ff" d="M646.3,-604.91C678.27,-607.96 712.17,-611.19 736.85,-613.55"/>
+<polygon fill="#3f00ff" stroke="#3f00ff" points="736.54,-617.04 746.83,-614.5 737.21,-610.07 736.54,-617.04"/>
+</g>
+<!-- proc~evp_zeta_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge43" class="edge">
+<title>proc~evp_zeta_impl&#45;&gt;local</title>
+<path fill="none" stroke="#bf00ff" d="M596.28,-562.86C612.02,-566.32 629.89,-570.53 646,-575 677.21,-583.66 712.12,-595.35 737.42,-604.2"/>
+<polygon fill="#bf00ff" stroke="#bf00ff" points="736.36,-607.54 746.96,-607.56 738.69,-600.94 736.36,-607.54"/>
+</g>
+<!-- proc~ice_limit_stresses&#45;&gt;local -->
+<g id="proc~~ice_evp_step~~CallsGraph_edge44" class="edge">
+<title>proc~ice_limit_stresses&#45;&gt;local</title>
+<path fill="none" stroke="#ff00ff" d="M604.24,-520.09C618.11,-523.21 632.91,-527.41 646,-533 685.59,-549.89 726.19,-579.27 750.5,-598.42"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="748.4,-601.22 758.39,-604.73 752.77,-595.75 748.4,-601.22"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_evp_stepCallsGraph = svgPanZoom('#procice_evp_stepCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_evp_step~~CalledByGraph Pages: 1 -->
+<svg id="procice_evp_stepCalledByGraph" width="468pt" height="74pt"
+ viewBox="0.00 0.00 468.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_evp_step~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~ice_evp_step~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 464,-70 464,4 -4,4"/>
+<!-- proc~ice_evp_step -->
+<g id="proc~~ice_evp_step~~CalledByGraph_node1" class="node">
+<title>proc~ice_evp_step</title>
+<polygon fill="none" stroke="black" points="460,-45 379,-45 379,-21 460,-21 460,-45"/>
+<text text-anchor="middle" x="419.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_evp_step</text>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_evp_step~~CalledByGraph_node2" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_evp_step~~CalledByGraph_node2"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-45 245,-45 245,-21 343,-21 343,-45"/>
+<text text-anchor="middle" x="294" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_evp_step -->
+<g id="proc~~ice_evp_step~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_evp_step</title>
+<path fill="none" stroke="#ff0000" d="M343.1,-33C351.48,-33 360.21,-33 368.64,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.71,-36.5 378.71,-33 368.71,-29.5 368.71,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_evp_step~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_evp_step~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_evp_step~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M209.19,-45.94C217.5,-44.66 226.14,-43.32 234.58,-42.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.39,-45.44 244.74,-40.45 234.32,-38.52 235.39,-45.44"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_evp_step~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_evp_step~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_evp_step~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M204.57,-19.34C214.33,-20.85 224.72,-22.46 234.81,-24.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.35,-27.49 244.77,-25.55 235.42,-20.57 234.35,-27.49"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_evp_step~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_evp_step~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_evp_step~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~344"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~344"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~338"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ice_evp_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt_slow</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">,</span><span class="w"> </span><span class="n">dt_transport</span><span class="p">,</span><span class="w"> </span><span class="n">n_trunc</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Gathers `mis`/`mice`/`ci` from the category state (mode-branched,</span>
+<span class="w">      </span><span class="c">!! mirrors PR 4b's IST-&gt;CAS dispatch), pulls the one-step-lagged</span>
+<span class="w">      </span><span class="c">!! ocean surface velocity, and calls `ice_evp_dynamics` on</span>
+<span class="w">      </span><span class="c">!! `ice%u_ice/v_ice/str_d/str_t/str_s/fxoc/fyoc`.  No-op when the</span>
+<span class="w">      </span><span class="c">!! ice slot is not live or `dynamics` is off (defence-in-depth; the</span>
+<span class="w">      </span><span class="c">!! driver already gates this call on `ice%dynamics`).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! DEVIATION from SPEC §4.1's literal signature: `par` is an</span>
+<span class="w">      </span><span class="c">!! explicit argument here (the spec's shim signature omits it, but</span>
+<span class="w">      </span><span class="c">!! the shim has no other route to `&amp;ocean_ice_nml` — the driver</span>
+<span class="w">      </span><span class="c">!! builds `par` ONCE via `ice_evp_params_from_config` and passes it</span>
+<span class="w">      </span><span class="c">!! into every call, which is both cheaper and clearer than a hidden</span>
+<span class="w">      </span><span class="c">!! module-level singleton).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_corner</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Coriolis parameter at corners, shape (nx+1,ny+1) (`coriolis_adv_t%f_corner`).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sea_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_slow</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ice_evp_params_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">par</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_transport</span>
+<span class="w">         </span><span class="c">!! PR 36: the dt the TRANSPORT step will actually consume</span>
+<span class="w">         </span><span class="c">!! (`ocean_dyn%therm_dt(dt)`), NOT this call's `dt_slow` — EVP</span>
+<span class="w">         </span><span class="c">!! runs every outer step, transport at thermo cadence. Absent =&gt;</span>
+<span class="w">         </span><span class="c">!! `dt_slow` (read only when `par%cfl_trunc &gt; 0`).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_trunc</span>
+<span class="w">         </span><span class="c">!! PR 36: count of ice-bearing faces the final CFL clip touched</span>
+<span class="w">         </span><span class="c">!! (`0` when `par%cfl_trunc &lt;= 0`). Mirrors `ice_transport_step`'s</span>
+<span class="w">         </span><span class="c">!! `ok` idiom — the caller (driver) logs, this module does not.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">dynamics</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">n_trunc</span><span class="p">))</span><span class="w"> </span><span class="n">n_trunc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="c">! F3: gather into the dedicated INPUT buffers on the workspace slot,</span>
+<span class="w">      </span><span class="c">! distinct from the `mis_w`/`mice_w`/`ci_w` that `ice_evp_dynamics`</span>
+<span class="w">      </span><span class="c">! fills from these — no dummy-argument aliasing.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_cell_concentration_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">mis_in_w</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">mice_in_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">ci_in_w</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">ice_evp_dynamics</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">mis_in_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">mice_in_w</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">%</span><span class="n">ci_in_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_a_x</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_a_y</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">ice</span><span class="p">%</span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">dt_slow</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">evp_ws</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">dt_transport</span><span class="p">,</span><span class="w"> </span><span class="n">n_trunc</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_evp_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

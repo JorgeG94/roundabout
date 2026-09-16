@@ -1,0 +1,1635 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ice_enthalpy.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ice_enthalpy.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">67 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_enthalpy.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ice_enthalpy.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_enthalpy.html">rdb_ice_enthalpy</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ice_enthalpy.f90.html#src">rdb_ice_enthalpy.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Sea-ice enthalpy library (SIS2 port, PR 2).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_enthalpyf90EfferentGraph" width="277pt" height="32pt"
+ viewBox="0.00 0.00 277.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 273,-28 273,4 -4,4"/>
+<!-- sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_enthalpy.f90</title>
+<polygon fill="none" stroke="black" points="269,-24 145,-24 145,0 269,0 269,-24"/>
+<text text-anchor="middle" x="207" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_enthalpy.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-24 0,-24 0,0 109,0 109,-24"/>
+<text text-anchor="middle" x="54.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.79,-12C136.45,-12 127.89,-12 119.51,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.41,-8.5 109.41,-12 119.41,-15.5 119.41,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_enthalpyf90AfferentGraph" width="641pt" height="285pt"
+ viewBox="0.00 0.00 641.00 285.16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph" class="graph" transform="scale(0.22 0.22) rotate(0) translate(4 1283.43)">
+<title>sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1283.43 2890,-1283.43 2890,4 -4,4"/>
+<!-- sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_enthalpy.f90</title>
+<polygon fill="none" stroke="black" points="124,-417.53 0,-417.53 0,-393.53 124,-393.53 124,-417.53"/>
+<text text-anchor="middle" x="62" y="-403.13" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_enthalpy.F90</text>
+</g>
+<!-- sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_config.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_config.f90.html" xlink:title="rdb_config.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="885,-642.53 794,-642.53 794,-618.53 885,-618.53 885,-642.53"/>
+<text text-anchor="middle" x="839.5" y="-628.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M793.76,-622.04C731.61,-611.14 615.56,-594.02 516,-597.53"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ice_init.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ice_init.f90.html" xlink:title="rdb_ice_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="729,-440.53 633,-440.53 633,-416.53 729,-416.53 729,-440.53"/>
+<text text-anchor="middle" x="681" y="-426.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M832.62,-618.51C820.53,-594.4 791.2,-538.99 758,-498.53 742.21,-479.28 721.2,-460.32 705.27,-447"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="707.41,-444.23 697.46,-440.58 702.96,-449.64 707.41,-444.23"/>
+</g>
+<!-- sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ice_column.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ice_column.f90.html" xlink:title="rdb_ice_column.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="426,-377.53 307,-377.53 307,-353.53 426,-353.53 426,-377.53"/>
+<text text-anchor="middle" x="366.5" y="-363.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M334.71,-377.61C304.99,-388.34 258.46,-402.76 216.5,-405.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M214.5,-405.53C188.43,-407.25 159.79,-407.63 134.49,-407.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="134.28,-403.96 124.24,-407.36 134.21,-410.96 134.28,-403.96"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ice_mass.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ice_mass.f90.html" xlink:title="rdb_ice_mass.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="269,-457.53 162,-457.53 162,-433.53 269,-433.53 269,-457.53"/>
+<text text-anchor="middle" x="215.5" y="-443.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M345.46,-377.55C326.5,-388.8 297.12,-405.86 271,-419.53 264.88,-422.73 258.31,-426 251.92,-429.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="250.26,-426.01 242.75,-433.48 253.28,-432.33 250.26,-426.01"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ice_optics.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ice_optics.f90.html" xlink:title="rdb_ice_optics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="271,-377.53 160,-377.53 160,-353.53 271,-353.53 271,-377.53"/>
+<text text-anchor="middle" x="215.5" y="-363.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M306.61,-365.53C298.28,-365.53 289.68,-365.53 281.25,-365.53"/>
+<polygon fill="#003fff" stroke="#003fff" points="281.08,-362.03 271.08,-365.53 281.08,-369.03 281.08,-362.03"/>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ice_frazil_uptake.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ice_frazil_uptake.f90.html" xlink:title="rdb_ice_frazil_uptake.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="755,-531.53 607,-531.53 607,-507.53 755,-507.53 755,-531.53"/>
+<text text-anchor="middle" x="681" y="-517.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_frazil_uptake.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M666.15,-531.55C639.16,-553.68 576.84,-598.51 516,-597.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M514,-597.53C377.33,-595.32 344,-568.82 216.5,-519.53"/>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M606.86,-526.91C578.17,-527.89 545.18,-526.64 516,-519.53"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M514,-519.53C445.55,-502.84 397.71,-425.37 377.81,-387.08"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="380.78,-385.18 373.15,-377.82 374.52,-388.33 380.78,-385.18"/>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_mass.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M514,-519.53C430.66,-499.21 334.33,-475.14 274.41,-460.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="274.94,-456.62 264.39,-457.58 273.23,-463.41 274.94,-456.62"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_state.f90.html" xlink:title="rdb_ice_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="568,-337.53 462,-337.53 462,-313.53 568,-313.53 568,-337.53"/>
+<text text-anchor="middle" x="515" y="-323.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M662.68,-507.45C645.65,-494.77 619.95,-473.39 604,-449.53 578.21,-410.95 598.93,-386.12 568,-351.53 565.12,-348.31 561.76,-345.44 558.15,-342.9"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="559.74,-339.77 549.39,-337.53 556.09,-345.74 559.74,-339.77"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M643.04,-440.62C547.95,-470.96 296.69,-546.05 216.5,-519.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M214.5,-519.53C159.73,-498.35 107.73,-451.33 81.23,-424.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="83.65,-422.24 74.15,-417.54 78.65,-427.14 83.65,-422.24"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M632.96,-416.92C623.28,-414.15 613.23,-410.98 604,-407.53 563.4,-392.36 559.26,-362.97 516,-365.53"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M632.94,-421.25C622.75,-418.17 612.49,-413.78 604,-407.53 580.17,-389.99 590.02,-371.29 568,-351.53 564.34,-348.24 560.2,-345.27 555.88,-342.61"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="557.31,-339.4 546.88,-337.57 553.9,-345.51 557.31,-339.4"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M169.05,-433.53C153.24,-429.35 135.32,-424.62 118.78,-420.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.25,-416.76 108.68,-417.59 117.46,-423.53 119.25,-416.76"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M169.05,-377.53C153.24,-381.7 135.32,-386.43 118.78,-390.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="117.46,-387.53 108.68,-393.47 119.25,-394.3 117.46,-387.53"/>
+</g>
+<!-- sourcefile~rdb_ice_snow.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ice_snow.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ice_snow.f90.html" xlink:title="rdb_ice_snow.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="734,-398.53 628,-398.53 628,-374.53 734,-374.53 734,-398.53"/>
+<text text-anchor="middle" x="681" y="-384.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_snow.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M627.82,-387.82C541.97,-390.14 365.57,-395.7 216.5,-405.53"/>
+</g>
+<!-- sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M631.8,-374.44C622.49,-371.76 612.88,-368.75 604,-365.53 585.41,-358.78 565.28,-349.77 548.97,-342"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="550.38,-338.8 539.85,-337.6 547.34,-345.1 550.38,-338.8"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M461.84,-320.31C391.48,-315.05 263.09,-311.79 160,-344.53 131.72,-353.51 103.47,-372.73 84.81,-387.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="82.58,-384.51 76.94,-393.48 86.95,-389.98 82.58,-384.51"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M470.05,-337.53C454.76,-341.7 437.44,-346.43 421.44,-350.8"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="420.4,-347.46 411.68,-353.47 422.25,-354.21 420.4,-347.46"/>
+</g>
+<!-- sourcefile~rdb_config_schema.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_config_schema.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_config_schema.f90.html" xlink:title="rdb_config_schema.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1060,-622.53 921,-622.53 921,-598.53 1060,-598.53 1060,-622.53"/>
+<text text-anchor="middle" x="990.5" y="-608.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_schema.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M920.67,-619.77C912.1,-620.92 903.44,-622.08 895.13,-623.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="894.65,-619.73 885.2,-624.53 895.58,-626.67 894.65,-619.73"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_decomp.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_decomp.f90.html" xlink:title="rdb_decomp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1041.5,-776.53 939.5,-776.53 939.5,-752.53 1041.5,-752.53 1041.5,-776.53"/>
+<text text-anchor="middle" x="990.5" y="-762.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M976.01,-752.4C949.97,-728.98 892.6,-677.38 861.51,-649.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="863.62,-646.62 853.85,-642.53 858.94,-651.82 863.62,-646.62"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2733.5,-1056.53 2645.5,-1056.53 2645.5,-1032.53 2733.5,-1032.53 2733.5,-1056.53"/>
+<text text-anchor="middle" x="2689.5" y="-1042.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1768.5,-1238.53C1678.11,-1241.28 1659.41,-1276.55 1569,-1278.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1567,-1278.53C1237.74,-1285.75 1104.49,-1189.01 921,-915.53 863.61,-829.99 846.74,-703.78 842.12,-652.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="845.59,-652.44 841.27,-642.76 838.62,-653.02 845.59,-652.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1652,-1250.53 1484,-1250.53 1484,-1226.53 1652,-1226.53 1652,-1250.53"/>
+<text text-anchor="middle" x="1568" y="-1236.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1768.5,-1238.53C1733.97,-1238.81 1696.09,-1238.88 1662.69,-1238.85"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="1662.48,-1235.35 1652.48,-1238.84 1662.47,-1242.35 1662.48,-1235.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2606,-450.53 2473,-450.53 2473,-426.53 2606,-426.53 2606,-450.53"/>
+<text text-anchor="middle" x="2539.5" y="-436.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M2683.62,-1032.22C2674.51,-1008.95 2654.7,-956.74 2642,-911.53 2593.91,-740.34 2555.94,-528.8 2544.24,-460.73"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="2547.67,-459.99 2542.54,-450.72 2540.77,-461.17 2547.67,-459.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2019.5,-739.53 1896.5,-739.53 1896.5,-715.53 2019.5,-715.53 2019.5,-739.53"/>
+<text text-anchor="middle" x="1958" y="-725.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2648.92,-1032.49C2573.91,-1009.22 2406.44,-955.07 2271,-895.53 2254.44,-888.25 2251.79,-883.27 2235,-876.53 2198.97,-862.06 2186.54,-868.16 2151,-852.53"/>
+</g>
+<!-- sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_halo.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_halo.f90.html" xlink:title="rdb_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1409,-1056.53 1328,-1056.53 1328,-1032.53 1409,-1032.53 1409,-1056.53"/>
+<text text-anchor="middle" x="1368.5" y="-1042.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2538.5,-1084.53C2400.9,-1101.43 2370.76,-1128.47 2235,-1156.53 2029.7,-1198.96 1980.13,-1236.78 1770.5,-1238.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1768.5,-1238.53C1701.35,-1239.79 1535.03,-1180.2 1484,-1136.53 1458.61,-1114.8 1473.65,-1091.94 1448,-1070.53 1439.56,-1063.48 1429.15,-1058.33 1418.7,-1054.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1419.74,-1051.22 1409.15,-1051.48 1417.59,-1057.88 1419.74,-1051.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node40" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node40"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1827.5,-896.53 1711.5,-896.53 1711.5,-872.53 1827.5,-872.53 1827.5,-896.53"/>
+<text text-anchor="middle" x="1769.5" y="-882.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge107" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M2654.34,-1056.56C2624.68,-1066.33 2580.35,-1079.31 2540.5,-1084.53"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M2538.5,-1084.53C2520.25,-1086.92 1997.1,-945.9 1824.88,-899.27"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1825.58,-895.84 1815.01,-896.6 1823.75,-902.59 1825.58,-895.84"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2737,-902.53 2642,-902.53 2642,-878.53 2737,-878.53 2737,-902.53"/>
+<text text-anchor="middle" x="2689.5" y="-888.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2661.14,-902.56C2591.33,-932.87 2400.42,-1013.39 2235,-1061.53 2145.2,-1087.66 2121.23,-1088.97 2029,-1104.53 1789.74,-1144.89 1721.15,-1187.86 1484,-1136.53 1429.37,-1124.7 1422.92,-1100.96 1369.5,-1084.53"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M2684.54,-878.44C2664.48,-817.17 2573.97,-540.75 2547.68,-460.46"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="2550.98,-459.28 2544.54,-450.87 2544.33,-461.46 2550.98,-459.28"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2641.94,-890.85C2528.31,-891.06 2239.59,-887.98 2151,-852.53"/>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2149,-852.53C2083.7,-823.8 2015.93,-773.35 1981.7,-746.16"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="1983.73,-743.3 1973.75,-739.77 1979.35,-748.76 1983.73,-743.3"/>
+</g>
+<!-- sourcefile~rdb_ice_atm_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ice_atm_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ice_atm_forcing.f90.html" xlink:title="rdb_ice_atm_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2029,-183.53 1887,-183.53 1887,-159.53 2029,-159.53 2029,-183.53"/>
+<text text-anchor="middle" x="1958" y="-169.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_atm_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_atm_forcing.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ice_atm_forcing.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1937.22,-159.49C1881.47,-126.75 1717.47,-38.53 1569,-38.53 1569,-38.53 1569,-38.53 838.5,-38.53 720.4,-38.53 687.84,-80.34 604,-163.53 562.38,-204.82 535.27,-269.96 523.21,-303.68"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="519.79,-302.86 519.82,-313.46 526.4,-305.15 519.79,-302.86"/>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ice_basal_flux.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ice_basal_flux.f90.html" xlink:title="rdb_ice_basal_flux.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="747.5,-276.53 614.5,-276.53 614.5,-252.53 747.5,-252.53 747.5,-276.53"/>
+<text text-anchor="middle" x="681" y="-262.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_basal_flux.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M664.72,-276.55C639.01,-296.63 587.98,-335.84 568,-346.53 546.3,-358.13 540.56,-364.08 516,-365.53"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M514,-365.53C488.67,-367.02 460.84,-367.35 436.3,-367.2"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="436.03,-363.7 426,-367.1 435.97,-370.7 436.03,-363.7"/>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M643.53,-276.6C630.96,-280.87 616.82,-285.79 604,-290.53 587.81,-296.51 570.09,-303.48 554.83,-309.61"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="553.16,-306.51 545.2,-313.5 555.78,-313 553.16,-306.51"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="730.5,-196.53 631.5,-196.53 631.5,-172.53 730.5,-172.53 730.5,-196.53"/>
+<text text-anchor="middle" x="681" y="-182.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M642.78,-172.41C597.71,-158.2 526.51,-137.45 516,-144.53"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M631.29,-196.43C621.73,-200.04 612.15,-204.66 604,-210.53 569.07,-235.65 541.52,-278.58 527.09,-304.28"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="523.93,-302.76 522.21,-313.21 530.07,-306.11 523.93,-302.76"/>
+</g>
+<!-- sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ice_itd.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ice_itd.f90.html" xlink:title="rdb_ice_itd.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1614.5,-196.53 1521.5,-196.53 1521.5,-172.53 1614.5,-172.53 1614.5,-196.53"/>
+<text text-anchor="middle" x="1568" y="-182.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_itd.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_itd.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ice_itd.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1521.42,-184.68C1415.63,-185.46 1145.32,-189.91 921,-214.53 884.9,-218.49 876.3,-222.46 840.5,-228.53"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M838.5,-228.53C768.94,-229.95 746.6,-198.69 682,-224.53"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1253,-93.53 1096,-93.53 1096,-69.53 1253,-69.53 1253,-93.53"/>
+<text text-anchor="middle" x="1174.5" y="-79.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1095.87,-77.6C1044.9,-77.37 977.47,-81.58 921,-100.53 839.3,-127.94 837.08,-171.29 758,-205.53 726.05,-219.36 713.1,-208.87 682,-224.53"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M680,-224.53C647.67,-237.46 634.6,-226.91 604,-243.53 574.91,-259.33 548.1,-287.01 531.9,-305.79"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="529.19,-303.57 525.44,-313.48 534.55,-308.08 529.19,-303.57"/>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ice_thermo_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ice_thermo_driver.f90.html" xlink:title="rdb_ice_thermo_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="758,-356.53 604,-356.53 604,-332.53 758,-332.53 758,-356.53"/>
+<text text-anchor="middle" x="681" y="-342.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_thermo_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M603.86,-356.48C576.26,-360.23 544.8,-363.83 516,-365.53"/>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M603.76,-335.7C595.2,-334.7 586.55,-333.7 578.19,-332.73"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="578.51,-329.25 568.17,-331.57 577.7,-336.2 578.51,-329.25"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1833.5,-311.53 1705.5,-311.53 1705.5,-287.53 1833.5,-287.53 1833.5,-311.53"/>
+<text text-anchor="middle" x="1769.5" y="-297.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1705.36,-291.51C1597.04,-277.86 1368.77,-249.55 1175.5,-228.53"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1173.5,-228.53C1118.74,-219.56 1113.84,-189.94 1060,-176.53 824.99,-117.97 716.91,-9.27 516,-144.53"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1173.5,-228.53C1026.27,-213.48 988.47,-225.5 840.5,-228.53"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_itd.f90</title>
+<path fill="none" stroke="#17ff00" stroke-dasharray="5,2" d="M1754.66,-287.39C1733.68,-269.48 1692.01,-235.8 1652,-214.53 1641.75,-209.08 1630.29,-204.22 1619.24,-200.09"/>
+<polygon fill="#17ff00" stroke="#17ff00" points="1620.27,-196.74 1609.67,-196.65 1617.9,-203.33 1620.27,-196.74"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node37" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node37"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1622.5,-816.53 1513.5,-816.53 1513.5,-792.53 1622.5,-792.53 1622.5,-816.53"/>
+<text text-anchor="middle" x="1568" y="-802.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge102" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1765.53,-311.66C1748.6,-380.7 1664.59,-721.56 1652,-740.53 1639.14,-759.89 1618.45,-775.86 1600.95,-787.01"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1598.85,-784.19 1592.14,-792.39 1602.5,-790.16 1598.85,-784.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2886,-978.53 2773,-978.53 2773,-954.53 2886,-954.53 2886,-978.53"/>
+<text text-anchor="middle" x="2829.5" y="-964.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2824.29,-978.76C2803.57,-1036.44 2706.73,-1278.53 2540.5,-1278.53 2540.5,-1278.53 2540.5,-1278.53 1957,-1278.53 1784.56,-1278.53 1741.44,-1277.33 1569,-1278.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ffd000" stroke-dasharray="5,2" d="M2806.63,-954.49C2783.75,-941.89 2747.63,-921.99 2721.75,-907.74"/>
+<polygon fill="#ffd000" stroke="#ffd000" points="2723.17,-904.52 2712.72,-902.77 2719.79,-910.66 2723.17,-904.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2221.5,-314.53 2078.5,-314.53 2078.5,-290.53 2221.5,-290.53 2221.5,-314.53"/>
+<text text-anchor="middle" x="2150" y="-300.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2827.83,-954.49C2823.23,-876.53 2793.25,-444.36 2690.5,-378.53"/>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2688.5,-378.53C2633.12,-343.04 2606.18,-382.06 2540.5,-378.53"/>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2538.5,-378.53C2528.08,-377.97 2365.06,-341.29 2355,-338.53"/>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2353,-338.53C2313.75,-327.76 2269.3,-319.43 2232.1,-313.51"/>
+<polygon fill="#1700ff" stroke="#1700ff" points="2232.24,-309.99 2221.82,-311.91 2231.16,-316.91 2232.24,-309.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M2688.5,-378.53C2667.84,-365.29 2605,-399.04 2568.18,-421.13"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="2566.15,-418.27 2559.42,-426.46 2569.79,-424.25 2566.15,-418.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2437,-390.53 2271,-390.53 2271,-366.53 2437,-366.53 2437,-390.53"/>
+<text text-anchor="middle" x="2354" y="-376.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M2538.5,-378.53C2508.91,-376.94 2476.59,-376.5 2447.43,-376.59"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="2447.24,-373.09 2437.26,-376.65 2447.28,-380.09 2447.24,-373.09"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge108" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M2772.85,-958.98C2657.25,-943.6 2382.58,-908.54 2151,-890.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1497.51,-1250.56C1350.83,-1271.86 1005.69,-1299.81 794,-1136.53 583.76,-974.37 750.72,-776.16 568,-583.53 532.15,-545.74 500.13,-569.02 462,-533.53 416.71,-491.38 387.55,-422.49 374.84,-387.46"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="378.05,-386.02 371.43,-377.75 371.44,-388.34 378.05,-386.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1544.66,-1226.32C1526.04,-1215.09 1500.04,-1196.83 1484,-1174.53 1455.44,-1134.82 1482.82,-1104.88 1448,-1070.53 1440.02,-1062.65 1429.6,-1057.16 1418.98,-1053.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1419.82,-1049.93 1409.23,-1050.27 1417.72,-1056.61 1419.82,-1049.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1851,-660.53 1688,-660.53 1688,-636.53 1851,-636.53 1851,-660.53"/>
+<text text-anchor="middle" x="1769.5" y="-646.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1705.48,-636.48C1647.81,-625.42 1560.13,-608.53 1484,-593.53 1433.07,-583.49 1420.47,-560.7 1369.5,-570.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_ocean_data_input.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_ocean_data_input.f90.html" xlink:title="rdb_ocean_data_input.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1644.5,-584.53 1491.5,-584.53 1491.5,-560.53 1644.5,-560.53 1644.5,-584.53"/>
+<text text-anchor="middle" x="1568" y="-570.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1723.78,-636.49C1711.89,-632.65 1699.24,-627.96 1688,-622.53 1670.69,-614.16 1669.35,-606.82 1652,-598.53 1643.6,-594.51 1634.42,-590.92 1625.34,-587.78"/>
+<polygon fill="#002eff" stroke="#002eff" points="1626.15,-584.37 1615.56,-584.56 1623.96,-591.01 1626.15,-584.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node41" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node41"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1643.5,-976.53 1492.5,-976.53 1492.5,-952.53 1643.5,-952.53 1643.5,-976.53"/>
+<text text-anchor="middle" x="1568" y="-962.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge112" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1745.1,-660.68C1726.48,-671.64 1701.41,-689.55 1688,-712.53 1636.71,-800.36 1718.5,-861.57 1652,-938.53 1649.17,-941.81 1645.93,-944.68 1642.41,-947.19"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1640.49,-944.25 1633.74,-952.42 1644.11,-950.25 1640.49,-944.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1491.34,-564.73C1454.3,-562.69 1409.23,-562.86 1369.5,-570.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M2142.01,-290.31C2108.69,-233.82 1959.65,-0.53 1770.5,-0.53 1770.5,-0.53 1770.5,-0.53 838.5,-0.53 732.46,-0.53 696.17,7.91 604,-44.53 552.54,-73.81 563.31,-108.93 516,-144.53"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M514,-144.53C440.55,-197.49 393.47,-299.57 375.61,-343.99"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="372.27,-342.92 371.88,-353.51 378.79,-345.48 372.27,-342.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2082.32,-314.66C2075.72,-318.19 2069.72,-322.73 2065,-328.53 1959.83,-457.67 2130.55,-569.52 2029,-701.53 2026.54,-704.73 2023.63,-707.54 2020.44,-710"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="2018.49,-707.09 2011.97,-715.44 2022.27,-712.98 2018.49,-707.09"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2537.15,-450.85C2529.75,-516.78 2492.32,-827.79 2437,-904.53 2320.7,-1065.86 1767.66,-1131.97 1569,-1122.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1567,-1122.53C1477.64,-1120.28 1457.41,-1100.71 1369.5,-1084.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1367.5,-1084.53C1304.22,-1072.88 1116.61,-1032.11 1096,-1018.53 952.81,-924.15 871.22,-718.89 847.69,-652.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="850.98,-650.85 844.41,-642.54 844.36,-653.13 850.98,-650.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_frazil_uptake.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_frazil_uptake.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1567,-1122.53C1393.06,-1118.15 1349.5,-1122.53 1175.5,-1122.53 1175.5,-1122.53 1175.5,-1122.53 989.5,-1122.53 745.82,-1122.53 880.97,-835.9 758,-625.53 739.7,-594.22 714.56,-560.61 698.3,-539.82"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="700.86,-537.42 691.91,-531.74 695.37,-541.76 700.86,-537.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1567,-418.53C1255.83,-389.16 880.42,-412.77 739.31,-423.72"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="738.85,-420.24 729.16,-424.51 739.4,-427.22 738.85,-420.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_snow.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_snow.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M838.5,-386.53C807.53,-387.03 773.11,-387.08 744.45,-386.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="744.18,-383.49 734.17,-386.95 744.16,-390.49 744.18,-383.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M2538.18,-450.86C2536.29,-501.9 2523.47,-699.92 2437,-828.53 2385.62,-904.95 2343.29,-895.47 2271,-952.53 2254.65,-965.43 2253.81,-973.59 2235,-982.53 2046.75,-1071.91 1978.83,-1041.23 1770.5,-1046.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_atm_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_atm_forcing.f90</title>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M2472.96,-432.58C2437.88,-429.09 2394,-424.25 2355,-418.53"/>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M2353,-418.53C2315.99,-413.09 2306.32,-411.85 2271,-399.53 2215.25,-380.08 2205.66,-364.85 2151,-342.53"/>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M2149,-342.53C2113.57,-328.05 2096.76,-344.89 2065,-323.53 2015.89,-290.49 1982.62,-226.44 1967.79,-193.01"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="1970.95,-191.49 1963.78,-183.69 1964.52,-194.26 1970.95,-191.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90</title>
+<path fill="none" stroke="#a2ff00" stroke-dasharray="5,2" d="M1173.5,-266.53C1097.99,-244.12 875.77,-252.99 757.72,-259.68"/>
+<polygon fill="#a2ff00" stroke="#a2ff00" points="757.45,-256.19 747.67,-260.26 757.85,-263.18 757.45,-256.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M1957,-418.53C1786.57,-392.27 1740.43,-437.21 1569,-418.53"/>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M1567,-418.53C1520.21,-413.78 1414.52,-356.13 1369.5,-342.53"/>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M1367.5,-342.53C1279.65,-315.98 1262.99,-294.23 1175.5,-266.53"/>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M1173.5,-266.53C1021.67,-218.46 834.03,-197.12 740.6,-188.92"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="740.76,-185.42 730.5,-188.06 740.17,-192.4 740.76,-185.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_itd.f90</title>
+<path fill="none" stroke="#17ff00" stroke-dasharray="5,2" d="M1768.5,-184.53C1722.98,-164.85 1665.96,-167.18 1624.56,-173.06"/>
+<polygon fill="#17ff00" stroke="#17ff00" points="1624,-169.61 1614.65,-174.58 1625.06,-176.53 1624,-169.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M2149,-342.53C2113.57,-328.05 2101.19,-335.99 2065,-323.53 1928.15,-276.39 1903.35,-241.96 1770.5,-184.53"/>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1768.5,-184.53C1592.82,-133.22 1379.96,-103.91 1263.02,-90.51"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="1263.38,-87.02 1253.05,-89.38 1262.59,-93.98 1263.38,-87.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90</title>
+<path fill="none" stroke="#00ff73" stroke-dasharray="5,2" d="M1367.5,-342.53C1141.53,-277.87 1075.51,-382.73 840.5,-386.53"/>
+<path fill="none" stroke="#00ff73" stroke-dasharray="5,2" d="M838.5,-386.53C835.79,-386.53 779.81,-371.36 735.56,-359.25"/>
+<polygon fill="#00ff73" stroke="#00ff73" points="736.33,-355.83 725.76,-356.56 734.48,-362.58 736.33,-355.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M2353,-418.53C2179.75,-393.09 2132.07,-445.19 1959,-418.53"/>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M1957,-418.53C1886.31,-407.64 1819.78,-349.62 1788.76,-318.81"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="1791.17,-316.27 1781.66,-311.6 1786.19,-321.18 1791.17,-316.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1957,-687.53C1917.65,-679.36 1873.64,-670.16 1838.25,-662.75"/>
+<polygon fill="#0073ff" stroke="#0073ff" points="1838.55,-659.23 1828.04,-660.61 1837.11,-666.08 1838.55,-659.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M2353,-814.53C2271.46,-868.44 2245.63,-752.04 2151,-727.53"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M2149,-727.53C2065.46,-705.89 2043.49,-705.07 1959,-687.53"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1957,-687.53C1904,-676.52 1901.4,-647.28 1851,-627.53 1816.77,-614.12 1805.27,-620.45 1770.5,-608.53"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1768.5,-608.53C1732.13,-596.06 1690.48,-587.68 1654.67,-582.17"/>
+<polygon fill="#002eff" stroke="#002eff" points="1655.14,-578.7 1644.74,-580.69 1654.11,-585.62 1655.14,-578.7"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2519.57,-426.4C2506.17,-417.53 2487.98,-404.94 2473,-392.53 2455.81,-378.29 2456.59,-368.22 2437,-357.53 2404.16,-339.61 2391.08,-348.43 2355,-338.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2213,-942.53 2087,-942.53 2087,-918.53 2213,-918.53 2213,-942.53"/>
+<text text-anchor="middle" x="2150" y="-928.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#a200ff" stroke-dasharray="5,2" d="M2353,-814.53C2314.89,-839.72 2307.26,-848.72 2271,-876.53 2254.92,-888.86 2252.97,-895.16 2235,-904.53 2227.23,-908.58 2218.72,-912.12 2210.2,-915.18"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="2208.95,-911.9 2200.6,-918.42 2211.2,-918.53 2208.95,-911.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ocean_stability_audit.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ocean_stability_audit.f90.html" xlink:title="rdb_ocean_stability_audit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2235,-622.53 2065,-622.53 2065,-598.53 2235,-598.53 2235,-622.53"/>
+<text text-anchor="middle" x="2150" y="-608.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M2536.93,-450.84C2529.25,-505.2 2490.42,-725 2355,-814.53"/>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M2353,-814.53C2331.34,-828.85 2211.13,-684.73 2167.14,-630.58"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="2169.77,-628.27 2160.76,-622.71 2164.33,-632.68 2169.77,-628.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2149,-727.53C2110.47,-717.55 2066.06,-716.98 2029.86,-719.16"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="2029.62,-715.67 2019.88,-719.84 2030.1,-722.65 2029.62,-715.67"/>
+</g>
+<!-- sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_state.f90.html" xlink:title="rdb_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2396.5,-470.53 2311.5,-470.53 2311.5,-446.53 2396.5,-446.53 2396.5,-470.53"/>
+<text text-anchor="middle" x="2354" y="-456.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90</title>
+<path fill="none" stroke="#ff0045" stroke-dasharray="5,2" d="M2472.77,-445.69C2451.04,-448.06 2427.19,-450.66 2406.67,-452.9"/>
+<polygon fill="#ff0045" stroke="#ff0045" points="2406.14,-449.43 2396.58,-454 2406.9,-456.39 2406.14,-449.43"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge91" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M2502.85,-426.43C2483.41,-419.87 2458.91,-411.67 2437,-404.53 2426.02,-400.95 2414.19,-397.16 2403.02,-393.61"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="2404.01,-390.25 2393.42,-390.57 2401.9,-396.93 2404.01,-390.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1234,-852.53 1115,-852.53 1115,-828.53 1234,-828.53 1234,-852.53"/>
+<text text-anchor="middle" x="1174.5" y="-838.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge96" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1957,-687.53C1853.94,-666.13 1586.65,-689.24 1484,-712.53 1377.31,-736.73 1260.31,-794.78 1206.15,-823.65"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1204.24,-820.7 1197.09,-828.52 1207.56,-826.86 1204.24,-820.7"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge109" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M2353,-814.53C2272.98,-867.43 2246.06,-903.35 2151,-890.53"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M2149,-890.53C2040.92,-875.95 1913.92,-877.75 1837.94,-880.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1837.41,-877.34 1827.56,-881.26 1837.7,-884.33 1837.41,-877.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge114" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M2353,-814.53C2314.89,-839.72 2299.92,-841.16 2271,-876.53 2247.59,-905.15 2265.6,-930.77 2235,-951.53 2133.24,-1020.55 2081.77,-963.82 1959,-970.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2089.22,-918.51C2051.86,-911.17 2002.71,-901.83 1959,-894.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1957,-894.53C1885.86,-882.64 1720.91,-804.83 1652,-783.53 1578.36,-760.77 1558.34,-760.88 1484,-740.53 1346.24,-702.81 1318.22,-655.95 1175.5,-650.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M2124.01,-942.59C2099.93,-954.02 2062.35,-971.34 2029,-984.53 1998.42,-996.62 1990.21,-998.14 1959,-1008.53"/>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1957,-1008.53C1876.74,-1035.25 1854.99,-1042.28 1770.5,-1046.53"/>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1768.5,-1046.53C1641.93,-1052.89 1610.23,-1038.75 1484,-1027.53 1467.96,-1026.1 1464.03,-1024.98 1448,-1023.53 1387.54,-1018.06 1228.49,-1034.15 1175.5,-1004.53"/>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1173.5,-1004.53C1083.07,-951.23 1022.56,-833.97 1000.64,-785.81"/>
+<polygon fill="#ff4500" stroke="#ff4500" points="1003.82,-784.34 996.56,-776.63 997.43,-787.19 1003.82,-784.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2130.16,-918.35C2112.34,-906.34 2085.36,-886.88 2065,-866.53 2027.01,-828.55 1990.88,-776.65 1972.2,-748.22"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="1974.94,-746.02 1966.56,-739.54 1969.07,-749.83 1974.94,-746.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1957,-1008.53C1907.53,-1026.02 1902.12,-1048.66 1851,-1060.53 1692.11,-1097.4 1646.72,-1071.84 1484,-1060.53 1462.69,-1059.05 1439.3,-1056.03 1419.25,-1053.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1419.52,-1049.51 1409.1,-1051.44 1418.45,-1056.43 1419.52,-1049.51"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge98" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1957,-894.53C1910.2,-887.25 1898.19,-901.49 1851,-905.53 1725.84,-916.23 1694.46,-918.32 1569,-924.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge110" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1957,-894.53C1917.78,-888.43 1873.42,-885.88 1837.81,-884.87"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1837.62,-881.37 1827.53,-884.62 1837.44,-888.37 1837.62,-881.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge115" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M2109.45,-942.62C2071.34,-953.36 2011.85,-967.78 1959,-970.53"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1957,-970.53C1852.85,-975.94 1732.79,-972.61 1654.14,-969.14"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1653.95,-965.62 1643.8,-968.67 1653.63,-972.62 1653.95,-965.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2089.86,-598.49C1973.76,-576.35 1707.81,-533.08 1484,-551.53 1432.59,-555.76 1420.12,-560.59 1369.5,-570.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1367.5,-570.53C1332.19,-576.97 1322.53,-576.7 1289,-589.53 1235.51,-609.99 1232.76,-651.3 1175.5,-650.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1173.5,-650.53C1075.38,-649.2 961.27,-640.87 895.32,-635.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="895.41,-631.88 885.16,-634.53 894.83,-638.86 895.41,-631.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1567,-650.53C1397.59,-610.81 1349.46,-654.11 1175.5,-650.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1907.32,-715.48C1899.81,-711.94 1892.68,-707.39 1887,-701.53 1852.08,-665.5 1886.46,-630.02 1851,-594.53 1779.76,-523.23 1092.29,-304.53 991.5,-304.53 991.5,-304.53 991.5,-304.53 838.5,-304.53 747.83,-304.53 643.12,-312.9 578.22,-319.07"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="577.78,-315.59 568.16,-320.04 578.45,-322.56 577.78,-315.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1768.5,-726.53C1679.83,-726.44 1657.62,-729.41 1569,-726.53"/>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1567,-726.53C1357.64,-719.71 1303.41,-714.19 1096,-743.53 1081.49,-745.58 1065.95,-748.37 1051.41,-751.25"/>
+<polygon fill="#ff4500" stroke="#ff4500" points="1050.63,-747.84 1041.53,-753.25 1052.02,-754.7 1050.63,-747.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#0073ff" stroke-dasharray="5,2" d="M1922.99,-715.45C1911.49,-711.22 1898.62,-706.32 1887,-701.53 1859.14,-690.03 1828.1,-675.84 1805.07,-665.04"/>
+<polygon fill="#0073ff" stroke="#0073ff" points="1806.26,-661.73 1795.73,-660.63 1803.28,-668.06 1806.26,-661.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1909.39,-715.48C1901.29,-711.93 1893.43,-707.36 1887,-701.53 1859.91,-676.95 1879.56,-650.38 1851,-627.53 1822.3,-604.56 1805.27,-620.45 1770.5,-608.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_z_init.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_z_init.f90.html" xlink:title="rdb_ocean_z_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1430.5,-622.53 1306.5,-622.53 1306.5,-598.53 1430.5,-598.53 1430.5,-622.53"/>
+<text text-anchor="middle" x="1368.5" y="-608.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_z_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1896.1,-727.07C1859.66,-726.82 1812.43,-726.57 1770.5,-726.53"/>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1768.5,-726.53C1673.62,-726.43 1661.38,-672.19 1569,-650.53"/>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1567,-650.53C1525.26,-640.74 1478.22,-631.16 1440.53,-623.83"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1441.14,-620.38 1430.65,-621.92 1439.81,-627.25 1441.14,-620.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~rdb_ocean_restart_io.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/rdb_ocean_restart_io.f90.html" xlink:title="rdb_ocean_restart_io.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1247,-776.53 1102,-776.53 1102,-752.53 1247,-752.53 1247,-776.53"/>
+<text text-anchor="middle" x="1174.5" y="-762.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge99" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_restart_io.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1567,-726.53C1459.66,-726.53 1336.53,-740.85 1257.47,-751.91"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1256.51,-748.52 1247.1,-753.38 1257.49,-755.45 1256.51,-748.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge104" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1768.5,-726.53C1702.5,-726.46 1632.14,-763.97 1595.18,-786.99"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1593.08,-784.18 1586.52,-792.5 1596.84,-790.08 1593.08,-784.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge111" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1942.68,-739.59C1910.4,-766.76 1831.79,-832.93 1792.96,-865.62"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1790.27,-863.31 1784.87,-872.43 1794.78,-868.67 1790.27,-863.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1333.26,-622.54C1295.19,-634.73 1231.67,-651.69 1175.5,-650.53"/>
+</g>
+<!-- sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2311.3,-458.18C2239.4,-457.6 2087.43,-456.53 1959,-456.53 1959,-456.53 1959,-456.53 1173.5,-456.53 1040.96,-456.53 909.04,-566.14 860.25,-611.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="857.77,-608.89 852.89,-618.29 862.57,-613.99 857.77,-608.89"/>
+</g>
+<!-- sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1327.95,-1043.17C1287.35,-1040.26 1223.5,-1031.36 1175.5,-1004.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#1700ff" stroke-dasharray="5,2" d="M2307.01,-366.44C2295.03,-362.62 2282.31,-357.96 2271,-352.53 2253.66,-344.21 2252.36,-336.79 2235,-328.53 2226.6,-324.53 2217.43,-320.96 2208.35,-317.85"/>
+<polygon fill="#1700ff" stroke="#1700ff" points="2209.15,-314.43 2198.56,-314.64 2206.98,-321.08 2209.15,-314.43"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00d0" stroke-dasharray="5,2" d="M2303,-390.66C2292.08,-394.31 2280.85,-398.89 2271,-404.53 2164.17,-465.61 2131.93,-486.26 2065,-589.53 2036.56,-633.4 2065.14,-663.74 2029,-701.53 2025.79,-704.89 2022.1,-707.81 2018.14,-710.37"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="2016.15,-707.47 2009.1,-715.37 2019.54,-713.59 2016.15,-707.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1144.66,-828.49C1113.6,-815.52 1064.04,-794.82 1029.74,-780.5"/>
+<polygon fill="#ff4500" stroke="#ff4500" points="1031.08,-777.26 1020.5,-776.64 1028.38,-783.72 1031.08,-777.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff4500" stroke-dasharray="5,2" d="M1101.83,-764.53C1085.35,-764.53 1067.98,-764.53 1052.02,-764.53"/>
+<polygon fill="#ff4500" stroke="#ff4500" points="1051.76,-761.03 1041.76,-764.53 1051.76,-768.03 1051.76,-761.03"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node36" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node36"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1448,-892.53 1289,-892.53 1289,-868.53 1448,-868.53 1448,-892.53"/>
+<text text-anchor="middle" x="1368.5" y="-878.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge92" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1309.89,-868.53C1288.92,-864.16 1265.01,-859.18 1243.23,-854.64"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1243.9,-851.2 1233.4,-852.59 1242.47,-858.06 1243.9,-851.2"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge93" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1513.4,-810.08C1492.94,-812.16 1469.4,-814.51 1448,-816.53 1378.67,-823.08 1299.37,-830 1244.26,-834.71"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1243.92,-831.23 1234.26,-835.57 1244.52,-838.2 1243.92,-831.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node38" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node38"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1636.5,-896.53 1499.5,-896.53 1499.5,-872.53 1636.5,-872.53 1636.5,-896.53"/>
+<text text-anchor="middle" x="1568" y="-882.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge94" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1526.68,-896.59C1477.99,-910.48 1398.96,-930.63 1369.5,-924.53"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1367.5,-924.53C1331.9,-917.15 1322.64,-915.32 1289,-901.53 1258.8,-889.15 1226.16,-871.06 1203.67,-857.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1205.36,-854.74 1194.98,-852.62 1201.78,-860.75 1205.36,-854.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge100" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1499.31,-883.16C1486.23,-882.89 1472.34,-882.61 1458.69,-882.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1458.39,-878.83 1448.32,-882.12 1458.25,-885.83 1458.39,-878.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node39" class="node">
+<title>sourcefile~rdb_ocean_chksum.f90</title>
+<g id="a_sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_node39"><a xlink:href="../sourcefile/rdb_ocean_chksum.f90.html" xlink:title="rdb_ocean_chksum.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1637,-1018.53 1499,-1018.53 1499,-994.53 1637,-994.53 1637,-1018.53"/>
+<text text-anchor="middle" x="1568" y="-1004.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_chksum.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1504.51,-1018.55C1476.97,-1023.85 1445.07,-1029.99 1419.19,-1034.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1418.39,-1031.56 1409.23,-1036.88 1419.71,-1038.43 1418.39,-1031.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge95" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1726.92,-896.62C1686.88,-907.36 1624.39,-921.79 1569,-924.53"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1567,-924.53C1479.33,-928.87 1455.45,-942.34 1369.5,-924.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge101" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1713.37,-872.51C1694.06,-868.85 1672.16,-865.33 1652,-863.53 1577.63,-856.88 1558.46,-858.03 1484,-863.53 1472.76,-864.36 1460.95,-865.64 1449.36,-867.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1448.7,-863.69 1439.25,-868.5 1449.63,-870.63 1448.7,-863.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge103" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1744.8,-872.43C1721.53,-860.82 1684.85,-843.23 1652,-830.53 1642.07,-826.69 1631.32,-823 1620.95,-819.66"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1621.76,-816.24 1611.17,-816.57 1619.65,-822.92 1621.76,-816.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge105" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1711.33,-884.53C1691.25,-884.53 1668.34,-884.53 1646.85,-884.53"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1646.77,-881.03 1636.77,-884.53 1646.77,-888.03 1646.77,-881.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_chksum.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge106" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_chksum.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1757.95,-896.85C1738.98,-918.22 1696.85,-962.12 1652,-985.53 1648.22,-987.5 1644.24,-989.3 1640.17,-990.93"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1638.7,-987.73 1630.5,-994.44 1641.1,-994.31 1638.7,-987.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge113" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1744.8,-896.63C1721.53,-908.24 1684.85,-925.83 1652,-938.53 1642.07,-942.36 1631.32,-946.06 1620.95,-949.4"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1619.65,-946.14 1611.17,-952.49 1621.76,-952.82 1619.65,-946.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_enthalpy.f90~~AfferentGraph_edge97" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1506.9,-952.5C1467.75,-944.63 1415.58,-934.07 1369.5,-924.53"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ice_enthalpyf90AfferentGraph = svgPanZoom('#sourcefilerdb_ice_enthalpyf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Sea-ice enthalpy library (SIS2 port, PR 2).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ice_enthalpy</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Specific-enthalpy &lt;-&gt; temperature inversions for the sea-ice</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! thermodynamic column model.</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! * The thermodynamic prognostic of the ice model is SPECIFIC</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!!   ENTHALPY (J/kg), never temperature; these are the exact T&lt;-&gt;E</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!!   inversions every later rung (PR 3 Winton column, PR 4</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!!   transport re-layering) consumes.</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! * Source: ../SIS2/src/SIS2_ice_thm.F90 (Apache-2.0) — T_Freeze</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!!   (:1622), enth_from_TS (:1647), enthalpy_liquid_freeze (:1679),</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!!   enthalpy_liquid (:1691), Temp_from_En_S (:1830); constant</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!   defaults from ice_thermo_init (:1534-1617).</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! * THE SIMPLIFICATION (ratified in PLAN_SEA_ICE.md): Cp_brine ==</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!!   Cp_ice. SIS2's default Cp_brine = Cp_water makes Temp_from_En_S</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!   transcendental (a T_fr*log(T_fr/T) term) and needs the</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!   20-iteration Newton/false-position solve at SIS2_ice_thm.F90:</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!   1876-1933; with Cp_brine = Cp_ice the log term vanishes and the</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!!   T&lt;-&gt;E map is a closed-form quadratic, invertible EXACTLY. Only</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!!   the Cp_ice == Cp_brine branches are ported; the else branches</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!!   are deliberately NOT.</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! * WHY THE ROUND-TRIP IS EXACT: for S &gt; 0, T &lt; t_fr, substituting</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!!   ice_enth_from_ts's En into ice_temp_from_en_s gives</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!!   BB = 0.5*(ICE_LAT_FUS*t_fr/T + ICE_CP_ICE*T), and the quadratic</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!!   ICE_CP_ICE*T**2 - 2*BB*T + ICE_LAT_FUS*t_fr = 0 has T as its</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!!   smaller root by construction — so</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!!   ice_temp_from_en_s(ice_enth_from_ts(T,S), S) == T to machine</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!!   precision, not merely to a solver tolerance. The fresh-water</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="c">!!   and melted branches invert trivially.</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="c">!! * Everything pure elemental + `!$acc routine seq`: host scalars,</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="c">!!   whole-array elemental calls, or per-point inside a</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="c">!!   do concurrent device kernel.</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="k">   private</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice_t_freeze</span><span class="p">,</span><span class="w"> </span><span class="n">ice_enth_from_ts</span><span class="p">,</span><span class="w"> </span><span class="n">ice_enthalpy_liquid_freeze</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">             </span><span class="n">ice_enthalpy_liquid</span><span class="p">,</span><span class="w"> </span><span class="n">ice_temp_from_en_s</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="c">! SIS2 ice-thermodynamics constants (ice_thermo_init defaults,</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="c">! SIS2_ice_thm.F90:1534-1617), unscaled SI. Co-located with their</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="c">! kernel per the rdb_eos TFR_S_COEFF precedent.</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.34e5_wp</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">      </span><span class="c">!! Latent heat of fusion (J/kg) — SIS2 `LATENT_HEAT_FUSION`.</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_CP_ICE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">210</span><span class="mf">0.0_wp</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="c">!! Heat capacity of fresh ice (J/kg/K) — SIS2 `CP_ICE`.</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_CP_WATER</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">420</span><span class="mf">0.0_wp</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="c">!! Heat capacity of seawater as carried by the ICE model</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">      </span><span class="c">!! (J/kg/K) — SIS2 `CP_SEAWATER`. Deliberately DISTINCT from the</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="c">!! ocean's `SEAWATER_CP = 3992` (`rdb_ocean_surface_flux`): SIS2's</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="c">!! ice model owns its own Cp_water = 4200 as the enthalpy</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="c">!! zero-of-reference, and reusing 3992 here would break bit-parity</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="c">!! with SIS2's enthalpy and mis-close the PR-3 frazil energy</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="c">!! handshake. Do not "unify" them.</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_CP_BRINE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_CP_ICE</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">      </span><span class="c">!! Heat capacity of brine pockets (J/kg/K). THE simplification:</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="c">!! set equal to `ICE_CP_ICE` (SIS2's documented computational-</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">      </span><span class="c">!! convenience option for `CP_BRINE`, not its default Cp_water) so</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="c">!! the T&lt;-&gt;E map closes in quadratic form with no Newton loop.</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_DTF_DS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">0.054_wp</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="c">!! Liquidus slope dT_f/dS (degC/PSU) — SIS2 `DTFREEZE_DS`. Same</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="c">!! value as the ocean-side `TFR_S_COEFF` (rdb_eos) by</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="c">!! construction — SIS2 parity on both sides of the seam.</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_ENTH_LIQ_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="c">!! Enthalpy of liquid fresh water at 0 degC (J/kg) — SIS2</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="c">!! `ENTHALPY_LIQUID_0`. Zero-point of the enthalpy scale; kept in</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="c">!! the algebra (even though it is 0) so a future non-zero</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="c">!! reference is a one-line change.</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_LIQ_LIM</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.99_wp</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="c">!! `LIQUID_LIMIT` (PR 3a) — max liquid fraction before the</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="c">!! excess-enthalpy clamp (SIS2_ice_thm.F90:500-524) and the</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! bottom-freeze `min_dEnth_freeze` floor (:1164-1188). Co-located</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="c">!! here (not `rdb_ice_column`) so both `rdb_ice_column` and</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="c">!! `rdb_ice_mass` can depend on this leaf module without a cycle.</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_NK_MAX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="c">!! Compile-time cap on per-column local-array size (kappa-shear</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="c">!! `NZ_STACK_MAX` precedent). `nk_ice &lt;= ICE_NK_MAX` is asserted</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="c">!! at slot init (`ocean_sea_ice_init`, `rdb_ice_state`). Co-located</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">!! on this leaf (not `rdb_ice_column`) — like `ICE_LIQ_LIM` — so</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="c">!! `rdb_ice_mass` can size its fixed device-stack locals by it</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="c">!! without a `rdb_ice_column` → `rdb_ice_mass` → `rdb_ice_column`</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! cycle. `rdb_ice_column` re-exports it for existing importers.</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="k">contains</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="k">   pure elemental function </span><span class="n">ice_t_freeze</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">t_fr</span><span class="p">)</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="c">!! Freezing temperature (degC) of the ice brine at bulk salinity</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! `s` — SIS2 `T_Freeze` (SIS2_ice_thm.F90:1622), linear liquidus.</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! RAW `s` (no max(0,s) clamp) — faithful to SIS2, which clamps</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="c">!! only in enth_from_TS. Do not unify with ice_enth_from_ts's</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! internal t_fr.</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">         </span><span class="c">!! Ice bulk salinity (PSU).</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_fr</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="n">t_fr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_DTF_DS</span><span class="o">*</span><span class="n">s</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">   </span><span class="k">end function </span><span class="n">ice_t_freeze</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">   </span><span class="k">pure elemental function </span><span class="n">ice_enthalpy_liquid_freeze</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">enth</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="c">!! Enthalpy (J/kg) of liquid water at the freezing point for</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="c">!! salinity `s` — SIS2 `enthalpy_liquid_freeze` (SIS2_ice_thm.F90:1679).</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">         </span><span class="c">!! Ice bulk salinity (PSU).</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_CP_WATER</span><span class="o">*</span><span class="p">(</span><span class="n">ICE_DTF_DS</span><span class="o">*</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_ENTH_LIQ_0</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">   </span><span class="k">end function </span><span class="n">ice_enthalpy_liquid_freeze</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">   </span><span class="k">pure elemental function </span><span class="n">ice_enthalpy_liquid</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">enth</span><span class="p">)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="c">!! Enthalpy (J/kg) of liquid water at temperature `t` — SIS2</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="c">!! `enthalpy_liquid` (SIS2_ice_thm.F90:1691). `s` is unused in</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="c">!! this linear form; the argument is kept for SIS2 call-site</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="c">!! parity (`enthalpy_liquid(T, S, ITV)`).</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">         </span><span class="c">!! Water temperature (degC).</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">         </span><span class="c">!! Ice bulk salinity (PSU) — unused, kept for call-site parity.</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_ENTH_LIQ_0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_CP_WATER</span><span class="o">*</span><span class="n">t</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">   </span><span class="k">end function </span><span class="n">ice_enthalpy_liquid</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">   </span><span class="k">pure elemental function </span><span class="n">ice_enth_from_ts</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">enth</span><span class="p">)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="c">!! Ice specific enthalpy (J/kg) from temperature + bulk salinity —</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="c">!! SIS2 `enth_from_TS` (SIS2_ice_thm.F90:1647). NOTE: here (and</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="c">!! only here) the freezing point uses max(0, s), per SIS2.</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="c">!! The SIS2 `else` branch at :1667-1671 (Cp_brine /= Cp_ice, the</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="c">!! T_fr*log(T_fr/T) form) is deliberately NOT ported — with</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="c">!! ICE_CP_BRINE == ICE_CP_ICE it is unreachable, and dropping it</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="c">!! keeps the map closed-form-invertible (see module docstring).</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">         </span><span class="c">!! Ice temperature (degC).</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">         </span><span class="c">!! Ice bulk salinity (PSU).</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_fr</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="n">t_fr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_DTF_DS</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">)</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">s</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">         </span><span class="c">! Fresh water at/below freezing is assumed all ice, due to the</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">         </span><span class="c">! degeneracy in inverting temperature for enthalpy (SIS2 note).</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ICE_ENTH_LIQ_0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_CP_ICE</span><span class="o">*</span><span class="n">t</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">t_fr</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">         </span><span class="c">! Already melted: just the sensible heat relative to 0 degC.</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_ENTH_LIQ_0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_CP_WATER</span><span class="o">*</span><span class="n">t</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">         </span><span class="c">! Cp_ice == Cp_brine closed form (SIS2 :1664-1666).</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ICE_ENTH_LIQ_0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fr</span><span class="o">/</span><span class="n">t</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">                </span><span class="p">(</span><span class="n">ICE_CP_ICE</span><span class="o">*</span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">ICE_CP_WATER</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_CP_ICE</span><span class="p">)</span><span class="o">*</span><span class="n">t_fr</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="k">   end function </span><span class="n">ice_enth_from_ts</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">   </span><span class="k">pure elemental function </span><span class="n">ice_temp_from_en_s</span><span class="p">(</span><span class="n">en</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="c">!! Ice temperature (degC) from specific enthalpy + bulk salinity —</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="c">!! SIS2 `Temp_from_En_S` (SIS2_ice_thm.F90:1830), Cp_ice ==</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="c">!! Cp_brine path only: the quadratic</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="c">!!   ICE_CP_ICE*T**2 - 2*BB*T + ICE_LAT_FUS*t_fr = 0</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="c">!! solved for its smaller root. The SIS2 Newton/false-position</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">      </span><span class="c">!! refinement (:1876-1933) is only needed when Cp_brine /= Cp_ice</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="c">!! and is deliberately NOT ported. Uses RAW `s` for t_fr (no max),</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="c">!! faithful to SIS2.</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">en</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">         </span><span class="c">!! Ice specific enthalpy (J/kg).</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">         </span><span class="c">!! Ice bulk salinity (PSU).</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_fr</span><span class="p">,</span><span class="w"> </span><span class="n">en_j</span><span class="p">,</span><span class="w"> </span><span class="n">bb</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="n">t_fr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_DTF_DS</span><span class="o">*</span><span class="n">s</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="n">en_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">en</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_ENTH_LIQ_0</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">s</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">         </span><span class="c">! Step function for fresh water: liquid / mushy plateau / solid.</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">en_j</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="k">            </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">en_j</span><span class="o">/</span><span class="n">ICE_CP_WATER</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">en_j</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="o">-</span><span class="n">ICE_LAT_FUS</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="k">            </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="k">            </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">en_j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="p">)</span><span class="o">/</span><span class="n">ICE_CP_ICE</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="k">      else if</span><span class="w"> </span><span class="p">(</span><span class="n">en_j</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">t_fr</span><span class="o">*</span><span class="n">ICE_CP_WATER</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">         </span><span class="c">! Completely melted layer.</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">         </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">en_j</span><span class="o">/</span><span class="n">ICE_CP_WATER</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">         </span><span class="c">! Closed-form quadratic root (SIS2 :1868-1874).</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">         </span><span class="n">bb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">((</span><span class="n">en_j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fr</span><span class="o">*</span><span class="p">(</span><span class="n">ICE_CP_WATER</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_CP_ICE</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="p">)</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">         </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">bb</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">bb</span><span class="o">*</span><span class="n">bb</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fr</span><span class="o">*</span><span class="n">ICE_CP_ICE</span><span class="o">*</span><span class="n">ICE_LAT_FUS</span><span class="p">))</span><span class="o">/</span><span class="n">ICE_CP_ICE</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="k">   end function </span><span class="n">ice_temp_from_en_s</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="k">end module </span><span class="n">rdb_ice_enthalpy</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,884 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_surface_flux_apply_sw_penetration &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_surface_flux_apply_sw_penetration
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">24 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_surface_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_surface_flux.f90.html'>rdb_ocean_surface_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_surface_flux_apply_sw_penetration</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_surface_flux_apply_sw_penetration.html#variable-idx_t~4">idx_T</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_apply_sw_penetration.html#variable-nx~123">nx</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_apply_sw_penetration.html#variable-ny~123">ny</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_apply_sw_penetration.html#variable-nz~119">nz</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_surface_flux_apply_sw_penetration.html#src">ocean_surface_flux_apply_sw_penetration</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_surface_flux_apply_sw_penetration(grid, sf, ms, dt, active)  
+</h2>
+    
+
+    <p>Additive correction that redistributes the penetrating
+shortwave fraction of <code>Q_heat</code> through the upper water column
+as a two-band exponential (Paulson &amp; Simpson 1977; Jerlov
+types), instead of leaving all of it deposited at the surface
+layer by <code>ocean_surface_flux_apply_tracers</code>.</p>
+<p>Penetrating irradiance at downward depth <code>d</code>:
+  I(d) = I0 · [ R·exp(-d/zeta1) + (1-R)·exp(-d/zeta2) ]
+with <code>I0 = sw_pen_frac · Q_heat(i,j)</code>.  Per-layer absorbed SW =
+<code>I(d_top) - I(d_bot)</code>; the bed (<code>k = 1</code>) is treated as opaque
+(<code>I_bot := 0</code>) so the column absorbs all of <code>I0</code> and energy is
+conserved exactly (Σ_k absorbed_k = I0).</p>
+<p>Additive-correction structure: the surface kernel already
+deposited the full <code>I0</code> lump at <code>k = nz</code>; this kernel removes it
+there (<code>-inv_scale · I0</code>) and adds the distributed profile, so
+the net column heat change versus the legacy all-at-<code>nz</code>
+deposition is zero — shortwave only MOVES heat in depth.  Both
+the <code>hTr</code> and <code>heat_budget_surface</code> increments are mirrored, so
+the total surface heat budget is unchanged (just depth-spread).</p>
+<p>Bottom-up convention (<code>k = nz</code> surface, <code>k = 1</code> bed).  No-op
+unless <code>sf%has_sw .and. sf%has_heat</code>, a temperature tracer is
+registered, and (optionally) <code>active</code> is true.  Default-off
+(<code>sw_pen_frac = 0</code> ⇒ <code>has_sw = .false.</code>) leaves the path
+byte-for-byte unchanged.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~78"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~5"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                <p>Optional — absent ⇒ no-op (no forcing configured).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~30"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~32"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-active~5"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>active</strong></td>
+            <td>
+                <p>Optional thermo-cadence gate.  Present-and-false ⇒ early
+return; absent ⇒ kernel runs.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph Pages: 1 -->
+<svg id="prococean_surface_flux_apply_sw_penetrationCallsGraph" width="572pt" height="74pt"
+ viewBox="0.00 0.00 572.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 568,-70 568,4 -4,4"/>
+<!-- proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node1" class="node">
+<title>proc~ocean_surface_flux_apply_sw_penetration</title>
+<polygon fill="none" stroke="black" points="236,-45 0,-45 0,-21 236,-21 236,-45"/>
+<text text-anchor="middle" x="118" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surface_flux_apply_sw_penetration</text>
+</g>
+<!-- proc~apply_sw_penetration_impl -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node2" class="node">
+<title>proc~apply_sw_penetration_impl</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node2"><a xlink:href="../proc/apply_sw_penetration_impl.html" xlink:title="apply_sw_penetration_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="429,-45 272,-45 272,-21 429,-21 429,-45"/>
+<text text-anchor="middle" x="350.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_penetration_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_impl -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_impl</title>
+<path fill="none" stroke="#ff0000" d="M236.28,-33C244.81,-33 253.34,-33 261.66,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="261.7,-36.5 271.7,-33 261.7,-29.5 261.7,-36.5"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node3" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="541.5,-66 487.5,-66 487.5,-42 541.5,-42 541.5,-66"/>
+<text text-anchor="middle" x="514.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~apply_sw_penetration_impl&#45;&gt;local -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_edge2" class="edge">
+<title>proc~apply_sw_penetration_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M429.18,-43.07C445.87,-45.23 462.76,-47.42 476.99,-49.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="476.93,-52.79 487.3,-50.6 477.83,-45.85 476.93,-52.79"/>
+</g>
+<!-- proc~sw_transmission -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node4" class="node">
+<title>proc~sw_transmission</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_node4"><a xlink:href="../proc/sw_transmission.html" xlink:title="sw_transmission">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="564,-24 465,-24 465,0 564,0 564,-24"/>
+<text text-anchor="middle" x="514.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_penetration_impl&#45;&gt;proc~sw_transmission -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CallsGraph_edge3" class="edge">
+<title>proc~apply_sw_penetration_impl&#45;&gt;proc~sw_transmission</title>
+<path fill="none" stroke="#ff0000" d="M429.18,-22.93C437.84,-21.81 446.55,-20.68 454.91,-19.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="455.45,-23.05 464.92,-18.3 454.55,-16.11 455.45,-23.05"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph Pages: 1 -->
+<svg id="prococean_surface_flux_apply_sw_penetrationCalledByGraph" width="641pt" height="53pt"
+ viewBox="0.00 0.00 641.00 53.24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 70)">
+<title>proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 887,-70 887,4 -4,4"/>
+<!-- proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node1" class="node">
+<title>proc~ocean_surface_flux_apply_sw_penetration</title>
+<polygon fill="none" stroke="black" points="883,-45 647,-45 647,-21 883,-21 883,-45"/>
+<text text-anchor="middle" x="765" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surface_flux_apply_sw_penetration</text>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node2" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node2"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.5,-66 532.5,-66 532.5,-42 597.5,-42 597.5,-66"/>
+<text text-anchor="middle" x="565" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge1" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration</title>
+<path fill="none" stroke="#ff0000" d="M597.81,-50.63C610.01,-49.33 624.78,-47.77 640.42,-46.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="641.24,-49.54 650.81,-45 640.5,-42.58 641.24,-49.54"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node3" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node3"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-24 519,-24 519,0 611,0 611,-24"/>
+<text text-anchor="middle" x="565" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration</title>
+<path fill="none" stroke="#ff0000" d="M611.43,-16.82C620.51,-17.78 630.46,-18.84 640.78,-19.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="640.46,-23.42 650.77,-20.99 641.19,-16.46 640.46,-23.42"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-66 371.5,-66 371.5,-42 469.5,-42 469.5,-66"/>
+<text text-anchor="middle" x="420.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M469.74,-54C486.7,-54 505.6,-54 522,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="522.37,-57.5 532.37,-54 522.37,-50.5 522.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-24 358,-24 358,0 483,0 483,-24"/>
+<text text-anchor="middle" x="420.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M483.17,-12C491.73,-12 500.47,-12 508.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="508.99,-15.5 518.99,-12 508.99,-8.5 508.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node6" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node6"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-38.85C334.29,-40.75 348.1,-42.89 361.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="361.05,-48.45 371.47,-46.53 362.13,-41.53 361.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M322.11,-27.15C330.15,-25.9 338.91,-24.54 347.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.44,-26.6 357.78,-21.6 347.36,-19.68 348.44,-26.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node9" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_node9"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_surface_flux_apply_sw_penetration~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_surface_flux_apply_sw_penetrationCalledByGraph = svgPanZoom('#prococean_surface_flux_apply_sw_penetrationCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_t~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_T</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~123"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~123"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~119"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_surface_flux_apply_sw_penetration</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Additive correction that redistributes the penetrating</span>
+<span class="w">      </span><span class="c">!! shortwave fraction of `Q_heat` through the upper water column</span>
+<span class="w">      </span><span class="c">!! as a two-band exponential (Paulson &amp; Simpson 1977; Jerlov</span>
+<span class="w">      </span><span class="c">!! types), instead of leaving all of it deposited at the surface</span>
+<span class="w">      </span><span class="c">!! layer by `ocean_surface_flux_apply_tracers`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Penetrating irradiance at downward depth `d`:</span>
+<span class="w">      </span><span class="c">!!   I(d) = I0 · [ R·exp(-d/zeta1) + (1-R)·exp(-d/zeta2) ]</span>
+<span class="w">      </span><span class="c">!! with `I0 = sw_pen_frac · Q_heat(i,j)`.  Per-layer absorbed SW =</span>
+<span class="w">      </span><span class="c">!! `I(d_top) - I(d_bot)`; the bed (`k = 1`) is treated as opaque</span>
+<span class="w">      </span><span class="c">!! (`I_bot := 0`) so the column absorbs all of `I0` and energy is</span>
+<span class="w">      </span><span class="c">!! conserved exactly (Σ_k absorbed_k = I0).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Additive-correction structure: the surface kernel already</span>
+<span class="w">      </span><span class="c">!! deposited the full `I0` lump at `k = nz`; this kernel removes it</span>
+<span class="w">      </span><span class="c">!! there (`-inv_scale · I0`) and adds the distributed profile, so</span>
+<span class="w">      </span><span class="c">!! the net column heat change versus the legacy all-at-`nz`</span>
+<span class="w">      </span><span class="c">!! deposition is zero — shortwave only MOVES heat in depth.  Both</span>
+<span class="w">      </span><span class="c">!! the `hTr` and `heat_budget_surface` increments are mirrored, so</span>
+<span class="w">      </span><span class="c">!! the total surface heat budget is unchanged (just depth-spread).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Bottom-up convention (`k = nz` surface, `k = 1` bed).  No-op</span>
+<span class="w">      </span><span class="c">!! unless `sf%has_sw .and. sf%has_heat`, a temperature tracer is</span>
+<span class="w">      </span><span class="c">!! registered, and (optionally) `active` is true.  Default-off</span>
+<span class="w">      </span><span class="c">!! (`sw_pen_frac = 0` ⇒ `has_sw = .false.`) leaves the path</span>
+<span class="w">      </span><span class="c">!! byte-for-byte unchanged.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+<span class="w">         </span><span class="c">!! Optional — absent ⇒ no-op (no forcing configured).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span>
+<span class="w">         </span><span class="c">!! Optional thermo-cadence gate.  Present-and-false ⇒ early</span>
+<span class="w">         </span><span class="c">!! return; absent ⇒ kernel runs.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">idx_T</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">active</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">sf</span><span class="p">%</span><span class="n">has_sw</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">has_heat</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">idx_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx_T</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="c">! Shim+_impl split: keep the `tracers(idx_T)%hTr` registry deref on</span>
+<span class="w">      </span><span class="c">! the host (array-of-DT indirection blocks NVHPC device codegen).</span>
+<span class="w">      </span><span class="c">! The irradiance source is selected HOST-SIDE (`sw_from_qsw`): the</span>
+<span class="w">      </span><span class="c">! PR-12 `q_sw` component is allocated only under `use_components`,</span>
+<span class="w">      </span><span class="c">! so passing it as an actual argument is only legal on the branch</span>
+<span class="w">      </span><span class="c">! guarded by the host flag (validate_config forces</span>
+<span class="w">      </span><span class="c">! enable_components when sw_source="q_sw", making this total).  The</span>
+<span class="w">      </span><span class="c">! additive-correction identity `-I0 + Σ_k I0·(T_top - T_bot) = 0`</span>
+<span class="w">      </span><span class="c">! holds for ANY I0, so the source swap cannot break conservation.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sf</span><span class="p">%</span><span class="n">sw_from_qsw</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">apply_sw_penetration_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sw</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">dt</span><span class="o">/</span><span class="p">(</span><span class="n">sf</span><span class="p">%</span><span class="n">rho0</span><span class="o">*</span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">),</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_pen_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_band_ratio</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta1</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">apply_sw_penetration_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">dt</span><span class="o">/</span><span class="p">(</span><span class="n">sf</span><span class="p">%</span><span class="n">rho0</span><span class="o">*</span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">),</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_pen_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_band_ratio</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta1</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">ocean_surface_flux_apply_sw_penetration</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

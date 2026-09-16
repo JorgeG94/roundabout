@@ -1,0 +1,1749 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_recon_weno &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_recon_weno
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.6% of total for modules and submodules.">318 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_recon_weno.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_recon_weno.f90.html'>rdb_recon_weno.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_recon_weno</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_ok">TRACER_RECON_OK</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_ppm">TRACER_RECON_PPM</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_reject_no_ml">TRACER_RECON_REJECT_NO_ML</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_reject_ocean">TRACER_RECON_REJECT_OCEAN</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_reject_pqm">TRACER_RECON_REJECT_PQM</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_reject_unknown">TRACER_RECON_REJECT_UNKNOWN</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_weno5">TRACER_RECON_WENO5</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_weno7">TRACER_RECON_WENO7</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#variable-tracer_recon_weno9">TRACER_RECON_WENO9</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-parse_tracer_recon">parse_tracer_recon</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-plm_face_swept">plm_face_swept</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-recon_rung_for_face">recon_rung_for_face</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-tracer_recon_required_nghost">tracer_recon_required_nghost</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-tracer_recon_support_status">tracer_recon_support_status</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-weno5_face_swept">weno5_face_swept</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-weno7_face_swept">weno7_face_swept</a>
+            <a class="list-group-item" href="../module/rdb_recon_weno.html#proc-weno9_face_swept">weno9_face_swept</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_recon_weno~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_recon_wenoUsesGraph" width="422pt" height="52pt"
+ viewBox="0.00 0.00 422.00 52.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_recon_weno~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 48)">
+<title>module~~rdb_recon_weno~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-48 418,-48 418,4 -4,4"/>
+<!-- module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsesGraph_node1" class="node">
+<title>module~rdb_recon_weno</title>
+<polygon fill="none" stroke="black" points="414,-44 314,-44 314,-20 414,-20 414,-44"/>
+<text text-anchor="middle" x="364" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_recon_weno</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_recon_weno~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_recon_weno~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="185,-44 98,-44 98,-20 185,-20 185,-44"/>
+<text text-anchor="middle" x="141.5" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_recon_weno&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_recon_weno~~UsesGraph_edge1" class="edge">
+<title>module~rdb_recon_weno&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M313.56,-32.68C301.9,-32.81 289.51,-32.93 278,-33 252.67,-33.15 246.33,-33.16 221,-33 212.76,-32.95 204.04,-32.86 195.52,-32.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="195.32,-29.26 185.28,-32.64 195.23,-36.26 195.32,-29.26"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_recon_weno~~UsesGraph_node3" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_recon_weno~~UsesGraph_node3"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="278,-24 221,-24 221,0 278,0 278,-24"/>
+<text text-anchor="middle" x="249.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_recon_weno&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_recon_weno~~UsesGraph_edge2" class="edge">
+<title>module~rdb_recon_weno&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M313.98,-23.29C305.32,-21.75 296.43,-20.17 288.15,-18.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="288.5,-15.2 278.04,-16.9 287.27,-22.09 288.5,-15.2"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_recon_weno~~UsesGraph_node4" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-44 0,-44 0,-20 62,-20 62,-44"/>
+<text text-anchor="middle" x="31" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_recon_weno~~UsesGraph_edge3" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M97.93,-32C89.5,-32 80.67,-32 72.32,-32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.05,-28.5 62.05,-32 72.05,-35.5 72.05,-28.5"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_recon_weno~~UsesGraph_edge4" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M220.93,-17.2C212.99,-18.7 204.06,-20.38 195.15,-22.07"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="194.32,-18.66 185.14,-23.95 195.62,-25.54 194.32,-18.66"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_recon_weno~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_recon_wenoUsedByGraph" width="641pt" height="141pt"
+ viewBox="0.00 0.00 641.00 141.13" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_recon_weno~~UsedByGraph" class="graph" transform="scale(0.51 0.51) rotate(0) translate(4 271)">
+<title>module~~rdb_recon_weno~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-271 1245,-271 1245,4 -4,4"/>
+<!-- module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node1" class="node">
+<title>module~rdb_recon_weno</title>
+<polygon fill="none" stroke="black" points="100,-84 0,-84 0,-60 100,-60 100,-84"/>
+<text text-anchor="middle" x="50" y="-69.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_recon_weno</text>
+</g>
+<!-- module~rdb_continuity -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node2" class="node">
+<title>module~rdb_continuity</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node2"><a xlink:href="../module/rdb_continuity.html" xlink:title="rdb_continuity">
+<polygon fill="#337ab7" stroke="#337ab7" points="227,-104 139,-104 139,-80 227,-80 227,-104"/>
+<text text-anchor="middle" x="183" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_continuity&#45;&gt;module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_continuity&#45;&gt;module~rdb_recon_weno</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M138.74,-85.4C129.56,-83.99 119.72,-82.49 110.06,-81.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="110.52,-77.55 100.1,-79.5 109.46,-84.47 110.52,-77.55"/>
+</g>
+<!-- module~rdb_ocean_halo_width -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_halo_width</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_halo_width.html" xlink:title="rdb_ocean_halo_width">
+<polygon fill="#337ab7" stroke="#337ab7" points="1005,-241 874,-241 874,-217 1005,-217 1005,-241"/>
+<text text-anchor="middle" x="939.5" y="-226.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_width</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_halo_width&#45;&gt;module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_halo_width&#45;&gt;module~rdb_recon_weno</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M873.75,-240.61C805.71,-251.78 695.44,-267 599.5,-267 599.5,-267 599.5,-267 312,-267 196.45,-267 99.11,-142.83 64.5,-92.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="67.28,-90.52 58.78,-84.2 61.48,-94.44 67.28,-90.52"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="650,-64 547,-64 547,-40 650,-40 650,-64"/>
+<text text-anchor="middle" x="598.5" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_recon_weno</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M448,-52C328.28,-43.24 187.97,-55.62 110.32,-64.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="109.78,-60.99 100.25,-65.62 110.58,-67.95 109.78,-60.99"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="360,-24 266,-24 266,0 360,0 360,-24"/>
+<text text-anchor="middle" x="313" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M546.92,-53.82C518.41,-54.39 482.18,-54.35 450,-52"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M448,-52C414.29,-49.53 377.62,-37.92 351.17,-27.84"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="352.15,-24.46 341.56,-24.07 349.6,-30.98 352.15,-24.46"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="499,-146 399,-146 399,-122 499,-122 499,-146"/>
+<text text-anchor="middle" x="449" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M580.81,-64C562.18,-77.08 530.85,-98.12 502,-113 498.74,-114.68 495.31,-116.33 491.83,-117.9"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="490.37,-114.72 482.59,-121.91 493.16,-121.14 490.37,-114.72"/>
+</g>
+<!-- proc~validate_config -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node5" class="node">
+<title>proc~validate_config</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node5"><a xlink:href="../proc/validate_config.html" xlink:title="validate_config">
+<polygon fill="#d9534f" stroke="#d9534f" points="230,-24 136,-24 136,0 230,0 230,-24"/>
+<text text-anchor="middle" x="183" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">validate_config</text>
+</a>
+</g>
+</g>
+<!-- proc~validate_config&#45;&gt;module~rdb_recon_weno -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge4" class="edge">
+<title>proc~validate_config&#45;&gt;module~rdb_recon_weno</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M155.49,-24.14C135.69,-33.21 108.42,-45.7 86.7,-55.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="85.1,-52.53 77.47,-59.88 88.02,-58.89 85.1,-52.53"/>
+</g>
+<!-- module~rdb_ice_transport -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node6" class="node">
+<title>module~rdb_ice_transport</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node6"><a xlink:href="../module/rdb_ice_transport.html" xlink:title="rdb_ice_transport">
+<polygon fill="#337ab7" stroke="#337ab7" points="502,-104 396,-104 396,-80 502,-80 502,-104"/>
+<text text-anchor="middle" x="449" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_transport&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ice_transport&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M404.75,-104.03C378.59,-110 344.51,-115.45 314,-113"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M312,-113C287.17,-111.01 259.89,-106.82 236.93,-102.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="237.5,-99.24 227.03,-100.88 236.24,-106.13 237.5,-99.24"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1241,-109 1150,-109 1150,-85 1241,-85 1241,-109"/>
+<text text-anchor="middle" x="1195.5" y="-94.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_halo_width -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_halo_width</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1076.5,-189C1052.73,-199.14 1025.58,-207.69 1001.82,-214.25"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1000.61,-210.95 991.87,-216.94 1002.43,-217.71 1000.61,-210.95"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1186.97,-84.71C1174.53,-65.73 1147.68,-30.01 1114,-16 1084.04,-3.54 1073.44,-15.51 1041,-16 966.75,-17.11 948.02,-15.04 874,-21 826.41,-24.83 815.12,-38.34 767.5,-35"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M765.5,-35C623.53,-22.16 455.76,-15.96 370.25,-13.45"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="370.33,-9.95 360.23,-13.16 370.13,-16.94 370.33,-9.95"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="995,-87 884,-87 884,-63 995,-63 995,-87"/>
+<text text-anchor="middle" x="939.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1149.97,-93.14C1109.89,-89.67 1050.5,-84.53 1005.19,-80.6"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1005.43,-77.11 995.16,-79.73 1004.82,-84.08 1005.43,-77.11"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node12" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node12"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1114,-129 1041,-129 1041,-105 1114,-105 1114,-129"/>
+<text text-anchor="middle" x="1077.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1149.98,-104.68C1141.53,-106.13 1132.68,-107.66 1124.2,-109.12"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1123.34,-105.72 1114.08,-110.87 1124.53,-112.62 1123.34,-105.72"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="838,-201 695,-201 695,-177 838,-177 838,-201"/>
+<text text-anchor="middle" x="766.5" y="-186.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M938.5,-189C909.2,-187.31 877.03,-186.93 848.57,-187.09"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="848.24,-183.59 838.27,-187.18 848.3,-190.59 848.24,-183.59"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="659,-182 538,-182 538,-158 659,-158 659,-182"/>
+<text text-anchor="middle" x="598.5" y="-167.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1183.7,-109.01C1164.67,-129.31 1122.95,-170.05 1078.5,-189"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1076.5,-189C1020.9,-212.71 1000.84,-192.48 940.5,-189"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M938.5,-189C892.94,-186.38 883.39,-172.69 838,-168 774.78,-161.47 758.55,-167.33 695,-168 686.66,-168.09 677.9,-168.22 669.23,-168.37"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="669.03,-164.87 659.1,-168.56 669.16,-171.87 669.03,-164.87"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M292.56,-24.15C271.1,-37.56 236.38,-59.26 211.99,-74.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.83,-71.73 203.2,-80 213.54,-77.67 209.83,-71.73"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M893.9,-87.07C859.63,-95.69 810.96,-106.53 767.5,-111"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M765.5,-111C752.53,-112.33 683.21,-85.72 638.35,-67.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="639.48,-64.48 628.9,-64.01 636.88,-70.98 639.48,-64.48"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ice_transport -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ice_transport</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M765.5,-111C677.86,-120.02 576.04,-110.25 512.31,-101.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="512.41,-98.2 502.03,-100.3 511.46,-105.13 512.41,-98.2"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M902.33,-62.98C868.07,-52.45 814.95,-38.32 767.5,-35"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M765.5,-111C691.73,-119.54 673.18,-120.77 599.5,-130"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M920.2,-87.2C889.99,-107.34 829.53,-147.65 794.43,-171.05"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="792.05,-168.43 785.67,-176.89 795.93,-174.25 792.05,-168.43"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M765.5,-111C740.29,-113.6 678.16,-137.55 637.47,-154.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="636.05,-150.93 628.13,-157.96 638.71,-157.4 636.05,-150.93"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M398.89,-124.49C373.63,-120.06 342.28,-115.27 314,-113"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M411.22,-121.9C405.87,-119.37 400.62,-116.41 396,-113 366.12,-90.92 340.78,-55.51 326.49,-33.02"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="329.29,-30.91 321.05,-24.25 323.34,-34.6 329.29,-30.91"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_node11" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_recon_weno~~UsedByGraph_node11"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1111,-49 1044,-49 1044,-25 1111,-25 1111,-49"/>
+<text text-anchor="middle" x="1077.5" y="-34.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1043.78,-35.38C1016.22,-34.29 975.76,-33.33 940.5,-35"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M938.5,-35C862.59,-38.6 843.31,-40.31 767.5,-35"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1043.92,-46.1C1028.82,-50.32 1010.47,-55.45 993.45,-60.21"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="992.3,-56.89 983.61,-62.95 994.19,-63.63 992.3,-56.89"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M938.5,-35C826.95,-40.3 801.98,-64.96 695,-97 651.98,-109.88 644.06,-124.42 599.5,-130"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M597.5,-130C568.54,-133.63 536.14,-134.82 509.09,-135.02"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="509,-131.52 499.01,-135.06 509.02,-138.52 509,-131.52"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1040.77,-105.96C1025.11,-101.13 1006.48,-95.38 989.55,-90.15"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="990.41,-86.75 979.82,-87.14 988.34,-93.44 990.41,-86.75"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1040.76,-121.81C998.6,-128.66 927.48,-144.02 874,-175 854.69,-186.19 858.33,-200.79 838,-210 741.14,-253.88 703.18,-252.6 599.5,-229"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M731.28,-201.04C690.36,-214.77 624.29,-234.64 599.5,-229"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M597.5,-229C545.55,-217.18 495.74,-177.16 469.39,-153"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="471.68,-150.35 461.99,-146.06 466.89,-155.45 471.68,-150.35"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M694.62,-180.89C686.22,-179.93 677.66,-178.95 669.28,-177.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="669.51,-174.49 659.18,-176.83 668.71,-181.44 669.51,-174.49"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_recon_weno~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M547.97,-157.91C535.44,-154.85 521.85,-151.54 508.9,-148.37"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="509.69,-144.97 499.14,-145.99 508.03,-151.77 509.69,-144.97"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_recon_wenoUsedByGraph = svgPanZoom('#modulerdb_recon_wenoUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_ok"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_OK</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Config honours the requested tracer_recon code.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_ppm"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_PPM</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Use PPM (the default path — does not call this module).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_reject_no_ml"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_REJECT_NO_ML</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                <p>weno* requested on a coastal run without multilayer tracers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_reject_ocean"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_REJECT_OCEAN</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>weno* requested on sim_type=&rsquo;ocean&rsquo; (coastal-only in wave 1).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_reject_pqm"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_REJECT_PQM</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>&ldquo;pqm&rdquo; requested — deferred, not implemented on any config.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_reject_unknown"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_REJECT_UNKNOWN</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Unrecognised tracer_recon string.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_weno5"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_WENO5</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>WENO5-Z (Jiang-Shu 1996 + Borges 2008 Z-weights), nghost &gt;= 3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_weno7"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_WENO7</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>WENO7-Z (Balsara-Shu 2000), nghost &gt;= 4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tracer_recon_weno9"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TRACER_RECON_WENO9</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>WENO9-Z (Balsara-Shu 2000), nghost &gt;= 5.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_tracer_recon"></span> <h3>public pure function <a href='../proc/parse_tracer_recon.html'>parse_tracer_recon</a>(str) result(code)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Map a namelist string onto a TRACER_RECON_* code.</p><a href="../proc/parse_tracer_recon.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str~27"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-plm_face_swept"></span> <h3>public pure function <a href='../proc/plm_face_swept.html'>plm_face_swept</a>(qm1, q0, qp1, sigma) result(face)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>PLM (piecewise-linear) swept-average face value.</p><a href="../proc/plm_face_swept.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm1~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q0~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q0</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp1~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sigma</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-recon_rung_for_face"></span> <h3>public pure function <a href='../proc/recon_rung_for_face.html'>recon_rung_for_face</a>(avail_up, avail_down, rung_max) result(rung)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Return the highest feasible reconstruction rung for one face.</p><a href="../proc/recon_rung_for_face.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-avail_up~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>avail_up</strong></td>
+            <td>
+<p>Interior cells from domain-west to face (including upwind cell c).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-avail_down~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>avail_down</strong></td>
+            <td>
+<p>Interior cells from face downwind side to domain-east.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rung_max~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rung_max</strong></td>
+            <td>
+<p>Maximum internal rung allowed (4 = WENO9, 3 = WENO7, 2 = WENO5).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tracer_recon_required_nghost"></span> <h3>public pure function <a href='../proc/tracer_recon_required_nghost.html'>tracer_recon_required_nghost</a>(code) result(ng)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Minimum nghost required for a given TRACER_RECON_* code.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-code~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>code</strong></td>
+            <td>
+<p>TRACER_RECON_* constant.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tracer_recon_support_status"></span> <h3>public pure function <a href='../proc/tracer_recon_support_status.html'>tracer_recon_support_status</a>(recon_code, is_ocean, has_multilayer_tracers) result(status)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Decide whether a parsed tracer_recon code is honoured on this
+config, independent of the multilayer nghost/use_ppm_tracer
+quality guards (those apply only once this returns OK for a weno
+rung).  Factored out as a pure predicate so the fail-loud
+decision is unit-testable without triggering error stop.</p><a href="../proc/tracer_recon_support_status.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-recon_code"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>recon_code</strong></td>
+            <td>
+<p>parse_tracer_recon(cfg%tracer_recon) result.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_ocean"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_ocean</strong></td>
+            <td>
+<p>.true. when sim_type == &lsquo;ocean&rsquo;.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_multilayer_tracers"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_multilayer_tracers</strong></td>
+            <td>
+<p>cfg%use_multilayer — the coastal multilayer tracer registry.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-weno5_face_swept"></span> <h3>public pure function <a href='../proc/weno5_face_swept.html'>weno5_face_swept</a>(qm2, qm1, q0, qp1, qp2, sigma) result(face)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>WENO5-Z swept-average face value (u &gt; 0, upwind cell = q0).</p><a href="../proc/weno5_face_swept.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm2~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm2</strong></td>
+            <td>
+<p>Cell averages at i-2, i-1, i, i+1, i+2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm1~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm1</strong></td>
+            <td>
+<p>Cell averages at i-2, i-1, i, i+1, i+2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q0~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q0</strong></td>
+            <td>
+<p>Cell averages at i-2, i-1, i, i+1, i+2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp1~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp1</strong></td>
+            <td>
+<p>Cell averages at i-2, i-1, i, i+1, i+2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp2~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp2</strong></td>
+            <td>
+<p>Cell averages at i-2, i-1, i, i+1, i+2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sigma</strong></td>
+            <td>
+<p>CFL of upwind cell: |u_eff|*dt/dx.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-weno7_face_swept"></span> <h3>public pure function <a href='../proc/weno7_face_swept.html'>weno7_face_swept</a>(qm3, qm2, qm1, q0, qp1, qp2, qp3, sigma) result(face)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>WENO7-Z swept-average face value (u &gt; 0, upwind cell = q0).</p><a href="../proc/weno7_face_swept.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm3~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm3</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm2~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm2</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm1~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm1</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q0~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q0</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp1~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp1</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp2~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp2</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp3~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp3</strong></td>
+            <td>
+<p>Cell averages at i-3 through i+3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sigma</strong></td>
+            <td>
+<p>CFL of upwind cell: |u_eff|*dt/dx.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-weno9_face_swept"></span> <h3>public pure function <a href='../proc/weno9_face_swept.html'>weno9_face_swept</a>(qm4, qm3, qm2, qm1, q0, qp1, qp2, qp3, qp4, sigma) result(face)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>WENO9-Z swept-average face value (u &gt; 0, upwind cell = q0).</p><a href="../proc/weno9_face_swept.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm4~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm4</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm3~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm3</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm2~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm2</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qm1~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qm1</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q0~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q0</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp1~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp1</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp2~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp2</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp3~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp3</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qp4~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qp4</strong></td>
+            <td>
+<p>Cell averages at i-4 through i+4.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sigma</strong></td>
+            <td>
+<p>CFL of upwind cell: |u_eff|*dt/dx.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

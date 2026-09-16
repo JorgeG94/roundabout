@@ -1,0 +1,979 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>halo_exchange_2d_device &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>halo_exchange_2d_device
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">107 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_halo.f90.html'>rdb_halo.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_halo.html'>rdb_halo</a></li>
+            <li class="breadcrumb-item active" aria-current="page">halo_exchange_2d_device</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-comm~8">comm</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-i~344">i</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-j~309">j</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-k~258">k</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-nreq~9">nreq</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-nx_total~46">nx_total</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-ny_total~46">ny_total</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-rank_east~3">rank_east</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-rank_north~3">rank_north</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-rank_south~3">rank_south</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-rank_west~3">rank_west</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-reqs~9">reqs</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-stats~8">stats</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-strip_ew~4">strip_ew</a>
+            <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#variable-strip_sn~3">strip_sn</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/halo_exchange_2d_device.html#src">halo_exchange_2d_device</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine halo_exchange_2d_device(fld, decomp, nghost, nx_local, ny_local)  
+</h2>
+    
+
+    <p>GPU-direct halo exchange via CUDA-aware MPI</p>
+<p>Pack/unpack buffers live on the device. MPI operates on device
+pointers via !$acc host_data use_device, eliminating the
+full-array GPU&lt;-&gt;host copies required by the host-staged path.</p>
+<p>Uses persistent module-level send/recv buffers
+(<code>hs_buf_*</code>) so back-to-back halo calls do not hit the
+cudaMalloc/cudaFree allocator on every call.  Lazy-allocated by
+<code>halo_sync_buffers_ensure</code>; the solver normally calls that from
+<code>solver_enter_data</code>, but a guard here keeps the routine
+self-contained for callers that haven&rsquo;t been migrated yet.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~26"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(:,:)</td>
+            <td>
+                <p>2D field with ghost cells (present on device)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~7"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~53"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~halo_exchange_2d_device~~CallsGraph Pages: 1 -->
+<svg id="prochalo_exchange_2d_deviceCallsGraph" width="557pt" height="242pt"
+ viewBox="0.00 0.00 557.00 242.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_exchange_2d_device~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 238)">
+<title>proc~~halo_exchange_2d_device~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-238 553,-238 553,4 -4,4"/>
+<!-- proc~halo_exchange_2d_device -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node1" class="node">
+<title>proc~halo_exchange_2d_device</title>
+<polygon fill="none" stroke="black" points="152,-129 0,-129 0,-105 152,-105 152,-129"/>
+<text text-anchor="middle" x="76" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">halo_exchange_2d_device</text>
+</g>
+<!-- comm_irecv_real_sp_array_n -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node2" class="node">
+<title>comm_irecv_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="355.5,-234 189.5,-234 189.5,-210 355.5,-210 355.5,-234"/>
+<text text-anchor="middle" x="272.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_irecv_real_sp_array_n</text>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge1" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#ff0000" d="M89.52,-129.23C108.97,-147.55 148.34,-181.98 188,-201 192.32,-203.07 196.87,-204.95 201.52,-206.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.58,-210.04 211.17,-209.93 202.82,-203.41 200.58,-210.04"/>
+</g>
+<!-- comm_isend_real_sp_array_n -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node3" class="node">
+<title>comm_isend_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="357,-192 188,-192 188,-168 357,-168 357,-192"/>
+<text text-anchor="middle" x="272.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_isend_real_sp_array_n</text>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge2" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#ff0000" d="M106.36,-129.17C128.55,-138.11 159.89,-150.18 188,-159 194.96,-161.18 202.3,-163.3 209.63,-165.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.01,-168.75 219.57,-167.93 210.8,-161.98 209.01,-168.75"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node4" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~halo_exchange_2d_device~~CallsGraph_node4"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="354,-150 191,-150 191,-126 354,-126 354,-150"/>
+<text text-anchor="middle" x="272.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge3" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M152.2,-125.12C161.46,-126.12 171.01,-127.15 180.47,-128.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="180.38,-131.68 190.7,-129.28 181.13,-124.72 180.38,-131.68"/>
+</g>
+<!-- proc~decomp_rank_from_coords -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node5" class="node">
+<title>proc~decomp_rank_from_coords</title>
+<g id="a_proc~~halo_exchange_2d_device~~CallsGraph_node5"><a xlink:href="../proc/decomp_rank_from_coords.html" xlink:title="decomp_rank_from_coords">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="351,-108 194,-108 194,-84 351,-84 351,-108"/>
+<text text-anchor="middle" x="272.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_rank_from_coords</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge4" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#ff0000" d="M152.2,-108.88C162.57,-107.76 173.29,-106.6 183.86,-105.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.36,-108.93 193.93,-104.38 183.61,-101.97 184.36,-108.93"/>
+</g>
+<!-- proc~halo_sync_buffers_ensure -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node6" class="node">
+<title>proc~halo_sync_buffers_ensure</title>
+<g id="a_proc~~halo_exchange_2d_device~~CallsGraph_node6"><a xlink:href="../proc/halo_sync_buffers_ensure.html" xlink:title="halo_sync_buffers_ensure">
+<polygon fill="#d9534f" stroke="#d9534f" points="347,-66 198,-66 198,-42 347,-42 347,-66"/>
+<text text-anchor="middle" x="272.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_sync_buffers_ensure</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;proc~halo_sync_buffers_ensure -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge5" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;proc~halo_sync_buffers_ensure</title>
+<path fill="none" stroke="#ff0000" d="M106.36,-104.83C128.55,-95.89 159.89,-83.82 188,-75 194.96,-72.82 202.3,-70.7 209.63,-68.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="210.8,-72.02 219.57,-66.07 209.01,-65.25 210.8,-72.02"/>
+</g>
+<!-- waitall -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node7" class="node">
+<title>waitall</title>
+<polygon fill="#777777" stroke="#777777" points="299.5,-24 245.5,-24 245.5,0 299.5,0 299.5,-24"/>
+<text text-anchor="middle" x="272.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">waitall</text>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;waitall -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge6" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;waitall</title>
+<path fill="none" stroke="#ff0000" d="M89.52,-104.77C108.97,-86.45 148.34,-52.02 188,-33 202.78,-25.91 220.23,-21.04 235.34,-17.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="236.24,-21.18 245.37,-15.79 234.88,-14.31 236.24,-21.18"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node8" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="511.5,-150 430.5,-150 430.5,-126 511.5,-126 511.5,-150"/>
+<text text-anchor="middle" x="471" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge7" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ff00" d="M354.27,-138C376.63,-138 400.23,-138 420.25,-138"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="420.36,-141.5 430.36,-138 420.36,-134.5 420.36,-141.5"/>
+</g>
+<!-- proc~halo_sync_buffers_cleanup -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_node9" class="node">
+<title>proc~halo_sync_buffers_cleanup</title>
+<g id="a_proc~~halo_exchange_2d_device~~CallsGraph_node9"><a xlink:href="../proc/halo_sync_buffers_cleanup.html" xlink:title="halo_sync_buffers_cleanup">
+<polygon fill="#d9534f" stroke="#d9534f" points="549,-66 393,-66 393,-42 549,-42 549,-66"/>
+<text text-anchor="middle" x="471" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_sync_buffers_cleanup</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_sync_buffers_ensure&#45;&gt;proc~halo_sync_buffers_cleanup -->
+<g id="proc~~halo_exchange_2d_device~~CallsGraph_edge8" class="edge">
+<title>proc~halo_sync_buffers_ensure&#45;&gt;proc~halo_sync_buffers_cleanup</title>
+<path fill="none" stroke="#0000ff" d="M347.23,-54C358.77,-54 370.79,-54 382.6,-54"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="382.91,-57.5 392.91,-54 382.91,-50.5 382.91,-57.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-comm~8"></span>
+              type(comm_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>comm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~344"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~309"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~258"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nreq~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nreq</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~46"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~46"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_east~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_east</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_north~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_north</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_south~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_south</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_west~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_west</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reqs~9"></span>
+              type(request_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reqs</strong>(MAX_REQS)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stats~8"></span>
+              type(MPI_Status),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stats</strong>(MAX_REQS)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strip_ew~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strip_ew</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strip_sn~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strip_sn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">halo_exchange_2d_device</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_local</span><span class="p">,</span><span class="w"> </span><span class="n">ny_local</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! GPU-direct halo exchange via CUDA-aware MPI</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Pack/unpack buffers live on the device. MPI operates on device</span>
+<span class="w">      </span><span class="c">!! pointers via !$acc host_data use_device, eliminating the</span>
+<span class="w">      </span><span class="c">!! full-array GPU&lt;-&gt;host copies required by the host-staged path.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Uses persistent module-level send/recv buffers</span>
+<span class="w">      </span><span class="c">!! (`hs_buf_*`) so back-to-back halo calls do not hit the</span>
+<span class="w">      </span><span class="c">!! cudaMalloc/cudaFree allocator on every call.  Lazy-allocated by</span>
+<span class="w">      </span><span class="c">!! `halo_sync_buffers_ensure`; the solver normally calls that from</span>
+<span class="w">      </span><span class="c">!! `solver_enter_data`, but a guard here keeps the routine</span>
+<span class="w">      </span><span class="c">!! self-contained for callers that haven't been migrated yet.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! 2D field with ghost cells (present on device)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">decomp_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">decomp</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_local</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ny_local</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rank_west</span><span class="p">,</span><span class="w"> </span><span class="n">rank_east</span><span class="p">,</span><span class="w"> </span><span class="n">rank_south</span><span class="p">,</span><span class="w"> </span><span class="n">rank_north</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">request_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">MAX_REQS</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">MPI_Status</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stats</span><span class="p">(</span><span class="n">MAX_REQS</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nreq</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">strip_ew</span><span class="p">,</span><span class="w"> </span><span class="n">strip_sn</span>
+
+<span class="w">      </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_env_compute_comm</span><span class="p">()</span>
+<span class="w">      </span><span class="n">nx_total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">ny_total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">strip_ew</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="o">*</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">strip_sn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx_total</span><span class="o">*</span><span class="n">nghost</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">halo_sync_buffers_ensure</span><span class="p">(</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! --- Pack on device ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_west</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">rank_west</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp_rank_from_coords</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">rx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_send_west, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">               </span><span class="n">hs_buf_send_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_east</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">rank_east</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp_rank_from_coords</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">rx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_send_east, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">               </span><span class="n">hs_buf_send_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_local</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_south</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">rank_south</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp_rank_from_coords</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_send_south, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span>
+<span class="w">               </span><span class="n">hs_buf_send_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_north</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">rank_north</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">decomp_rank_from_coords</span><span class="p">(</span><span class="n">decomp</span><span class="p">%</span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">ry</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_send_north, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span>
+<span class="w">               </span><span class="n">hs_buf_send_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_local</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! --- MPI with device pointers ---</span>
+<span class="w">      </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_west</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc host_data use_device(hs_buf_send_west, hs_buf_recv_west)</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_send_west</span><span class="p">,</span><span class="w"> </span><span class="n">strip_ew</span><span class="p">,</span><span class="w"> </span><span class="n">rank_west</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_recv_west</span><span class="p">,</span><span class="w"> </span><span class="n">strip_ew</span><span class="p">,</span><span class="w"> </span><span class="n">rank_west</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="c">!$acc end host_data</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_east</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc host_data use_device(hs_buf_send_east, hs_buf_recv_east)</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_send_east</span><span class="p">,</span><span class="w"> </span><span class="n">strip_ew</span><span class="p">,</span><span class="w"> </span><span class="n">rank_east</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_recv_east</span><span class="p">,</span><span class="w"> </span><span class="n">strip_ew</span><span class="p">,</span><span class="w"> </span><span class="n">rank_east</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="c">!$acc end host_data</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_south</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc host_data use_device(hs_buf_send_south, hs_buf_recv_south)</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_send_south</span><span class="p">,</span><span class="w"> </span><span class="n">strip_sn</span><span class="p">,</span><span class="w"> </span><span class="n">rank_south</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_recv_south</span><span class="p">,</span><span class="w"> </span><span class="n">strip_sn</span><span class="p">,</span><span class="w"> </span><span class="n">rank_south</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="c">!$acc end host_data</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_north</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc host_data use_device(hs_buf_send_north, hs_buf_recv_north)</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_ISEND_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_send_north</span><span class="p">,</span><span class="w"> </span><span class="n">strip_sn</span><span class="p">,</span><span class="w"> </span><span class="n">rank_north</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="n">nreq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nreq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">call </span><span class="n">HALO_IRECV_N</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">hs_buf_recv_north</span><span class="p">,</span><span class="w"> </span><span class="n">strip_sn</span><span class="p">,</span><span class="w"> </span><span class="n">rank_north</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">reqs</span><span class="p">(</span><span class="n">nreq</span><span class="p">))</span>
+<span class="w">         </span><span class="c">!$acc end host_data</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">nreq</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">call </span><span class="n">waitall</span><span class="p">(</span><span class="n">reqs</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">),</span><span class="w"> </span><span class="n">stats</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nreq</span><span class="p">))</span>
+
+<span class="w">      </span><span class="c">! --- Unpack on device ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_west</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_recv_west, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">               </span><span class="n">fld</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hs_buf_recv_west</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_east</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_recv_east, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">               </span><span class="n">fld</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hs_buf_recv_east</span><span class="p">((</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_south</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_recv_south, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span>
+<span class="w">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hs_buf_recv_south</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">decomp</span><span class="p">%</span><span class="n">has_north</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">!$acc parallel loop collapse(2) present(hs_buf_recv_north, fld)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span>
+<span class="w">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_local</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hs_buf_recv_north</span><span class="p">((</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="k">   end subroutine </span><span class="n">halo_exchange_2d_device</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

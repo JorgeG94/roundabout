@@ -1,0 +1,995 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_poison_ghost_bands &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_poison_ghost_bands
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">42 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_ghost_poison.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_ghost_poison.f90.html'>rdb_ocean_ghost_poison.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_ghost_poison.html'>rdb_ocean_ghost_poison</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_poison_ghost_bands</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-it~29">it</a>
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-ng~34">ng</a>
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-nxl~9">nxl</a>
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-nyl~9">nyl</a>
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-nzt">nzt</a>
+            <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#variable-qnan~2">qnan</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_poison_ghost_bands.html#src">ocean_poison_ghost_bands</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_poison_ghost_bands(grid, ms, bt_work, ss, poison_w, poison_e, poison_s, poison_n)  
+</h2>
+    
+
+    <p>Sentinel-NaN the exchange-covered ghost bands of all multilayer
+prognostic fields and the BT workstate fields.  Called at the TOP
+of each outer step (before any exchange or kernel) so that any
+kernel consuming an unexchanged ghost produces a loud NaN at the
+offending step.</p>
+<p><code>poison_w/e/s/n</code> encode the band-selection rule: pass
+<code>(.not. bc%has_*) .or. bc%periodic_*</code>.
+When all four are <code>.false.</code> (e.g. a single-rank all-wall run with no
+periodic axes) this routine is a no-op — every ghost is BC-owned.
+Do not allocate anything: device-resident state arrays are written
+via plain <code>do concurrent</code> band-fill kernels, identical to the
+periodic-wrap pattern.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~137"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                <p>Horizontal grid (carries nx_total, ny_total, nx_phys, ny_phys, nghost).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~67"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                <p>Multilayer C-grid state whose exchange-covered ghost bands are poisoned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_work~25"></span>
+              type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_work</strong></td>
+            <td>
+                <p>BT workstate whose exchange-covered ghost bands are poisoned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~7"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
+            <td>
+                <p>Surface-stress slot.  Its <code>tau_x</code>/<code>tau_y</code> bands became
+exchange-owned with the forcing-halo fix, so they are poisoned
+here too — see the block at the end of the body.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poison_w"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>poison_w</strong></td>
+            <td>
+                <p>Poison west ghost band.  <code>.true.</code> iff the west edge is exchange-owned
+(MPI seam or periodic-x).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poison_e"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>poison_e</strong></td>
+            <td>
+                <p>Poison east ghost band.  <code>.true.</code> iff the east edge is exchange-owned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poison_s"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>poison_s</strong></td>
+            <td>
+                <p>Poison south ghost band.  <code>.true.</code> iff the south edge is exchange-owned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-poison_n"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>poison_n</strong></td>
+            <td>
+                <p>Poison north ghost band.  <code>.true.</code> iff the north edge is exchange-owned.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_poison_ghost_bands~~CallsGraph Pages: 1 -->
+<svg id="prococean_poison_ghost_bandsCallsGraph" width="308pt" height="242pt"
+ viewBox="0.00 0.00 308.00 242.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 238)">
+<title>proc~~ocean_poison_ghost_bands~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-238 304,-238 304,4 -4,4"/>
+<!-- proc~ocean_poison_ghost_bands -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node1" class="node">
+<title>proc~ocean_poison_ghost_bands</title>
+<polygon fill="none" stroke="black" points="158,-129 0,-129 0,-105 158,-105 158,-129"/>
+<text text-anchor="middle" x="79" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_poison_ghost_bands</text>
+</g>
+<!-- proc~poison_centre_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node2" class="node">
+<title>proc~poison_centre_2d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node2"><a xlink:href="../proc/poison_centre_2d.html" xlink:title="poison_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-234 194,-234 194,-210 300,-210 300,-234"/>
+<text text-anchor="middle" x="247" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_centre_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_centre_2d</title>
+<path fill="none" stroke="#ff0000" d="M93.96,-129.11C114.7,-146.66 155.37,-179.42 194,-201 197.02,-202.69 200.21,-204.31 203.46,-205.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="202.13,-209.1 212.68,-210 204.99,-202.71 202.13,-209.1"/>
+</g>
+<!-- proc~poison_centre_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node3" class="node">
+<title>proc~poison_centre_3d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node3"><a xlink:href="../proc/poison_centre_3d.html" xlink:title="poison_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-192 194,-192 194,-168 300,-168 300,-192"/>
+<text text-anchor="middle" x="247" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_centre_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_centre_3d</title>
+<path fill="none" stroke="#ff0000" d="M112.01,-129.15C138.5,-139.2 176.31,-153.55 205.02,-164.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="203.78,-167.72 214.37,-168 206.27,-161.18 203.78,-167.72"/>
+</g>
+<!-- proc~poison_face_x_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node4" class="node">
+<title>proc~poison_face_x_2d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node4"><a xlink:href="../proc/poison_face_x_2d.html" xlink:title="poison_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-150 194,-150 194,-126 300,-126 300,-150"/>
+<text text-anchor="middle" x="247" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_x_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_x_2d</title>
+<path fill="none" stroke="#ff0000" d="M158.14,-126.89C166.75,-127.97 175.43,-129.07 183.8,-130.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.49,-133.62 193.85,-131.4 184.37,-126.67 183.49,-133.62"/>
+</g>
+<!-- proc~poison_face_x_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node5" class="node">
+<title>proc~poison_face_x_3d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node5"><a xlink:href="../proc/poison_face_x_3d.html" xlink:title="poison_face_x_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-108 194,-108 194,-84 300,-84 300,-108"/>
+<text text-anchor="middle" x="247" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_face_x_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_x_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_x_3d</title>
+<path fill="none" stroke="#ff0000" d="M158.14,-107.11C166.75,-106.03 175.43,-104.93 183.8,-103.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.37,-107.33 193.85,-102.6 183.49,-100.38 184.37,-107.33"/>
+</g>
+<!-- proc~poison_face_y_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node6" class="node">
+<title>proc~poison_face_y_2d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node6"><a xlink:href="../proc/poison_face_y_2d.html" xlink:title="poison_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-66 194,-66 194,-42 300,-42 300,-66"/>
+<text text-anchor="middle" x="247" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_y_2d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_y_2d</title>
+<path fill="none" stroke="#ff0000" d="M112.01,-104.85C138.5,-94.8 176.31,-80.45 205.02,-69.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="206.27,-72.82 214.37,-66 203.78,-66.28 206.27,-72.82"/>
+</g>
+<!-- proc~poison_face_y_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_node7" class="node">
+<title>proc~poison_face_y_3d</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CallsGraph_node7"><a xlink:href="../proc/poison_face_y_3d.html" xlink:title="poison_face_y_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="300,-24 194,-24 194,0 300,0 300,-24"/>
+<text text-anchor="middle" x="247" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poison_face_y_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_y_3d -->
+<g id="proc~~ocean_poison_ghost_bands~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_poison_ghost_bands&#45;&gt;proc~poison_face_y_3d</title>
+<path fill="none" stroke="#ff0000" d="M93.96,-104.89C114.7,-87.34 155.37,-54.58 194,-33 197.02,-31.31 200.21,-29.69 203.46,-28.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.99,-31.29 212.68,-24 202.13,-24.9 204.99,-31.29"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_poison_ghost_bands~~CalledByGraph Pages: 1 -->
+<svg id="prococean_poison_ghost_bandsCalledByGraph" width="641pt" height="69pt"
+ viewBox="0.00 0.00 641.00 69.25" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph" class="graph" transform="scale(0.94 0.94) rotate(0) translate(4 70)">
+<title>proc~~ocean_poison_ghost_bands~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 681,-70 681,4 -4,4"/>
+<!-- proc~ocean_poison_ghost_bands -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node1" class="node">
+<title>proc~ocean_poison_ghost_bands</title>
+<polygon fill="none" stroke="black" points="677,-45 519,-45 519,-21 677,-21 677,-45"/>
+<text text-anchor="middle" x="598" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_poison_ghost_bands</text>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node2" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CalledByGraph_node2"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-45 358,-45 358,-21 483,-21 483,-45"/>
+<text text-anchor="middle" x="420.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_poison_ghost_bands -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_poison_ghost_bands</title>
+<path fill="none" stroke="#ff0000" d="M483.37,-33C491.6,-33 500.16,-33 508.73,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="508.77,-36.5 518.77,-33 508.77,-29.5 508.77,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node3" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CalledByGraph_node3"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-33C330.15,-33 338.91,-33 347.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.78,-36.5 357.78,-33 347.78,-29.5 347.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_poison_ghost_bands~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_poison_ghost_bands~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_poison_ghost_bandsCalledByGraph = svgPanZoom('#prococean_poison_ghost_bandsCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~29"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~34"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxl~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyl~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzt"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qnan~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qnan</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_poison_ghost_bands</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Sentinel-NaN the exchange-covered ghost bands of all multilayer</span>
+<span class="w">      </span><span class="c">!! prognostic fields and the BT workstate fields.  Called at the TOP</span>
+<span class="w">      </span><span class="c">!! of each outer step (before any exchange or kernel) so that any</span>
+<span class="w">      </span><span class="c">!! kernel consuming an unexchanged ghost produces a loud NaN at the</span>
+<span class="w">      </span><span class="c">!! offending step.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `poison_w/e/s/n` encode the band-selection rule: pass</span>
+<span class="w">      </span><span class="c">!! `(.not. bc%has_*) .or. bc%periodic_*`.</span>
+<span class="w">      </span><span class="c">!! When all four are `.false.` (e.g. a single-rank all-wall run with no</span>
+<span class="w">      </span><span class="c">!! periodic axes) this routine is a no-op — every ghost is BC-owned.</span>
+<span class="w">      </span><span class="c">!! Do not allocate anything: device-resident state arrays are written</span>
+<span class="w">      </span><span class="c">!! via plain `do concurrent` band-fill kernels, identical to the</span>
+<span class="w">      </span><span class="c">!! periodic-wrap pattern.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">         </span><span class="c">!! Horizontal grid (carries nx_total, ny_total, nx_phys, ny_phys, nghost).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">         </span><span class="c">!! Multilayer C-grid state whose exchange-covered ghost bands are poisoned.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">barotropic_workstate_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_work</span>
+<span class="w">         </span><span class="c">!! BT workstate whose exchange-covered ghost bands are poisoned.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_stress_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ss</span>
+<span class="w">         </span><span class="c">!! Surface-stress slot.  Its `tau_x`/`tau_y` bands became</span>
+<span class="w">         </span><span class="c">!! exchange-owned with the forcing-halo fix, so they are poisoned</span>
+<span class="w">         </span><span class="c">!! here too — see the block at the end of the body.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">poison_w</span>
+<span class="w">         </span><span class="c">!! Poison west ghost band.  `.true.` iff the west edge is exchange-owned</span>
+<span class="w">         </span><span class="c">!! (MPI seam or periodic-x).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">poison_e</span>
+<span class="w">         </span><span class="c">!! Poison east ghost band.  `.true.` iff the east edge is exchange-owned.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">poison_s</span>
+<span class="w">         </span><span class="c">!! Poison south ghost band.  `.true.` iff the south edge is exchange-owned.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">poison_n</span>
+<span class="w">         </span><span class="c">!! Poison north ghost band.  `.true.` iff the north edge is exchange-owned.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nzt</span><span class="p">,</span><span class="w"> </span><span class="n">it</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">qnan</span>
+
+<span class="w">      </span><span class="n">nxl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span>
+<span class="w">      </span><span class="n">nyl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span>
+<span class="w">      </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">nzt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="c">! Compute the sentinel value on the host — ieee_value is a host intrinsic.</span>
+<span class="w">      </span><span class="c">! Pass the scalar into the do-concurrent kernels as a local value (device-safe:</span>
+<span class="w">      </span><span class="c">! plain IEEE representation, no intrinsic call inside the DC body).</span>
+<span class="w">      </span><span class="n">qnan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ieee_value</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">ieee_quiet_nan</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! ML h_layer: centre (nx_total, ny_total, nz_ml)</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">call </span><span class="n">poison_centre_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nzt</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! ML u_face_x_layer: face-x (nx_total+1, ny_total, nz_ml)</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">call </span><span class="n">poison_face_x_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nzt</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! ML v_face_y_layer: face-y (nx_total, ny_total+1, nz_ml)</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">call </span><span class="n">poison_face_y_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nzt</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! Tracers: per-tracer hTr — centre (nx_total, ny_total, nz_ml).</span>
+<span class="w">      </span><span class="c">! Outer-shim rule: array-of-DT cannot be dereferenced on-device;</span>
+<span class="w">      </span><span class="c">! the loop is on the HOST, each element passed by explicit-shape helper.</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">poison_centre_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nzt</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! BT workstate: bt_eta (centre), bt_ubt (face-x), bt_vbt (face-y).</span>
+<span class="w">      </span><span class="c">! These are re-derived/exchanged early in each stage.  Poisoning</span>
+<span class="w">      </span><span class="c">! them proves the derive/coupling+exchange chain covers the bands.</span>
+<span class="w">      </span><span class="c">! Guard with allocated() — the BT workstate is only allocated when</span>
+<span class="w">      </span><span class="c">! ocean_dyn_init has been called with nz_ml present (split path).</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_eta</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">poison_centre_2d</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_eta</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_ubt</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">poison_face_x_2d</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_ubt</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_vbt</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">poison_face_y_2d</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_vbt</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="c">! Surface stress (face-x / face-y).  Exchange-owned as of the</span>
+<span class="w">      </span><span class="c">! forcing-halo fix: `ocean_seam_refresh_surface_stress` fills these</span>
+<span class="w">      </span><span class="c">! bands at configure and after every file blend.  Poisoning them is</span>
+<span class="w">      </span><span class="c">! what proves that — several kernels read one cell beyond their own</span>
+<span class="w">      </span><span class="c">! (`stress_mag` face-to-centre average feeding KPP/EPBL, and the MLE</span>
+<span class="w">      </span><span class="c">! corner average), so an unexchanged band shows up as NaN rather</span>
+<span class="w">      </span><span class="c">! than as a quiet decomposition-dependent answer.</span>
+<span class="w">      </span><span class="c">! ------------------------------------------------------------------</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">poison_face_x_2d</span><span class="p">(</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">poison_face_y_2d</span><span class="p">(</span><span class="n">ss</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="n">nxl</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">qnan</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">poison_w</span><span class="p">,</span><span class="w"> </span><span class="n">poison_e</span><span class="p">,</span><span class="w"> </span><span class="n">poison_s</span><span class="p">,</span><span class="w"> </span><span class="n">poison_n</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">   end subroutine </span><span class="n">ocean_poison_ghost_bands</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,611 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_layer_to_z &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_layer_to_z
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_fills.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_fills.f90.html'>rdb_ocean_diag_fills.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_layer_to_z</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_layer_to_z.html#src">remap_layer_to_z</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine remap_layer_to_z(state_handle, z_out, layer_buf, output_buf, is_extensive)  
+</h2>
+    
+
+    <p>Layer→fixed-z vertical remap, CONSERVATIVE (donor-cell overlap via
+<code>remap_column</code>, scheme <code>diag_remap_method</code>).  <code>is_extensive=.false.</code>
+⇒ INTENSIVE (thickness-weighted average of overlapping source layers);
+<code>.true.</code> ⇒ EXTENSIVE (thickness-integrated field — column integral
+redistributed across targets, Σ preserved when the z-grid spans H).
+<code>z_out(:)</code> = target INTERFACE depths (m, positive-down, shallow→deep,
+implicit 0 surface); output cell m spans <code>[z_out(m-1), z_out(m)]</code>.
+Thicknesses clipped to column total H = Σ h_layer (exact
+conservation); below-seafloor cells read 0.  k=1 bed, k=nz surface.
+Public only for the unit-test suite.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~12"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_out</strong>(:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_z~~CallsGraph Pages: 1 -->
+<svg id="procremap_layer_to_zCallsGraph" width="641pt" height="156pt"
+ viewBox="0.00 0.00 641.00 156.26" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_z~~CallsGraph" class="graph" transform="scale(0.66 0.66) rotate(0) translate(4 231)">
+<title>proc~~remap_layer_to_z~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-231 960,-231 960,4 -4,4"/>
+<!-- proc~remap_layer_to_z -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node1" class="node">
+<title>proc~remap_layer_to_z</title>
+<polygon fill="none" stroke="black" points="106,-168 0,-168 0,-144 106,-144 106,-168"/>
+<text text-anchor="middle" x="53" y="-153.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_z</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node2" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node2"><a xlink:href="../proc/remap_layer_to_vcoord_impl.html" xlink:title="remap_layer_to_vcoord_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="308,-168 142,-168 142,-144 308,-144 308,-168"/>
+<text text-anchor="middle" x="225" y="-153.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge1" class="edge">
+<title>proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#ff0000" d="M106.39,-156C114.46,-156 122.98,-156 131.61,-156"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.76,-159.5 141.76,-156 131.76,-152.5 131.76,-159.5"/>
+</g>
+<!-- local -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node3" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="417,-189 363,-189 363,-165 417,-165 417,-189"/>
+<text text-anchor="middle" x="390" y="-174.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge2" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M308.46,-166.62C324.03,-168.63 339.56,-170.63 352.77,-172.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="352.45,-175.82 362.82,-173.63 353.35,-168.88 352.45,-175.82"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node4" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node4"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="436,-147 344,-147 344,-123 436,-123 436,-147"/>
+<text text-anchor="middle" x="390" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff0000" d="M308.46,-145.38C317.01,-144.28 325.54,-143.18 333.69,-142.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.3,-145.58 343.77,-140.83 333.4,-138.63 334.3,-145.58"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node5" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node5"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="602.5,-227 481.5,-227 481.5,-203 602.5,-203 602.5,-227"/>
+<text text-anchor="middle" x="542" y="-212.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge4" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ffff" d="M420.28,-147.07C425.67,-149.73 431.13,-152.74 436,-156 454.04,-168.06 453.51,-177.63 472,-189 478.15,-192.78 484.93,-196.15 491.78,-199.12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="490.52,-202.39 501.1,-202.91 493.15,-195.9 490.52,-202.39"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node6" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node6"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="956,-148 838,-148 838,-124 956,-124 956,-148"/>
+<text text-anchor="middle" x="897" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge5" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ffff" d="M429.34,-147.07C442.7,-150.7 457.88,-154.2 472,-156 617.51,-174.56 655.9,-163.14 802,-150 810.39,-149.25 819.16,-148.24 827.84,-147.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="828.52,-150.54 837.96,-145.72 827.58,-143.61 828.52,-150.54"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node7" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node7"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.5,-108 664.5,-108 664.5,-84 785.5,-84 785.5,-108"/>
+<text text-anchor="middle" x="725" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge6" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M431.48,-122.96C444.33,-119.55 458.67,-116.19 472,-114 533.04,-103.99 603.31,-99.55 654.11,-97.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="654.46,-101.06 664.33,-97.2 654.2,-94.07 654.46,-101.06"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node8" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node8"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="612,-147 472,-147 472,-123 612,-123 612,-147"/>
+<text text-anchor="middle" x="542" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge7" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ffff" d="M436,-135C444.22,-135 453.01,-135 461.87,-135"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="461.89,-138.5 471.89,-135 461.89,-131.5 461.89,-138.5"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node9" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node9"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="602.5,-67 481.5,-67 481.5,-43 602.5,-43 602.5,-67"/>
+<text text-anchor="middle" x="542" y="-52.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge8" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ffff" d="M406.78,-122.9C422.64,-111.13 448.09,-93.27 472,-81 479.21,-77.3 487.07,-73.84 494.81,-70.73"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="496.1,-73.99 504.16,-67.12 493.57,-67.46 496.1,-73.99"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge9" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff66" d="M777.01,-108C795.24,-112.29 815.98,-117.17 834.98,-121.64"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="834.2,-125.05 844.74,-123.94 835.8,-118.24 834.2,-125.05"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge10" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M612.32,-135.2C674.71,-135.37 765.84,-135.63 827.86,-135.81"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="827.93,-139.31 837.94,-135.84 827.95,-132.31 827.93,-139.31"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#cc00ff" d="M596.33,-67.08C616.58,-71.67 639.84,-76.94 660.92,-81.71"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="660.22,-85.14 670.74,-83.94 661.76,-78.31 660.22,-85.14"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node10" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node10"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="782.5,-24 667.5,-24 667.5,0 782.5,0 782.5,-24"/>
+<text text-anchor="middle" x="725" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge11" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#cc00ff" d="M593.9,-42.91C615.58,-37.76 641.03,-31.71 663.65,-26.34"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="664.56,-29.72 673.48,-24 662.94,-22.91 664.56,-29.72"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_node11" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~remap_layer_to_z~~CallsGraph_node11"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="802,-66 648,-66 648,-42 802,-42 802,-66"/>
+<text text-anchor="middle" x="725" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_z~~CallsGraph_edge12" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#cc00ff" d="M602.52,-54.67C613.87,-54.61 625.96,-54.54 637.94,-54.48"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="637.99,-57.98 647.97,-54.42 637.95,-50.98 637.99,-57.98"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_layer_to_zCallsGraph = svgPanZoom('#procremap_layer_to_zCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">remap_layer_to_z</span><span class="p">(</span><span class="n">state_handle</span><span class="p">,</span><span class="w"> </span><span class="n">z_out</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Layer→fixed-z vertical remap, CONSERVATIVE (donor-cell overlap via</span>
+<span class="w">      </span><span class="c">!! `remap_column`, scheme `diag_remap_method`).  `is_extensive=.false.`</span>
+<span class="w">      </span><span class="c">!! ⇒ INTENSIVE (thickness-weighted average of overlapping source layers);</span>
+<span class="w">      </span><span class="c">!! `.true.` ⇒ EXTENSIVE (thickness-integrated field — column integral</span>
+<span class="w">      </span><span class="c">!! redistributed across targets, Σ preserved when the z-grid spans H).</span>
+<span class="w">      </span><span class="c">!! `z_out(:)` = target INTERFACE depths (m, positive-down, shallow→deep,</span>
+<span class="w">      </span><span class="c">!! implicit 0 surface); output cell m spans `[z_out(m-1), z_out(m)]`.</span>
+<span class="w">      </span><span class="c">!! Thicknesses clipped to column total H = Σ h_layer (exact</span>
+<span class="w">      </span><span class="c">!! conservation); below-seafloor cells read 0.  k=1 bed, k=nz surface.</span>
+<span class="w">      </span><span class="c">!! Public only for the unit-test suite.</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state_handle</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_out</span><span class="p">(:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_extensive</span>
+
+<span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">state_handle</span><span class="p">)</span>
+<span class="w">      </span><span class="k">class is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">remap_layer_to_vcoord_impl</span><span class="p">(</span><span class="n">DIAG_VGRID_Z_FIXED</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">z_out</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">diag_remap_method</span><span class="p">,</span><span class="w"> </span><span class="n">diag_mask_vanished</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">DIAG_MISSING_VALUE</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end select</span>
+<span class="k">   end subroutine </span><span class="n">remap_layer_to_z</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

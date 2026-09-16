@@ -1,0 +1,5024 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_diag &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_diag
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 1.5% of total for modules and submodules.">810 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag.f90.html'>rdb_ocean_diag.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_diag</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_coord_unset">DIAG_COORD_UNSET</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_loc_center">DIAG_LOC_CENTER</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_loc_corner">DIAG_LOC_CORNER</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_loc_face_x">DIAG_LOC_FACE_X</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_loc_face_y">DIAG_LOC_FACE_Y</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_missing_value">DIAG_MISSING_VALUE</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_instant">DIAG_OP_INSTANT</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_integral">DIAG_OP_INTEGRAL</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_max">DIAG_OP_MAX</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_mean">DIAG_OP_MEAN</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_min">DIAG_OP_MIN</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_op_unset">DIAG_OP_UNSET</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_bottom">DIAG_VGRID_BOTTOM</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_density">DIAG_VGRID_DENSITY</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_layer">DIAG_VGRID_LAYER</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_sigma">DIAG_VGRID_SIGMA</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_surface">DIAG_VGRID_SURFACE</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_zstar">DIAG_VGRID_ZSTAR</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-diag_vgrid_z_fixed">DIAG_VGRID_Z_FIXED</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#variable-initial_capacity">INITIAL_CAPACITY</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#absints-0"
+         aria-expanded="false" aria-controls="absints-0">
+         <h4 class="card-header bg-primary text-white">Abstract Interfaces</h4>
+      </a>
+      <div id="absints-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#interface-diag_emit_proc">diag_emit_proc</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#interface-diag_fill_proc">diag_fill_proc</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#interface-diag_remap_proc">diag_remap_proc</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#type-diag_spec_t">diag_spec_t</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#type-diag_var_t">diag_var_t</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#type-ocean_diag_nc_stream_t">ocean_diag_nc_stream_t</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#type-ocean_diag_t">ocean_diag_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-parse_diag_spec">parse_diag_spec</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-diag_var_bytes">diag_var_bytes</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-lower_ascii">lower_ascii</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_bytes">ocean_diag_bytes</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_is_registered">ocean_diag_is_registered</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-diag_reduce_stats">diag_reduce_stats</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-fill_and_remap">fill_and_remap</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-fill_buffer_impl">fill_buffer_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-finalise_accumulator">finalise_accumulator</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-finalise_copy_impl">finalise_copy_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-finalise_scale_impl">finalise_scale_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-fold_sample">fold_sample</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-fold_sample_masked_impl">fold_sample_masked_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-fold_sample_unmasked_impl">fold_sample_unmasked_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_destroy">ocean_diag_destroy</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_disable">ocean_diag_disable</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_enter_data">ocean_diag_enter_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_enter_data_impl">ocean_diag_enter_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_exit_data">ocean_diag_exit_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_exit_data_impl">ocean_diag_exit_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_init">ocean_diag_init</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_register">ocean_diag_register</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_set_output_density_levels">ocean_diag_set_output_density_levels</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_set_output_sigma_levels">ocean_diag_set_output_sigma_levels</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_set_output_z_levels">ocean_diag_set_output_z_levels</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_set_output_zstar_levels">ocean_diag_set_output_zstar_levels</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-ocean_diag_step">ocean_diag_step</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-parse_cadence_attr">parse_cadence_attr</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-parse_one_spec_token">parse_one_spec_token</a>
+            <a class="list-group-item" href="../module/rdb_ocean_diag.html#proc-reset_accumulator">reset_accumulator</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Owns the diagnostics pipeline for the ocean dynamical core.
+Built around the following design points (Phase 6 work):</p>
+<ol>
+<li>
+<p><strong>Pull model, not push.</strong>  Kernels write to <code>state</code> and
+     stay diag-agnostic; this manager iterates a registry each
+     output step, fetches the source array (by pointer / by
+     enum tag), remaps onto the configured output vertical
+     grid, accumulates time means, and hands the ready buffer
+     to the I/O server.  Kernels never call <code>diag%send(...)</code>.</p>
+</li>
+<li>
+<p><strong>Compute-side remap.</strong>  Layer→z, layer→isopycnal, and
+     time-mean accumulation all happen on the compute rank
+     before hand-off.  The I/O server then only has to do
+     compression + netcdf write.  Keeps the I/O server lean
+     (no physics-aware code) at the cost of carrying the
+     remap target buffers on every compute rank — which is
+     cheap since they&rsquo;re shape <code>(nx, ny, nz_out)</code> not
+     <code>(nx_global, ny_global, nz_out)</code>.</p>
+</li>
+<li>
+<p><strong>I/O server interaction.</strong>  When a <code>diag_var_t</code>&rsquo;s
+     cadence fires, this manager calls <code>io_server_send(buf,
+     meta)</code> on the per-rank send queue.  Backpressure (server
+     slower than compute) shows up as a hung send and is
+     logged.  Hand-off contract: the manager owns the buffer
+     lifetime; the I/O server gets a non-owning view.</p>
+</li>
+</ol>
+<p>Phase 0e status: empty scaffold.  Components are declared so
+Phase 6 can fill in <code>register / step / send_ready</code> without
+restructuring the god state.  The bound procedures init/destroy
+are no-ops on the empty registry.</p>
+<p>Collaborator hand-off: this slot is independent of the
+dynamical core — once <code>ocean_diag_register</code> lands, every other
+kernel can be diagnosed without modification.  Good first task
+for a new contributor with FMS / diag_manager experience.</p>
+<p>Exposed for <code>test_ocean_diag_reduce</code>: the emit-path statistics
+reduction is the only device kernel in this module, so it is unit
+tested directly (numerics + <code>mem:separate</code> residency) rather than
+only through <code>step</code>.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_diag_mask.html'>rdb_ocean_diag_mask</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='rdb_ocean_status.html'>rdb_ocean_status</a></li>
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_error_ring.html'>rdb_error_ring</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_diag~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ocean_diagUsesGraph" width="637pt" height="233pt"
+ viewBox="0.00 0.00 637.00 233.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_diag~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 229)">
+<title>module~~rdb_ocean_diag~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-229 633,-229 633,4 -4,4"/>
+<!-- module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node1" class="node">
+<title>module~rdb_ocean_diag</title>
+<polygon fill="none" stroke="black" points="629,-105 532,-105 532,-81 629,-81 629,-105"/>
+<text text-anchor="middle" x="580.5" y="-90.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_diag</text>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node2" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="192,-225 98,-225 98,-201 192,-201 192,-225"/>
+<text text-anchor="middle" x="145" y="-210.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-213C365.28,-230.91 345.62,-204.45 279.5,-213"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node3" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node3"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="188.5,-66 101.5,-66 101.5,-42 188.5,-42 188.5,-66"/>
+<text text-anchor="middle" x="145" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M277.5,-53C251.6,-51.07 222.76,-51.05 198.7,-51.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.6,-48.13 188.7,-51.91 198.79,-55.13 198.6,-48.13"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node4" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node4"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="322.5,-24 234.5,-24 234.5,0 322.5,0 322.5,-24"/>
+<text text-anchor="middle" x="278.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge3" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M545.34,-80.99C515.68,-71.24 471.34,-58.27 431.5,-53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-53C392.83,-48.15 352.45,-36.75 322.83,-27.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="323.81,-23.84 313.22,-24.04 321.62,-30.49 323.81,-23.84"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node5" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node5"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="307,-105 250,-105 250,-81 307,-81 307,-105"/>
+<text text-anchor="middle" x="278.5" y="-90.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge4" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-53C388.03,-47.52 341.71,-63.39 311.66,-76.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="310.13,-73.58 302.51,-80.94 313.05,-79.94 310.13,-73.58"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node6" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node6"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="329,-185 228,-185 228,-161 329,-161 329,-185"/>
+<text text-anchor="middle" x="278.5" y="-170.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge5" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M570.5,-105.16C549.71,-131.98 495.23,-195.23 431.5,-213"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-213C409,-218.72 356.73,-202.16 319.68,-188.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="320.73,-185.3 310.14,-185.1 318.3,-191.86 320.73,-185.3"/>
+</g>
+<!-- module~rdb_ocean_diag_mask -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node7" class="node">
+<title>module~rdb_ocean_diag_mask</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node7"><a xlink:href="../module/rdb_ocean_diag_mask.html" xlink:title="rdb_ocean_diag_mask">
+<polygon fill="#337ab7" stroke="#337ab7" points="496,-145 365,-145 365,-121 496,-121 496,-145"/>
+<text text-anchor="middle" x="430.5" y="-130.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_mask</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_ocean_diag_mask -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge6" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_ocean_diag_mask</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M535.1,-105C519.65,-109.17 502.15,-113.9 485.99,-118.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="484.87,-114.95 476.13,-120.94 486.7,-121.71 484.87,-114.95"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node8" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_module~~rdb_ocean_diag~~UsesGraph_node8"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="483.5,-25 377.5,-25 377.5,-1 483.5,-1 483.5,-25"/>
+<text text-anchor="middle" x="430.5" y="-10.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge7" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M562.8,-80.84C546.34,-69.19 520.21,-51.56 496,-39 489.07,-35.4 481.52,-31.96 474.11,-28.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="475.44,-25.59 464.86,-25.04 472.78,-32.07 475.44,-25.59"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node9" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179,-24 111,-24 111,0 179,0 179,-24"/>
+<text text-anchor="middle" x="145" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_ocean_diag&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge8" class="edge">
+<title>module~rdb_ocean_diag&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M429.5,-53C363.41,-44.27 345.98,-57.95 279.5,-53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M277.5,-53C244.09,-50.51 207.86,-38.47 181.91,-28.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.07,-24.76 172.49,-24.19 180.41,-31.24 183.07,-24.76"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node11" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-66 0,-66 0,-42 62,-42 62,-66"/>
+<text text-anchor="middle" x="31" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge9" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M101.34,-54C91.82,-54 81.75,-54 72.32,-54"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="72.02,-50.5 62.02,-54 72.02,-57.5 72.02,-50.5"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge10" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M234.44,-12C219.98,-12 203.84,-12 189.35,-12"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="189.14,-8.5 179.14,-12 189.14,-15.5 189.14,-8.5"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge11" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M249.93,-84.82C234.36,-80.2 214.4,-74.29 196.15,-68.87"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="197.1,-65.5 186.51,-66.02 195.11,-72.21 197.1,-65.5"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge12" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M238.05,-185C224.77,-189.04 209.79,-193.6 195.83,-197.84"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="194.43,-194.61 185.88,-200.87 196.47,-201.31 194.43,-194.61"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge13" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M250.2,-160.92C242.67,-157 234.72,-152.28 228,-147 200.87,-125.69 175.57,-94.61 160.44,-74.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="163.15,-72.12 154.42,-66.12 157.51,-76.26 163.15,-72.12"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge14" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M265.38,-160.68C254.6,-149.27 238.91,-131.47 228,-114 207.14,-80.58 219.72,-61 192,-33 190.61,-31.6 189.11,-30.28 187.53,-29.04"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="189.37,-26.06 179.09,-23.5 185.53,-31.91 189.37,-26.06"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_node10" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179.5,-183 110.5,-183 110.5,-159 179.5,-159 179.5,-183"/>
+<text text-anchor="middle" x="145" y="-168.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge15" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M227.79,-172.24C215.41,-172.06 202.23,-171.86 190.14,-171.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="189.9,-168.17 179.85,-171.51 189.79,-175.17 189.9,-168.17"/>
+</g>
+<!-- module~rdb_ocean_diag_mask&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge16" class="edge">
+<title>module~rdb_ocean_diag_mask&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M415.42,-145.1C390.22,-165.65 334.82,-205.84 279.5,-213"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M277.5,-213C252.95,-216.18 225.6,-216.66 202.22,-216.17"/>
+<polygon fill="#003fff" stroke="#003fff" points="202.23,-212.66 192.13,-215.89 202.03,-219.66 202.23,-212.66"/>
+</g>
+<!-- module~rdb_ocean_diag_mask&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge17" class="edge">
+<title>module~rdb_ocean_diag_mask&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M364.91,-135.54C324.37,-135.07 271.69,-130.59 228,-114 204.13,-104.94 181.03,-86.94 165.47,-73.01"/>
+<polygon fill="#003fff" stroke="#003fff" points="167.77,-70.37 158.05,-66.16 163.03,-75.52 167.77,-70.37"/>
+</g>
+<!-- module~rdb_ocean_diag_mask&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge18" class="edge">
+<title>module~rdb_ocean_diag_mask&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M384.5,-121C362.94,-115.25 337.42,-108.45 316.94,-102.99"/>
+<polygon fill="#003fff" stroke="#003fff" points="317.6,-99.54 307.04,-100.34 315.8,-106.3 317.6,-99.54"/>
+</g>
+<!-- module~rdb_ocean_diag_mask&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_diag~~UsesGraph_edge19" class="edge">
+<title>module~rdb_ocean_diag_mask&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M384.5,-145C368.84,-149.17 351.11,-153.9 334.73,-158.27"/>
+<polygon fill="#003fff" stroke="#003fff" points="333.49,-154.98 324.73,-160.94 335.3,-161.74 333.49,-154.98"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_diag~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ocean_diagUsedByGraph" width="641pt" height="146pt"
+ viewBox="0.00 0.00 641.00 146.34" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_diag~~UsedByGraph" class="graph" transform="scale(0.66 0.66) rotate(0) translate(4 218.59)">
+<title>module~~rdb_ocean_diag~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-218.59 971,-218.59 971,4 -4,4"/>
+<!-- module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node1" class="node">
+<title>module~rdb_ocean_diag</title>
+<polygon fill="none" stroke="black" points="97,-120.41 0,-120.41 0,-96.41 97,-96.41 97,-120.41"/>
+<text text-anchor="middle" x="48.5" y="-106.01" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_diag</text>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="584,-42.41 441,-42.41 441,-18.41 584,-18.41 584,-42.41"/>
+<text text-anchor="middle" x="512.5" y="-28.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M440.71,-21.55C373.81,-15.15 271,-10.44 184,-28.41"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M182,-28.41C138.38,-38.23 95.49,-69.08 70.81,-89.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="68.23,-87.06 62.87,-96.2 72.76,-92.41 68.23,-87.06"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="397.5,-80.41 276.5,-80.41 276.5,-56.41 397.5,-56.41 397.5,-80.41"/>
+<text text-anchor="middle" x="337" y="-66.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M456.6,-42.43C439.59,-46.16 420.68,-50.3 403.05,-54.16"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="401.86,-50.84 392.84,-56.4 403.35,-57.68 401.86,-50.84"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node6" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node6"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="233,-120.41 133,-120.41 133,-96.41 233,-96.41 233,-120.41"/>
+<text text-anchor="middle" x="183" y="-106.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M470.35,-42.54C460.39,-46.29 450.02,-50.91 441,-56.41 422.47,-67.71 423.95,-78.83 405,-89.41 377.97,-104.5 368.91,-106.74 338,-108.41"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M336,-108.41C305.49,-110.06 271.49,-110.21 243.39,-109.89"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="243.37,-106.39 233.32,-109.75 243.27,-113.39 243.37,-106.39"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_diag</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M303.75,-56.31C266.29,-42.9 206.71,-23.72 184,-28.41"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M290.39,-80.41C274.54,-84.58 256.56,-89.31 239.96,-93.68"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="238.62,-90.42 229.84,-96.35 240.4,-97.19 238.62,-90.42"/>
+</g>
+<!-- module~rdb_ocean_diag_netcdf -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_diag_netcdf</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_diag_netcdf.html" xlink:title="rdb_ocean_diag_netcdf">
+<polygon fill="#337ab7" stroke="#337ab7" points="405,-160.41 269,-160.41 269,-136.41 405,-136.41 405,-160.41"/>
+<text text-anchor="middle" x="337" y="-146.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_netcdf</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_netcdf&#45;&gt;module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_diag_netcdf&#45;&gt;module~rdb_ocean_diag</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M303.75,-160.51C266.29,-173.92 206.71,-193.1 184,-188.41"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M182,-188.41C137.98,-179.32 94.91,-147.95 70.35,-127.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.32,-124.38 62.46,-120.5 67.75,-129.68 72.32,-124.38"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="731,-122.41 620,-122.41 620,-98.41 731,-98.41 731,-122.41"/>
+<text text-anchor="middle" x="675.5" y="-108.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M511.5,-188.41C367.96,-212.52 326.55,-217.86 184,-188.41"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M650.05,-98.26C622.46,-84.55 577.45,-62.19 546.7,-46.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="548.17,-43.73 537.66,-42.41 545.05,-50 548.17,-43.73"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M619.68,-111.1C588.52,-111.15 548.79,-110.63 513.5,-108.41"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M511.5,-108.41C467.56,-105.64 418.8,-93.57 384.19,-83.41"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="384.96,-79.98 374.37,-80.46 382.95,-86.69 384.96,-79.98"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_netcdf -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_netcdf</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M659.35,-122.45C642.04,-135.67 612.42,-156.7 584,-169.41 554.38,-182.66 545.5,-183.03 513.5,-188.41"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M511.5,-188.41C487.53,-192.44 427.54,-176.42 384.83,-163.47"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="385.78,-160.1 375.19,-160.51 383.72,-166.79 385.78,-160.1"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M511.5,-108.41C434.54,-103.57 415,-104.25 338,-108.41"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="564,-160.41 461,-160.41 461,-136.41 564,-136.41 564,-160.41"/>
+<text text-anchor="middle" x="512.5" y="-146.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M623.56,-122.43C607.84,-126.14 590.38,-130.26 574.08,-134.11"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="573.04,-130.76 564.11,-136.46 574.65,-137.57 573.04,-130.76"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_diag -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_diag</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M132.66,-108.41C124.4,-108.41 115.76,-108.41 107.3,-108.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="107.12,-104.91 97.12,-108.41 107.12,-111.91 107.12,-104.91"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node7" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node7"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="837,-82.41 770,-82.41 770,-58.41 837,-58.41 837,-82.41"/>
+<text text-anchor="middle" x="803.5" y="-68.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M769.72,-80.82C755.85,-85.22 739.41,-90.44 724.22,-95.26"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="722.94,-91.99 714.47,-98.36 725.06,-98.67 722.94,-91.99"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M769.54,-71.84C705.91,-74.76 561.78,-82.21 441,-94.41 395.04,-99.05 384.13,-105.92 338,-108.41"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node8" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node8"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="840,-162.41 767,-162.41 767,-138.41 840,-138.41 840,-162.41"/>
+<text text-anchor="middle" x="803.5" y="-148.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M766.73,-139.05C753.49,-134.85 738.26,-130.02 724.13,-125.53"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="725.15,-122.18 714.56,-122.49 723.03,-128.85 725.15,-122.18"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M766.62,-161.68C723.71,-174.53 649.45,-194.73 584,-202.41 444.19,-218.82 398.32,-225.01 269,-169.41 244.98,-159.09 221.11,-141.09 204.8,-127.31"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="206.86,-124.46 197.01,-120.56 202.27,-129.75 206.86,-124.46"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ocean_diag~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="967,-122.41 876,-122.41 876,-98.41 967,-98.41 967,-122.41"/>
+<text text-anchor="middle" x="921.5" y="-108.01" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M674.5,-30.41C648.39,-28.81 619.86,-28.39 594.16,-28.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="594.07,-24.98 584.09,-28.55 594.11,-31.98 594.07,-24.98"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M908.97,-98.4C894.39,-84.05 867.82,-60.59 840,-49.41 772.12,-22.13 749.52,-34.87 676.5,-30.41"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M674.5,-30.41C633.42,-26.29 625.02,-14.11 584,-9.41 520.86,-2.18 502.42,6.93 441,-9.41 411.34,-17.3 381.32,-35.99 361.41,-50.23"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="359.25,-47.47 353.26,-56.21 363.39,-53.11 359.25,-47.47"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M875.75,-110.41C838.13,-110.41 783.85,-110.41 741.45,-110.41"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="741.22,-106.91 731.22,-110.41 741.22,-113.91 741.22,-106.91"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M885.7,-122.41C874.22,-126.37 861.29,-130.83 849.17,-135.01"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="847.99,-131.71 839.68,-138.28 850.27,-138.33 847.99,-131.71"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_diag~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M482.17,-136.37C448.02,-123.6 389.7,-105.62 338,-108.41"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_diagUsedByGraph = svgPanZoom('#modulerdb_ocean_diagUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_coord_unset"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_COORD_UNSET</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p><code>diag_spec_t%coord</code> sentinel: no <code>:coord</code> attribute given =&gt; keep
+the diagnostic&rsquo;s default output vgrid (the global <code>&amp;ocean_diag_nml
+vgrid</code>).  Set values are <code>DIAG_VGRID_*</code> (layer / z / zstar / sigma).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_loc_center"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_LOC_CENTER</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>cell centre</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_loc_corner"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_LOC_CORNER</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                <p>south-west corner</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_loc_face_x"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_LOC_FACE_X</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>east face</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_loc_face_y"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_LOC_FACE_Y</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>north face</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_missing_value"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_MISSING_VALUE</strong></td>
+<td> =</td>
+                <td>1.0e20_wp</td>
+            <td>
+                <p>Sentinel written into remapped output cells that overlap no water
+(below-bottom / pinched-out) when vanished-target masking is on,
+and advertised as the NetCDF <code>_FillValue</code> / <code>missing_value</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_instant"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_INSTANT</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>snapshot at cadence</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_integral"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_INTEGRAL</strong></td>
+<td> =</td>
+                <td>5</td>
+            <td>
+                <p>Cumulative time integral over the cadence window —
+emits Σ(sample · dt) without dividing.  Used for budget
+closure: time-integrated fluxes through a surface or
+through an OBC face are the conserved quantity, not
+their per-step rate.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_max"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_MAX</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_mean"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_MEAN</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>dt-weighted time mean over cadence</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_min"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_MIN</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_op_unset"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_OP_UNSET</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+                <p><code>diag_spec_t%time_op</code> sentinel: attribute not given =&gt; keep the
+diagnostic&rsquo;s canonical default time-operator.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_bottom"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_BOTTOM</strong></td>
+<td> =</td>
+                <td>5</td>
+            <td>
+                <p>2D bed slice.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_density"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_DENSITY</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>Isopycnal bins for watermass analysis.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_layer"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_LAYER</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Model layers (k=1 bed, k=nz surface).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_sigma"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_SIGMA</strong></td>
+<td> =</td>
+                <td>7</td>
+            <td>
+                <p>Fixed sigma-levels: terrain-following fractional-depth output
+grid (target interface depth = sigma fraction * col_h).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_surface"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_SURFACE</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                <p>2D surface slice (no remap needed).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_zstar"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_ZSTAR</strong></td>
+<td> =</td>
+                <td>6</td>
+            <td>
+                <p>Fixed z*-levels: SSH-tracking stretched-depth output grid
+(each column&rsquo;s target depths scale with col_h / resting depth).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag_vgrid_z_fixed"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>DIAG_VGRID_Z_FIXED</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Fixed z-levels (e.g., 50 standard depths).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-initial_capacity"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>INITIAL_CAPACITY</strong></td>
+<td> =</td>
+                <td>16</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+        <section>
+          <h2>Abstract Interfaces</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-diag_emit_proc"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine diag_emit_proc(diag, ivar, t)  
+
+    </h3>
+  <p>Optional post-fire emit hook.  Called by <code>step</code> once per
+cadence-fire AFTER the log line; used by the NetCDF
+writer to append a slice for the var that just fired.
+Kept abstract so the diag module stays free of NetCDF /
+I/O-server deps — <code>rdb_ocean_diag_netcdf</code> provides the
+concrete implementation.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-diag"></span>
+              class(*),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>diag</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ivar"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ivar</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-diag_fill_proc"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine diag_fill_proc(state_handle, buf)  
+
+    </h3>
+  <p>Fill routine signature.  <code>state_handle</code> is polymorphic so
+this module stays decoupled from <code>ocean_state_t</code> (which
+itself composes <code>ocean_diag_t</code>).  Implementations live in
+<code>rdb_ocean_diag_fills</code> and do a <code>select type</code> cast to the
+concrete ocean state inside the body.  <code>buf</code> is the
+pre-allocated output buffer the manager owns.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~19"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-buf~28"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="interface-diag_remap_proc"></span><h3>abstract interface
+        
+    </h3></div>
+    <ul class="list-group">
+      <li class="list-group-item">
+            <h3>
+    public  subroutine diag_remap_proc(state_handle, z_out, layer_buf, output_buf, is_extensive)  
+
+    </h3>
+  <p>Vertical-remap routine signature.  Called by the manager
+after <code>fill</code> when a var&rsquo;s <code>output_vgrid</code> is not LAYER.
+<code>layer_buf</code> is the manager-owned native-grid scratch the
+fill wrote into; <code>output_buf</code> is the remap target on the
+configured output vgrid (z-levels / isopycnals / 2D).
+State-side data needed for the remap (e.g. <code>h_layer</code>,
+bathy) is fetched via <code>select type</code> on <code>state_handle</code>.</p>
+<p>Conservation contract:  <code>is_extensive</code> (forwarded by the
+manager from <code>diag_var_t%is_extensive</code>) selects the operator.
+<code>.false.</code> — INTENSIVE: the target value is the
+thickness-weighted average of the overlapping source layers.
+<code>.true.</code> — EXTENSIVE: the column integral is conservatively
+REDISTRIBUTED (Σ output == Σ layer_buf), for thickness-
+integrated quantities (hTr, h·KE, transports).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~20"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_out~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_out</strong>(:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~7"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+      </li>
+    </ul>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-diag_spec_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/diag_spec_t.html'>diag_spec_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>One parsed entry of the <code>&amp;ocean_diag_nml diags</code> selection list.
+Produced by <code>parse_diag_spec</code>; consumed by <code>register_default_diags</code>
+(canonical-default overrides / skips) and the derived-diagnostic
+orchestrator (<code>apply_diag_selection</code>).  Unset attributes carry
+sentinels so the consumer falls back to the canonical default.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord~4"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord</strong></td>
+<td> =</td>
+                <td>DIAG_COORD_UNSET</td>
+            <td>
+<p><code>:layer/z/zstar/sigma</code> output-vgrid override</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_out~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_out</strong></td>
+<td> =</td>
+                <td>-1.0_wp</td>
+            <td>
+<p><code>:&lt;n&gt;s/m/h/d</code> cadence override (&lt;0 = unset)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~39"></span>
+              character(len=64),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+<p>diagnostic name (catalog or canonical)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-off~3"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>off</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>:off</code> =&gt; skip this diagnostic</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_op~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_op</strong></td>
+<td> =</td>
+                <td>DIAG_OP_UNSET</td>
+            <td>
+<p><code>:instant/mean/max/min</code> override</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-diag_var_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/diag_var_t.html'>diag_var_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Per-variable diagnostic record.  Owned by ocean_diag_t.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-accumulator"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>accumulator</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_accum"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_accum</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Wall time accumulated into this var&rsquo;s window (s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_out~4"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_out</strong></td>
+<td> =</td>
+                <td>3600.0_wp</td>
+            <td>
+<p>Output cadence (s).  Manager keeps a per-var counter and
+fires when the accumulated dt passes the threshold.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enabled~3"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enabled</strong></td>
+<td> =</td>
+                <td>.true.</td>
+            <td>
+<p>When <code>.false.</code> the dispatcher skips this var entirely — no
+<code>fill_*</code> kernel, no accumulator fold, no emit — so an
+unrequested diagnostic costs zero GPU work.  Lets a run turn
+off individual default diagnostics it does not want.  Default
+<code>.true.</code> ⇒ every registered var runs (bit-identical).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fill~2"></span>
+              procedure(<a href='../interface/diag_fill_proc.html'>diag_fill_proc</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer, nopass
+            </td>
+            <td>::</td>
+            <td><strong>fill</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fire_count"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fire_count</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of times this var&rsquo;s <code>output_buffer</code> has been
+refreshed (filled/folded/finalised + pulled host-ward) since
+registration. Incremented unconditionally in <code>ocean_diag_step</code>
+at the SAME point as the per-fire <code>update self</code> — independent
+of whether a NetCDF stream is open (<code>nc_time_index</code> stays 0
+with diagnostics disabled or output suppressed, so it cannot
+serve this role). This is the <code>generation</code> the C ABI&rsquo;s
+<code>rdb_ocean_get_diagnostic_ptr</code> returns: a Python <code>Field</code>
+re-checks it on access and knows <code>output_buffer</code> is already
+host-current the instant it changes (no separate refresh call
+needed — the pull above already happened synchronously).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_missing"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_missing</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>When <code>.true.</code> the remap fills target cells that overlap no water
+(below-bottom / pinched-out in a shallow column) with
+<code>DIAG_MISSING_VALUE</code> instead of 0, and the NetCDF writer tags the
+variable with a <code>_FillValue</code> / <code>missing_value</code> attribute.  Set at
+register time for non-LAYER diagnostics when masking is enabled
+(<code>&amp;ocean_diag_nml mask_vanished_layers</code>).  Default <code>.false.</code> =&gt;
+below-bottom cells read 0 (bit-identical to the legacy writer).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~8"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>.false.</code> (default): field is INTENSIVE — per-unit-thickness
+quantity like temperature, salinity, velocity, density.
+When remapped to a non-LAYER vgrid, the column value is
+weight-averaged across overlapping source layers.</p><a href="../type/diag_var_t.html#variable-is_extensive~8" class="pull-right"><emph>Read more&hellip;</emph></a>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buffer"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>layer_buffer</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-long_name~2"></span>
+              character(len=128),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>long_name</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+<p>CF-compliant long_name attribute.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask~9"></span>
+              type(<a href='../type/diag_mask_t.html'>diag_mask_t</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>mask</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Optional region mask.  When allocated, <code>fold_sample</code>
+multiplies each sample by <code>mask%weight(i, j)</code> before
+folding into the accumulator — cells outside the region
+contribute zero.  Output buffer shape is unchanged (full
+domain with zeros outside the mask); scalar-aggregating
+reductions land with the Phase D budget plumbing or as
+a Phase C v2 follow-on.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_accum"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_accum</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of contributions in the current accumulator window.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~40"></span>
+              character(len=64),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+<p>Short netcdf variable name.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_time_dimid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_time_dimid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_time_index"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_time_index</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of slices already written for this var (1-indexed
+position of the NEXT write).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_time_varid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_time_varid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_varid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_varid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_z_dimid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_z_dimid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+<p>-1 for 2D vars; set for 3D vars when the stream is opened.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buffer"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>output_buffer</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_vgrid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_vgrid</strong></td>
+<td> =</td>
+                <td>DIAG_VGRID_LAYER</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-remap~3"></span>
+              procedure(<a href='../interface/diag_remap_proc.html'>diag_remap_proc</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer, nopass
+            </td>
+            <td>::</td>
+            <td><strong>remap</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Optional vertical-remap routine.  Set at register time
+when <code>output_vgrid /= DIAG_VGRID_LAYER</code>; null otherwise.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-source_loc"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>source_loc</strong></td>
+<td> =</td>
+                <td>DIAG_LOC_CENTER</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-source_vgrid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>source_vgrid</strong></td>
+<td> =</td>
+                <td>DIAG_VGRID_LAYER</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-standard_name~2"></span>
+              character(len=64),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>standard_name</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stream_id"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stream_id</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>ID of the output stream this var ships to (Phase 6 wires
+the I/O server stream table).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_op~3"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_op</strong></td>
+<td> =</td>
+                <td>DIAG_OP_MEAN</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-units~3"></span>
+              character(len=32),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>units</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/diag_var_t.html#boundprocedure-bytes~19'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/diag_var_bytes.html'>diag_var_bytes</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ocean_diag_nc_stream_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ocean_diag_nc_stream_t.html'>ocean_diag_nc_stream_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>NetCDF output stream state.  Carried inline on <code>ocean_diag_t</code>
+so the diag module stays NetCDF-free (no <code>use netcdf</code> here);
+the actual file operations live in <code>rdb_ocean_diag_netcdf</code>
+which manipulates these fields.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-filename~7"></span>
+              character(len=256),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>filename</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_open"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_open</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncid~48"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stage"></span>
+              real(kind=real32),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>stage</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Host staging buffer for the fp64 -&gt; fp32 conversion done
+immediately before <code>nf90_put_var</code>.  Allocated by <code>open_stream</code>
+ONLY when <code>xtype == NC_R4</code>, sized to the largest registered
+variable&rsquo;s <code>output_buffer</code>; unallocated (zero cost) on the
+default double-precision path.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x_dimid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x_dimid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xtype~3"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xtype</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+<p>Resolved NetCDF element type for the DATA variables of this
+stream (<code>NC_WP</code> / <code>NC_R4</code> — see <code>rdb_io_netcdf</code>).  <code>-1</code> = unset;
+<code>open_stream</code> resolves it from <code>&amp;ocean_diag_nml
+output_precision</code> (&ldquo;double&rdquo;, the default, =&gt; <code>NC_WP</code> =&gt;
+byte-identical output).  Held as a bare integer so this module
+stays NetCDF-free; only <code>rdb_ocean_diag_netcdf</code> interprets it.</p><a href="../type/ocean_diag_nc_stream_t.html#variable-xtype~3" class="pull-right"><emph>Read more&hellip;</emph></a>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y_dimid"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y_dimid</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ocean_diag_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ocean_diag_t.html'>ocean_diag_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_last_eval"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_last_eval</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Wall time at last evaluation pass (s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-emit_post_fire"></span>
+              procedure(<a href='../interface/diag_emit_proc.html'>diag_emit_proc</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer, nopass
+            </td>
+            <td>::</td>
+            <td><strong>emit_post_fire</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Optional post-fire hook the manager calls after the log
+line.  <code>rdb_ocean_diag_netcdf::open_stream</code> binds this to
+the NetCDF writer; unbound = log-only behaviour.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enabled~4"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enabled</strong></td>
+<td> =</td>
+                <td>.true.</td>
+            <td>
+<p>Master switch.  Phase 6 reads from namelist.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~135"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Cached grid (scalar-only struct, cheap to copy).  Derived
+diagnostic fills read <code>grid%nghost</code> from here (and the
+per-cell spacing from <code>state%metrics</code> directly — design D5);
+they only see <code>state_handle</code> so the grid has to be reachable
+through the state composition.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_init~20"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_init</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>True between <code>init</code> and <code>destroy</code>.  Prefer this to
+<code>allocated(...)</code> — tracks GPU device attachment too.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_rho_out"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_rho_out</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_sigma_out"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_sigma_out</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_zstar_out"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_zstar_out</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nc_stream"></span>
+              type(<a href='../type/ocean_diag_nc_stream_t.html'>ocean_diag_nc_stream_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nc_stream</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nvars"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nvars</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Live count of registered diagnostics.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nvars_max"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nvars_max</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Capacity of <code>vars(:)</code>.  Grown via reallocation on
+<code>register</code> overflow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_out~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_out</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-on_device~7"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>on_device</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>.true.</code> between <code>enter_data</code> and <code>exit_data</code>.  The emit-time
+statistics reduction reads <code>output_buffer</code> where it actually
+lives: on the device via <code>do concurrent ... reduce</code> when mapped,
+on the host otherwise (unit tests that skip <code>enter_data</code>).  A
+device read of an unmapped buffer under <code>-gpu=mem:separate</code>
+would return garbage silently, so this is not optional.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_out"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>rho_out</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Output isopycnal bin edges (kg/m^3).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-send_buf"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>send_buf</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma_out"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sigma_out</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Output sigma levels: cumulative fractions (0..1, shallow-&gt;deep).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vars"></span>
+              type(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>vars</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_out~4"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>z_out</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Output z-levels (m, positive up; surface at index nz_out).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_out"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>zstar_out</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Output z* reference interface depths (m, positive-down; deepest =
+reference total depth H_ref).  Per-column grid stretched by
+col_h / H_ref (SSH-tracking).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-bytes~20'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_bytes.html'>ocean_diag_bytes</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-destroy~22'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_destroy.html'>ocean_diag_destroy</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-disable'>disable</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_disable.html'>ocean_diag_disable</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-enter_data~20'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_enter_data.html'>ocean_diag_enter_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-exit_data~20'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_exit_data.html'>ocean_diag_exit_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-init~22'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_init.html'>ocean_diag_init</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-is_registered'>is_registered</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_is_registered.html'>ocean_diag_is_registered</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-register'>register</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_register.html'>ocean_diag_register</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-set_output_density_levels'>set_output_density_levels</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_set_output_density_levels.html'>ocean_diag_set_output_density_levels</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-set_output_sigma_levels'>set_output_sigma_levels</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_set_output_sigma_levels.html'>ocean_diag_set_output_sigma_levels</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-set_output_z_levels'>set_output_z_levels</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_set_output_z_levels.html'>ocean_diag_set_output_z_levels</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-set_output_zstar_levels'>set_output_zstar_levels</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_set_output_zstar_levels.html'>ocean_diag_set_output_zstar_levels</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_diag_t.html#boundprocedure-step~3'>step</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_diag_step.html'>ocean_diag_step</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_diag_spec"></span> <h3>public  function <a href='../proc/parse_diag_spec.html'>parse_diag_spec</a>(spec) result(specs)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Parse the <code>&amp;ocean_diag_nml diags</code> selection string into structured
+entries.  Entries are whitespace/comma-separated; within an entry,
+colon-separated attributes are self-identifying (order-free):</p><a href="../proc/parse_diag_spec.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-spec"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>spec</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>type(<a href='../type/diag_spec_t.html'>diag_spec_t</a>), allocatable, (:)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-diag_var_bytes"></span> <h3>private pure function <a href='../proc/diag_var_bytes.html'>diag_var_bytes</a>(this) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Counted allocatable footprint of ONE registered diagnostic
+(0 for every buffer that is unallocated).</p><a href="../proc/diag_var_bytes.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~229"></span>
+              class(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-lower_ascii"></span> <h3>private pure function <a href='../proc/lower_ascii.html'>lower_ascii</a>(s) result(out)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>ASCII lowercase a string (attribute matching is case-insensitive).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~14"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>character(len=len)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_bytes"></span> <h3>private pure function <a href='../proc/ocean_diag_bytes.html'>ocean_diag_bytes</a>(this) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Counted allocatable footprint of the diagnostics slot: the flat
+remap-level arrays, the host NetCDF staging buffer, AND the
+per-variable registry buffers (0 when unallocated).  One
+arr_bytes term per array — add a term here when a new allocatable
+joins the type; new <code>diag_var_t</code> buffers go in <code>diag_var_bytes</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~230"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_is_registered"></span> <h3>private pure function <a href='../proc/ocean_diag_is_registered.html'>ocean_diag_is_registered</a>(this, name) result(yes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>.true.</code> iff a diagnostic named <code>name</code> is registered (enabled or
+not).  Registration state only — says nothing about whether it
+will actually fire (see <code>enabled</code>); a <code>disable</code>d diagnostic is
+still registered and this returns <code>.true.</code> for it.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~223"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~43"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-diag_reduce_stats"></span> <h3>public pure subroutine <a href='../proc/diag_reduce_stats.html'>diag_reduce_stats</a>(buf, n1, n2, n3, vmin, vmax, vsum)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Whole-array min / max / sum of a diagnostic buffer in ONE pass.</p><a href="../proc/diag_reduce_stats.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-buf~31"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>buf</strong>(n1,n2,n3)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n3~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n3</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmin~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmin</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmax~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmax</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vsum~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vsum</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fill_and_remap"></span> <h3>private  subroutine <a href='../proc/fill_and_remap.html'>fill_and_remap</a>(v, state_handle, z_out, rho_out, sigma_out, zstar_out)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Invoke the var&rsquo;s <code>fill</code> (and <code>remap</code> if non-LAYER) so
+<code>output_buffer</code> holds the current sample.  The accumulation
+/ log emission step consumes <code>output_buffer</code> after this.</p><a href="../proc/fill_and_remap.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~7"></span>
+              type(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~22"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_out~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>z_out</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_out~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>rho_out</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma_out~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sigma_out</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_out~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>zstar_out</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fill_buffer_impl"></span> <h3>private pure subroutine <a href='../proc/fill_buffer_impl.html'>fill_buffer_impl</a>(buf, val)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Device-side scalar fill.  Used by reset_accumulator and (when
+<code>idx_temperature</code> / <code>idx_salinity</code> is unset) the manager could
+also seed <code>output_buffer</code> via this; today only the accumulator
+reset goes through here.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-buf~30"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>buf</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-val~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-finalise_accumulator"></span> <h3>private  subroutine <a href='../proc/finalise_accumulator.html'>finalise_accumulator</a>(v)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Copy the accumulator into <code>output_buffer</code>.  Called at
+cadence-fire BEFORE log / NetCDF emission consumes
+<code>output_buffer</code>.</p><a href="../proc/finalise_accumulator.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~9"></span>
+              type(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-finalise_copy_impl"></span> <h3>private pure subroutine <a href='../proc/finalise_copy_impl.html'>finalise_copy_impl</a>(out, accum)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-out~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>out</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-accum~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>accum</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-finalise_scale_impl"></span> <h3>private pure subroutine <a href='../proc/finalise_scale_impl.html'>finalise_scale_impl</a>(out, accum, scale_factor)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Device-side <code>out = accum * scale_factor</code>.  Used for MEAN
+finalise where <code>scale_factor = 1/dt_accum</code>.</p><a href="../proc/finalise_scale_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-out~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>out</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-accum~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>accum</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-scale_factor"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>scale_factor</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fold_sample"></span> <h3>private  subroutine <a href='../proc/fold_sample.html'>fold_sample</a>(v, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Combine the current <code>output_buffer</code> sample into <code>accumulator</code>
+per <code>time_op</code>.</p><a href="../proc/fold_sample.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~8"></span>
+              type(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~66"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fold_sample_masked_impl"></span> <h3>private pure subroutine <a href='../proc/fold_sample_masked_impl.html'>fold_sample_masked_impl</a>(accum, out, weight, mask_nx, mask_ny, dt, time_op)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Masked fold — multiplies sample by <code>weight(i, j)</code> before folding.
+MAX/MIN treat <code>weight == 0</code> as &ldquo;don&rsquo;t update&rdquo; so masked-out cells
+keep their seed value.  Loop bounds clip to whichever extent is
+smaller (accumulator vs mask) so an undersized mask doesn&rsquo;t OOB.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-accum~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>accum</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-out~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>out</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-weight"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>weight</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_nx"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_ny"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~68"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_op~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_op</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-fold_sample_unmasked_impl"></span> <h3>private pure subroutine <a href='../proc/fold_sample_unmasked_impl.html'>fold_sample_unmasked_impl</a>(accum, out, dt, time_op)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Whole-buffer fold without a region mask.  One <code>do concurrent</code>
+per op so the compiler can specialise — case-inside-loop blocks
+NVHPC device codegen.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-accum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>accum</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-out~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>out</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~67"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_op~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_op</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_destroy"></span> <h3>private  subroutine <a href='../proc/ocean_diag_destroy.html'>ocean_diag_destroy</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~216"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_disable"></span> <h3>private  subroutine <a href='../proc/ocean_diag_disable.html'>ocean_diag_disable</a>(this, name)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Turn OFF the registered diagnostic <code>name</code> so the dispatcher skips
+it entirely (no fill, no fold, no emit).  Fail-loud if <code>name</code>
+matches no registered var — a typo must not silently leave a
+diagnostic running.  Lists the registered names on abort.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~222"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~42"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_enter_data"></span> <h3>private  subroutine <a href='../proc/ocean_diag_enter_data.html'>ocean_diag_enter_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Attach each registered var&rsquo;s per-buffer allocatables to the device.
+Called by <code>ocean_state_enter_data</code> after <code>register_default_diags</code>
+has populated <code>vars(:)</code> — buffers are sized at register time, so
+the descriptors here are valid.</p><a href="../proc/ocean_diag_enter_data.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~217"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_enter_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_diag_enter_data_impl.html'>ocean_diag_enter_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~218"></span>
+              type(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_exit_data"></span> <h3>private  subroutine <a href='../proc/ocean_diag_exit_data.html'>ocean_diag_exit_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Detach in reverse order of enter_data.  Idempotency-safe via
+<code>is_init</code> gate — repeated calls without intervening enter_data
+become no-ops once the manager is destroyed.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~219"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_exit_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_diag_exit_data_impl.html'>ocean_diag_exit_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~220"></span>
+              type(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_init"></span> <h3>private  subroutine <a href='../proc/ocean_diag_init.html'>ocean_diag_init</a>(this, grid)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Allocate an empty registry sized at <code>INITIAL_CAPACITY</code> slots.
+Subsequent <code>register</code> calls grow the array via doubling.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~215"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~136"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_register"></span> <h3>private  subroutine <a href='../proc/ocean_diag_register.html'>ocean_diag_register</a>(this, name, units, fill, n1, n2, n3, long_name, standard_name, time_op, dt_out, output_vgrid, remap, mask, is_extensive, has_missing)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Register a new diagnostic variable.  Grows the registry via
+capacity doubling on overflow.  Buffer allocation depends on
+<code>output_vgrid</code>:
+  * <code>LAYER</code> (default): one <code>output_buffer(n1, n2, n3)</code> —
+    <code>fill</code> writes directly into it.
+  * <code>Z_FIXED</code> (or any non-LAYER target): two buffers —
+    <code>layer_buffer(n1, n2, n3)</code> for the fill, plus
+    <code>output_buffer(n1, n2, this%nz_out)</code> for the remapped
+    result.  Caller must have configured <code>nz_out</code> via
+    <code>set_output_z_levels</code> first, and bind a <code>remap</code> proc.
+Caller binds <code>fill</code> to a routine that knows how to populate
+the layer-native buffer from the state handle.</p><a href="../proc/ocean_diag_register.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~221"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~41"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-units~4"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>units</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fill~3"></span>
+              procedure(<a href='../interface/diag_fill_proc.html'>diag_fill_proc</a>)
+            </td>
+<td></td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fill</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n3~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n3</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-long_name~3"></span>
+              character(len=*),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>long_name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-standard_name~3"></span>
+              character(len=*),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>standard_name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_op~4"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_op</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_out~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_out</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_vgrid~2"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_vgrid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-remap~4"></span>
+              procedure(<a href='../interface/diag_remap_proc.html'>diag_remap_proc</a>),
+            </td>
+<td></td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>remap</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask~10"></span>
+              type(<a href='../type/diag_mask_t.html'>diag_mask_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~9"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_missing~2"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_missing</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_set_output_density_levels"></span> <h3>private  subroutine <a href='../proc/ocean_diag_set_output_density_levels.html'>ocean_diag_set_output_density_levels</a>(this, rho, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Configure the isopycnal (DENSITY) output grid — monotone-increasing
+target potential densities (kg/m³).  Stored copy; must be called
+BEFORE any <code>register</code> with <code>output_vgrid == DIAG_VGRID_DENSITY</code> so
+the manager knows the output buffer shape (one cell per target).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~225"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~57"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_set_output_sigma_levels"></span> <h3>private  subroutine <a href='../proc/ocean_diag_set_output_sigma_levels.html'>ocean_diag_set_output_sigma_levels</a>(this, sigma, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Configure the terrain-following (SIGMA) output grid — cumulative
+sigma fractions (0..1, monotone shallow-&gt;deep).  Stored copy; must
+be called BEFORE any <code>register</code> with <code>output_vgrid ==
+DIAG_VGRID_SIGMA</code> so the manager knows the output buffer shape.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~226"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sigma"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sigma</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~58"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_set_output_z_levels"></span> <h3>private  subroutine <a href='../proc/ocean_diag_set_output_z_levels.html'>ocean_diag_set_output_z_levels</a>(this, z, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Configure the fixed-z output grid.  Stored copy; the original
+<code>z</code> array is not retained.  Must be called BEFORE any
+<code>register</code> with <code>output_vgrid == DIAG_VGRID_Z_FIXED</code> so the
+manager knows the output buffer shape.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~224"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~56"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+<p>Non-zero (<code>OCEAN_STATUS_ERR_SETUP</code>) when <code>size(z) &gt;
+NZ_STACK_MAX</code>, when present; absent behaves as today
+(<code>error stop</code>). (F5 residual, P2.4)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_set_output_zstar_levels"></span> <h3>private  subroutine <a href='../proc/ocean_diag_set_output_zstar_levels.html'>ocean_diag_set_output_zstar_levels</a>(this, zstar, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Configure the SSH-tracking (ZSTAR) output grid — reference interface
+depths (m, positive-down, monotone shallow-&gt;deep; deepest = H_ref).
+Stored copy; must be called BEFORE any <code>register</code> with
+<code>output_vgrid == DIAG_VGRID_ZSTAR</code> so the manager knows the buffer
+shape.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~227"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zstar</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~59"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_diag_step"></span> <h3>private  subroutine <a href='../proc/ocean_diag_step.html'>ocean_diag_step</a>(this, state_handle, dt, t)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Advance every registered variable.  Behaviour by <code>time_op</code>:</p><a href="../proc/ocean_diag_step.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~228"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~21"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~65"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~23"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_cadence_attr"></span> <h3>private pure subroutine <a href='../proc/parse_cadence_attr.html'>parse_cadence_attr</a>(s, secs, ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Parse a cadence attribute <code>&lt;int&gt;&lt;unit&gt;</code> (unit s/m/h/d) to seconds.
+<code>ok=.false.</code> if <code>s</code> is not a well-formed positive cadence.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~13"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-secs~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>secs</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ok~26"></span>
+              logical,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ok</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_one_spec_token"></span> <h3>private  subroutine <a href='../proc/parse_one_spec_token.html'>parse_one_spec_token</a>(tok, s)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Parse a single <code>name[:attr]...</code> token into a <code>diag_spec_t</code>.
+Fails loud on an unrecognised attribute.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tok"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tok</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~12"></span>
+              type(<a href='../type/diag_spec_t.html'>diag_spec_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-reset_accumulator"></span> <h3>private pure subroutine <a href='../proc/reset_accumulator.html'>reset_accumulator</a>(v)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Zero (MEAN), -huge (MAX), or +huge (MIN) the accumulator —
+so the first accumulate step seeds correctly.  Runs on device
+via the flat-impl shim because <code>v%accumulator</code> is reached
+through the <code>vars(:)</code> array-of-derived-types indirection that
+NVHPC can&rsquo;t follow inside a <code>do concurrent</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~6"></span>
+              type(<a href='../type/diag_var_t.html'>diag_var_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

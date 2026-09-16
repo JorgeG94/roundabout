@@ -1,0 +1,1632 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ks_adaptive_dt &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ks_adaptive_dt
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">93 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_kappa_shear.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_kappa_shear.f90.html'>rdb_ocean_kappa_shear.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_kappa_shear.html'>rdb_ocean_kappa_shear</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ks_adaptive_dt</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-c1_pr">c1_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-dt_inc">dt_inc</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-dt_try">dt_try</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-dt_tst">dt_tst</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-idtt">idtt</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-ih">ih</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-ir">ir</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-k_hi~2">k_hi</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-k_lo~2">k_lo</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-ke_lyr">ke_lyr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-kk~3">kk</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-ks_lyr">ks_lyr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-ksrc_tst">ksrc_tst</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-lower_t">lower_t</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-max_halvings">max_halvings</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-n2_pr">n2_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-s2_pr">s2_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-s_pr">s_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-t_pr">t_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-tol2_l">tol2_l</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-tol_chg_a">tol_chg_a</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-tol_dksrc_low">tol_dksrc_low</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-tol_max">tol_max</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-tol_min_a">tol_min_a</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-u_pr">u_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-upper_t">upper_t</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-v_pr">v_pr</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-valid_dt">valid_dt</a>
+            <a class="list-group-item" href="../proc/ks_adaptive_dt.html#variable-valid_try">valid_try</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ks_adaptive_dt.html#src">ks_adaptive_dt</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure function ks_adaptive_dt(nz, dt_rem, itt_outer, max_substep_it, ri_crit, shearmix_rate, fri_curvature, src_max_chg, tol_err, vel_underflow, dbuoy_t, dbuoy_s, h_s, u_cur, v_cur, t_cur, s_cur, kappa_out_s, kappa_src_s, local_src_s, local_src_avg_s, ks_kap, ke_kap, idz_int_s) result(dt_now_r)  
+</h2>
+    
+
+    <p>Largest dt_test &lt;= dt_rem such that, after mixing for
+0.5*dt_test with <code>kappa_out_s</code>, the regenerated source stays
+within the tolerance bands of the accepted-state source
+(design doc section 5.3): a halving pass followed by a 5-step
+refinement pass.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~30"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_rem"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_rem</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-itt_outer"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>itt_outer</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_substep_it~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_substep_it</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ri_crit~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ri_crit</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-shearmix_rate~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>shearmix_rate</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fri_curvature~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fri_curvature</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-src_max_chg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>src_max_chg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_err~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol_err</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vel_underflow~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vel_underflow</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dbuoy_t~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dbuoy_t</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dbuoy_s~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dbuoy_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_s"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_s</strong>(NZL)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_cur"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_cur</strong>(NZL)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_cur"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_cur</strong>(NZL)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_cur"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_cur</strong>(NZL)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_cur"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_cur</strong>(NZL)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_out_s"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_out_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_src_s"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_src_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_src_s"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_src_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_src_avg_s"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_src_avg_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ks_kap~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ks_kap</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ke_kap~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ke_kap</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idz_int_s~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idz_int_s</strong>(NZLI)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-dt_now_r"></span>
+          real(kind=wp)
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ks_adaptive_dt~~CallsGraph Pages: 1 -->
+<svg id="procks_adaptive_dtCallsGraph" width="246pt" height="74pt"
+ viewBox="0.00 0.00 246.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ks_adaptive_dt~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~ks_adaptive_dt~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 242,-70 242,4 -4,4"/>
+<!-- proc~ks_adaptive_dt -->
+<g id="proc~~ks_adaptive_dt~~CallsGraph_node1" class="node">
+<title>proc~ks_adaptive_dt</title>
+<polygon fill="none" stroke="black" points="91,-45 0,-45 0,-21 91,-21 91,-45"/>
+<text text-anchor="middle" x="45.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ks_adaptive_dt</text>
+</g>
+<!-- proc~ks_projected_state -->
+<g id="proc~~ks_adaptive_dt~~CallsGraph_node2" class="node">
+<title>proc~ks_projected_state</title>
+<g id="a_proc~~ks_adaptive_dt~~CallsGraph_node2"><a xlink:href="../proc/ks_projected_state.html" xlink:title="ks_projected_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="238,-66 127,-66 127,-42 238,-42 238,-66"/>
+<text text-anchor="middle" x="182.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_projected_state</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~ks_adaptive_dt~~CallsGraph_edge1" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#ff0000" d="M91.08,-39.93C99.25,-41.21 107.93,-42.56 116.55,-43.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="116.19,-47.38 126.61,-45.46 117.27,-40.47 116.19,-47.38"/>
+</g>
+<!-- proc~ks_src_func -->
+<g id="proc~~ks_adaptive_dt~~CallsGraph_node3" class="node">
+<title>proc~ks_src_func</title>
+<g id="a_proc~~ks_adaptive_dt~~CallsGraph_node3"><a xlink:href="../proc/ks_src_func.html" xlink:title="ks_src_func">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="219,-24 146,-24 146,0 219,0 219,-24"/>
+<text text-anchor="middle" x="182.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_src_func</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func -->
+<g id="proc~~ks_adaptive_dt~~CallsGraph_edge2" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#ff0000" d="M91.08,-26.07C105.42,-23.84 121.32,-21.36 135.74,-19.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="136.59,-22.53 145.94,-17.53 135.52,-15.61 136.59,-22.53"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ks_adaptive_dt~~CalledByGraph Pages: 1 -->
+<svg id="procks_adaptive_dtCalledByGraph" width="641pt" height="53pt"
+ viewBox="0.00 0.00 641.00 53.12" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ks_adaptive_dt~~CalledByGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 70)">
+<title>proc~~ks_adaptive_dt~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 889,-70 889,4 -4,4"/>
+<!-- proc~ks_adaptive_dt -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node1" class="node">
+<title>proc~ks_adaptive_dt</title>
+<polygon fill="none" stroke="black" points="885,-45 794,-45 794,-21 885,-21 885,-45"/>
+<text text-anchor="middle" x="839.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ks_adaptive_dt</text>
+</g>
+<!-- proc~ks_solve_column -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node2" class="node">
+<title>proc~ks_solve_column</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node2"><a xlink:href="../proc/ks_solve_column.html" xlink:title="ks_solve_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="758,-45 656,-45 656,-21 758,-21 758,-45"/>
+<text text-anchor="middle" x="707" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_solve_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge1" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt</title>
+<path fill="none" stroke="#ff0000" d="M758.08,-33C766.46,-33 775.2,-33 783.69,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="783.89,-36.5 793.89,-33 783.89,-29.5 783.89,-36.5"/>
+</g>
+<!-- proc~kappa_shear_column_kernel -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node3" class="node">
+<title>proc~kappa_shear_column_kernel</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node3"><a xlink:href="../proc/kappa_shear_column_kernel.html" xlink:title="kappa_shear_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="620,-66 455,-66 455,-42 620,-42 620,-66"/>
+<text text-anchor="middle" x="537.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge2" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#ff0000" d="M620.29,-43.75C628.91,-42.67 637.55,-41.58 645.86,-40.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="646.32,-44.01 655.81,-39.29 645.45,-37.06 646.32,-44.01"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node4" class="node">
+<title>proc~kappa_shear_vertex_kernel</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node4"><a xlink:href="../proc/kappa_shear_vertex_kernel.html" xlink:title="kappa_shear_vertex_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="616.5,-24 458.5,-24 458.5,0 616.5,0 616.5,-24"/>
+<text text-anchor="middle" x="537.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_vertex_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge3" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#ff0000" d="M616.86,-21.82C626.61,-23.05 636.46,-24.28 645.88,-25.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="645.55,-28.95 655.9,-26.72 646.42,-22 645.55,-28.95"/>
+</g>
+<!-- proc~kappa_shear_compute -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node5" class="node">
+<title>proc~kappa_shear_compute</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node5"><a xlink:href="../proc/kappa_shear_compute.html" xlink:title="kappa_shear_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="419,-45 286,-45 286,-21 419,-21 419,-45"/>
+<text text-anchor="middle" x="352.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge4" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel</title>
+<path fill="none" stroke="#ff0000" d="M419.05,-40.52C427.38,-41.48 436.02,-42.47 444.67,-43.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="444.47,-46.96 454.8,-44.62 445.27,-40.01 444.47,-46.96"/>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge5" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel</title>
+<path fill="none" stroke="#00ffff" d="M419.05,-25.48C428.49,-24.39 438.33,-23.27 448.12,-22.14"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="448.75,-25.59 458.29,-20.97 447.96,-18.64 448.75,-25.59"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node6" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node6"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="250,-45 128,-45 128,-21 250,-21 250,-45"/>
+<text text-anchor="middle" x="189" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge6" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#ff0000" d="M250.14,-33C258.52,-33 267.21,-33 275.83,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="275.89,-36.5 285.89,-33 275.89,-29.5 275.89,-36.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node7" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node7"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="78.5,-66 13.5,-66 13.5,-42 78.5,-42 78.5,-66"/>
+<text text-anchor="middle" x="46" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M78.64,-49.29C90.34,-47.55 104.11,-45.49 117.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="118.46,-46.9 127.84,-41.96 117.43,-39.97 118.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_node8" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ks_adaptive_dt~~CalledByGraph_node8"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="92,-24 0,-24 0,0 92,0 92,-24"/>
+<text text-anchor="middle" x="46" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ks_adaptive_dt~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M92,-18.7C100.32,-19.94 109.18,-21.26 118.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="117.58,-26.05 127.99,-24.06 118.61,-19.13 117.58,-26.05"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocks_adaptive_dtCalledByGraph = svgPanZoom('#procks_adaptive_dtCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c1_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c1_pr</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_inc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_inc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_try"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_try</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_tst"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_tst</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idtt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idtt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ih"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ih</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ir"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ir</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_hi~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_lo~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ke_lyr"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ke_lyr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kk~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kk</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ks_lyr"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ks_lyr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ksrc_tst"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ksrc_tst</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lower_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lower_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_halvings"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_halvings</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2_pr</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s2_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s2_pr</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_pr</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_pr</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol2_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol2_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_chg_a"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol_chg_a</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_dksrc_low"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol_dksrc_low</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol_max</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tol_min_a"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tol_min_a</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_pr</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-upper_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>upper_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_pr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_pr</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-valid_dt"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>valid_dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-valid_try"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>valid_try</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure function </span><span class="n">ks_adaptive_dt</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt_rem</span><span class="p">,</span><span class="w"> </span><span class="n">itt_outer</span><span class="p">,</span><span class="w"> </span><span class="n">max_substep_it</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="n">fri_curvature</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">src_max_chg</span><span class="p">,</span><span class="w"> </span><span class="n">tol_err</span><span class="p">,</span><span class="w"> </span><span class="n">vel_underflow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">dbuoy_t</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">h_s</span><span class="p">,</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span><span class="p">,</span><span class="w"> </span><span class="n">t_cur</span><span class="p">,</span><span class="w"> </span><span class="n">s_cur</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">kappa_out_s</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">,</span><span class="w"> </span><span class="n">local_src_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">local_src_avg_s</span><span class="p">,</span><span class="w"> </span><span class="n">ks_kap</span><span class="p">,</span><span class="w"> </span><span class="n">ke_kap</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">idz_int_s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">dt_now_r</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Largest dt_test &lt;= dt_rem such that, after mixing for</span>
+<span class="w">      </span><span class="c">!! 0.5*dt_test with `kappa_out_s`, the regenerated source stays</span>
+<span class="w">      </span><span class="c">!! within the tolerance bands of the accepted-state source</span>
+<span class="w">      </span><span class="c">!! (design doc section 5.3): a halving pass followed by a 5-step</span>
+<span class="w">      </span><span class="c">!! refinement pass.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">itt_outer</span><span class="p">,</span><span class="w"> </span><span class="n">max_substep_it</span><span class="p">,</span><span class="w"> </span><span class="n">ks_kap</span><span class="p">,</span><span class="w"> </span><span class="n">ke_kap</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_rem</span><span class="p">,</span><span class="w"> </span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="n">fri_curvature</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">src_max_chg</span><span class="p">,</span><span class="w"> </span><span class="n">tol_err</span><span class="p">,</span><span class="w"> </span><span class="n">vel_underflow</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dbuoy_t</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_s</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">u_cur</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">v_cur</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_cur</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">s_cur</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_out_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_src_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">local_src_avg_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_now_r</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tol_max</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_pr</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">v_pr</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">t_pr</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">s_pr</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c1_pr</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">n2_pr</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">s2_pr</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kk</span><span class="p">,</span><span class="w"> </span><span class="n">k_lo</span><span class="p">,</span><span class="w"> </span><span class="n">k_hi</span><span class="p">,</span><span class="w"> </span><span class="n">ih</span><span class="p">,</span><span class="w"> </span><span class="n">ir</span><span class="p">,</span><span class="w"> </span><span class="n">max_halvings</span><span class="p">,</span><span class="w"> </span><span class="n">ks_lyr</span><span class="p">,</span><span class="w"> </span><span class="n">ke_lyr</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_tst</span><span class="p">,</span><span class="w"> </span><span class="n">dt_inc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_try</span><span class="p">,</span><span class="w"> </span><span class="n">idtt</span><span class="p">,</span><span class="w"> </span><span class="n">tol_dksrc_low</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ksrc_tst</span><span class="p">,</span><span class="w"> </span><span class="n">upper_t</span><span class="p">,</span><span class="w"> </span><span class="n">lower_t</span><span class="p">,</span><span class="w"> </span><span class="n">tol2_l</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">valid_dt</span><span class="p">,</span><span class="w"> </span><span class="n">valid_try</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">src_max_chg</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">tol_dksrc_low</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.95_wp</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">tol_dksrc_low</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">src_max_chg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="o">/</span><span class="n">src_max_chg</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">tol2_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">tol_err</span>
+
+<span class="w">      </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">tol_max</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">src_max_chg</span><span class="o">*</span><span class="n">local_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span>
+<span class="w">         </span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tol_dksrc_low</span><span class="o">*</span><span class="n">local_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span>
+<span class="w">         </span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tol2_l</span><span class="o">*</span><span class="n">local_src_avg_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="k">      </span><span class="n">k_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">ks_kap</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">      </span><span class="n">k_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">ke_kap</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ks_lyr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">ks_kap</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ke_lyr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">ke_kap</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">dt_tst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_rem</span>
+<span class="w">      </span><span class="n">valid_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="n">max_halvings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">max_substep_it</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">itt_outer</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+
+<span class="w">      </span><span class="c">! Halving pass.</span>
+<span class="w">      </span><span class="k">do </span><span class="n">ih</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">max_halvings</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ks_projected_state</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt_tst</span><span class="p">,</span><span class="w"> </span><span class="n">ks_lyr</span><span class="p">,</span><span class="w"> </span><span class="n">ke_lyr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">vel_underflow</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_t</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">,</span><span class="w"> </span><span class="n">h_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span><span class="p">,</span><span class="w"> </span><span class="n">t_cur</span><span class="p">,</span><span class="w"> </span><span class="n">s_cur</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">kappa_out_s</span><span class="p">,</span><span class="w"> </span><span class="n">u_pr</span><span class="p">,</span><span class="w"> </span><span class="n">v_pr</span><span class="p">,</span><span class="w"> </span><span class="n">t_pr</span><span class="p">,</span><span class="w"> </span><span class="n">s_pr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">c1_pr</span><span class="p">,</span><span class="w"> </span><span class="n">n2_pr</span><span class="p">,</span><span class="w"> </span><span class="n">s2_pr</span><span class="p">)</span>
+<span class="w">         </span><span class="n">idtt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dt_tst</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">idtt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">dt_tst</span>
+<span class="w">         </span><span class="n">valid_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">         </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_lo</span><span class="p">,</span><span class="w"> </span><span class="n">k_hi</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ri_crit</span><span class="o">*</span><span class="n">s2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ks_src_func</span><span class="p">(</span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="n">fri_curvature</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">n2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">s2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">               </span><span class="n">upper_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">tol_max</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">               </span><span class="n">lower_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">upper_t</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">lower_t</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">valid_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">                  </span><span class="k">exit</span>
+<span class="k">               end if</span>
+<span class="k">            else</span>
+<span class="k">               </span><span class="n">lower_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">lower_t</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">valid_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">                  </span><span class="k">exit</span>
+<span class="k">               end if</span>
+<span class="k">            end if</span>
+<span class="k">         end do</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">valid_dt</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">         </span><span class="n">dt_tst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt_tst</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! Refinement pass.</span>
+<span class="w">      </span><span class="n">dt_inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dt_tst</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">dt_rem</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">valid_dt</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">dt_inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt_tst</span>
+<span class="w">         </span><span class="k">do </span><span class="n">ir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span>
+<span class="w">            </span><span class="n">dt_try</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_tst</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt_inc</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ks_projected_state</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt_try</span><span class="p">,</span><span class="w"> </span><span class="n">ks_lyr</span><span class="p">,</span><span class="w"> </span><span class="n">ke_lyr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">vel_underflow</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_t</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">,</span><span class="w"> </span><span class="n">h_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span><span class="p">,</span><span class="w"> </span><span class="n">t_cur</span><span class="p">,</span><span class="w"> </span><span class="n">s_cur</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">kappa_out_s</span><span class="p">,</span><span class="w"> </span><span class="n">u_pr</span><span class="p">,</span><span class="w"> </span><span class="n">v_pr</span><span class="p">,</span><span class="w"> </span><span class="n">t_pr</span><span class="p">,</span><span class="w"> </span><span class="n">s_pr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">c1_pr</span><span class="p">,</span><span class="w"> </span><span class="n">n2_pr</span><span class="p">,</span><span class="w"> </span><span class="n">s2_pr</span><span class="p">)</span>
+<span class="w">            </span><span class="n">idtt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dt_try</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">idtt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">dt_try</span>
+<span class="w">            </span><span class="n">valid_try</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">            </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_lo</span><span class="p">,</span><span class="w"> </span><span class="n">k_hi</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ri_crit</span><span class="o">*</span><span class="n">s2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ks_src_func</span><span class="p">(</span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">fri_curvature</span><span class="p">,</span><span class="w"> </span><span class="n">n2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">s2_pr</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">                  </span><span class="n">upper_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">tol_max</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">                  </span><span class="n">lower_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">upper_t</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ksrc_tst</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">lower_t</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">valid_try</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">                     </span><span class="k">exit</span>
+<span class="k">                  end if</span>
+<span class="k">               else</span>
+<span class="k">                  </span><span class="n">lower_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">tol_min_a</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">kappa_src_s</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">idtt</span><span class="o">*</span><span class="n">tol_chg_a</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">lower_t</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">valid_try</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">                     </span><span class="k">exit</span>
+<span class="k">                  end if</span>
+<span class="k">               end if</span>
+<span class="k">            end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">valid_try</span><span class="p">)</span><span class="w"> </span><span class="n">dt_tst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_try</span>
+<span class="w">            </span><span class="n">dt_inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">dt_inc</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">dt_now_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">dt_tst</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tol_err</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt_inc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_rem</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">ks_adaptive_dt</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

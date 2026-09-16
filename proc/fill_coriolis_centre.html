@@ -1,0 +1,802 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fill_coriolis_centre &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fill_coriolis_centre
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">10 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_setup.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_setup.f90.html'>rdb_ocean_setup.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fill_coriolis_centre</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/fill_coriolis_centre.html#variable-f_corner_scratch">f_corner_scratch</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/fill_coriolis_centre.html#src">fill_coriolis_centre</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine fill_coriolis_centre(cfg, metrics, grid, f_centre)  
+</h2>
+    
+
+    <p>Fill a cell-centre |Coriolis| array via <code>metrics_fill_coriolis</code>
+(D7).  beta_plane (default) is BIT-IDENTICAL to the legacy
+EPBL / kappa-shear <code>set_f_centre</code>.  The corner output is
+discarded here (filled into local scratch).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~96"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~73"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~262"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_centre~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_centre</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~fill_coriolis_centre~~CallsGraph Pages: 1 -->
+<svg id="procfill_coriolis_centreCallsGraph" width="285pt" height="74pt"
+ viewBox="0.00 0.00 285.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fill_coriolis_centre~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~fill_coriolis_centre~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 281,-70 281,4 -4,4"/>
+<!-- proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CallsGraph_node1" class="node">
+<title>proc~fill_coriolis_centre</title>
+<polygon fill="none" stroke="black" points="108,-45 0,-45 0,-21 108,-21 108,-45"/>
+<text text-anchor="middle" x="54" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">fill_coriolis_centre</text>
+</g>
+<!-- proc~metrics_fill_coriolis -->
+<g id="proc~~fill_coriolis_centre~~CallsGraph_node2" class="node">
+<title>proc~metrics_fill_coriolis</title>
+<g id="a_proc~~fill_coriolis_centre~~CallsGraph_node2"><a xlink:href="../proc/metrics_fill_coriolis.html" xlink:title="metrics_fill_coriolis">
+<polygon fill="#d9534f" stroke="#d9534f" points="267.5,-66 153.5,-66 153.5,-42 267.5,-42 267.5,-66"/>
+<text text-anchor="middle" x="210.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fill_coriolis</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_coriolis_centre&#45;&gt;proc~metrics_fill_coriolis -->
+<g id="proc~~fill_coriolis_centre~~CallsGraph_edge1" class="edge">
+<title>proc~fill_coriolis_centre&#45;&gt;proc~metrics_fill_coriolis</title>
+<path fill="none" stroke="#ff0000" d="M108.17,-40.23C119.44,-41.76 131.48,-43.4 143.17,-44.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="142.95,-48.49 153.33,-46.37 143.9,-41.55 142.95,-48.49"/>
+</g>
+<!-- proc~parse_coriolis_scheme -->
+<g id="proc~~fill_coriolis_centre~~CallsGraph_node3" class="node">
+<title>proc~parse_coriolis_scheme</title>
+<g id="a_proc~~fill_coriolis_centre~~CallsGraph_node3"><a xlink:href="../proc/parse_coriolis_scheme.html" xlink:title="parse_coriolis_scheme">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="277,-24 144,-24 144,0 277,0 277,-24"/>
+<text text-anchor="middle" x="210.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_coriolis_scheme</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_coriolis_centre&#45;&gt;proc~parse_coriolis_scheme -->
+<g id="proc~~fill_coriolis_centre~~CallsGraph_edge2" class="edge">
+<title>proc~fill_coriolis_centre&#45;&gt;proc~parse_coriolis_scheme</title>
+<path fill="none" stroke="#ff0000" d="M108.17,-25.77C116.45,-24.65 125.14,-23.47 133.81,-22.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="134.51,-25.73 143.94,-20.91 133.56,-18.79 134.51,-25.73"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~fill_coriolis_centre~~CalledByGraph Pages: 1 -->
+<svg id="procfill_coriolis_centreCalledByGraph" width="641pt" height="127pt"
+ viewBox="0.00 0.00 641.00 127.06" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fill_coriolis_centre~~CalledByGraph" class="graph" transform="scale(0.64 0.64) rotate(0) translate(4 196)">
+<title>proc~~fill_coriolis_centre~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 1005,-196 1005,4 -4,4"/>
+<!-- proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node1" class="node">
+<title>proc~fill_coriolis_centre</title>
+<polygon fill="none" stroke="black" points="1001,-108 893,-108 893,-84 1001,-84 1001,-108"/>
+<text text-anchor="middle" x="947" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">fill_coriolis_centre</text>
+</g>
+<!-- proc~configure_ocean_epbl -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_epbl</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_epbl.html" xlink:title="configure_ocean_epbl">
+<polygon fill="#d9534f" stroke="#d9534f" points="834.5,-192 704.5,-192 704.5,-168 834.5,-168 834.5,-192"/>
+<text text-anchor="middle" x="769.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_epbl</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_epbl&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_epbl&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#ff0000" d="M832.89,-167.87C841.16,-165.39 849.4,-162.46 857,-159 882.17,-147.54 907.6,-128.65 924.79,-114.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="927.12,-117.15 932.53,-108.04 922.62,-111.78 927.12,-117.15"/>
+</g>
+<!-- proc~configure_ocean_kappa_shear -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node3" class="node">
+<title>proc~configure_ocean_kappa_shear</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node3"><a xlink:href="../proc/configure_ocean_kappa_shear.html" xlink:title="configure_ocean_kappa_shear">
+<polygon fill="#d9534f" stroke="#d9534f" points="857,-150 682,-150 682,-126 857,-126 857,-150"/>
+<text text-anchor="middle" x="769.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_kappa_shear</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge2" class="edge">
+<title>proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#ff0000" d="M820.79,-125.96C841.08,-121.11 864.65,-115.47 885.84,-110.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="886.79,-113.77 895.7,-108.04 885.16,-106.96 886.79,-113.77"/>
+</g>
+<!-- proc~configure_ocean_meke -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node4" class="node">
+<title>proc~configure_ocean_meke</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node4"><a xlink:href="../proc/configure_ocean_meke.html" xlink:title="configure_ocean_meke">
+<polygon fill="#d9534f" stroke="#d9534f" points="837.5,-108 701.5,-108 701.5,-84 837.5,-84 837.5,-108"/>
+<text text-anchor="middle" x="769.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_meke</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_meke&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge3" class="edge">
+<title>proc~configure_ocean_meke&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#ff0000" d="M837.6,-96C852.32,-96 867.86,-96 882.43,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="882.84,-99.5 892.84,-96 882.84,-92.5 882.84,-99.5"/>
+</g>
+<!-- proc~configure_ocean_varmix -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node5" class="node">
+<title>proc~configure_ocean_varmix</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node5"><a xlink:href="../proc/configure_ocean_varmix.html" xlink:title="configure_ocean_varmix">
+<polygon fill="#d9534f" stroke="#d9534f" points="841,-66 698,-66 698,-42 841,-42 841,-66"/>
+<text text-anchor="middle" x="769.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_varmix</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_varmix&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge4" class="edge">
+<title>proc~configure_ocean_varmix&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#ff0000" d="M820.79,-66.04C841.08,-70.89 864.65,-76.53 885.84,-81.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="885.16,-85.04 895.7,-83.96 886.79,-78.23 885.16,-85.04"/>
+</g>
+<!-- proc~configure_ocean_wavespeed -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node6" class="node">
+<title>proc~configure_ocean_wavespeed</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node6"><a xlink:href="../proc/configure_ocean_wavespeed.html" xlink:title="configure_ocean_wavespeed">
+<polygon fill="#d9534f" stroke="#d9534f" points="852.5,-24 686.5,-24 686.5,0 852.5,0 852.5,-24"/>
+<text text-anchor="middle" x="769.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_wavespeed</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_wavespeed&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge5" class="edge">
+<title>proc~configure_ocean_wavespeed&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#ff0000" d="M832.89,-24.13C841.16,-26.61 849.4,-29.54 857,-33 882.17,-44.46 907.6,-63.35 924.79,-77.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="922.62,-80.22 932.53,-83.96 927.12,-74.85 922.62,-80.22"/>
+</g>
+<!-- proc~configure_ocean_lateral -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node7" class="node">
+<title>proc~configure_ocean_lateral</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node7"><a xlink:href="../proc/configure_ocean_lateral.html" xlink:title="configure_ocean_lateral">
+<polygon fill="#d9534f" stroke="#d9534f" points="646,-108 505,-108 505,-84 646,-84 646,-108"/>
+<text text-anchor="middle" x="575.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_lateral</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_epbl -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge6" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_epbl</title>
+<path fill="none" stroke="#ff0000" d="M593.21,-108.15C613.34,-122.27 648.63,-145.35 682,-159 687.41,-161.21 693.1,-163.23 698.88,-165.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="698.08,-168.47 708.66,-167.96 700.07,-161.76 698.08,-168.47"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_kappa_shear -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge7" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_kappa_shear</title>
+<path fill="none" stroke="#cbff00" d="M631.52,-108.04C654.01,-112.96 680.2,-118.69 703.62,-123.81"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="702.96,-127.24 713.47,-125.96 704.45,-120.41 702.96,-127.24"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_meke -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge8" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_meke</title>
+<path fill="none" stroke="#00ff66" d="M646.09,-96C660.74,-96 676.28,-96 691.19,-96"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="691.39,-99.5 701.39,-96 691.39,-92.5 691.39,-99.5"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_varmix -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge9" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_varmix</title>
+<path fill="none" stroke="#0066ff" d="M631.52,-83.96C654.01,-79.04 680.2,-73.31 703.62,-68.19"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="704.45,-71.59 713.47,-66.04 702.96,-64.76 704.45,-71.59"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_wavespeed -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge10" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_wavespeed</title>
+<path fill="none" stroke="#cc00ff" d="M593.21,-83.85C613.34,-69.73 648.63,-46.65 682,-33 687.41,-30.79 693.1,-28.77 698.88,-26.94"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="700.07,-30.24 708.66,-24.04 698.08,-23.53 700.07,-30.24"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node8" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node8"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-108 385,-108 385,-84 469,-84 469,-108"/>
+<text text-anchor="middle" x="427" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_lateral -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_lateral</title>
+<path fill="none" stroke="#ff0000" d="M469.2,-96C477.17,-96 485.77,-96 494.49,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.77,-99.5 504.77,-96 494.77,-92.5 494.77,-99.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node9" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node9"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-129 209,-129 209,-105 349,-105 349,-129"/>
+<text text-anchor="middle" x="279" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge12" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-107.05C357.85,-105.8 366.62,-104.54 374.97,-103.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.51,-106.8 384.91,-101.91 374.51,-99.87 375.51,-106.8"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node10" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-87 226,-87 226,-63 332,-63 332,-87"/>
+<text text-anchor="middle" x="279" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge13" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-82.52C345.99,-84.49 360.74,-86.61 374.4,-88.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.19,-92.08 384.59,-90.04 375.19,-85.16 374.19,-92.08"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node11" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node11"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-87 53,-87 53,-63 120,-63 120,-87"/>
+<text text-anchor="middle" x="86.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge16" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-75C146.45,-75 183.96,-75 215.83,-75"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-78.5 225.95,-75 215.95,-71.5 215.95,-78.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node12" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node12"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-171 11,-171 11,-147 162,-147 162,-171"/>
+<text text-anchor="middle" x="86.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge14" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-146.96C164.41,-142.04 190.39,-136.31 213.63,-131.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-134.61 223.4,-129.04 212.88,-127.77 214.39,-134.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~fill_coriolis_centre~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-129 0,-129 0,-105 173,-105 173,-129"/>
+<text text-anchor="middle" x="86.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~fill_coriolis_centre~~CalledByGraph_edge15" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-117C181.77,-117 190.37,-117 198.79,-117"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-120.5 208.97,-117 198.97,-113.5 198.97,-120.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfill_coriolis_centreCalledByGraph = svgPanZoom('#procfill_coriolis_centreCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner_scratch"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>f_corner_scratch</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">fill_coriolis_centre</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">f_centre</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Fill a cell-centre |Coriolis| array via `metrics_fill_coriolis`</span>
+<span class="w">      </span><span class="c">!! (D7).  beta_plane (default) is BIT-IDENTICAL to the legacy</span>
+<span class="w">      </span><span class="c">!! EPBL / kappa-shear `set_f_centre`.  The corner output is</span>
+<span class="w">      </span><span class="c">!! discarded here (filled into local scratch).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_centre</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_corner_scratch</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">f_corner_scratch</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">      </span><span class="k">call </span><span class="n">metrics_fill_coriolis</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">parse_coriolis_scheme</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">coriolis_scheme</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">cfg</span><span class="p">%</span><span class="n">coriolis_f</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">topo</span><span class="p">%</span><span class="n">coriolis_beta</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">topo</span><span class="p">%</span><span class="n">coriolis_y_ref</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">omega</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">f_centre</span><span class="p">)</span>
+<span class="w">      </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">f_corner_scratch</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">fill_coriolis_centre</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

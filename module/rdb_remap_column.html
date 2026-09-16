@@ -1,0 +1,1651 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_remap_column &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_remap_column
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 1.5% of total for modules and submodules.">806 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_remap_column.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_remap_column.f90.html'>rdb_remap_column.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_remap_column</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_min_frac~2">H_MIN_FRAC</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_neglect~3">H_NEGLECT</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_ratio_floor">H_RATIO_FLOOR</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-pqm_min_frac">PQM_MIN_FRAC</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column">remap_column</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_pcm">remap_column_pcm</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_plm">remap_column_plm</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_ppm">remap_column_ppm</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_ppm_h4">remap_column_ppm_h4</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_pqm">remap_column_pqm</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-pqm_end_value_h4">pqm_end_value_h4</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-pqm_solve_diag_dominant">pqm_solve_diag_dominant</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Pure per-column conservative vertical remap, shared by both backends.
+Reconstruction methods:
+  PCM    — piecewise constant (donor cell)
+  PLM    — piecewise linear, minmod limiter
+  PPM    — piecewise parabolic (Colella &amp; Woodward 1984)
+  PPM_H4 — PPM with non-uniform 4th-order edge values (White &amp; Adcroft 2008)
+  PQM    — piecewise quartic (White &amp; Adcroft 2008)</p>
+<p>All routines are pure with NZ_STACK_MAX stack workspace so they run
+inside <code>do concurrent</code> (one GPU thread per column, sequential O(nz)
+vertical sweep). Conservation: sum(q_new<em>dz_new) = sum(q_old</em>dz_old)
+to machine precision when sum(dz_old) = sum(dz_new).</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_remap_column~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_remap_columnUsesGraph" width="344pt" height="32pt"
+ viewBox="0.00 0.00 344.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_remap_column~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>module~~rdb_remap_column~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 340,-28 340,4 -4,4"/>
+<!-- module~rdb_remap_column -->
+<g id="module~~rdb_remap_column~~UsesGraph_node1" class="node">
+<title>module~rdb_remap_column</title>
+<polygon fill="none" stroke="black" points="336,-24 221,-24 221,0 336,0 336,-24"/>
+<text text-anchor="middle" x="278.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_remap_column</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_remap_column~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_remap_column~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="185,-24 98,-24 98,0 185,0 185,-24"/>
+<text text-anchor="middle" x="141.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_remap_column&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_remap_column~~UsesGraph_edge1" class="edge">
+<title>module~rdb_remap_column&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M220.64,-12C212.33,-12 203.8,-12 195.57,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="195.35,-8.5 185.35,-12 195.35,-15.5 195.35,-8.5"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_remap_column~~UsesGraph_node3" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-24 0,-24 0,0 62,0 62,-24"/>
+<text text-anchor="middle" x="31" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_remap_column~~UsesGraph_edge2" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M97.93,-12C89.5,-12 80.67,-12 72.32,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.05,-8.5 62.05,-12 72.05,-15.5 72.05,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_remap_column~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_remap_columnUsedByGraph" width="641pt" height="114pt"
+ viewBox="0.00 0.00 641.00 114.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_remap_column~~UsedByGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 226.33)">
+<title>module~~rdb_remap_column~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-226.33 1289,-226.33 1289,4 -4,4"/>
+<!-- module~rdb_remap_column -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node1" class="node">
+<title>module~rdb_remap_column</title>
+<polygon fill="none" stroke="black" points="115,-78.33 0,-78.33 0,-54.33 115,-54.33 115,-78.33"/>
+<text text-anchor="middle" x="57.5" y="-63.93" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_remap_column</text>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="723,-38.33 602,-38.33 602,-14.33 723,-14.33 723,-38.33"/>
+<text text-anchor="middle" x="662.5" y="-23.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_remap_column -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_remap_column</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M601.86,-24.97C506.27,-23.59 313.03,-24.11 151,-45.33 138.88,-46.92 126.01,-49.35 113.85,-52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="112.81,-48.65 103.83,-54.27 114.36,-55.48 112.81,-48.65"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="566,-118.33 466,-118.33 466,-94.33 566,-94.33 566,-118.33"/>
+<text text-anchor="middle" x="516" y="-103.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M631.41,-38.41C621.86,-42.53 611.35,-47.35 602,-52.33 581.55,-63.21 559.51,-77.29 542.99,-88.34"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="540.75,-85.63 534.43,-94.13 544.68,-91.43 540.75,-85.63"/>
+</g>
+<!-- module~rdb_ocean_min_thickness -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_min_thickness</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_min_thickness.html" xlink:title="rdb_ocean_min_thickness">
+<polygon fill="#337ab7" stroke="#337ab7" points="300,-78.33 151,-78.33 151,-54.33 300,-54.33 300,-78.33"/>
+<text text-anchor="middle" x="225.5" y="-63.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_min_thickness</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_min_thickness&#45;&gt;module~rdb_remap_column -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_min_thickness&#45;&gt;module~rdb_remap_column</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M150.72,-66.33C142.23,-66.33 133.6,-66.33 125.21,-66.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="125.11,-62.83 115.11,-66.33 125.11,-69.83 125.11,-62.83"/>
+</g>
+<!-- module~rdb_ocean_remap -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_remap</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_remap.html" xlink:title="rdb_ocean_remap">
+<polygon fill="#337ab7" stroke="#337ab7" points="280,-120.33 171,-120.33 171,-96.33 280,-96.33 280,-120.33"/>
+<text text-anchor="middle" x="225.5" y="-105.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_remap</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_remap&#45;&gt;module~rdb_remap_column -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_remap&#45;&gt;module~rdb_remap_column</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M176.93,-96.3C157.92,-91.48 135.85,-85.9 115.95,-80.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="116.63,-77.43 106.08,-78.37 114.91,-84.21 116.63,-77.43"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1285,-98.33 1194,-98.33 1194,-74.33 1285,-74.33 1285,-98.33"/>
+<text text-anchor="middle" x="1239.5" y="-83.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1223.14,-74.25C1201.96,-58.61 1161.91,-32.6 1122.5,-26.33"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1120.5,-26.33C1065.19,-17.54 1050.4,-29.75 994.5,-26.33"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M992.5,-26.33C951.29,-23.81 943.02,-10.03 902,-5.33 838.86,1.9 822.18,1.53 759,-5.33 745.82,-6.76 731.79,-9.28 718.67,-12.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="717.83,-8.68 708.83,-14.26 719.35,-15.51 717.83,-8.68"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node6" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node6"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="902,-38.33 759,-38.33 759,-14.33 902,-14.33 902,-38.33"/>
+<text text-anchor="middle" x="830.5" y="-23.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M992.5,-26.33C966.39,-24.74 937.86,-24.31 912.16,-24.4"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="912.07,-20.9 902.09,-24.47 912.11,-27.9 912.07,-20.9"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="430,-119.33 336,-119.33 336,-95.33 430,-95.33 430,-119.33"/>
+<text text-anchor="middle" x="383" y="-104.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1230.95,-98.52C1218.29,-117.95 1190.91,-155.81 1158,-176.33 1093.95,-216.28 1069.99,-222.33 994.5,-222.33 994.5,-222.33 994.5,-222.33 829.5,-222.33 689.59,-222.33 653.8,-213.69 517,-184.33"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1049,-78.33 938,-78.33 938,-54.33 1049,-54.33 1049,-78.33"/>
+<text text-anchor="middle" x="993.5" y="-63.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1120.5,-26.33C1103.32,-23.6 1062.3,-38.13 1031.71,-50.44"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1030.11,-47.3 1022.18,-54.33 1032.76,-53.78 1030.11,-47.3"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node10" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node10"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1158,-98.33 1085,-98.33 1085,-74.33 1158,-74.33 1158,-98.33"/>
+<text text-anchor="middle" x="1121.5" y="-83.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1193.98,-86.33C1185.53,-86.33 1176.68,-86.33 1168.2,-86.33"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1168.08,-82.83 1158.08,-86.33 1168.08,-89.83 1168.08,-82.83"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M758.62,-26.33C750.22,-26.33 741.66,-26.33 733.28,-26.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="733.18,-22.83 723.18,-26.33 733.18,-29.83 733.18,-22.83"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M789.68,-38.33C756.32,-47.8 707.27,-60.38 663.5,-66.33"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M661.5,-66.33C626.78,-71.06 588.61,-81.87 560.23,-91.07"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="559.02,-87.78 550.62,-94.24 561.21,-94.43 559.02,-87.78"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_min_thickness -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_min_thickness</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M336.19,-95.25C319.18,-90.77 299.7,-85.63 281.93,-80.95"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="282.82,-77.56 272.26,-78.4 281.03,-84.33 282.82,-77.56"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_remap -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_remap</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M335.77,-107.63C321.58,-107.72 305.71,-107.82 290.56,-107.92"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="290.19,-104.42 280.21,-107.99 290.24,-111.42 290.19,-104.42"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M937.68,-67.94C906.52,-68.45 866.8,-68.42 831.5,-66.33"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M829.5,-66.33C787.4,-63.83 740.82,-51.76 707.74,-41.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="708.52,-38.1 697.93,-38.41 706.41,-44.77 708.52,-38.1"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M944.19,-54.33C927.08,-50.08 907.64,-45.25 889.78,-40.81"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="890.6,-37.41 880.05,-38.39 888.91,-44.2 890.6,-37.41"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M829.5,-146.33C729.27,-163.42 702.76,-156.73 602,-170.33 564.06,-175.45 554.55,-191.8 517,-184.33"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="714,-118.33 611,-118.33 611,-94.33 714,-94.33 714,-118.33"/>
+<text text-anchor="middle" x="662.5" y="-103.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M976.26,-78.5C948.42,-98.36 889.04,-136.52 831.5,-146.33"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M829.5,-146.33C806.62,-150.23 749.62,-134.4 708.8,-121.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="709.66,-118.11 699.07,-118.39 707.52,-124.77 709.66,-118.11"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M829.5,-66.33C755.85,-61.96 736.6,-56.38 663.5,-66.33"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_remap_column~~UsedByGraph_node9" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_remap_column~~UsedByGraph_node9"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1155,-167.33 1088,-167.33 1088,-143.33 1155,-143.33 1155,-167.33"/>
+<text text-anchor="middle" x="1121.5" y="-152.93" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M661.5,-184.33C597.92,-175.24 579.79,-197.81 517,-184.33"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1103.51,-143.33C1082,-128.13 1044.75,-101.82 1019.87,-84.25"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1021.81,-81.34 1011.63,-78.43 1017.77,-87.06 1021.81,-81.34"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1087.94,-161.69C1012.83,-175.43 821.75,-205.03 663.5,-184.33"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M661.5,-184.33C613.88,-177.52 566.26,-145.8 539.32,-124.97"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="541.34,-122.1 531.33,-118.63 536.99,-127.59 541.34,-122.1"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1084.73,-80.65C1076.7,-79.38 1067.93,-77.99 1059.12,-76.59"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1059.62,-73.12 1049.19,-75.01 1058.52,-80.04 1059.62,-73.12"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1084.86,-86.93C1073.41,-87.09 1060.67,-87.25 1049,-87.33 920.08,-88.23 887.38,-92.22 759,-80.33 716.28,-76.38 706.01,-60.55 663.5,-66.33"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M631.77,-118.37C622.14,-122.52 611.5,-127.38 602,-132.33 562.73,-152.8 560.44,-192.97 517,-184.33"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M515,-184.33C472.18,-175.82 429.98,-146.14 405.49,-126.21"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="407.51,-123.34 397.59,-119.62 403.03,-128.71 407.51,-123.34"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M610.96,-106.33C599.87,-106.33 588.03,-106.33 576.62,-106.33"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="576.29,-102.83 566.29,-106.33 576.29,-109.83 576.29,-102.83"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_remap_column~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M465.85,-106.71C457.59,-106.77 448.96,-106.84 440.53,-106.9"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="440.37,-103.4 430.39,-106.98 440.42,-110.4 440.37,-103.4"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_remap_columnUsedByGraph = svgPanZoom('#modulerdb_remap_columnUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min_frac~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>H_MIN_FRAC</strong></td>
+<td> =</td>
+                <td>1.0e-5_wp</td>
+            <td>
+                <p>Relative thickness floor in the PPM_H4 edge stencil when a consecutive
+thickness pair sums to ~0.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_neglect~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>H_NEGLECT</strong></td>
+<td> =</td>
+                <td>1.0e-30_wp</td>
+            <td>
+                <p>Tiny thickness floor for the PPM_H4 edge singularity guard; only fires
+on degenerate (vanishing-layer) columns. White &amp; Adcroft 2008.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_ratio_floor"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>H_RATIO_FLOOR</strong></td>
+<td> =</td>
+                <td>1.0e-12_wp</td>
+            <td>
+                <p>Relative thickness-ratio floor in the PQM implicit-h4 edge-value
+stencil (White &amp; Adcroft 2008, roundoff-safe).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pqm_min_frac"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PQM_MIN_FRAC</strong></td>
+<td> =</td>
+                <td>1.0e-6_wp</td>
+            <td>
+                <p>Boundary-closure guard for the PQM 4th-order one-sided end fit
+(White &amp; Adcroft 2008).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column"></span> <h3>public pure subroutine <a href='../proc/remap_column.html'>remap_column</a>(method, nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Dispatch to the requested remapping method.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+<p>REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4, or REMAP_PQM</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~241"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_pcm"></span> <h3>public pure subroutine <a href='../proc/remap_column_pcm.html'>remap_column_pcm</a>(nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Piecewise-constant (donor cell) remap. Diffusive, guaranteed monotone.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~242"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses (must sum to same total as dz_new)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_plm"></span> <h3>public pure subroutine <a href='../proc/remap_column_plm.html'>remap_column_plm</a>(nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
+Per old layer k: q_hat(xi) = q(k) + slope(k)<em>(2</em>xi - 1), xi in [0,1],
+slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~243"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm.html'>remap_column_ppm</a>(nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Piecewise-parabolic (Colella &amp; Woodward 1984) remap.
+Per old layer k, xi in [0,1]:
+  q_hat(xi) = q_L + xi<em>(q_R - q_L + q6</em>(1 - xi)), q6 = 6<em>q_bar - 3</em>(q_L+q_R)
+Edge values: 4th-order interp + CW monotonicity limiting; boundary
+layers fall back to PLM-quality edges.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~244"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm_h4"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm_h4.html'>remap_column_ppm_h4</a>(nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>PPM with non-uniform 4th-order (H4) edge values (White &amp; Adcroft 2008).
+As <code>remap_column_ppm</code> but the interior edge estimate is the
+thickness-weighted exactly-4th-order stencil (reduces to PPM&rsquo;s
+(7/12,-1/12) on uniform layers), cutting spurious diapycnal mixing per
+remap (Ilicak et al. 2012). Limiter/reconstruction/integration are
+identical to PPM. H4 edge algebra is inlined (helper extraction costs
+4-6% on this hot kernel). Boundary edges: outermost = PCM,
+second-from-boundary = non-uniform 3-cell (H3) quadratic; CW limiter
+clamps all edges to local monotone bounds.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~245"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_pqm"></span> <h3>public pure subroutine <a href='../proc/remap_column_pqm.html'>remap_column_pqm</a>(nz, dz_old, dz_new, q_old, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Piecewise-quartic (PQM_IH4IH3) conservative remap (White &amp; Adcroft 2008).
+Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
+diagonally-dominant tridiagonal solve with one-sided 4-cell boundary
+closure), per-cell quartic, W&amp;A monotonicity limiter, conservative
+quartic overlap integral. Cuts diapycnal mixing per remap vs PPM/PPM_H4
+(Ilicak et al. 2012).
+Per cell k, xi in [0,1]: q_hat(xi) = a + b<em>xi + c</em>xi^2 + d<em>xi^3 + e</em>xi^4.
+Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
+(W&amp;A boundary closure needs &gt;= 4 cells).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~246"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses (must sum to same total as dz_new)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-pqm_end_value_h4"></span> <h3>private pure subroutine <a href='../proc/pqm_end_value_h4.html'>pqm_end_value_h4</a>(dz, u, csys)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>One-sided 4th-order polynomial fit of the cell averages <code>u</code> to the
+four boundary layers <code>dz</code> (thicknesses, must be positive), returning
+the four coefficients <code>csys</code> of the fit (White &amp; Adcroft 2008,
+appendix; roundoff-safe closed form).  <code>csys(1)</code> is the edge VALUE at
+the boundary interface and <code>csys(2)</code> is the edge SLOPE there.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong>(4)</td>
+            <td>
+<p>Thicknesses of the 4 boundary layers, starting at the edge</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong>(4)</td>
+            <td>
+<p>Cell averages of the 4 boundary layers, starting at the edge</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-csys"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>csys</strong>(4)</td>
+            <td>
+<p>Coefficients of the 4th-order fit polynomial in z</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-pqm_solve_diag_dominant"></span> <h3>private pure subroutine <a href='../proc/pqm_solve_diag_dominant.html'>pqm_solve_diag_dominant</a>(n, al, ac, au, r, x)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Diagonally-dominant tridiagonal solve; central diagonal supplied as the
+OFFSET <code>ac</code> from <code>al + au</code> (full pivot = ac + al + au). Never divides by
+zero for positive-definite ac, al, au (White &amp; Adcroft 2008).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~29"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+<p>Number of unknowns (= number of edges = nz+1)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-al"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>al</strong>(n)</td>
+            <td>
+<p>Lower diagonal (al(1) unused)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ac"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ac</strong>(n)</td>
+            <td>
+<p>Central-diagonal OFFSET from al+au (full diagonal = ac+al+au)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-au"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>au</strong>(n)</td>
+            <td>
+<p>Upper diagonal (au(n) unused)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>r</strong>(n)</td>
+            <td>
+<p>Right-hand side</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x</strong>(n)</td>
+            <td>
+<p>Solution vector</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

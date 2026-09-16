@@ -1,0 +1,1059 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_diag_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_diag_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">58 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag.f90.html'>rdb_ocean_diag.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag.html'>rdb_ocean_diag</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_diag_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-fire">fire</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-i~245">i</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-line~5">line</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-t_emit">t_emit</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-vmax~3">vmax</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-vmean">vmean</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-vmin~2">vmin</a>
+            <a class="list-group-item" href="../proc/ocean_diag_step.html#variable-vsum">vsum</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_diag_step.html#src">ocean_diag_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine ocean_diag_step(this, state_handle, dt, t)  
+</h2>
+    
+
+    <p>Advance every registered variable.  Behaviour by <code>time_op</code>:</p>
+<ul>
+<li><code>INSTANT</code>: skip until <code>dt_accum &gt;= dt_out</code>, then fill once
+    (snapshot) and emit.</li>
+<li><code>MEAN</code> / <code>INTEGRAL</code> / <code>MAX</code> / <code>MIN</code>: fill EVERY step, fold
+    the sample into the accumulator.  When <code>dt_accum &gt;= dt_out</code>,
+    finalise the accumulator into <code>output_buffer</code> (see
+    <code>finalise_accumulator</code>), emit, reset.</li>
+</ul>
+<p>Fill writes into <code>output_buffer</code> for LAYER vgrid or into
+<code>layer_buffer</code> (then remap to <code>output_buffer</code>) for Z_FIXED.
+The post-remap value is the unit of accumulation — so the
+mean of T at fixed z-levels is computed in z-space, not
+layer-space (matters when h_layer drifts).</p>
+<p>Time stamping (CF-1.8 convention):
+  * INSTANT, MAX, MIN -&gt; emit at <code>t</code> (end of window).
+  * MEAN, INTEGRAL    -&gt; emit at the centre of the window,
+    <code>t - dt_accum / 2</code>.  The centre lines up with the
+    temporal centroid of the time-weighted average so
+    downstream tools (CF-aware analysis) plot it correctly.</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/ocean_diag_t.html'>ocean_diag_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~228"></span>
+              class(<a href='../type/ocean_diag_t.html'>ocean_diag_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state_handle~21"></span>
+              class(*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state_handle</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~65"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~23"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_diag_step~~CallsGraph Pages: 1 -->
+<svg id="prococean_diag_stepCallsGraph" width="641pt" height="284pt"
+ viewBox="0.00 0.00 641.00 283.56" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_diag_step~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 280)">
+<title>proc~~ocean_diag_step~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-280 638,-280 638,4 -4,4"/>
+<!-- proc~ocean_diag_step -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node1" class="node">
+<title>proc~ocean_diag_step</title>
+<polygon fill="none" stroke="black" points="182,-171 0,-171 0,-147 182,-147 182,-171"/>
+<text text-anchor="middle" x="91" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_diag_t%ocean_diag_step</text>
+</g>
+<!-- info -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node2" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="307,-276 253,-276 253,-252 307,-252 307,-276"/>
+<text text-anchor="middle" x="280" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;info -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M107.51,-171.26C130.53,-189 175.59,-222 218,-243 225.94,-246.93 234.79,-250.43 243.23,-253.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="242.29,-256.78 252.88,-256.63 244.51,-250.14 242.29,-256.78"/>
+</g>
+<!-- proc~diag_reduce_stats -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node3" class="node">
+<title>proc~diag_reduce_stats</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node3"><a xlink:href="../proc/diag_reduce_stats.html" xlink:title="diag_reduce_stats">
+<polygon fill="#d9534f" stroke="#d9534f" points="334,-234 226,-234 226,-210 334,-210 334,-234"/>
+<text text-anchor="middle" x="280" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_reduce_stats</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~diag_reduce_stats -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~diag_reduce_stats</title>
+<path fill="none" stroke="#ff0000" d="M128.06,-171.15C158.16,-181.29 201.24,-195.8 233.67,-206.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="232.78,-210.12 243.37,-210 235.01,-203.49 232.78,-210.12"/>
+</g>
+<!-- proc~fill_and_remap -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node4" class="node">
+<title>proc~fill_and_remap</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node4"><a xlink:href="../proc/fill_and_remap.html" xlink:title="fill_and_remap">
+<polygon fill="#d9534f" stroke="#d9534f" points="325.5,-192 234.5,-192 234.5,-168 325.5,-168 325.5,-192"/>
+<text text-anchor="middle" x="280" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_and_remap</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~fill_and_remap -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~fill_and_remap</title>
+<path fill="none" stroke="#ff0000" d="M182.21,-169.13C196.51,-170.74 210.91,-172.35 224.07,-173.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="224.01,-177.35 234.34,-174.98 224.79,-170.39 224.01,-177.35"/>
+</g>
+<!-- proc~finalise_accumulator -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node5" class="node">
+<title>proc~finalise_accumulator</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node5"><a xlink:href="../proc/finalise_accumulator.html" xlink:title="finalise_accumulator">
+<polygon fill="#d9534f" stroke="#d9534f" points="342,-150 218,-150 218,-126 342,-126 342,-150"/>
+<text text-anchor="middle" x="280" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_accumulator</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~finalise_accumulator -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~finalise_accumulator</title>
+<path fill="none" stroke="#ff0000" d="M182.21,-148.87C190.78,-147.91 199.38,-146.94 207.73,-146"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.23,-149.47 217.78,-144.88 207.45,-142.51 208.23,-149.47"/>
+</g>
+<!-- proc~fold_sample -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node6" class="node">
+<title>proc~fold_sample</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node6"><a xlink:href="../proc/fold_sample.html" xlink:title="fold_sample">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.5,-108 241.5,-108 241.5,-84 318.5,-84 318.5,-108"/>
+<text text-anchor="middle" x="280" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~fold_sample -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~fold_sample</title>
+<path fill="none" stroke="#ff0000" d="M128.06,-146.85C158.16,-136.71 201.24,-122.2 233.67,-111.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.01,-114.51 243.37,-108 232.78,-107.88 235.01,-114.51"/>
+</g>
+<!-- proc~reset_accumulator -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node7" class="node">
+<title>proc~reset_accumulator</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node7"><a xlink:href="../proc/reset_accumulator.html" xlink:title="reset_accumulator">
+<polygon fill="#d9534f" stroke="#d9534f" points="336,-45 224,-45 224,-21 336,-21 336,-45"/>
+<text text-anchor="middle" x="280" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reset_accumulator</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~reset_accumulator -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~reset_accumulator</title>
+<path fill="none" stroke="#ff0000" d="M109.93,-146.92C143.02,-124.62 213.83,-76.91 252.48,-50.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="254.79,-53.54 261.12,-45.04 250.88,-47.73 254.79,-53.54"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node13" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="488,-234 434,-234 434,-210 488,-210 488,-234"/>
+<text text-anchor="middle" x="461" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~diag_reduce_stats&#45;&gt;reduce -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge7" class="edge">
+<title>proc~diag_reduce_stats&#45;&gt;reduce</title>
+<path fill="none" stroke="#ffff00" d="M334.22,-222C363.02,-222 397.86,-222 423.56,-222"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="423.63,-225.5 433.63,-222 423.63,-218.5 423.63,-225.5"/>
+</g>
+<!-- proc~finalise_copy_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node9" class="node">
+<title>proc~finalise_copy_impl</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node9"><a xlink:href="../proc/finalise_copy_impl.html" xlink:title="finalise_copy_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="516,-192 406,-192 406,-168 516,-168 516,-192"/>
+<text text-anchor="middle" x="461" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_copy_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_and_remap&#45;&gt;proc~finalise_copy_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge8" class="edge">
+<title>proc~fill_and_remap&#45;&gt;proc~finalise_copy_impl</title>
+<path fill="none" stroke="#00ff00" d="M325.71,-180C346.91,-180 372.62,-180 395.85,-180"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="395.98,-183.5 405.98,-180 395.98,-176.5 395.98,-183.5"/>
+</g>
+<!-- proc~finalise_accumulator&#45;&gt;proc~finalise_copy_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge9" class="edge">
+<title>proc~finalise_accumulator&#45;&gt;proc~finalise_copy_impl</title>
+<path fill="none" stroke="#00ffff" d="M332.29,-150.04C353.08,-154.91 377.25,-160.58 398.93,-165.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="398.16,-169.09 408.7,-167.96 399.76,-162.27 398.16,-169.09"/>
+</g>
+<!-- proc~finalise_scale_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node10" class="node">
+<title>proc~finalise_scale_impl</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node10"><a xlink:href="../proc/finalise_scale_impl.html" xlink:title="finalise_scale_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="517,-150 405,-150 405,-126 517,-126 517,-150"/>
+<text text-anchor="middle" x="461" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_scale_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~finalise_accumulator&#45;&gt;proc~finalise_scale_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge10" class="edge">
+<title>proc~finalise_accumulator&#45;&gt;proc~finalise_scale_impl</title>
+<path fill="none" stroke="#00ffff" d="M342.1,-138C358.96,-138 377.32,-138 394.42,-138"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="394.88,-141.5 404.88,-138 394.88,-134.5 394.88,-141.5"/>
+</g>
+<!-- proc~fold_sample_masked_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node11" class="node">
+<title>proc~fold_sample_masked_impl</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node11"><a xlink:href="../proc/fold_sample_masked_impl.html" xlink:title="fold_sample_masked_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="537.5,-108 384.5,-108 384.5,-84 537.5,-84 537.5,-108"/>
+<text text-anchor="middle" x="461" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample_masked_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_sample&#45;&gt;proc~fold_sample_masked_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge11" class="edge">
+<title>proc~fold_sample&#45;&gt;proc~fold_sample_masked_impl</title>
+<path fill="none" stroke="#0000ff" d="M318.52,-96C334.76,-96 354.49,-96 374,-96"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="374.16,-99.5 384.16,-96 374.16,-92.5 374.16,-99.5"/>
+</g>
+<!-- proc~fold_sample_unmasked_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node12" class="node">
+<title>proc~fold_sample_unmasked_impl</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node12"><a xlink:href="../proc/fold_sample_unmasked_impl.html" xlink:title="fold_sample_unmasked_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="544,-66 378,-66 378,-42 544,-42 544,-66"/>
+<text text-anchor="middle" x="461" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample_unmasked_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_sample&#45;&gt;proc~fold_sample_unmasked_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge12" class="edge">
+<title>proc~fold_sample&#45;&gt;proc~fold_sample_unmasked_impl</title>
+<path fill="none" stroke="#0000ff" d="M318.52,-87.2C341.7,-81.76 372,-74.65 398.61,-68.4"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="399.67,-71.75 408.61,-66.06 398.07,-64.94 399.67,-71.75"/>
+</g>
+<!-- proc~fill_buffer_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node8" class="node">
+<title>proc~fill_buffer_impl</title>
+<g id="a_proc~~ocean_diag_step~~CallsGraph_node8"><a xlink:href="../proc/fill_buffer_impl.html" xlink:title="fill_buffer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="506.5,-24 415.5,-24 415.5,0 506.5,0 506.5,-24"/>
+<text text-anchor="middle" x="461" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_buffer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge13" class="edge">
+<title>proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl</title>
+<path fill="none" stroke="#ff00ff" d="M336.17,-26.53C358.07,-23.96 383.21,-21.01 405.09,-18.44"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="405.69,-21.9 415.21,-17.25 404.87,-14.94 405.69,-21.9"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_diag_step~~CallsGraph_node14" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="634,-108 580,-108 580,-84 634,-84 634,-108"/>
+<text text-anchor="middle" x="607" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~fold_sample_masked_impl&#45;&gt;local -->
+<g id="proc~~ocean_diag_step~~CallsGraph_edge14" class="edge">
+<title>proc~fold_sample_masked_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M537.8,-96C548.94,-96 559.97,-96 569.8,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="569.94,-99.5 579.94,-96 569.94,-92.5 569.94,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_diag_stepCallsGraph = svgPanZoom('#prococean_diag_stepCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_diag_step~~CalledByGraph Pages: 1 -->
+<svg id="prococean_diag_stepCalledByGraph" width="592pt" height="74pt"
+ viewBox="0.00 0.00 592.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_diag_step~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~ocean_diag_step~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 588,-70 588,4 -4,4"/>
+<!-- proc~ocean_diag_step -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_node1" class="node">
+<title>proc~ocean_diag_step</title>
+<polygon fill="none" stroke="black" points="584,-45 402,-45 402,-21 584,-21 584,-45"/>
+<text text-anchor="middle" x="493" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_diag_t%ocean_diag_step</text>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_node2" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~ocean_diag_step~~CalledByGraph_node2"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="366,-45 245,-45 245,-21 366,-21 366,-45"/>
+<text text-anchor="middle" x="305.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step</title>
+<path fill="none" stroke="#ff0000" d="M366.21,-33C374.36,-33 382.9,-33 391.52,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.67,-36.5 401.67,-33 391.67,-29.5 391.67,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_diag_step~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M209,-46.6C217.35,-45.41 226.1,-44.16 234.78,-42.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.5,-46.36 244.91,-41.48 234.51,-39.43 235.5,-46.36"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_diag_step~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M204.89,-18.82C214.48,-20.18 224.74,-21.64 234.89,-23.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.58,-26.58 244.98,-24.53 235.57,-19.65 234.58,-26.58"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_diag_step~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_diag_step~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fire"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fire</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~245"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-line~5"></span>
+              character(len=256),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>line</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_emit"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_emit</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmax~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmax</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmean"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmean</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmin~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmin</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vsum"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vsum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_diag_step</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">state_handle</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Advance every registered variable.  Behaviour by `time_op`:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   * `INSTANT`: skip until `dt_accum &gt;= dt_out`, then fill once</span>
+<span class="w">      </span><span class="c">!!     (snapshot) and emit.</span>
+<span class="w">      </span><span class="c">!!   * `MEAN` / `INTEGRAL` / `MAX` / `MIN`: fill EVERY step, fold</span>
+<span class="w">      </span><span class="c">!!     the sample into the accumulator.  When `dt_accum &gt;= dt_out`,</span>
+<span class="w">      </span><span class="c">!!     finalise the accumulator into `output_buffer` (see</span>
+<span class="w">      </span><span class="c">!!     `finalise_accumulator`), emit, reset.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Fill writes into `output_buffer` for LAYER vgrid or into</span>
+<span class="w">      </span><span class="c">!! `layer_buffer` (then remap to `output_buffer`) for Z_FIXED.</span>
+<span class="w">      </span><span class="c">!! The post-remap value is the unit of accumulation — so the</span>
+<span class="w">      </span><span class="c">!! mean of T at fixed z-levels is computed in z-space, not</span>
+<span class="w">      </span><span class="c">!! layer-space (matters when h_layer drifts).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Time stamping (CF-1.8 convention):</span>
+<span class="w">      </span><span class="c">!!   * INSTANT, MAX, MIN -&gt; emit at `t` (end of window).</span>
+<span class="w">      </span><span class="c">!!   * MEAN, INTEGRAL    -&gt; emit at the centre of the window,</span>
+<span class="w">      </span><span class="c">!!     `t - dt_accum / 2`.  The centre lines up with the</span>
+<span class="w">      </span><span class="c">!!     temporal centroid of the time-weighted average so</span>
+<span class="w">      </span><span class="c">!!     downstream tools (CF-aware analysis) plot it correctly.</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_diag_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state_handle</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vmean</span><span class="p">,</span><span class="w"> </span><span class="n">vsum</span><span class="p">,</span><span class="w"> </span><span class="n">t_emit</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fire</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">line</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nvars</span>
+<span class="w">         </span><span class="k">associate</span><span class="w"> </span><span class="p">(</span><span class="n">v</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vars</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+<span class="w">            </span><span class="n">v</span><span class="p">%</span><span class="n">dt_accum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">%</span><span class="n">dt_accum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">            </span><span class="n">fire</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">dt_accum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0e-9_wp</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">v</span><span class="p">%</span><span class="n">dt_out</span><span class="p">)</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">associated</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">fill</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">v</span><span class="p">%</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+
+<span class="k">            select case</span><span class="w"> </span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">time_op</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">DIAG_OP_INSTANT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">fire</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">               call </span><span class="n">fill_and_remap</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">state_handle</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">z_out</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rho_out</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">this</span><span class="p">%</span><span class="n">sigma_out</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">zstar_out</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">DIAG_OP_MEAN</span><span class="p">,</span><span class="w"> </span><span class="n">DIAG_OP_INTEGRAL</span><span class="p">,</span><span class="w"> </span><span class="n">DIAG_OP_MAX</span><span class="p">,</span><span class="w"> </span><span class="n">DIAG_OP_MIN</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">fill_and_remap</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">state_handle</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">z_out</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rho_out</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">this</span><span class="p">%</span><span class="n">sigma_out</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">zstar_out</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">fold_sample</span><span class="p">(</span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">fire</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">               call </span><span class="n">finalise_accumulator</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case </span><span class="n">default</span>
+<span class="w">               </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"ocean_diag%step: unknown v%time_op"</span>
+<span class="w">            </span><span class="k">end select</span>
+
+<span class="k">            select case</span><span class="w"> </span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">time_op</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">DIAG_OP_MEAN</span><span class="p">,</span><span class="w"> </span><span class="n">DIAG_OP_INTEGRAL</span><span class="p">)</span>
+<span class="w">               </span><span class="n">t_emit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">v</span><span class="p">%</span><span class="n">dt_accum</span>
+<span class="w">            </span><span class="k">case </span><span class="n">default</span>
+<span class="w">               </span><span class="n">t_emit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span>
+<span class="w">            </span><span class="k">end select</span>
+
+<span class="w">            </span><span class="c">! Single device→host pull at cadence fire — the fills, fold,</span>
+<span class="w">            </span><span class="c">! and finalise above all ran on device, so `output_buffer`</span>
+<span class="w">            </span><span class="c">! lives on the device.  Pull it once here so both the log-line</span>
+<span class="w">            </span><span class="c">! reductions and the NetCDF write below see fresh host data.</span>
+<span class="w">            </span><span class="c">!</span>
+<span class="w">            </span><span class="c">! `if_present` keeps lightweight unit tests (which skip</span>
+<span class="w">            </span><span class="c">! `ocean_state_enter_data` and run on host) working — when</span>
+<span class="w">            </span><span class="c">! the buffer hasn't been attached, the directive is a no-op</span>
+<span class="w">            </span><span class="c">! and the host buffer is already current from the host-side</span>
+<span class="w">            </span><span class="c">! fills.</span>
+<span class="w">            </span><span class="c">! Statistics first, where the data already is.  On a GPU build</span>
+<span class="w">            </span><span class="c">! the buffer is device-resident, so one fused device reduction</span>
+<span class="w">            </span><span class="c">! returns three scalars instead of dragging the whole array</span>
+<span class="w">            </span><span class="c">! through three host passes.  Without device residency (unit</span>
+<span class="w">            </span><span class="c">! tests that skip `enter_data`) the host path is the only</span>
+<span class="w">            </span><span class="c">! correct one -- a device read of an unmapped buffer under</span>
+<span class="w">            </span><span class="c">! `-gpu=mem:separate` returns garbage without failing.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">on_device</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">diag_reduce_stats</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">size</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">size</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">size</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vsum</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">vmin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">)</span>
+<span class="w">               </span><span class="n">vmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">)</span>
+<span class="w">               </span><span class="n">vsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">vmean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vsum</span><span class="o">/</span><span class="kt">real</span><span class="p">(</span><span class="n">size</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">output_buffer</span><span class="p">),</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span>
+
+<span class="w">            </span><span class="c">! The NetCDF write below needs the array itself on the host.</span>
+<span class="w">            </span><span class="c">!$acc update self(v%output_buffer) if_present</span>
+<span class="w">            </span><span class="n">v</span><span class="p">%</span><span class="n">fire_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v</span><span class="p">%</span><span class="n">fire_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">line</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A,F12.2,A,A,A,A,A,ES13.5,A,ES13.5,A,ES13.5)"</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="s2">"[diag] t="</span><span class="p">,</span><span class="w"> </span><span class="n">t_emit</span><span class="p">,</span><span class="w"> </span><span class="s2">" "</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">name</span><span class="p">),</span><span class="w"> </span><span class="s2">" ["</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">units</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="s2">"]  min="</span><span class="p">,</span><span class="w"> </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="s2">"  max="</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="s2">"  mean="</span><span class="p">,</span><span class="w"> </span><span class="n">vmean</span>
+<span class="w">            </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">associated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">emit_post_fire</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">this</span><span class="p">%</span><span class="n">emit_post_fire</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">t_emit</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">v</span><span class="p">%</span><span class="n">dt_accum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">v</span><span class="p">%</span><span class="n">time_op</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIAG_OP_INSTANT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">reset_accumulator</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+<span class="w">               </span><span class="n">v</span><span class="p">%</span><span class="n">n_accum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end associate</span>
+<span class="k">      end do</span>
+<span class="k">      </span><span class="n">this</span><span class="p">%</span><span class="n">dt_last_eval</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_diag_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1603 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_pressure_force_compute &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_pressure_force_compute
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for procedures.">146 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_pressure_force.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_pressure_force.f90.html'>rdb_ocean_pressure_force.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_pressure_force.html'>rdb_ocean_pressure_force</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_pressure_force_compute</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-drho_star">drho_star</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-e_l">e_l</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-e_r">e_r</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-g_over_rho0">g_over_rho0</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-h_l~2">h_l</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-h_r~2">h_r</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-i~196">i</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-inv_rho0~3">inv_rho0</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-j~191">j</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-k~149">k</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-nx~185">nx</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-ny~185">ny</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-nz~175">nz</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-p_centre_above">p_centre_above</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-p_centre_below">p_centre_below</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-p_centre_left">p_centre_left</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-p_centre_right">p_centre_right</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-rho_face">rho_face</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-z_correction">z_correction</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-z_eff">z_eff</a>
+            <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#variable-z_running">z_running</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_pressure_force_compute.html#src">ocean_pressure_force_compute</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine ocean_pressure_force_compute(grid, metrics, pgf, ms, eos)  
+</h2>
+    
+
+    <p>Compute the hydrostatic pressure-gradient acceleration at every
+C-grid face. Variants (see the OPGF_VARIANT_* / GPRIME / FV_MOM6
+constants for the per-variant formulas): MONT (layer-mean ρgh),
+FV_LITE (+ z-correction), FV_WRIGHT (+ in-situ Wright density),
+GPRIME, FV_MOM6.</p>
+<p>Pass layout: (1b) z_centre from h_layer (MONT + FV variants);
+then either (M1) the Montgomery column recursion and (M2/M3) its
+face passes, or (1) the column pressure sweep filling p_edge
+(+ rho_insitu for FV_WRIGHT) and (2/3) the FV east/north-face
+acceleration; finally (4) the grounded-layer gate.</p>
+<p><code>ms%rho_layer</code> must be up to date — call the EOS kernel first.
+FV_WRIGHT needs <code>EOS_VARIANT_WRIGHT_97</code> for a good Picard seed.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~106"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~26"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                <p>Curvilinear horizontal metrics. The u-face gradient divides by
+<code>idxCu(i,j)</code>, the v-face by <code>idyCv(i,j)</code>. On uniform Cartesian
+<code>idxCu == 1/dx</code> bitwise (byte-identical to scalar inv_dx/inv_dy).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pgf~2"></span>
+              type(<a href='../type/ocean_pressure_force_t.html'>ocean_pressure_force_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pgf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~52"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~20"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                <p>EOS handle — REQUIRED when <code>pgf%reconstruct_for_pressure</code> is
+on (the in-layer Boole quadrature evaluates the EOS at each
+sub-point).  Optional so the legacy PCM call sites (and the
+non-reconstruct variant tests) need not thread it through.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_pressure_force_compute~~CallsGraph Pages: 1 -->
+<svg id="prococean_pressure_force_computeCallsGraph" width="641pt" height="197pt"
+ viewBox="0.00 0.00 641.00 197.17" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph" class="graph" transform="scale(0.73 0.73) rotate(0) translate(4 265.15)">
+<title>proc~~ocean_pressure_force_compute~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-265.15 871,-265.15 871,4 -4,4"/>
+<!-- proc~ocean_pressure_force_compute -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node1" class="node">
+<title>proc~ocean_pressure_force_compute</title>
+<polygon fill="none" stroke="black" points="181,-192 0,-192 0,-168 181,-168 181,-192"/>
+<text text-anchor="middle" x="90.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_pressure_force_compute</text>
+</g>
+<!-- local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="550,-192 496,-192 496,-168 550,-168 550,-192"/>
+<text text-anchor="middle" x="523" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M109.17,-192.24C132.58,-207.63 175.72,-233.22 217,-243 306.95,-264.31 336.36,-269.26 425,-243 454.05,-234.39 482.56,-214.05 501.06,-198.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="503.47,-201.34 508.83,-192.2 498.94,-196 503.47,-201.34"/>
+</g>
+<!-- proc~compute_fv_mom6_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node3" class="node">
+<title>proc~compute_fv_mom6_impl</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node3"><a xlink:href="../proc/compute_fv_mom6_impl.html" xlink:title="compute_fv_mom6_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="392.5,-234 249.5,-234 249.5,-210 392.5,-210 392.5,-234"/>
+<text text-anchor="middle" x="321" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_fv_mom6_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_impl</title>
+<path fill="none" stroke="#ff0000" d="M156.98,-192.04C184.35,-197.07 216.31,-202.94 244.65,-208.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.04,-211.6 254.51,-209.96 245.31,-204.71 244.04,-211.6"/>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node4" class="node">
+<title>proc~compute_fv_mom6_reconstruct_impl</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node4"><a xlink:href="../proc/compute_fv_mom6_reconstruct_impl.html" xlink:title="compute_fv_mom6_reconstruct_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="425,-108 217,-108 217,-84 425,-84 425,-108"/>
+<text text-anchor="middle" x="321" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_fv_mom6_reconstruct_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_reconstruct_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_reconstruct_impl</title>
+<path fill="none" stroke="#ff0000" d="M111.64,-167.79C135.84,-153.61 178.06,-130.47 217,-117 223.88,-114.62 231.11,-112.47 238.42,-110.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="239.56,-113.86 248.42,-108.04 237.87,-107.07 239.56,-113.86"/>
+</g>
+<!-- proc~compute_gprime_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node5" class="node">
+<title>proc~compute_gprime_impl</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node5"><a xlink:href="../proc/compute_gprime_impl.html" xlink:title="compute_gprime_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="387,-192 255,-192 255,-168 387,-168 387,-192"/>
+<text text-anchor="middle" x="321" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_gprime_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;proc~compute_gprime_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;proc~compute_gprime_impl</title>
+<path fill="none" stroke="#ff0000" d="M181.15,-180C202.22,-180 224.47,-180 244.83,-180"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.97,-183.5 254.97,-180 244.97,-176.5 244.97,-183.5"/>
+</g>
+<!-- proc~eos_wright_pgf_column_sweep_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node6" class="node">
+<title>proc~eos_wright_pgf_column_sweep_impl</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node6"><a xlink:href="../proc/eos_wright_pgf_column_sweep_impl.html" xlink:title="eos_wright_pgf_column_sweep_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="423.5,-150 218.5,-150 218.5,-126 423.5,-126 423.5,-150"/>
+<text text-anchor="middle" x="321" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_wright_pgf_column_sweep_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;proc~eos_wright_pgf_column_sweep_impl -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;proc~eos_wright_pgf_column_sweep_impl</title>
+<path fill="none" stroke="#ff0000" d="M156.98,-167.96C184.35,-162.93 216.31,-157.06 244.65,-151.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.31,-155.29 254.51,-150.04 244.04,-148.4 245.31,-155.29"/>
+</g>
+<!-- proc~compute_fv_mom6_impl&#45;&gt;local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge6" class="edge">
+<title>proc~compute_fv_mom6_impl&#45;&gt;local</title>
+<path fill="none" stroke="#cbff00" d="M381.66,-209.96C395.87,-207.06 410.98,-203.95 425,-201 445.11,-196.77 467.53,-191.93 485.75,-187.96"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="486.65,-191.34 495.67,-185.79 485.15,-184.5 486.65,-191.34"/>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl&#45;&gt;local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge7" class="edge">
+<title>proc~compute_fv_mom6_reconstruct_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff66" d="M405.6,-108C412.38,-110.47 418.94,-113.44 425,-117 446.19,-129.46 440.67,-145.18 461,-159 468.61,-164.17 477.61,-168.18 486.33,-171.25"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="485.37,-174.62 495.96,-174.32 487.5,-167.95 485.37,-174.62"/>
+</g>
+<!-- proc~boole_dpa_intz_layer -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node7" class="node">
+<title>proc~boole_dpa_intz_layer</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node7"><a xlink:href="../proc/boole_dpa_intz_layer.html" xlink:title="boole_dpa_intz_layer">
+<polygon fill="#d9534f" stroke="#d9534f" points="585,-150 461,-150 461,-126 585,-126 585,-150"/>
+<text text-anchor="middle" x="523" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boole_dpa_intz_layer</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~boole_dpa_intz_layer -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge8" class="edge">
+<title>proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~boole_dpa_intz_layer</title>
+<path fill="none" stroke="#00ff66" d="M381.66,-108.04C395.87,-110.94 410.98,-114.05 425,-117 435.29,-119.16 446.18,-121.49 456.8,-123.77"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="456.37,-127.26 466.88,-125.95 457.84,-120.42 456.37,-127.26"/>
+</g>
+<!-- proc~plm_edges_column -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node8" class="node">
+<title>proc~plm_edges_column</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node8"><a xlink:href="../proc/plm_edges_column.html" xlink:title="plm_edges_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="580.5,-108 465.5,-108 465.5,-84 580.5,-84 580.5,-108"/>
+<text text-anchor="middle" x="523" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_edges_column</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~plm_edges_column -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge9" class="edge">
+<title>proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~plm_edges_column</title>
+<path fill="none" stroke="#00ff66" d="M425.22,-96C435.39,-96 445.52,-96 455.18,-96"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="455.46,-99.5 465.46,-96 455.46,-92.5 455.46,-99.5"/>
+</g>
+<!-- proc~ppm_edges_column -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node9" class="node">
+<title>proc~ppm_edges_column</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node9"><a xlink:href="../proc/ppm_edges_column.html" xlink:title="ppm_edges_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="582.5,-66 463.5,-66 463.5,-42 582.5,-42 582.5,-66"/>
+<text text-anchor="middle" x="523" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edges_column</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~ppm_edges_column -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge10" class="edge">
+<title>proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~ppm_edges_column</title>
+<path fill="none" stroke="#00ff66" d="M379.31,-83.96C402.85,-79.02 430.27,-73.26 454.75,-68.12"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="455.61,-71.52 464.68,-66.04 454.17,-64.67 455.61,-71.52"/>
+</g>
+<!-- proc~recon_rho_surf -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node10" class="node">
+<title>proc~recon_rho_surf</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node10"><a xlink:href="../proc/recon_rho_surf.html" xlink:title="recon_rho_surf">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="568.5,-24 477.5,-24 477.5,0 568.5,0 568.5,-24"/>
+<text text-anchor="middle" x="523" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">recon_rho_surf</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~recon_rho_surf -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge11" class="edge">
+<title>proc~compute_fv_mom6_reconstruct_impl&#45;&gt;proc~recon_rho_surf</title>
+<path fill="none" stroke="#00ff66" d="M346.81,-83.9C374.38,-70.66 420.38,-49.16 461,-33 465.69,-31.13 470.63,-29.27 475.57,-27.47"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="476.78,-30.76 485.02,-24.11 474.43,-24.16 476.78,-30.76"/>
+</g>
+<!-- proc~compute_gprime_impl&#45;&gt;local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge12" class="edge">
+<title>proc~compute_gprime_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0066ff" d="M387.21,-180C419.82,-180 458.06,-180 485.46,-180"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="485.77,-183.5 495.77,-180 485.77,-176.5 485.77,-183.5"/>
+</g>
+<!-- proc~eos_wright_pgf_column_sweep_impl&#45;&gt;local -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge13" class="edge">
+<title>proc~eos_wright_pgf_column_sweep_impl&#45;&gt;local</title>
+<path fill="none" stroke="#cc00ff" d="M381.66,-150.04C395.87,-152.94 410.98,-156.05 425,-159 445.11,-163.23 467.53,-168.07 485.75,-172.04"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="485.15,-175.5 495.67,-174.21 486.65,-168.66 485.15,-175.5"/>
+</g>
+<!-- proc~eos_density_point -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node11" class="node">
+<title>proc~eos_density_point</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node11"><a xlink:href="../proc/eos_density_point.html" xlink:title="eos_density_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="728,-150 621,-150 621,-126 728,-126 728,-150"/>
+<text text-anchor="middle" x="674.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_point</text>
+</a>
+</g>
+</g>
+<!-- proc~boole_dpa_intz_layer&#45;&gt;proc~eos_density_point -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge14" class="edge">
+<title>proc~boole_dpa_intz_layer&#45;&gt;proc~eos_density_point</title>
+<path fill="none" stroke="#ff0000" d="M585.24,-138C593.61,-138 602.21,-138 610.61,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="610.72,-141.5 620.72,-138 610.72,-134.5 610.72,-141.5"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_node12" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CallsGraph_node12"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="867,-150 764,-150 764,-126 867,-126 867,-150"/>
+<text text-anchor="middle" x="815.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_point&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~ocean_pressure_force_compute~~CallsGraph_edge15" class="edge">
+<title>proc~eos_density_point&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff0000" d="M728.05,-138C736.36,-138 745.01,-138 753.49,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="753.72,-141.5 763.72,-138 753.72,-134.5 753.72,-141.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_pressure_force_computeCallsGraph = svgPanZoom('#prococean_pressure_force_computeCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_pressure_force_compute~~CalledByGraph Pages: 1 -->
+<svg id="prococean_pressure_force_computeCalledByGraph" width="641pt" height="57pt"
+ viewBox="0.00 0.00 641.00 56.74" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 70)">
+<title>proc~~ocean_pressure_force_compute~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 832,-70 832,4 -4,4"/>
+<!-- proc~ocean_pressure_force_compute -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node1" class="node">
+<title>proc~ocean_pressure_force_compute</title>
+<polygon fill="none" stroke="black" points="828,-45 647,-45 647,-21 828,-21 828,-45"/>
+<text text-anchor="middle" x="737.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_pressure_force_compute</text>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node2" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node2"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.5,-66 532.5,-66 532.5,-42 597.5,-42 597.5,-66"/>
+<text text-anchor="middle" x="565" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_pressure_force_compute -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge1" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_pressure_force_compute</title>
+<path fill="none" stroke="#ff0000" d="M597.67,-50.1C608.98,-48.71 622.42,-47.05 636.4,-45.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="637.16,-48.76 646.65,-44.07 636.3,-41.81 637.16,-48.76"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node3" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node3"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-24 519,-24 519,0 611,0 611,-24"/>
+<text text-anchor="middle" x="565" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_pressure_force_compute -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_pressure_force_compute</title>
+<path fill="none" stroke="#ff0000" d="M611.24,-17.57C619.27,-18.56 627.91,-19.63 636.77,-20.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="636.48,-24.21 646.83,-21.96 637.34,-17.26 636.48,-24.21"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-66 371.5,-66 371.5,-42 469.5,-42 469.5,-66"/>
+<text text-anchor="middle" x="420.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M469.74,-54C486.7,-54 505.6,-54 522,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="522.37,-57.5 532.37,-54 522.37,-50.5 522.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-24 358,-24 358,0 483,0 483,-24"/>
+<text text-anchor="middle" x="420.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M483.17,-12C491.73,-12 500.47,-12 508.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="508.99,-15.5 518.99,-12 508.99,-8.5 508.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node6" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node6"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-38.85C334.29,-40.75 348.1,-42.89 361.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="361.05,-48.45 371.47,-46.53 362.13,-41.53 361.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M322.11,-27.15C330.15,-25.9 338.91,-24.54 347.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.44,-26.6 357.78,-21.6 347.36,-19.68 348.44,-26.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_node9" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_pressure_force_compute~~CalledByGraph_node9"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_pressure_force_compute~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_pressure_force_computeCalledByGraph = svgPanZoom('#prococean_pressure_force_computeCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drho_star"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drho_star</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_over_rho0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_over_rho0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_l~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_r~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~196"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inv_rho0~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inv_rho0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~191"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~149"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~185"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~185"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~175"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_centre_above"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_centre_above</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_centre_below"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_centre_below</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_centre_left"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_centre_left</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_centre_right"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_centre_right</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_face"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_face</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_correction"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_correction</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_eff"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_eff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_running"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_running</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_pressure_force_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Compute the hydrostatic pressure-gradient acceleration at every</span>
+<span class="w">      </span><span class="c">!! C-grid face. Variants (see the OPGF_VARIANT_* / GPRIME / FV_MOM6</span>
+<span class="w">      </span><span class="c">!! constants for the per-variant formulas): MONT (layer-mean ρgh),</span>
+<span class="w">      </span><span class="c">!! FV_LITE (+ z-correction), FV_WRIGHT (+ in-situ Wright density),</span>
+<span class="w">      </span><span class="c">!! GPRIME, FV_MOM6.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Pass layout: (1b) z_centre from h_layer (MONT + FV variants);</span>
+<span class="w">      </span><span class="c">!! then either (M1) the Montgomery column recursion and (M2/M3) its</span>
+<span class="w">      </span><span class="c">!! face passes, or (1) the column pressure sweep filling p_edge</span>
+<span class="w">      </span><span class="c">!! (+ rho_insitu for FV_WRIGHT) and (2/3) the FV east/north-face</span>
+<span class="w">      </span><span class="c">!! acceleration; finally (4) the grounded-layer gate.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `ms%rho_layer` must be up to date — call the EOS kernel first.</span>
+<span class="w">      </span><span class="c">!! FV_WRIGHT needs `EOS_VARIANT_WRIGHT_97` for a good Picard seed.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">         </span><span class="c">!! Curvilinear horizontal metrics. The u-face gradient divides by</span>
+<span class="w">         </span><span class="c">!! `idxCu(i,j)`, the v-face by `idyCv(i,j)`. On uniform Cartesian</span>
+<span class="w">         </span><span class="c">!! `idxCu == 1/dx` bitwise (byte-identical to scalar inv_dx/inv_dy).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_pressure_force_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pgf</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">         </span><span class="c">!! EOS handle — REQUIRED when `pgf%reconstruct_for_pressure` is</span>
+<span class="w">         </span><span class="c">!! on (the in-layer Boole quadrature evaluates the EOS at each</span>
+<span class="w">         </span><span class="c">!! sub-point).  Optional so the legacy PCM call sites (and the</span>
+<span class="w">         </span><span class="c">!! non-reconstruct variant tests) need not thread it through.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">g_over_rho0</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_centre_left</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_right</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_centre_below</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_above</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_face</span><span class="p">,</span><span class="w"> </span><span class="n">z_correction</span><span class="p">,</span><span class="w"> </span><span class="n">z_running</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_l</span><span class="p">,</span><span class="w"> </span><span class="n">h_r</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">,</span><span class="w"> </span><span class="n">z_eff</span><span class="p">,</span><span class="w"> </span><span class="n">drho_star</span>
+
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="n">inv_rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">pgf</span><span class="p">%</span><span class="n">rho0</span>
+
+<span class="w">      </span><span class="c">! ---- gprime / reduced-gravity branch (Tier-1: NK = 2 only) ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_GPRIME</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">compute_gprime_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">gprime_gfs</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">gprime_gint</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Pass 1b: per-column z_centre from h_layer ----</span>
+<span class="w">      </span><span class="c">! z_centre(:, :, k) = physical z of the layer-k mid-depth,</span>
+<span class="w">      </span><span class="c">! measured from the free surface downward (z=0 at surface,</span>
+<span class="w">      </span><span class="c">! z negative below).  Computed by summing h_layer top-down so</span>
+<span class="w">      </span><span class="c">! the surface is the reference point regardless of column</span>
+<span class="w">      </span><span class="c">! bathymetry.  This is the load-bearing change that makes the</span>
+<span class="w">      </span><span class="c">! FV_LITE / FV_WRIGHT Jacobian cancel the cross-bathymetry</span>
+<span class="w">      </span><span class="c">! pressure gradient: a bed-relative z_centre would inject a</span>
+<span class="w">      </span><span class="c">! spurious `-g·ρ·dH/dx` residual at every shelf-break face.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! Hoisted AHEAD of the variant branches because it depends on nothing</span>
+<span class="w">      </span><span class="c">! but `h_layer`.  FV_LITE / FV_WRIGHT consume it in Passes 2/3; MONT</span>
+<span class="w">      </span><span class="c">! recovers the layer-TOP interface height `z_centre + h/2` from it for</span>
+<span class="w">      </span><span class="c">! both the `M` recursion and the face `z_eff`.  FV_MOM6's own face</span>
+<span class="w">      </span><span class="c">! assembly never touches it, so on that path it is filled ONLY to feed</span>
+<span class="w">      </span><span class="c">! the Pass-4 grounded-layer gate — which is also exactly when</span>
+<span class="w">      </span><span class="c">! `ocean_pressure_force_init`'s allocation gate provides the buffer.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_MONT</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_LITE</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_WRIGHT</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_MOM6</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">skip_nonoverlap</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">z_running</span><span class="p">)</span>
+<span class="w">            </span><span class="n">z_running</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_running</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">z_running</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_running</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- MONT branch — Boussinesq Montgomery potential ----------------</span>
+<span class="w">      </span><span class="c">! Pass M1 (per column): the vertical recursion that builds `M`.  Pass</span>
+<span class="w">      </span><span class="c">! M2/M3 (per face): ONE horizontal difference of `M`, plus the</span>
+<span class="w">      </span><span class="c">! horizontal-density term.  No pressure stack is built on this path.</span>
+<span class="w">      </span><span class="c">! See the OPGF_VARIANT_MONT docstring for the derivation.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_MONT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">g_over_rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">inv_rho0</span>
+
+<span class="w">         </span><span class="c">! ---- Pass M1: Montgomery potential per column -------------------</span>
+<span class="w">         </span><span class="c">! Seeded at the free surface: `e_edge(nz+1) = 0` (z_centre is</span>
+<span class="w">         </span><span class="c">! surface-relative) and the surface pressure is zero, so</span>
+<span class="w">         </span><span class="c">! `M(nz) = p/rho0 + rho_star(nz)*e_edge(nz+1)` is identically zero</span>
+<span class="w">         </span><span class="c">! in EVERY column.  That is not a loss: the barotropic `-g*grad(eta)`</span>
+<span class="w">         </span><span class="c">! it would otherwise carry is the BT substep's job, and adding it</span>
+<span class="w">         </span><span class="c">! here would double-count it.  Accumulated straight into the array</span>
+<span class="w">         </span><span class="c">! (no `local` reassigned in the k-loop), mirroring the Pass-1</span>
+<span class="w">         </span><span class="c">! pressure sweep.</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">               </span><span class="c">! `e_edge(k+1)` — the interface SHARED by layers k and k+1,</span>
+<span class="w">               </span><span class="c">! i.e. the TOP of layer k — is where `p` and `z` agree between</span>
+<span class="w">               </span><span class="c">! the two layers, so the whole jump in M is the jump in</span>
+<span class="w">               </span><span class="c">! rho_star.  Recovered from the layer-k centre.</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">g_over_rho0</span><span class="o">*</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                       </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+
+<span class="w">         </span><span class="c">! ---- Pass M2: east-face acceleration ----------------------------</span>
+<span class="w">         </span><span class="c">! `-dM/dx` plus the horizontal-density term `+ z_eff * d(rho_star)/dx`.</span>
+<span class="w">         </span><span class="c">! `z_eff` is the thickness-weighted height at which `M`'s two</span>
+<span class="w">         </span><span class="c">! column anchors are reconciled; on aligned columns (h_L == h_R) it</span>
+<span class="w">         </span><span class="c">! is exactly the mean layer centre and the pair reduces</span>
+<span class="w">         </span><span class="c">! ALGEBRAICALLY to FV_LITE.  `H_DIV_EPS` is pure 1/0 armour for a</span>
+<span class="w">         </span><span class="c">! face between two fully-vanished layers (numerator is then zero</span>
+<span class="w">         </span><span class="c">! too, so the face value is a clean zero).</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">local</span><span class="p">(</span><span class="n">h_l</span><span class="p">,</span><span class="w"> </span><span class="n">h_r</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">,</span><span class="w"> </span><span class="n">z_eff</span><span class="p">,</span><span class="w"> </span><span class="n">drho_star</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">e_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">h_l</span>
+<span class="w">            </span><span class="n">e_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">h_r</span>
+<span class="w">            </span><span class="n">z_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">e_l</span><span class="o">*</span><span class="n">h_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">e_r</span><span class="o">*</span><span class="n">h_l</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_l</span><span class="o">*</span><span class="n">h_r</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">h_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<span class="w">            </span><span class="n">drho_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_over_rho0</span><span class="o">*</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="o">+</span><span class="w"> </span><span class="n">drho_star</span><span class="o">*</span><span class="n">z_eff</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! ---- Pass M3: north-face acceleration ---------------------------</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">local</span><span class="p">(</span><span class="n">h_l</span><span class="p">,</span><span class="w"> </span><span class="n">h_r</span><span class="p">,</span><span class="w"> </span><span class="n">e_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_r</span><span class="p">,</span><span class="w"> </span><span class="n">z_eff</span><span class="p">,</span><span class="w"> </span><span class="n">drho_star</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">e_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">h_l</span>
+<span class="w">            </span><span class="n">e_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">h_r</span>
+<span class="w">            </span><span class="n">z_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">e_l</span><span class="o">*</span><span class="n">h_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">e_r</span><span class="o">*</span><span class="n">h_l</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_l</span><span class="o">*</span><span class="n">h_r</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">h_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<span class="w">            </span><span class="n">drho_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_over_rho0</span><span class="o">*</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">mont_M</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="o">+</span><span class="w"> </span><span class="n">drho_star</span><span class="o">*</span><span class="n">z_eff</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! ---- FV_MOM6 branch — faithful port of MOM6 PressureForce_FV_Bouss ----</span>
+<span class="w">         </span><span class="c">! Layer-integrated pressure differences with face-thickness</span>
+<span class="w">         </span><span class="c">! divisor.  See OPGF_VARIANT_FV_MOM6 doc above.</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_MOM6</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">reconstruct_for_pressure</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">eos</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">             </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! In-layer PLM/PPM reconstruction: build per-layer Boole</span>
+<span class="w">            </span><span class="c">! `dpa`/`intz_dpa` from a monotone sub-layer T/S profile, then</span>
+<span class="w">            </span><span class="c">! reuse the unchanged FV_MOM6 face assembly.</span>
+<span class="w">            </span><span class="k">call </span><span class="n">compute_fv_mom6_reconstruct_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">recon_S_t</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">recon_S_b</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">recon_T_t</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">recon_T_b</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">e_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">intz_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">intx_pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">inty_pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">intx_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">inty_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_ref</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">h_neglect</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">gfs_scale</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">recon_scheme</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">compute_fv_mom6_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">e_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">intz_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">intx_pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">inty_pa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">intx_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">inty_dpa</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_ref</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">h_neglect</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">pgf</span><span class="p">%</span><span class="n">gfs_scale</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">mass_weight</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else</span>
+
+<span class="w">         </span><span class="c">! ---- Pass 1: hydrostatic integration per column ----</span>
+<span class="w">         </span><span class="c">! Surface boundary condition: p_edge at the top of the</span>
+<span class="w">         </span><span class="c">! water column is zero (atmospheric absorbed into Boussinesq).</span>
+<span class="w">         </span><span class="c">! March down: each layer adds rho*g*h_layer to the pressure</span>
+<span class="w">         </span><span class="c">! at the layer below.  FV_WRIGHT also computes rho_insitu</span>
+<span class="w">         </span><span class="c">! per layer with a single Picard step.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_WRIGHT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">eos_wright_pgf_column_sweep_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">GRAVITY</span><span class="p">,</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="w">               </span><span class="c">! No S, T registered: fall through to rho_layer.  Keeps</span>
+<span class="w">               </span><span class="c">! the test scaffolding (which sets rho_layer directly</span>
+<span class="w">               </span><span class="c">! without registering tracers) workable.</span>
+<span class="w">               </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                     </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end do</span>
+<span class="k">            end if</span>
+<span class="k">         else</span>
+<span class="k">            do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">                  </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end do</span>
+<span class="k">         end if</span>
+
+<span class="w">         </span><span class="c">! ---- Pass 2: east-face acceleration ----</span>
+<span class="w">         </span><span class="c">! `idxCu(i,j)` replaces the scalar `inv_dx` (D4) — bit-identical on</span>
+<span class="w">         </span><span class="c">! uniform Cartesian.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_WRIGHT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">local</span><span class="p">(</span><span class="n">p_centre_left</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_right</span><span class="p">,</span><span class="w"> </span><span class="n">rho_face</span><span class="p">,</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">               </span><span class="n">p_centre_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">p_centre_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">rho_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">z_correction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">inv_rho0</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="p">(</span><span class="n">p_centre_right</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p_centre_left</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         else</span>
+<span class="w">            </span><span class="c">! FV_LITE — the only variant that still reaches this pass</span>
+<span class="w">            </span><span class="c">! (GPRIME returned, MONT and FV_MOM6 branched above).</span>
+<span class="w">            </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">local</span><span class="p">(</span><span class="n">p_centre_left</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_right</span><span class="p">,</span><span class="w"> </span><span class="n">rho_face</span><span class="p">,</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">               </span><span class="n">p_centre_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">p_centre_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">rho_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">z_correction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">inv_rho0</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="p">(</span><span class="n">p_centre_right</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p_centre_left</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end if</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! ---- Pass 3: north-face acceleration ----</span>
+<span class="w">         </span><span class="c">! `idyCv(i,j)` replaces the scalar `inv_dy` (D4).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OPGF_VARIANT_FV_WRIGHT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">local</span><span class="p">(</span><span class="n">p_centre_below</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_above</span><span class="p">,</span><span class="w"> </span><span class="n">rho_face</span><span class="p">,</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">               </span><span class="n">p_centre_above</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">p_centre_below</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">rho_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">rho_insitu</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">z_correction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">inv_rho0</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="p">(</span><span class="n">p_centre_above</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p_centre_below</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         else</span>
+<span class="w">            </span><span class="c">! FV_LITE — see the Pass-2 comment.</span>
+<span class="w">            </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">local</span><span class="p">(</span><span class="n">p_centre_below</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_above</span><span class="p">,</span><span class="w"> </span><span class="n">rho_face</span><span class="p">,</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">               </span><span class="n">p_centre_above</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">p_centre_below</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">p_edge</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="n">rho_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">z_correction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">inv_rho0</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="p">(</span><span class="n">p_centre_above</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p_centre_below</span><span class="p">)</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">z_correction</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end if</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Pass 4: grounded-layer gate (VCOORD_LAGRANGIAN only) ----</span>
+<span class="w">      </span><span class="c">! Passes 2/3 form a two-point Jacobian: the `Δp_centre` and</span>
+<span class="w">      </span><span class="c">! `g·ρ_layer·Δz_centre` terms cancel AT REST only while the two abutting</span>
+<span class="w">      </span><span class="c">! layer centres lie in a common z-interval whose ambient density IS</span>
+<span class="w">      </span><span class="c">! `ρ_layer`.  Where an isopycnal layer has wedged out against the bed on</span>
+<span class="w">      </span><span class="c">! one side, the centres are hundreds of metres apart, the interval</span>
+<span class="w">      </span><span class="c">! between them holds OTHER density classes, and what survives is</span>
+<span class="w">      </span><span class="c">! `g·(ρ_layer − ρ̄_ambient)·∂z/∂x` — a pressure gradient on a motionless</span>
+<span class="w">      </span><span class="c">! ocean.  There is no common depth to difference the pressure across</span>
+<span class="w">      </span><span class="c">! there, so the honest face value is ZERO; the layer is still free to be</span>
+<span class="w">      </span><span class="c">! re-wetted by continuity's upwind flux and the barotropic correction.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! FV_MOM6 is gated by the SAME test.  Its face assembly is not the</span>
+<span class="w">      </span><span class="c">! two-point Jacobian but the layer-integrated FV-Bouss form, yet the</span>
+<span class="w">      </span><span class="c">! defect is the geometry, not the quadrature: where the layer occupies</span>
+<span class="w">      </span><span class="c">! disjoint z-intervals in the two columns the layer-integrated pressure</span>
+<span class="w">      </span><span class="c">! difference is likewise being taken between depths that share no water</span>
+<span class="w">      </span><span class="c">! of that density class, and the `1/(h_L + h_R + h_neglect)` divisor</span>
+<span class="w">      </span><span class="c">! does NOT suppress it — the deep side keeps the thickness up while the</span>
+<span class="w">      </span><span class="c">! grounded side contributes the whole `e_bot` offset.  Measured on</span>
+<span class="w">      </span><span class="c">! `seamount_conservative_floor.nml` (form='fv_mom6'): En 2.17e-03 →</span>
+<span class="w">      </span><span class="c">! 1.39e-26 at day 2.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! MONT is gated by the same test for the same reason.  Its face</span>
+<span class="w">      </span><span class="c">! expression is neither the two-point Jacobian nor the layer-integrated</span>
+<span class="w">      </span><span class="c">! form, but a grounded layer still puts the two columns' `e_edge` values</span>
+<span class="w">      </span><span class="c">! hundreds of metres apart, so the `M` recursion stops producing a</span>
+<span class="w">      </span><span class="c">! horizontally uniform potential at rest and the residual reappears.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! A separate guarded pass on purpose: when the gate is off (every vcoord</span>
+<span class="w">      </span><span class="c">! but LAGRANGIAN) not one extra load is issued ⇒ bit-identical.</span>
+<span class="w">      </span><span class="c">! Reads `z_centre`, so the driver only ever sets the flag for the four</span>
+<span class="w">      </span><span class="c">! variants whose allocation gate provides it (MONT / FV_LITE /</span>
+<span class="w">      </span><span class="c">! FV_WRIGHT, and FV_MOM6 — where `z_centre` is allocated + filled for</span>
+<span class="w">      </span><span class="c">! this gate alone).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">skip_nonoverlap</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                    </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="nb">max</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                    </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdx_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                    </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="nb">max</span><span class="p">(</span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                    </span><span class="n">pgf</span><span class="p">%</span><span class="n">z_centre</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">pgf</span><span class="p">%</span><span class="n">dpdy_face</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">ocean_pressure_force_compute</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

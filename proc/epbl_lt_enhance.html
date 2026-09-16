@@ -1,0 +1,845 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>epbl_lt_enhance &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>epbl_lt_enhance
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">25 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_epbl.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_epbl.f90.html'>rdb_ocean_epbl.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_epbl.html'>rdb_ocean_epbl</a></li>
+            <li class="breadcrumb-item active" aria-current="page">epbl_lt_enhance</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/epbl_lt_enhance.html#variable-ek_ob">ek_ob</a>
+            <a class="list-group-item" href="../proc/epbl_lt_enhance.html#variable-enh">enh</a>
+            <a class="list-group-item" href="../proc/epbl_lt_enhance.html#variable-la_mod">la_mod</a>
+            <a class="list-group-item" href="../proc/epbl_lt_enhance.html#variable-mld_ek">mld_ek</a>
+            <a class="list-group-item" href="../proc/epbl_lt_enhance.html#variable-mld_ob">mld_ob</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/epbl_lt_enhance.html#src">epbl_lt_enhance</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine epbl_lt_enhance(scheme, coef, expo, max_enh, vonkar, lac1, lac2, lac3, lac4, lac5, la, b0, ustar, bld, absf, mstar)  
+</h2>
+    
+
+    <p>Apply the Langmuir enhancement to mstar (Reichl &amp; Li 2019;
+Li et al. 2016 stability modification).  The modified
+Langmuir number folds the boundary-layer stability regime in
+via Ekman / Obukhov / MLD length-scale ratios, split by the
+sign of the surface buoyancy flux; all-zero lac coefficients
+give La_mod = La exactly.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-scheme~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>scheme</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coef"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coef</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-expo"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>expo</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_enh"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_enh</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vonkar"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vonkar</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lac1"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lac1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lac2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lac2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lac3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lac3</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lac4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lac4</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lac5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lac5</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-la~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>la</strong></td>
+            <td>
+                <p>Raw turbulent Langmuir number (&gt; 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b0~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b0</strong></td>
+            <td>
+                <p>Surface buoyancy flux (m^2/s^3); &gt; 0 stabilizing.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ustar~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ustar</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bld~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bld</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-absf~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>absf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mstar~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mstar</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~epbl_lt_enhance~~CalledByGraph Pages: 1 -->
+<svg id="procepbl_lt_enhanceCalledByGraph" width="641pt" height="57pt"
+ viewBox="0.00 0.00 641.00 56.81" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~epbl_lt_enhance~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 70)">
+<title>proc~~epbl_lt_enhance~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 831,-70 831,4 -4,4"/>
+<!-- proc~epbl_lt_enhance -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node1" class="node">
+<title>proc~epbl_lt_enhance</title>
+<polygon fill="none" stroke="black" points="827,-45 727,-45 727,-21 827,-21 827,-45"/>
+<text text-anchor="middle" x="777" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">epbl_lt_enhance</text>
+</g>
+<!-- proc~epbl_column_kernel -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node2" class="node">
+<title>proc~epbl_column_kernel</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node2"><a xlink:href="../proc/epbl_column_kernel.html" xlink:title="epbl_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="691,-45 571,-45 571,-21 691,-21 691,-45"/>
+<text text-anchor="middle" x="631" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge1" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance</title>
+<path fill="none" stroke="#ff0000" d="M691.4,-33C699.77,-33 708.38,-33 716.75,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="716.81,-36.5 726.81,-33 716.81,-29.5 716.81,-36.5"/>
+</g>
+<!-- proc~epbl_compute -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node3" class="node">
+<title>proc~epbl_compute</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node3"><a xlink:href="../proc/epbl_compute.html" xlink:title="epbl_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="535,-45 447,-45 447,-21 535,-21 535,-45"/>
+<text text-anchor="middle" x="491" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_compute&#45;&gt;proc~epbl_column_kernel -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge2" class="edge">
+<title>proc~epbl_compute&#45;&gt;proc~epbl_column_kernel</title>
+<path fill="none" stroke="#ff0000" d="M535.29,-33C543.41,-33 552.09,-33 560.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="560.94,-36.5 570.94,-33 560.94,-29.5 560.94,-36.5"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node4" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node4"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="411,-45 289,-45 289,-21 411,-21 411,-45"/>
+<text text-anchor="middle" x="350" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge3" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute</title>
+<path fill="none" stroke="#ff0000" d="M411.16,-33C419.71,-33 428.46,-33 436.87,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="436.92,-36.5 446.92,-33 436.92,-29.5 436.92,-36.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node5" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node5"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="239.5,-66 174.5,-66 174.5,-42 239.5,-42 239.5,-66"/>
+<text text-anchor="middle" x="207" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M239.64,-49.29C251.34,-47.55 265.11,-45.49 278.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="279.46,-46.9 288.84,-41.96 278.43,-39.97 279.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node6" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node6"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="253,-24 161,-24 161,0 253,0 253,-24"/>
+<text text-anchor="middle" x="207" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M253,-18.7C261.32,-19.94 270.18,-21.26 279.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="278.58,-26.05 288.99,-24.06 279.61,-19.13 278.58,-26.05"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="111.5,-66 13.5,-66 13.5,-42 111.5,-42 111.5,-66"/>
+<text text-anchor="middle" x="62.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M111.74,-54C128.7,-54 147.6,-54 164,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.37,-57.5 174.37,-54 164.37,-50.5 164.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~epbl_lt_enhance~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="125,-24 0,-24 0,0 125,0 125,-24"/>
+<text text-anchor="middle" x="62.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~epbl_lt_enhance~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M125.17,-12C133.73,-12 142.47,-12 150.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="150.99,-15.5 160.99,-12 150.99,-8.5 150.99,-15.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocepbl_lt_enhanceCalledByGraph = svgPanZoom('#procepbl_lt_enhanceCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ek_ob"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ek_ob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enh"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enh</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-la_mod"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>la_mod</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mld_ek"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mld_ek</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mld_ob"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mld_ob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">epbl_lt_enhance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span><span class="w"> </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">expo</span><span class="p">,</span><span class="w"> </span><span class="n">max_enh</span><span class="p">,</span><span class="w"> </span><span class="n">vonkar</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">lac1</span><span class="p">,</span><span class="w"> </span><span class="n">lac2</span><span class="p">,</span><span class="w"> </span><span class="n">lac3</span><span class="p">,</span><span class="w"> </span><span class="n">lac4</span><span class="p">,</span><span class="w"> </span><span class="n">lac5</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">la</span><span class="p">,</span><span class="w"> </span><span class="n">b0</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="n">bld</span><span class="p">,</span><span class="w"> </span><span class="n">absf</span><span class="p">,</span><span class="w"> </span><span class="n">mstar</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Apply the Langmuir enhancement to mstar (Reichl &amp; Li 2019;</span>
+<span class="w">      </span><span class="c">!! Li et al. 2016 stability modification).  The modified</span>
+<span class="w">      </span><span class="c">!! Langmuir number folds the boundary-layer stability regime in</span>
+<span class="w">      </span><span class="c">!! via Ekman / Obukhov / MLD length-scale ratios, split by the</span>
+<span class="w">      </span><span class="c">!! sign of the surface buoyancy flux; all-zero lac coefficients</span>
+<span class="w">      </span><span class="c">!! give La_mod = La exactly.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">scheme</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">expo</span><span class="p">,</span><span class="w"> </span><span class="n">max_enh</span><span class="p">,</span><span class="w"> </span><span class="n">vonkar</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lac1</span><span class="p">,</span><span class="w"> </span><span class="n">lac2</span><span class="p">,</span><span class="w"> </span><span class="n">lac3</span><span class="p">,</span><span class="w"> </span><span class="n">lac4</span><span class="p">,</span><span class="w"> </span><span class="n">lac5</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">la</span>
+<span class="w">         </span><span class="c">!! Raw turbulent Langmuir number (&gt; 0).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b0</span>
+<span class="w">         </span><span class="c">!! Surface buoyancy flux (m^2/s^3); &gt; 0 stabilizing.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="n">bld</span><span class="p">,</span><span class="w"> </span><span class="n">absf</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mstar</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mld_ek</span><span class="p">,</span><span class="w"> </span><span class="n">ek_ob</span><span class="p">,</span><span class="w"> </span><span class="n">mld_ob</span><span class="p">,</span><span class="w"> </span><span class="n">la_mod</span><span class="p">,</span><span class="w"> </span><span class="n">enh</span>
+
+<span class="w">      </span><span class="n">mld_ek</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bld</span><span class="o">*</span><span class="n">absf</span><span class="o">/</span><span class="n">ustar</span>
+<span class="w">      </span><span class="n">ek_ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">b0</span><span class="o">*</span><span class="n">vonkar</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">absf</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0e-20_wp</span><span class="p">)</span><span class="o">*</span><span class="n">ustar</span><span class="o">*</span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">      </span><span class="n">mld_ob</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">bld</span><span class="o">*</span><span class="n">b0</span><span class="o">*</span><span class="n">vonkar</span><span class="p">)</span><span class="o">/</span><span class="n">ustar</span><span class="o">**</span><span class="mi">3</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">b0</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">la_mod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">la</span><span class="o">*</span><span class="p">((</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5_wp</span><span class="p">,</span><span class="w"> </span><span class="n">lac1</span><span class="o">*</span><span class="n">mld_ek</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="n">lac4</span><span class="o">*</span><span class="n">ek_ob</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">lac2</span><span class="o">*</span><span class="n">mld_ob</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">la_mod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">la</span><span class="o">*</span><span class="p">((</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5_wp</span><span class="p">,</span><span class="w"> </span><span class="n">lac1</span><span class="o">*</span><span class="n">mld_ek</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="n">lac5</span><span class="o">*</span><span class="n">ek_ob</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">lac3</span><span class="o">*</span><span class="n">mld_ob</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">la_mod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">la_mod</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0e-10_wp</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">scheme</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EPBL_LT_ADDITIVE</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">mstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mstar</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">coef</span><span class="o">*</span><span class="n">la_mod</span><span class="o">**</span><span class="n">expo</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">enh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">max_enh</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">coef</span><span class="o">*</span><span class="n">la_mod</span><span class="o">**</span><span class="n">expo</span><span class="p">)</span>
+<span class="w">         </span><span class="n">mstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mstar</span><span class="o">*</span><span class="n">enh</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">epbl_lt_enhance</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

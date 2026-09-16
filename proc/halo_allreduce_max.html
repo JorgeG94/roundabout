@@ -1,0 +1,706 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>halo_allreduce_max &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>halo_allreduce_max
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_halo.f90.html'>rdb_halo.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_halo.html'>rdb_halo</a></li>
+            <li class="breadcrumb-item active" aria-current="page">halo_allreduce_max</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/halo_allreduce_max.html#variable-comm~11">comm</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/halo_allreduce_max.html#src">halo_allreduce_max</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine halo_allreduce_max(local_val, global_val)  
+</h2>
+    
+
+    <p>MPI_Allreduce with MPI_MAX — max-type reductions are exact in FP,
+so a global max stays layout-reproducible (ocean-MPI plan D5).
+Used for auto_n_inner&rsquo;s global gravity-wave CFL (shared n_inner).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_max~~CallsGraph Pages: 1 -->
+<svg id="prochalo_allreduce_maxCallsGraph" width="443pt" height="74pt"
+ viewBox="0.00 0.00 443.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_max~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~halo_allreduce_max~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 439,-70 439,4 -4,4"/>
+<!-- proc~halo_allreduce_max -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_node1" class="node">
+<title>proc~halo_allreduce_max</title>
+<polygon fill="none" stroke="black" points="119,-45 0,-45 0,-21 119,-21 119,-45"/>
+<text text-anchor="middle" x="59.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_max</text>
+</g>
+<!-- allreduce -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_node2" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="267.5,-66 205.5,-66 205.5,-42 267.5,-42 267.5,-66"/>
+<text text-anchor="middle" x="236.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;allreduce -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_edge1" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;allreduce</title>
+<path fill="none" stroke="#ff0000" d="M119.26,-40.05C144.12,-43.03 172.46,-46.44 194.93,-49.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.79,-52.64 205.13,-50.36 195.62,-45.69 194.79,-52.64"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_node3" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~halo_allreduce_max~~CallsGraph_node3"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="318,-24 155,-24 155,0 318,0 318,-24"/>
+<text text-anchor="middle" x="236.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_edge2" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M119.26,-25.95C127.47,-24.96 136.05,-23.93 144.68,-22.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="145.3,-26.35 154.81,-21.68 144.47,-19.4 145.3,-26.35"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_node4" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="435,-24 354,-24 354,0 435,0 435,-24"/>
+<text text-anchor="middle" x="394.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~halo_allreduce_max~~CallsGraph_edge3" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ffff" d="M318.24,-12C326.92,-12 335.55,-12 343.71,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="343.75,-15.5 353.75,-12 343.75,-8.5 343.75,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_max~~CalledByGraph Pages: 1 -->
+<svg id="prochalo_allreduce_maxCalledByGraph" width="641pt" height="90pt"
+ viewBox="0.00 0.00 641.00 89.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_max~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 112)">
+<title>proc~~halo_allreduce_max~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 824,-112 824,4 -4,4"/>
+<!-- proc~halo_allreduce_max -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node1" class="node">
+<title>proc~halo_allreduce_max</title>
+<polygon fill="none" stroke="black" points="820,-87 701,-87 701,-63 820,-63 820,-87"/>
+<text text-anchor="middle" x="760.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_max</text>
+</g>
+<!-- proc~configure_ocean_bt_split -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_bt_split</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_bt_split.html" xlink:title="configure_ocean_bt_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="657,-66 513,-66 513,-42 657,-42 657,-66"/>
+<text text-anchor="middle" x="585" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_bt_split</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff0000" d="M657.07,-62.6C668.25,-63.95 679.78,-65.35 690.9,-66.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="690.63,-70.19 700.98,-67.92 691.47,-63.24 690.63,-70.19"/>
+</g>
+<!-- proc~ocean_console_stats_report -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node3" class="node">
+<title>proc~ocean_console_stats_report</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node3"><a xlink:href="../proc/ocean_console_stats_report.html" xlink:title="ocean_console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="665,-108 505,-108 505,-84 665,-84 665,-108"/>
+<text text-anchor="middle" x="585" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff0000" d="M665.13,-86.42C673.71,-85.38 682.39,-84.33 690.83,-83.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="691.47,-86.76 700.98,-82.08 690.63,-79.81 691.47,-86.76"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-108 226,-108 226,-84 332,-84 332,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report</title>
+<path fill="none" stroke="#00ffff" d="M332.26,-96C376.84,-96 441.9,-96 494.72,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="494.77,-99.5 504.77,-96 494.77,-92.5 494.77,-99.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node5" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node5"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-66 385,-66 385,-42 469,-42 469,-66"/>
+<text text-anchor="middle" x="427" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M321.84,-83.96C338.39,-79.2 357.58,-73.68 374.94,-68.69"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="376.27,-71.95 384.91,-65.82 374.33,-65.22 376.27,-71.95"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split</title>
+<path fill="none" stroke="#ff0000" d="M469.4,-54C479.73,-54 491.17,-54 502.71,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="502.84,-57.5 512.84,-54 502.84,-50.5 502.84,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node6" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node6"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge6" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M349.15,-54C357.75,-54 366.43,-54 374.69,-54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="374.91,-57.5 384.91,-54 374.91,-50.5 374.91,-57.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-108 53,-108 53,-84 120,-84 120,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M120.25,-96C146.45,-96 183.96,-96 215.83,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="215.95,-99.5 225.95,-96 215.95,-92.5 215.95,-99.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-66 11,-66 11,-42 162,-42 162,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.24,-54C174.21,-54 186.64,-54 198.71,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.75,-57.5 208.75,-54 198.75,-50.5 198.75,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~halo_allreduce_max~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-24 0,-24 0,0 173,0 173,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_max~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-24.04C164.41,-28.96 190.39,-34.69 213.63,-39.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="212.88,-43.23 223.4,-41.96 214.39,-36.39 212.88,-43.23"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprochalo_allreduce_maxCalledByGraph = svgPanZoom('#prochalo_allreduce_maxCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-comm~11"></span>
+              type(comm_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>comm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">halo_allreduce_max</span><span class="p">(</span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! MPI_Allreduce with MPI_MAX — max-type reductions are exact in FP,</span>
+<span class="w">      </span><span class="c">!! so a global max stays layout-reproducible (ocean-MPI plan D5).</span>
+<span class="w">      </span><span class="c">!! Used for auto_n_inner's global gravity-wave CFL (shared n_inner).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">global_val</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+
+<span class="w">      </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_env_compute_comm</span><span class="p">()</span>
+<span class="w">      </span><span class="c">! Single rank: the reduction is the identity, so return this rank's</span>
+<span class="w">      </span><span class="c">! own contribution without entering a collective.  Not just an</span>
+<span class="w">      </span><span class="c">! optimisation -- pic-mpi's serial backend (PIC_ENABLE_MPI=OFF)</span>
+<span class="w">      </span><span class="c">! deliberately `error stop`s in `allreduce`, pushing the size()==1</span>
+<span class="w">      </span><span class="c">! case onto the caller.  This IS that case.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">comm</span><span class="p">%</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">global_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      call </span><span class="n">allreduce</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">,</span><span class="w"> </span><span class="n">op</span><span class="o">=</span><span class="n">MPI_MAX</span><span class="p">)</span>
+
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">halo_allreduce_max</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

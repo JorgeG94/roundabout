@@ -1,0 +1,887 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ppm_limit_pos &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ppm_limit_pos
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">19 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ppm_limit_pos</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ppm_limit_pos.html#variable-curv">curv</a>
+            <a class="list-group-item" href="../proc/ppm_limit_pos.html#variable-dh~3">dh</a>
+            <a class="list-group-item" href="../proc/ppm_limit_pos.html#variable-loc_scale">loc_scale</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ppm_limit_pos.html#src">ppm_limit_pos</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine ppm_limit_pos(h_centre, h_left, h_right, h_min)  
+</h2>
+    
+
+    <p>Positivity-preserving limiter on the PPM reconstruction.
+Mirrors MOM6&rsquo;s <code>PPM_limit_pos</code>:
+when the parabolic fit predicts a minimum interior to the
+cell that dips below <code>h_min</code>, shrink h_left / h_right toward
+h_centre so the minimum sits at exactly <code>h_min</code>.  Pure
+scalar form per cell; runs after <code>ppm_cell_limiter</code> so the
+monotonic-limited reconstruction is the input.</p>
+<p>Algorithm:
+  curv = 3·(h_L + h_R − 2·h_in)         ! +ve ⇒ interior min
+  if curv &gt; 0 and |dh| &lt; curv:           ! min inside cell
+    if h_in ≤ h_min: flatten (h_L = h_R = h_in)
+    elif 12·curv·(h_in − h_min) &lt; curv² + 3·dh²:
+       loc_scale = 12·curv·(h_in − h_min) / (curv² + 3·dh²) ∈ (0,1)
+       h_L = h_in + loc_scale·(h_L − h_in)
+       h_R = h_in + loc_scale·(h_R − h_in)</p>
+<p><code>h_min = 0</code> ⇒ pure positivity (parabola can&rsquo;t go negative
+inside the cell).  Larger <code>h_min</code> ⇒ harder floor; matches
+MOM6&rsquo;s <code>GV%Angstrom_H</code> for the reduced-gravity setup.</p>
+<p>No-op when curv ≤ 0 (maximum interior, or linear / monotone
+profile) or |dh| ≥ curv (minimum outside the cell, edges
+already control).</p>
+<p>Consumer: <code>rdb_ice_transport</code> (sea-ice PR 4b) — SIS2 runs this
+unconditionally on the PD continuity scheme
+(<code>SIS_continuity.F90:1585</code>, <code>PPM_limit_pos</code>), so the ice-mass
+reconstruction always applies it (not optional there, unlike
+the ocean&rsquo;s <code>use_ppm_limit_pos</code> knob).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_centre~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_centre</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_left~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_left</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_right~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_right</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ppm_limit_pos~~CalledByGraph Pages: 1 -->
+<svg id="procppm_limit_posCalledByGraph" width="641pt" height="160pt"
+ viewBox="0.00 0.00 641.00 159.93" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ppm_limit_pos~~CalledByGraph" class="graph" transform="scale(0.64 0.64) rotate(0) translate(4 244)">
+<title>proc~~ppm_limit_pos~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-244 990,-244 990,4 -4,4"/>
+<!-- proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node1" class="node">
+<title>proc~ppm_limit_pos</title>
+<polygon fill="none" stroke="black" points="986,-135 897,-135 897,-111 986,-111 986,-135"/>
+<text text-anchor="middle" x="941.5" y="-120.6" font-family="Helvetica,sans-Serif" font-size="10.50">ppm_limit_pos</text>
+</g>
+<!-- proc~continuity_compute_fluxes -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node2" class="node">
+<title>proc~continuity_compute_fluxes</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node2"><a xlink:href="../proc/continuity_compute_fluxes.html" xlink:title="continuity_compute_fluxes">
+<polygon fill="#d9534f" stroke="#d9534f" points="831,-240 677,-240 677,-216 831,-216 831,-240"/>
+<text text-anchor="middle" x="754" y="-225.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_compute_fluxes</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_compute_fluxes&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge1" class="edge">
+<title>proc~continuity_compute_fluxes&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M831.16,-218.87C841.56,-215.94 851.8,-212.08 861,-207 888.9,-191.6 912.76,-163.02 926.87,-143.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="929.77,-145.46 932.64,-135.26 924.04,-141.45 929.77,-145.46"/>
+</g>
+<!-- proc~continuity_compute_fluxes_barotropic -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node3" class="node">
+<title>proc~continuity_compute_fluxes_barotropic</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node3"><a xlink:href="../proc/continuity_compute_fluxes_barotropic.html" xlink:title="continuity_compute_fluxes_barotropic">
+<polygon fill="#d9534f" stroke="#d9534f" points="861,-198 647,-198 647,-174 861,-174 861,-198"/>
+<text text-anchor="middle" x="754" y="-183.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_compute_fluxes_barotropic</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_compute_fluxes_barotropic&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge2" class="edge">
+<title>proc~continuity_compute_fluxes_barotropic&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M830.16,-173.94C840.65,-171.44 851.19,-168.48 861,-165 878.91,-158.65 897.76,-148.84 912.61,-140.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="914.46,-143.28 921.3,-135.19 910.9,-137.24 914.46,-143.28"/>
+</g>
+<!-- proc~continuity_meridional_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node4" class="node">
+<title>proc~continuity_meridional_flux</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node4"><a xlink:href="../proc/continuity_meridional_flux.html" xlink:title="continuity_meridional_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="830.5,-156 677.5,-156 677.5,-132 830.5,-132 830.5,-156"/>
+<text text-anchor="middle" x="754" y="-141.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_meridional_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge3" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M830.72,-135.43C849.56,-133.3 869.37,-131.05 886.9,-129.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="887.39,-132.53 896.93,-127.93 886.6,-125.58 887.39,-132.53"/>
+</g>
+<!-- proc~continuity_zonal_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node5" class="node">
+<title>proc~continuity_zonal_flux</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node5"><a xlink:href="../proc/continuity_zonal_flux.html" xlink:title="continuity_zonal_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="816,-114 692,-114 692,-90 816,-90 816,-114"/>
+<text text-anchor="middle" x="754" y="-99.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_zonal_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge4" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M816.25,-108.93C839.03,-111.51 864.68,-114.42 886.74,-116.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="886.59,-120.42 896.92,-118.07 887.38,-113.46 886.59,-120.42"/>
+</g>
+<!-- proc~ice_cat_flux_x_impl -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node6" class="node">
+<title>proc~ice_cat_flux_x_impl</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node6"><a xlink:href="../proc/ice_cat_flux_x_impl.html" xlink:title="ice_cat_flux_x_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="811.5,-30 696.5,-30 696.5,-6 811.5,-6 811.5,-30"/>
+<text text-anchor="middle" x="754" y="-15.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cat_flux_x_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge5" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M811.71,-22.65C828.34,-25.71 846.05,-30.75 861,-39 888.9,-54.4 912.76,-82.98 926.87,-102.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="924.04,-104.55 932.64,-110.74 929.77,-100.54 924.04,-104.55"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node7" class="node">
+<title>proc~ice_cat_flux_y_impl</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node7"><a xlink:href="../proc/ice_cat_flux_y_impl.html" xlink:title="ice_cat_flux_y_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="811.5,-72 696.5,-72 696.5,-48 811.5,-48 811.5,-72"/>
+<text text-anchor="middle" x="754" y="-57.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cat_flux_y_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge6" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#ff0000" d="M811.66,-68.08C827.85,-71.23 845.35,-75.45 861,-81 878.91,-87.35 897.76,-97.16 912.61,-105.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="910.9,-108.76 921.3,-110.81 914.46,-102.72 910.9,-108.76"/>
+</g>
+<!-- proc~continuity_step_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node8" class="node">
+<title>proc~continuity_step_split</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node8"><a xlink:href="../proc/continuity_step_split.html" xlink:title="continuity_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="592.5,-114 472.5,-114 472.5,-90 592.5,-90 592.5,-114"/>
+<text text-anchor="middle" x="532.5" y="-99.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_meridional_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge8" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_meridional_flux</title>
+<path fill="none" stroke="#00ff00" d="M592.61,-113.31C619.53,-118.46 651.66,-124.61 680.06,-130.04"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="679.46,-133.49 689.94,-131.93 680.77,-126.62 679.46,-133.49"/>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge10" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux</title>
+<path fill="none" stroke="#00ffff" d="M592.61,-102C620.1,-102 653.01,-102 681.85,-102"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="681.87,-105.5 691.87,-102 681.87,-98.5 681.87,-105.5"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node9" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node9"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-156 454,-156 454,-132 611,-132 611,-156"/>
+<text text-anchor="middle" x="532.5" y="-141.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~continuity_meridional_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge9" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~continuity_meridional_flux</title>
+<path fill="none" stroke="#00ff00" d="M611.2,-144C629.3,-144 648.68,-144 667.12,-144"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="667.25,-147.5 677.25,-144 667.25,-140.5 667.25,-147.5"/>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~continuity_zonal_flux -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge11" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~continuity_zonal_flux</title>
+<path fill="none" stroke="#00ffff" d="M596.4,-131.96C623.14,-126.85 654.45,-120.86 682.01,-115.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="682.82,-118.99 691.98,-113.68 681.5,-112.12 682.82,-118.99"/>
+</g>
+<!-- proc~ice_pass_x -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node10" class="node">
+<title>proc~ice_pass_x</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node10"><a xlink:href="../proc/ice_pass_x.html" xlink:title="ice_pass_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="567,-30 498,-30 498,-6 567,-6 567,-30"/>
+<text text-anchor="middle" x="532.5" y="-15.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_pass_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_cat_flux_x_impl -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge12" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_cat_flux_x_impl</title>
+<path fill="none" stroke="#0000ff" d="M567.32,-18C598.84,-18 646.77,-18 686.04,-18"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="686.08,-21.5 696.08,-18 686.08,-14.5 686.08,-21.5"/>
+</g>
+<!-- proc~ice_pass_y -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node11" class="node">
+<title>proc~ice_pass_y</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node11"><a xlink:href="../proc/ice_pass_y.html" xlink:title="ice_pass_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="567,-72 498,-72 498,-48 567,-48 567,-72"/>
+<text text-anchor="middle" x="532.5" y="-57.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_pass_y</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_cat_flux_y_impl -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge13" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_cat_flux_y_impl</title>
+<path fill="none" stroke="#ff00ff" d="M567.32,-60C598.84,-60 646.77,-60 686.04,-60"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="686.08,-63.5 696.08,-60 686.08,-56.5 686.08,-63.5"/>
+</g>
+<!-- proc~ocean_dyn_step_barotropic -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node12" class="node">
+<title>proc~ocean_dyn_step_barotropic</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node12"><a xlink:href="../proc/ocean_dyn_step_barotropic.html" xlink:title="ocean_dyn_step_barotropic">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-198 454,-198 454,-174 611,-174 611,-198"/>
+<text text-anchor="middle" x="532.5" y="-183.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_barotropic</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_barotropic&#45;&gt;proc~continuity_compute_fluxes_barotropic -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_barotropic&#45;&gt;proc~continuity_compute_fluxes_barotropic</title>
+<path fill="none" stroke="#ffff00" d="M611.2,-186C619.53,-186 628.13,-186 636.79,-186"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="636.96,-189.5 646.96,-186 636.96,-182.5 636.96,-189.5"/>
+</g>
+<!-- proc~ice_transport_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node13" class="node">
+<title>proc~ice_transport_step</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node13"><a xlink:href="../proc/ice_transport_step.html" xlink:title="ice_transport_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="411.5,-40 301.5,-40 301.5,-16 411.5,-16 411.5,-40"/>
+<text text-anchor="middle" x="356.5" y="-25.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_transport_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_pass_x -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge16" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_pass_x</title>
+<path fill="none" stroke="#00ff66" d="M411.6,-24.89C436.08,-23.48 464.64,-21.84 487.75,-20.51"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="488.16,-24 497.94,-19.93 487.76,-17.01 488.16,-24"/>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_pass_y -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge17" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_pass_y</title>
+<path fill="none" stroke="#0066ff" d="M411.6,-37.95C436.19,-42.47 464.9,-47.75 488.06,-52.01"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="487.47,-55.46 497.94,-53.83 488.74,-48.58 487.47,-55.46"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node14" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node14"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="418,-129 295,-129 295,-105 418,-105 418,-129"/>
+<text text-anchor="middle" x="356.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge14" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#cbff00" d="M418.36,-126.44C426.67,-127.73 435.33,-129.08 444,-130.42"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="443.74,-133.92 454.16,-132 444.81,-127.01 443.74,-133.92"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node15" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node15"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="389,-171 324,-171 324,-147 389,-147 389,-171"/>
+<text text-anchor="middle" x="356.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge15" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#cbff00" d="M389.01,-156.28C404.59,-154.94 424.25,-153.25 443.95,-151.55"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="444.25,-155.03 453.92,-150.69 443.65,-148.06 444.25,-155.03"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node16" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node16"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="259,-40 161,-40 161,-16 259,-16 259,-40"/>
+<text text-anchor="middle" x="210" y="-25.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_transport_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge18" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_transport_step</title>
+<path fill="none" stroke="#ff0000" d="M259.12,-28C269.38,-28 280.38,-28 291.15,-28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="291.36,-31.5 301.36,-28 291.36,-24.5 291.36,-31.5"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node17" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node17"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="259,-171 161,-171 161,-147 259,-147 259,-171"/>
+<text text-anchor="middle" x="210" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge20" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#0000ff" d="M259.12,-159C276.79,-159 296.65,-159 313.72,-159"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="313.95,-162.5 323.95,-159 313.95,-155.5 313.95,-162.5"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node18" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node18"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="256,-129 164,-129 164,-105 256,-105 256,-129"/>
+<text text-anchor="middle" x="210" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge19" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ff00" d="M256.32,-117C265.42,-117 275.17,-117 284.89,-117"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="284.97,-120.5 294.97,-117 284.97,-113.5 284.97,-120.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node19" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node19"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="115.5,-66 9.5,-66 9.5,-42 115.5,-42 115.5,-66"/>
+<text text-anchor="middle" x="62.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge21" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M115.62,-44.69C126.97,-42.66 139.05,-40.5 150.63,-38.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="151.41,-41.85 160.64,-36.64 150.18,-34.95 151.41,-41.85"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node20" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node20"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="101,-171 24,-171 24,-147 101,-147 101,-171"/>
+<text text-anchor="middle" x="62.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge23" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff00" d="M101.35,-159C116.41,-159 134.09,-159 150.71,-159"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="150.9,-162.5 160.9,-159 150.9,-155.5 150.9,-162.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node21" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node21"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="125,-129 0,-129 0,-105 125,-105 125,-129"/>
+<text text-anchor="middle" x="62.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge24" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M125.21,-117C134.66,-117 144.37,-117 153.67,-117"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="153.97,-120.5 163.97,-117 153.97,-113.5 153.97,-120.5"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_node22" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ppm_limit_pos~~CalledByGraph_node22"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="111,-24 14,-24 14,0 111,0 111,-24"/>
+<text text-anchor="middle" x="62.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ppm_limit_pos~~CalledByGraph_edge22" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M111.14,-17.24C123.7,-18.62 137.39,-20.13 150.45,-21.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="150.43,-25.08 160.75,-22.69 151.2,-18.12 150.43,-25.08"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocppm_limit_posCalledByGraph = svgPanZoom('#procppm_limit_posCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-curv"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>curv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dh~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dh</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-loc_scale"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>loc_scale</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ppm_limit_pos</span><span class="p">(</span><span class="n">h_centre</span><span class="p">,</span><span class="w"> </span><span class="n">h_left</span><span class="p">,</span><span class="w"> </span><span class="n">h_right</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! Positivity-preserving limiter on the PPM reconstruction.</span>
+<span class="w">      </span><span class="c">!! Mirrors MOM6's `PPM_limit_pos`:</span>
+<span class="w">      </span><span class="c">!! when the parabolic fit predicts a minimum interior to the</span>
+<span class="w">      </span><span class="c">!! cell that dips below `h_min`, shrink h_left / h_right toward</span>
+<span class="w">      </span><span class="c">!! h_centre so the minimum sits at exactly `h_min`.  Pure</span>
+<span class="w">      </span><span class="c">!! scalar form per cell; runs after `ppm_cell_limiter` so the</span>
+<span class="w">      </span><span class="c">!! monotonic-limited reconstruction is the input.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Algorithm:</span>
+<span class="w">      </span><span class="c">!!   curv = 3·(h_L + h_R − 2·h_in)         ! +ve ⇒ interior min</span>
+<span class="w">      </span><span class="c">!!   if curv &gt; 0 and |dh| &lt; curv:           ! min inside cell</span>
+<span class="w">      </span><span class="c">!!     if h_in ≤ h_min: flatten (h_L = h_R = h_in)</span>
+<span class="w">      </span><span class="c">!!     elif 12·curv·(h_in − h_min) &lt; curv² + 3·dh²:</span>
+<span class="w">      </span><span class="c">!!        loc_scale = 12·curv·(h_in − h_min) / (curv² + 3·dh²) ∈ (0,1)</span>
+<span class="w">      </span><span class="c">!!        h_L = h_in + loc_scale·(h_L − h_in)</span>
+<span class="w">      </span><span class="c">!!        h_R = h_in + loc_scale·(h_R − h_in)</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `h_min = 0` ⇒ pure positivity (parabola can't go negative</span>
+<span class="w">      </span><span class="c">!! inside the cell).  Larger `h_min` ⇒ harder floor; matches</span>
+<span class="w">      </span><span class="c">!! MOM6's `GV%Angstrom_H` for the reduced-gravity setup.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! No-op when curv ≤ 0 (maximum interior, or linear / monotone</span>
+<span class="w">      </span><span class="c">!! profile) or |dh| ≥ curv (minimum outside the cell, edges</span>
+<span class="w">      </span><span class="c">!! already control).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Consumer: `rdb_ice_transport` (sea-ice PR 4b) — SIS2 runs this</span>
+<span class="w">      </span><span class="c">!! unconditionally on the PD continuity scheme</span>
+<span class="w">      </span><span class="c">!! (`SIS_continuity.F90:1585`, `PPM_limit_pos`), so the ice-mass</span>
+<span class="w">      </span><span class="c">!! reconstruction always applies it (not optional there, unlike</span>
+<span class="w">      </span><span class="c">!! the ocean's `use_ppm_limit_pos` knob).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_centre</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_left</span><span class="p">,</span><span class="w"> </span><span class="n">h_right</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">curv</span><span class="p">,</span><span class="w"> </span><span class="n">dh</span><span class="p">,</span><span class="w"> </span><span class="n">loc_scale</span>
+
+<span class="w">      </span><span class="n">curv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="p">((</span><span class="n">h_left</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_right</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">h_centre</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">curv</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">dh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_right</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_left</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dh</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">curv</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">h_centre</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">h_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_centre</span>
+<span class="w">               </span><span class="n">h_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_centre</span>
+<span class="w">            </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">curv</span><span class="o">*</span><span class="p">(</span><span class="n">h_centre</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="p">(</span><span class="n">curv</span><span class="o">*</span><span class="n">curv</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">dh</span><span class="o">*</span><span class="n">dh</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">loc_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">curv</span><span class="o">*</span><span class="p">(</span><span class="n">h_centre</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">curv</span><span class="o">*</span><span class="n">curv</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">dh</span><span class="o">*</span><span class="n">dh</span><span class="p">)</span>
+<span class="w">               </span><span class="n">h_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_centre</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">loc_scale</span><span class="o">*</span><span class="p">(</span><span class="n">h_left</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_centre</span><span class="p">)</span>
+<span class="w">               </span><span class="n">h_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_centre</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">loc_scale</span><span class="o">*</span><span class="p">(</span><span class="n">h_right</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_centre</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">ppm_limit_pos</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

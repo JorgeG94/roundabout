@@ -1,0 +1,1636 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>comm_env_compute_comm &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>comm_env_compute_comm
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">8 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_comm_env.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_comm_env.f90.html'>rdb_comm_env.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_comm_env.html'>rdb_comm_env</a></li>
+            <li class="breadcrumb-item active" aria-current="page">comm_env_compute_comm</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/comm_env_compute_comm.html#src">comm_env_compute_comm</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  function comm_env_compute_comm() result(comm)  
+</h2>
+    
+
+    <p>Return the compute-only communicator
+Falls back to comm_world() if comm_env_init has not been called
+(e.g. tests that use raw MPI_Init).</p>
+
+
+    <h3>Arguments</h3>
+    <em>None</em>
+    <br>
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-comm~16"></span>
+          type(comm_t)
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~comm_env_compute_comm~~CallsGraph Pages: 1 -->
+<svg id="proccomm_env_compute_commCallsGraph" width="288pt" height="32pt"
+ viewBox="0.00 0.00 288.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~comm_env_compute_comm~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~comm_env_compute_comm~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 284,-28 284,4 -4,4"/>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CallsGraph_node1" class="node">
+<title>proc~comm_env_compute_comm</title>
+<polygon fill="none" stroke="black" points="163,-24 0,-24 0,0 163,0 163,-24"/>
+<text text-anchor="middle" x="81.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">comm_env_compute_comm</text>
+</g>
+<!-- comm_world -->
+<g id="proc~~comm_env_compute_comm~~CallsGraph_node2" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="280,-24 199,-24 199,0 280,0 280,-24"/>
+<text text-anchor="middle" x="239.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~comm_env_compute_comm~~CallsGraph_edge1" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#ff0000" d="M163.24,-12C171.92,-12 180.55,-12 188.71,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.75,-15.5 198.75,-12 188.75,-8.5 188.75,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~comm_env_compute_comm~~CalledByGraph Pages: 1 -->
+<svg id="proccomm_env_compute_commCalledByGraph" width="641pt" height="288pt"
+ viewBox="0.00 0.00 641.00 288.37" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~comm_env_compute_comm~~CalledByGraph" class="graph" transform="scale(0.31 0.31) rotate(0) translate(4 918.24)">
+<title>proc~~comm_env_compute_comm~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-918.24 2046,-918.24 2046,4 -4,4"/>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node1" class="node">
+<title>proc~comm_env_compute_comm</title>
+<polygon fill="none" stroke="black" points="2042,-409 1879,-409 1879,-385 2042,-385 2042,-409"/>
+<text text-anchor="middle" x="1960.5" y="-394.6" font-family="Helvetica,sans-Serif" font-size="10.50">comm_env_compute_comm</text>
+</g>
+<!-- proc~halo_allreduce_efp_list -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node2" class="node">
+<title>proc~halo_allreduce_efp_list</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node2"><a xlink:href="../proc/halo_allreduce_efp_list.html" xlink:title="halo_allreduce_efp_list">
+<polygon fill="#d9534f" stroke="#d9534f" points="1829,-367 1696,-367 1696,-343 1829,-343 1829,-367"/>
+<text text-anchor="middle" x="1762.5" y="-352.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_efp_list</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge1" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1819.67,-367.04C1842.63,-371.96 1869.37,-377.69 1893.27,-382.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1892.81,-386.29 1903.33,-384.96 1894.28,-379.45 1892.81,-386.29"/>
+</g>
+<!-- proc~halo_allreduce_max -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node3" class="node">
+<title>proc~halo_allreduce_max</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node3"><a xlink:href="../proc/halo_allreduce_max.html" xlink:title="halo_allreduce_max">
+<polygon fill="#d9534f" stroke="#d9534f" points="1822,-409 1703,-409 1703,-385 1822,-385 1822,-409"/>
+<text text-anchor="middle" x="1762.5" y="-394.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_max</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge2" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1822.04,-397C1836.66,-397 1852.69,-397 1868.47,-397"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1868.79,-400.5 1878.79,-397 1868.79,-393.5 1868.79,-400.5"/>
+</g>
+<!-- proc~halo_allreduce_min -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node4" class="node">
+<title>proc~halo_allreduce_min</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node4"><a xlink:href="../proc/halo_allreduce_min.html" xlink:title="halo_allreduce_min">
+<polygon fill="#d9534f" stroke="#d9534f" points="1820.5,-451 1704.5,-451 1704.5,-427 1820.5,-427 1820.5,-451"/>
+<text text-anchor="middle" x="1762.5" y="-436.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_min</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge3" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1819.67,-426.96C1842.63,-422.04 1869.37,-416.31 1893.27,-411.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1894.28,-414.55 1903.33,-409.04 1892.81,-407.71 1894.28,-414.55"/>
+</g>
+<!-- proc~halo_allreduce_sum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node5" class="node">
+<title>proc~halo_allreduce_sum</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node5"><a xlink:href="../proc/halo_allreduce_sum.html" xlink:title="halo_allreduce_sum">
+<polygon fill="#d9534f" stroke="#d9534f" points="1821.5,-325 1703.5,-325 1703.5,-301 1821.5,-301 1821.5,-325"/>
+<text text-anchor="middle" x="1762.5" y="-310.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_sum</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge4" class="edge">
+<title>proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1816.24,-325.04C1825.29,-327.64 1834.51,-330.64 1843,-334 1874.71,-346.55 1908.78,-365.71 1931.83,-379.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1930.04,-382.61 1940.4,-384.83 1933.68,-376.63 1930.04,-382.61"/>
+</g>
+<!-- proc~halo_allreduce_sum_i8 -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node6" class="node">
+<title>proc~halo_allreduce_sum_i8</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node6"><a xlink:href="../proc/halo_allreduce_sum_i8.html" xlink:title="halo_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="1829,-283 1696,-283 1696,-259 1829,-259 1829,-283"/>
+<text text-anchor="middle" x="1762.5" y="-268.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge5" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1822.05,-283.02C1829.31,-285.5 1836.47,-288.47 1843,-292 1883.92,-314.14 1922.11,-353.49 1942.99,-377.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1940.44,-379.63 1949.63,-384.92 1945.74,-375.06 1940.44,-379.63"/>
+</g>
+<!-- proc~halo_exchange_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node7" class="node">
+<title>proc~halo_exchange_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node7"><a xlink:href="../proc/halo_exchange_2d.html" xlink:title="halo_exchange_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1818.5,-241 1706.5,-241 1706.5,-217 1818.5,-217 1818.5,-241"/>
+<text text-anchor="middle" x="1762.5" y="-226.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_exchange_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_2d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge6" class="edge">
+<title>proc~halo_exchange_2d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1818.51,-238.55C1827.11,-241.42 1835.59,-245.15 1843,-250 1892.88,-282.64 1931,-343.77 1948.67,-375.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1945.68,-377.78 1953.48,-384.95 1951.85,-374.48 1945.68,-377.78"/>
+</g>
+<!-- proc~halo_exchange_2d_device -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node8" class="node">
+<title>proc~halo_exchange_2d_device</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node8"><a xlink:href="../proc/halo_exchange_2d_device.html" xlink:title="halo_exchange_2d_device">
+<polygon fill="#d9534f" stroke="#d9534f" points="1838.5,-199 1686.5,-199 1686.5,-175 1838.5,-175 1838.5,-199"/>
+<text text-anchor="middle" x="1762.5" y="-184.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_exchange_2d_device</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_2d_device&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge7" class="edge">
+<title>proc~halo_exchange_2d_device&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1827.19,-199C1832.81,-201.46 1838.18,-204.43 1843,-208 1902.11,-251.85 1937.85,-335.43 1952.2,-375.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1948.93,-376.32 1955.54,-384.6 1955.53,-374 1948.93,-376.32"/>
+</g>
+<!-- proc~halo_exchange_3d_device -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node9" class="node">
+<title>proc~halo_exchange_3d_device</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node9"><a xlink:href="../proc/halo_exchange_3d_device.html" xlink:title="halo_exchange_3d_device">
+<polygon fill="#d9534f" stroke="#d9534f" points="1838.5,-157 1686.5,-157 1686.5,-133 1838.5,-133 1838.5,-157"/>
+<text text-anchor="middle" x="1762.5" y="-142.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_exchange_3d_device</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_3d_device&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge8" class="edge">
+<title>proc~halo_exchange_3d_device&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1828.7,-157.13C1833.82,-159.57 1838.67,-162.5 1843,-166 1911.82,-221.76 1943.74,-328.68 1954.78,-374.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1951.39,-375.77 1957.04,-384.74 1958.22,-374.21 1951.39,-375.77"/>
+</g>
+<!-- proc~halo_exchange_begin -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node10" class="node">
+<title>proc~halo_exchange_begin</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node10"><a xlink:href="../proc/halo_exchange_begin.html" xlink:title="halo_exchange_begin">
+<polygon fill="#d9534f" stroke="#d9534f" points="1826.5,-115 1698.5,-115 1698.5,-91 1826.5,-91 1826.5,-115"/>
+<text text-anchor="middle" x="1762.5" y="-100.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_exchange_begin</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_begin&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge9" class="edge">
+<title>proc~halo_exchange_begin&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1826.59,-113.72C1832.53,-116.43 1838.14,-119.8 1843,-124 1921.63,-191.97 1948.68,-322.31 1956.61,-374.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1953.19,-375.31 1958.06,-384.72 1960.12,-374.32 1953.19,-375.31"/>
+</g>
+<!-- proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node11" class="node">
+<title>proc~ocean_halo_centre_2d_impl</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node11"><a xlink:href="../proc/ocean_halo_centre_2d_impl.html" xlink:title="ocean_halo_centre_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1842.5,-628 1682.5,-628 1682.5,-604 1842.5,-604 1842.5,-628"/>
+<text text-anchor="middle" x="1762.5" y="-613.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_halo_centre_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1795.64,-603.97C1811.13,-597.1 1829.27,-587.37 1843,-575 1894.4,-528.66 1932.97,-454.79 1949.96,-418.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1953.18,-419.89 1954.17,-409.34 1946.82,-416.97 1953.18,-419.89"/>
+</g>
+<!-- proc~ocean_halo_centre_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node12" class="node">
+<title>proc~ocean_halo_centre_3d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node12"><a xlink:href="../proc/ocean_halo_centre_3d.html" xlink:title="ocean_halo_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1828.5,-493 1696.5,-493 1696.5,-469 1828.5,-469 1828.5,-493"/>
+<text text-anchor="middle" x="1762.5" y="-478.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1816.24,-468.96C1825.29,-466.36 1834.51,-463.36 1843,-460 1874.71,-447.45 1908.78,-428.29 1931.83,-414.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1933.68,-417.37 1940.4,-409.17 1930.04,-411.39 1933.68,-417.37"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node13" class="node">
+<title>proc~ocean_halo_face_x_2d_impl</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node13"><a xlink:href="../proc/ocean_halo_face_x_2d_impl.html" xlink:title="ocean_halo_face_x_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1843,-743 1682,-743 1682,-719 1843,-719 1843,-743"/>
+<text text-anchor="middle" x="1762.5" y="-728.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1798.36,-718.96C1813.74,-712.18 1831,-702.35 1843,-689 1916.92,-606.76 1946.8,-471.82 1956.06,-419.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1959.52,-419.57 1957.73,-409.13 1952.62,-418.42 1959.52,-419.57"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node14" class="node">
+<title>proc~ocean_halo_face_x_3d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node14"><a xlink:href="../proc/ocean_halo_face_x_3d.html" xlink:title="ocean_halo_face_x_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1625,-575 1492,-575 1492,-551 1625,-551 1625,-575"/>
+<text text-anchor="middle" x="1558.5" y="-560.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge13" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1625.02,-568.31C1685.13,-570.29 1774.9,-565.77 1843,-530 1892.04,-504.24 1929.84,-448.7 1947.87,-418.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1951.07,-419.62 1953.02,-409.21 1945,-416.14 1951.07,-419.62"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node15" class="node">
+<title>proc~ocean_halo_face_y_2d_impl</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node15"><a xlink:href="../proc/ocean_halo_face_y_2d_impl.html" xlink:title="ocean_halo_face_y_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1843,-680 1682,-680 1682,-656 1843,-656 1843,-680"/>
+<text text-anchor="middle" x="1762.5" y="-665.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1811.38,-655.92C1822.71,-651.38 1834.07,-645.24 1843,-637 1910.27,-574.91 1943.11,-465.63 1954.59,-419.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1958.04,-419.64 1956.94,-409.1 1951.23,-418.03 1958.04,-419.64"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node16" class="node">
+<title>proc~ocean_halo_face_y_3d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node16"><a xlink:href="../proc/ocean_halo_face_y_3d.html" xlink:title="ocean_halo_face_y_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1625,-533 1492,-533 1492,-509 1625,-509 1625,-533"/>
+<text text-anchor="middle" x="1558.5" y="-518.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M1625.05,-528.43C1684.37,-532.46 1772.92,-531.65 1843,-502 1886.29,-483.68 1924.18,-442.32 1944.26,-417.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1947.19,-419.26 1950.6,-409.23 1941.68,-414.94 1947.19,-419.26"/>
+</g>
+<!-- interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node17" class="node">
+<title>interface~ocean_halo_centre</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node17"><a xlink:href="../interface/ocean_halo_centre.html" xlink:title="ocean_halo_centre">
+<polygon fill="#a7506f" stroke="#a7506f" points="1405.5,-498 1292.5,-498 1292.5,-474 1405.5,-474 1405.5,-498"/>
+<text text-anchor="middle" x="1349" y="-483.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge27" class="edge">
+<title>interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_3d</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1405.92,-485.32C1478.42,-484.44 1605.11,-482.9 1686.06,-481.92"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1686.23,-485.41 1696.19,-481.79 1686.15,-478.42 1686.23,-485.41"/>
+</g>
+<!-- proc~ocean_halo_centre_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node26" class="node">
+<title>proc~ocean_halo_centre_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node26"><a xlink:href="../proc/ocean_halo_centre_2d.html" xlink:title="ocean_halo_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1624.5,-617 1492.5,-617 1492.5,-593 1624.5,-593 1624.5,-617"/>
+<text text-anchor="middle" x="1558.5" y="-602.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge59" class="edge">
+<title>interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_2d</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1365.21,-498.36C1397.55,-524.62 1470.25,-583.63 1471,-584 1475.08,-586.02 1479.37,-587.85 1483.77,-589.52"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1482.93,-592.93 1493.52,-592.89 1485.22,-586.31 1482.93,-592.93"/>
+</g>
+<!-- interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node18" class="node">
+<title>interface~ocean_halo_face_x</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node18"><a xlink:href="../interface/ocean_halo_face_x.html" xlink:title="ocean_halo_face_x">
+<polygon fill="#a7506f" stroke="#a7506f" points="1406,-666 1292,-666 1292,-642 1406,-642 1406,-666"/>
+<text text-anchor="middle" x="1349" y="-651.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge31" class="edge">
+<title>interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_3d</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1367.23,-641.89C1389.99,-626.41 1431.81,-599.71 1471,-584 1476.51,-581.79 1482.32,-579.77 1488.21,-577.93"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1489.55,-581.19 1498.16,-575.01 1487.58,-574.47 1489.55,-581.19"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node28" class="node">
+<title>proc~ocean_halo_face_x_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node28"><a xlink:href="../proc/ocean_halo_face_x_2d.html" xlink:title="ocean_halo_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1625,-701 1492,-701 1492,-677 1625,-677 1625,-701"/>
+<text text-anchor="middle" x="1558.5" y="-686.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge62" class="edge">
+<title>interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d</title>
+<path fill="none" stroke="#6500ff" stroke-dasharray="5,2" d="M1406.15,-663.47C1429.36,-667.39 1456.62,-671.98 1481.57,-676.19"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="1481.29,-679.69 1491.73,-677.91 1482.46,-672.79 1481.29,-679.69"/>
+</g>
+<!-- interface~ocean_halo_face_y -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node19" class="node">
+<title>interface~ocean_halo_face_y</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node19"><a xlink:href="../interface/ocean_halo_face_y.html" xlink:title="ocean_halo_face_y">
+<polygon fill="#a7506f" stroke="#a7506f" points="1406,-588 1292,-588 1292,-564 1406,-564 1406,-588"/>
+<text text-anchor="middle" x="1349" y="-573.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge35" class="edge">
+<title>interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_3d</title>
+<path fill="none" stroke="#ff0066" stroke-dasharray="5,2" d="M1391.34,-563.99C1414.67,-557.31 1444.4,-548.96 1471,-542 1479.36,-539.81 1488.2,-537.57 1496.91,-535.42"/>
+<polygon fill="#ff0066" stroke="#ff0066" points="1497.78,-538.81 1506.65,-533.02 1496.11,-532.01 1497.78,-538.81"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node30" class="node">
+<title>proc~ocean_halo_face_y_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node30"><a xlink:href="../proc/ocean_halo_face_y_2d.html" xlink:title="ocean_halo_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1625,-659 1492,-659 1492,-635 1625,-635 1625,-659"/>
+<text text-anchor="middle" x="1558.5" y="-644.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge65" class="edge">
+<title>interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_2d</title>
+<path fill="none" stroke="#ff00cb" stroke-dasharray="5,2" d="M1376,-588.11C1400.21,-599.06 1437.5,-615.08 1471,-626 1477.87,-628.24 1485.11,-630.36 1492.37,-632.33"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="1491.67,-635.77 1502.23,-634.93 1493.45,-629 1491.67,-635.77"/>
+</g>
+<!-- proc~chksum_row -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node20" class="node">
+<title>proc~chksum_row</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node20"><a xlink:href="../proc/chksum_row.html" xlink:title="chksum_row">
+<polygon fill="#d9534f" stroke="#d9534f" points="1597.5,-76 1519.5,-76 1519.5,-52 1597.5,-52 1597.5,-76"/>
+<text text-anchor="middle" x="1558.5" y="-61.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_row</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_row&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge22" class="edge">
+<title>proc~chksum_row&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#65ff00" d="M1597.69,-66.88C1614.68,-70.11 1633.6,-76.69 1646,-90 1695.69,-143.33 1631.42,-197.52 1682,-250 1683.61,-251.67 1685.34,-253.21 1687.16,-254.64"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="1685.38,-257.66 1695.68,-260.16 1689.19,-251.78 1685.38,-257.66"/>
+</g>
+<!-- proc~configure_ocean_bt_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node21" class="node">
+<title>proc~configure_ocean_bt_split</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node21"><a xlink:href="../proc/configure_ocean_bt_split.html" xlink:title="configure_ocean_bt_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="1630.5,-409 1486.5,-409 1486.5,-385 1630.5,-385 1630.5,-409"/>
+<text text-anchor="middle" x="1558.5" y="-394.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_bt_split</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge17" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff6600" d="M1630.72,-397C1650.84,-397 1672.69,-397 1692.66,-397"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1692.92,-400.5 1702.92,-397 1692.92,-393.5 1692.92,-400.5"/>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_min -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge19" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_min</title>
+<path fill="none" stroke="#ffcc00" d="M1617.39,-409.04C1641.36,-414.02 1669.33,-419.84 1694.21,-425.01"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="1693.8,-428.5 1704.3,-427.11 1695.23,-421.65 1693.8,-428.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node22" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node22"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-308 103,-308 103,-284 209,-284 209,-308"/>
+<text text-anchor="middle" x="156" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge20" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#cbff00" d="M161.04,-283.66C170.71,-256.18 197.96,-189.89 245,-158 351.17,-86.03 400.23,-104 528.5,-104 528.5,-104 528.5,-104 1350,-104 1519.57,-104 1525.26,-227.29 1682,-292 1687.11,-294.11 1692.5,-296.06 1697.96,-297.86"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1697.24,-301.3 1707.83,-300.92 1699.31,-294.61 1697.24,-301.3"/>
+</g>
+<!-- proc~ocean_console_stats_report -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node24" class="node">
+<title>proc~ocean_console_stats_report</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node24"><a xlink:href="../proc/ocean_console_stats_report.html" xlink:title="ocean_console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="1638.5,-346 1478.5,-346 1478.5,-322 1638.5,-322 1638.5,-346"/>
+<text text-anchor="middle" x="1558.5" y="-331.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge54" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report</title>
+<path fill="none" stroke="#00ffcb" d="M173.03,-283.92C222.85,-247.61 380.48,-142 528.5,-142 528.5,-142 528.5,-142 1127,-142 1268.77,-142 1310.26,-157.63 1435,-225 1478.21,-248.34 1518.81,-289.71 1540.69,-314.22"/>
+<polygon fill="#00ffcb" stroke="#00ffcb" points="1538.15,-316.63 1547.38,-321.84 1543.41,-312.01 1538.15,-316.63"/>
+</g>
+<!-- proc~engine_enter_data -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node37" class="node">
+<title>proc~engine_enter_data</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node37"><a xlink:href="../proc/engine_enter_data.html" xlink:title="engine_enter_data">
+<polygon fill="#d9534f" stroke="#d9534f" points="938,-666 826,-666 826,-642 938,-642 938,-666"/>
+<text text-anchor="middle" x="882" y="-651.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_enter_data</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge74" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff24" d="M159.67,-308.42C167.24,-340.69 191.82,-427.97 245,-476 318.47,-542.35 359.22,-524.44 454,-553 488.75,-563.47 708.34,-614.31 818.36,-639.62"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="817.8,-643.09 828.33,-641.92 819.37,-636.27 817.8,-643.09"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node38" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node38"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="732,-308 648,-308 648,-284 732,-284 732,-308"/>
+<text text-anchor="middle" x="690" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge76" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ff91" d="M209.47,-296C311.62,-296 536.08,-296 637.48,-296"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="637.77,-299.5 647.77,-296 637.77,-292.5 637.77,-299.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node52" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node52"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="370,-624 293,-624 293,-600 370,-600 370,-624"/>
+<text text-anchor="middle" x="331.5" y="-609.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge99" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00b9ff" d="M156.88,-308.21C157.15,-352.32 164.11,-505.06 245,-586 255.15,-596.16 269.13,-602.37 282.85,-606.16"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="282.2,-609.6 292.74,-608.51 283.82,-602.79 282.2,-609.6"/>
+</g>
+<!-- proc~halo_exchange_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node23" class="node">
+<title>proc~halo_exchange_3d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node23"><a xlink:href="../proc/halo_exchange_3d.html" xlink:title="halo_exchange_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1614.5,-34 1502.5,-34 1502.5,-10 1614.5,-10 1614.5,-34"/>
+<text text-anchor="middle" x="1558.5" y="-19.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_exchange_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_exchange_3d&#45;&gt;proc~halo_exchange_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge23" class="edge">
+<title>proc~halo_exchange_3d&#45;&gt;proc~halo_exchange_2d</title>
+<path fill="none" stroke="#00ff00" d="M1614.59,-25.83C1626.26,-29.06 1637.58,-34.38 1646,-43 1698.45,-96.69 1630.09,-153.79 1682,-208 1686.24,-212.43 1691.29,-215.96 1696.76,-218.77"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1695.73,-222.14 1706.3,-222.86 1698.49,-215.7 1695.73,-222.14"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge16" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ff0000" d="M1638.76,-342.24C1654.26,-343.85 1670.48,-345.54 1685.87,-347.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1685.53,-350.62 1695.84,-348.17 1686.25,-343.66 1685.53,-350.62"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff6600" d="M1592.56,-346.06C1617.1,-354.83 1651.45,-366.74 1682,-376 1688.95,-378.11 1696.28,-380.21 1703.56,-382.22"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1702.85,-385.65 1713.42,-384.9 1704.69,-378.9 1702.85,-385.65"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge21" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#cbff00" d="M1638.76,-325.76C1656.77,-323.89 1675.76,-321.91 1693.27,-320.09"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1693.81,-323.56 1703.39,-319.04 1693.09,-316.59 1693.81,-323.56"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node25" class="node">
+<title>proc~ocean_halo_bt_group_2d_wide</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node25"><a xlink:href="../proc/ocean_halo_bt_group_2d_wide.html" xlink:title="ocean_halo_bt_group_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1646,-785 1471,-785 1471,-761 1646,-761 1646,-785"/>
+<text text-anchor="middle" x="1558.5" y="-770.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_bt_group_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge24" class="edge">
+<title>proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_centre_2d_impl</title>
+<path fill="none" stroke="#0066ff" d="M1633.07,-761C1637.74,-758.51 1642.12,-755.54 1646,-752 1682.45,-718.76 1647.85,-682.6 1682,-647 1687.62,-641.14 1694.49,-636.36 1701.8,-632.48"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1703.69,-635.46 1711.25,-628.03 1700.71,-629.13 1703.69,-635.46"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge28" class="edge">
+<title>proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#6500ff" d="M1617.39,-760.96C1641.16,-756.02 1668.85,-750.26 1693.57,-745.12"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="1694.53,-748.5 1703.61,-743.04 1693.1,-741.65 1694.53,-748.5"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge32" class="edge">
+<title>proc~ocean_halo_bt_group_2d_wide&#45;&gt;proc~ocean_halo_face_y_2d_impl</title>
+<path fill="none" stroke="#ff00cb" d="M1627.29,-760.96C1633.84,-758.51 1640.2,-755.56 1646,-752 1666.96,-739.15 1662.79,-725.35 1682,-710 1694.39,-700.1 1709.46,-691.45 1723.13,-684.61"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="1724.84,-687.67 1732.33,-680.17 1721.8,-681.37 1724.84,-687.67"/>
+</g>
+<!-- proc~ocean_halo_centre_2d&#45;&gt;proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge25" class="edge">
+<title>proc~ocean_halo_centre_2d&#45;&gt;proc~ocean_halo_centre_2d_impl</title>
+<path fill="none" stroke="#0066ff" d="M1624.53,-608.54C1639.66,-609.37 1656.04,-610.26 1672.03,-611.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1672.29,-614.65 1682.46,-611.7 1672.67,-607.66 1672.29,-614.65"/>
+</g>
+<!-- proc~ocean_halo_centre_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node27" class="node">
+<title>proc~ocean_halo_centre_2d_wide</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node27"><a xlink:href="../proc/ocean_halo_centre_2d_wide.html" xlink:title="ocean_halo_centre_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1639.5,-743 1477.5,-743 1477.5,-719 1639.5,-719 1639.5,-743"/>
+<text text-anchor="middle" x="1558.5" y="-728.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_2d_wide&#45;&gt;proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge26" class="edge">
+<title>proc~ocean_halo_centre_2d_wide&#45;&gt;proc~ocean_halo_centre_2d_impl</title>
+<path fill="none" stroke="#0066ff" d="M1630.64,-718.93C1636.1,-716.47 1641.31,-713.53 1646,-710 1671.77,-690.61 1657.58,-668.06 1682,-647 1689,-640.96 1697.32,-636.02 1705.89,-632.01"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1707.42,-635.16 1715.24,-628.01 1704.67,-628.72 1707.42,-635.16"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge29" class="edge">
+<title>proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#6500ff" d="M1617.39,-701.04C1641.16,-705.98 1668.85,-711.74 1693.57,-716.88"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="1693.1,-720.35 1703.61,-718.96 1694.53,-713.5 1693.1,-720.35"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node29" class="node">
+<title>proc~ocean_halo_face_x_2d_wide</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node29"><a xlink:href="../proc/ocean_halo_face_x_2d_wide.html" xlink:title="ocean_halo_face_x_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1640,-869 1477,-869 1477,-845 1640,-845 1640,-869"/>
+<text text-anchor="middle" x="1558.5" y="-854.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge30" class="edge">
+<title>proc~ocean_halo_face_x_2d_wide&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#6500ff" d="M1624.59,-844.98C1632.01,-842.51 1639.31,-839.55 1646,-836 1686.9,-814.29 1724.65,-774.79 1745.24,-750.91"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="1748,-753.07 1751.79,-743.18 1742.66,-748.55 1748,-753.07"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d&#45;&gt;proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge33" class="edge">
+<title>proc~ocean_halo_face_y_2d&#45;&gt;proc~ocean_halo_face_y_2d_impl</title>
+<path fill="none" stroke="#ff00cb" d="M1625.08,-653.82C1639.92,-655.36 1655.92,-657.02 1671.57,-658.65"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="1671.47,-662.16 1681.78,-659.71 1672.2,-655.2 1671.47,-662.16"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node31" class="node">
+<title>proc~ocean_halo_face_y_2d_wide</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node31"><a xlink:href="../proc/ocean_halo_face_y_2d_wide.html" xlink:title="ocean_halo_face_y_2d_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1640,-827 1477,-827 1477,-803 1640,-803 1640,-827"/>
+<text text-anchor="middle" x="1558.5" y="-812.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_2d_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_2d_wide&#45;&gt;proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge34" class="edge">
+<title>proc~ocean_halo_face_y_2d_wide&#45;&gt;proc~ocean_halo_face_y_2d_impl</title>
+<path fill="none" stroke="#ff00cb" d="M1632.36,-802.88C1637.25,-800.42 1641.87,-797.49 1646,-794 1677.01,-767.77 1654.47,-739.86 1682,-710 1691.88,-699.29 1705.12,-690.8 1717.96,-684.35"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="1719.63,-687.43 1727.19,-680 1716.65,-681.1 1719.63,-687.43"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node32" class="node">
+<title>proc~barotropic_substep_nonlinear</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node32"><a xlink:href="../proc/barotropic_substep_nonlinear.html" xlink:title="barotropic_substep_nonlinear">
+<polygon fill="#d9534f" stroke="#d9534f" points="1210.5,-820 1041.5,-820 1041.5,-796 1210.5,-796 1210.5,-820"/>
+<text text-anchor="middle" x="1126" y="-805.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_substep_nonlinear</text>
+</a>
+</g>
+</g>
+<!-- proc~barotropic_substep_nonlinear&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge42" class="edge">
+<title>proc~barotropic_substep_nonlinear&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff6600" d="M1138.75,-795.68C1161.17,-772.71 1212.35,-722.79 1263,-691 1275.96,-682.87 1291.01,-675.67 1304.82,-669.84"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1306.21,-673.05 1314.14,-666.03 1303.56,-666.57 1306.21,-673.05"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear&#45;&gt;proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge55" class="edge">
+<title>proc~barotropic_substep_nonlinear&#45;&gt;proc~ocean_halo_bt_group_2d_wide</title>
+<path fill="none" stroke="#00cbff" d="M1210.52,-801.21C1282.09,-795.39 1385.25,-787 1460.47,-780.89"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="1461.21,-784.34 1470.9,-780.04 1460.65,-777.36 1461.21,-784.34"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node40" class="node">
+<title>proc~ocean_halo_bt_group_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node40"><a xlink:href="../proc/ocean_halo_bt_group_2d.html" xlink:title="ocean_halo_bt_group_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1421.5,-724 1276.5,-724 1276.5,-700 1421.5,-700 1421.5,-724"/>
+<text text-anchor="middle" x="1349" y="-709.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_bt_group_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~barotropic_substep_nonlinear&#45;&gt;proc~ocean_halo_bt_group_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge78" class="edge">
+<title>proc~barotropic_substep_nonlinear&#45;&gt;proc~ocean_halo_bt_group_2d</title>
+<path fill="none" stroke="#0091ff" d="M1154.99,-795.84C1194.59,-778.64 1267.05,-747.16 1311.04,-728.06"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1312.46,-731.25 1320.24,-724.06 1309.67,-724.83 1312.46,-731.25"/>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node33" class="node">
+<title>proc~bt_wide_entry_exchange_impl</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node33"><a xlink:href="../proc/bt_wide_entry_exchange_impl.html" xlink:title="bt_wide_entry_exchange_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1435,-858 1263,-858 1263,-834 1435,-834 1435,-858"/>
+<text text-anchor="middle" x="1349" y="-843.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_entry_exchange_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge56" class="edge">
+<title>proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_bt_group_2d_wide</title>
+<path fill="none" stroke="#00cbff" d="M1399.16,-833.96C1411.19,-830.21 1423.81,-825.56 1435,-820 1452.67,-811.22 1453.08,-802.26 1471,-794 1475.62,-791.87 1480.48,-789.94 1485.44,-788.2"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="1486.65,-791.49 1495.08,-785.07 1484.49,-784.83 1486.65,-791.49"/>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_centre_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge60" class="edge">
+<title>proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_centre_2d_wide</title>
+<path fill="none" stroke="#0000ff" d="M1361.87,-833.9C1382.28,-813.8 1426.19,-773.61 1471,-752 1475.3,-749.93 1479.82,-748.05 1484.44,-746.35"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1485.69,-749.62 1494.05,-743.1 1483.45,-742.99 1485.69,-749.62"/>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_x_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge63" class="edge">
+<title>proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_x_2d_wide</title>
+<path fill="none" stroke="#cc00ff" d="M1435.3,-850.52C1445.72,-851.07 1456.39,-851.64 1466.88,-852.2"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1466.7,-855.69 1476.88,-852.73 1467.07,-848.7 1466.7,-855.69"/>
+</g>
+<!-- proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_y_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge66" class="edge">
+<title>proc~bt_wide_entry_exchange_impl&#45;&gt;proc~ocean_halo_face_y_2d_wide</title>
+<path fill="none" stroke="#ff0066" d="M1430.52,-833.97C1442.45,-832.19 1454.81,-830.34 1466.92,-828.53"/>
+<polygon fill="#ff0066" stroke="#ff0066" points="1467.65,-831.96 1477.02,-827.02 1466.62,-825.04 1467.65,-831.96"/>
+</g>
+<!-- proc~configure_ocean_land_mask -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node34" class="node">
+<title>proc~configure_ocean_land_mask</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node34"><a xlink:href="../proc/configure_ocean_land_mask.html" xlink:title="configure_ocean_land_mask">
+<polygon fill="#d9534f" stroke="#d9534f" points="1207.5,-327 1044.5,-327 1044.5,-303 1207.5,-303 1207.5,-327"/>
+<text text-anchor="middle" x="1126" y="-312.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_land_mask</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_land_mask&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge36" class="edge">
+<title>proc~configure_ocean_land_mask&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M1142.54,-327.02C1180.66,-356.52 1278.99,-432.61 1324.39,-467.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1322.43,-470.64 1332.48,-473.99 1326.71,-465.1 1322.43,-470.64"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node35" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node35"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="1204.5,-507 1047.5,-507 1047.5,-483 1204.5,-483 1204.5,-507"/>
+<text text-anchor="middle" x="1126" y="-492.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge37" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M1204.61,-491.84C1229.96,-490.81 1257.86,-489.67 1282.26,-488.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1282.63,-492.17 1292.48,-488.26 1282.35,-485.17 1282.63,-492.17"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node36" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node36"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-308 0,-308 0,-284 67,-284 67,-308"/>
+<text text-anchor="middle" x="33.5" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge53" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M67.11,-296C75.11,-296 83.94,-296 92.83,-296"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="92.85,-299.5 102.85,-296 92.85,-292.5 92.85,-299.5"/>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge43" class="edge">
+<title>proc~engine_enter_data&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff6600" d="M938.17,-654C1024.08,-654 1189.52,-654 1281.76,-654"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1281.82,-657.5 1291.82,-654 1281.82,-650.5 1281.82,-657.5"/>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d_wide -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge57" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d_wide</title>
+<path fill="none" stroke="#00cbff" d="M916.74,-666.07C945.27,-675.89 987.37,-689.46 1025,-698 1175.38,-732.14 1353.38,-753.45 1460.76,-764.27"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="1460.63,-767.77 1470.93,-765.28 1461.32,-760.81 1460.63,-767.77"/>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge79" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_bt_group_2d</title>
+<path fill="none" stroke="#0091ff" d="M938.17,-660.88C1019.41,-671.01 1171.77,-690.02 1266.09,-701.78"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1265.81,-705.28 1276.16,-703.04 1266.67,-698.33 1265.81,-705.28"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node41" class="node">
+<title>proc~ocean_halo_exchange_ml_state</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node41"><a xlink:href="../proc/ocean_halo_exchange_ml_state.html" xlink:title="ocean_halo_exchange_ml_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="1216.5,-588 1035.5,-588 1035.5,-564 1216.5,-564 1216.5,-588"/>
+<text text-anchor="middle" x="1126" y="-573.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_exchange_ml_state</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge81" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#0024ff" d="M938.01,-644.73C954.84,-640.79 973.09,-635.35 989,-628 1006.91,-619.72 1007.14,-610.41 1025,-602 1034.22,-597.66 1044.28,-593.96 1054.35,-590.84"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1055.36,-594.19 1063.98,-588.02 1053.39,-587.47 1055.36,-594.19"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge38" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M713.05,-283.98C729.56,-275.69 753,-265.4 775,-261 972.51,-221.5 1057.76,-184.78 1227,-294 1290.95,-335.27 1327.29,-423.59 1341.27,-464.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1337.96,-465.58 1344.42,-473.98 1344.61,-463.38 1337.96,-465.58"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge52" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split</title>
+<path fill="none" stroke="#65ff00" d="M699.33,-283.84C712.74,-265.45 741.1,-231.31 775,-218 961.99,-144.57 1032.65,-167.17 1227,-218 1347.32,-249.47 1360.79,-297.37 1471,-355 1487.66,-363.71 1506.4,-372.89 1522.17,-380.43"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="1521.03,-383.76 1531.56,-384.9 1524.04,-377.44 1521.03,-383.76"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_land_mask -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge70" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_land_mask</title>
+<path fill="none" stroke="#ffda00" d="M730.79,-283.93C744.64,-280.3 760.38,-276.8 775,-275 869.4,-263.38 894.86,-261.44 989,-275 1021.51,-279.68 1057.08,-290.35 1083.69,-299.5"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1082.83,-302.9 1093.42,-302.91 1085.15,-296.3 1082.83,-302.9"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge82" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#0024ff" d="M700.3,-308.21C720.22,-334.3 765.97,-393.7 775,-401 871.75,-479.22 1009.19,-535.08 1079.59,-560.55"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1078.48,-563.87 1089.07,-563.94 1080.83,-557.28 1078.48,-563.87"/>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node51" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node51"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="953.5,-308 810.5,-308 810.5,-284 953.5,-284 953.5,-308"/>
+<text text-anchor="middle" x="882" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge98" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#00ffb9" d="M732.23,-296C752.1,-296 776.65,-296 800.04,-296"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="800.32,-299.5 810.32,-296 800.32,-292.5 800.32,-299.5"/>
+</g>
+<!-- proc~ocean_data_forcing_configure -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node54" class="node">
+<title>proc~ocean_data_forcing_configure</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node54"><a xlink:href="../proc/ocean_data_forcing_configure.html" xlink:title="ocean_data_forcing_configure">
+<polygon fill="#d9534f" stroke="#d9534f" points="968,-350 796,-350 796,-326 968,-326 968,-350"/>
+<text text-anchor="middle" x="882" y="-335.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_configure</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge102" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure</title>
+<path fill="none" stroke="#5c00ff" d="M732.35,-306.77C745.9,-310.18 761.06,-313.88 775,-317 785.51,-319.35 796.64,-321.71 807.58,-323.94"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="807.06,-327.41 817.55,-325.96 808.45,-320.55 807.06,-327.41"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node39" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node39"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="592,-624 467,-624 467,-600 592,-600 592,-624"/>
+<text text-anchor="middle" x="529.5" y="-609.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge39" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M555.58,-599.95C599.18,-579.48 692.26,-537.91 775,-515 969.4,-461.17 1025.53,-464.03 1227,-474 1244.97,-474.89 1264.39,-476.52 1282.3,-478.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1282.06,-481.79 1292.36,-479.32 1282.77,-474.82 1282.06,-481.79"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node45" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node45"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="736,-725 644,-725 644,-701 736,-701 736,-725"/>
+<text text-anchor="middle" x="690" y="-710.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge90" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff006d" d="M549.62,-624.18C577.47,-641.93 629.34,-674.98 661.35,-695.38"/>
+<polygon fill="#ff006d" stroke="#ff006d" points="659.5,-698.35 669.81,-700.77 663.26,-692.45 659.5,-698.35"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_centre_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge58" class="edge">
+<title>proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_centre_2d</title>
+<path fill="none" stroke="#0066ff" d="M1389.19,-699.91C1404.49,-693.97 1421.54,-685.75 1435,-675 1456.12,-658.14 1448.51,-640.98 1471,-626 1474.72,-623.52 1478.7,-621.34 1482.84,-619.41"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1484.19,-622.64 1492.1,-615.59 1481.52,-616.17 1484.19,-622.64"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_x_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge61" class="edge">
+<title>proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_x_2d</title>
+<path fill="none" stroke="#6500ff" d="M1421.7,-704.05C1441.05,-701.91 1462.05,-699.58 1481.63,-697.41"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="1482.16,-700.87 1491.72,-696.29 1481.39,-693.91 1482.16,-700.87"/>
+</g>
+<!-- proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_y_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge64" class="edge">
+<title>proc~ocean_halo_bt_group_2d&#45;&gt;proc~ocean_halo_face_y_2d</title>
+<path fill="none" stroke="#ff00cb" d="M1380.52,-699.84C1404.8,-690.42 1439.76,-677.44 1471,-668 1478.38,-665.77 1486.18,-663.61 1493.94,-661.58"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="1494.9,-664.94 1503.72,-659.08 1493.17,-658.16 1494.9,-664.94"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge40" class="edge">
+<title>proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M1180.11,-563.95C1195.46,-559.85 1212.09,-554.82 1227,-549 1259.73,-536.24 1295.14,-517.12 1319.15,-503.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1321.2,-506.15 1328.08,-498.09 1317.67,-500.1 1321.2,-506.15"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge44" class="edge">
+<title>proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff6600" d="M1161.05,-588.02C1199.49,-601.59 1262.16,-623.7 1304.22,-638.55"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1303.32,-641.94 1313.91,-641.97 1305.65,-635.34 1303.32,-641.94"/>
+</g>
+<!-- proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_y -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge47" class="edge">
+<title>proc~ocean_halo_exchange_ml_state&#45;&gt;interface~ocean_halo_face_y</title>
+<path fill="none" stroke="#ffcc00" d="M1216.57,-576C1238.37,-576 1261.3,-576 1281.8,-576"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="1281.96,-579.5 1291.96,-576 1281.96,-572.5 1281.96,-579.5"/>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node42" class="node">
+<title>proc~ocean_seam_refresh_surface_stress</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node42"><a xlink:href="../proc/ocean_seam_refresh_surface_stress.html" xlink:title="ocean_seam_refresh_surface_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="1227,-427 1025,-427 1025,-403 1227,-403 1227,-427"/>
+<text text-anchor="middle" x="1126" y="-412.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_seam_refresh_surface_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge45" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff6600" d="M1160.26,-427.06C1182.19,-436.62 1209.92,-452.05 1227,-474 1261.98,-518.95 1229.33,-551.06 1263,-597 1275.41,-613.93 1294.46,-627.37 1311.39,-636.94"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1310.05,-640.2 1320.52,-641.86 1313.37,-634.03 1310.05,-640.2"/>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_y -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge48" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_y</title>
+<path fill="none" stroke="#ffcc00" d="M1150.5,-427.05C1171.34,-438.15 1202.22,-455.64 1227,-474 1244.44,-486.92 1246.57,-492.82 1263,-507 1283.41,-524.61 1307.28,-543.88 1324.53,-557.57"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="1322.4,-560.35 1332.42,-563.81 1326.74,-554.86 1322.4,-560.35"/>
+</g>
+<!-- proc~rdb_debug_chksum_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node43" class="node">
+<title>proc~rdb_debug_chksum_2d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node43"><a xlink:href="../proc/rdb_debug_chksum_2d.html" xlink:title="rdb_debug_chksum_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1416.5,-76 1281.5,-76 1281.5,-52 1416.5,-52 1416.5,-76"/>
+<text text-anchor="middle" x="1349" y="-61.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_debug_chksum_2d&#45;&gt;proc~chksum_row -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge50" class="edge">
+<title>proc~rdb_debug_chksum_2d&#45;&gt;proc~chksum_row</title>
+<path fill="none" stroke="#cbff00" d="M1416.51,-64C1446.68,-64 1481.69,-64 1509.27,-64"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1509.46,-67.5 1519.46,-64 1509.46,-60.5 1509.46,-67.5"/>
+</g>
+<!-- proc~rdb_debug_chksum_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node44" class="node">
+<title>proc~rdb_debug_chksum_3d</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node44"><a xlink:href="../proc/rdb_debug_chksum_3d.html" xlink:title="rdb_debug_chksum_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1416.5,-34 1281.5,-34 1281.5,-10 1416.5,-10 1416.5,-34"/>
+<text text-anchor="middle" x="1349" y="-19.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_debug_chksum_3d&#45;&gt;proc~chksum_row -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge51" class="edge">
+<title>proc~rdb_debug_chksum_3d&#45;&gt;proc~chksum_row</title>
+<path fill="none" stroke="#cbff00" d="M1409.46,-34.04C1441.06,-40.43 1479.42,-48.19 1509.16,-54.22"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1508.81,-57.71 1519.3,-56.27 1510.2,-50.85 1508.81,-57.71"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge41" class="edge">
+<title>proc~run_stage_split&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#ff0000" d="M693.29,-700.71C699.76,-669.74 721.36,-588.49 775,-553 859.05,-497.39 1127.54,-532.29 1227,-516 1250.14,-512.21 1275.37,-506.25 1296.77,-500.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1297.86,-503.98 1306.62,-498.02 1296.06,-497.21 1297.86,-503.98"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge46" class="edge">
+<title>proc~run_stage_split&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#ff6600" d="M736.02,-714.1C794.46,-715.1 899.53,-715.45 989,-708 1091.82,-699.44 1209.94,-679.75 1281.75,-666.66"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="1282.79,-670.03 1292,-664.78 1281.53,-663.14 1282.79,-670.03"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;interface~ocean_halo_face_y -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge49" class="edge">
+<title>proc~run_stage_split&#45;&gt;interface~ocean_halo_face_y</title>
+<path fill="none" stroke="#ffcc00" d="M736,-709.27C794.63,-703.96 900.15,-692.82 989,-675 1102.89,-652.16 1233.74,-612.61 1301.65,-591.06"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="1302.74,-594.39 1311.21,-588.02 1300.62,-587.72 1302.74,-594.39"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_halo_bt_group_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge80" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_halo_bt_group_2d</title>
+<path fill="none" stroke="#0091ff" d="M695.04,-725.3C704.33,-751.29 729.93,-811.31 775,-835 793.96,-844.96 1225.36,-829.69 1227,-829 1274.91,-808.92 1314.62,-760.31 1334.43,-732.48"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1337.32,-734.45 1340.14,-724.23 1331.57,-730.46 1337.32,-734.45"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge84" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#0024ff" d="M699.77,-700.9C713.57,-682.87 742.18,-649.31 775,-633 786.58,-627.25 933.66,-604.5 1033.43,-589.54"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1034.16,-592.97 1043.54,-588.03 1033.13,-586.05 1034.16,-592.97"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear_interior -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node47" class="node">
+<title>proc~barotropic_substep_nonlinear_interior</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node47"><a xlink:href="../proc/barotropic_substep_nonlinear_interior.html" xlink:title="barotropic_substep_nonlinear_interior">
+<polygon fill="#d9534f" stroke="#d9534f" points="989,-784 775,-784 775,-760 989,-760 989,-784"/>
+<text text-anchor="middle" x="882" y="-769.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_substep_nonlinear_interior</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~barotropic_substep_nonlinear_interior -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge93" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~barotropic_substep_nonlinear_interior</title>
+<path fill="none" stroke="#ff8b00" d="M719.04,-725.11C735.21,-731.81 756.03,-739.98 775,-746 788.15,-750.18 802.4,-754.08 816.05,-757.53"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="815.32,-760.95 825.87,-759.96 817,-754.16 815.32,-760.95"/>
+</g>
+<!-- proc~bt_wide_entry_exchange -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node48" class="node">
+<title>proc~bt_wide_entry_exchange</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node48"><a xlink:href="../proc/bt_wide_entry_exchange.html" xlink:title="bt_wide_t%bt_wide_entry_exchange">
+<polygon fill="#d9534f" stroke="#d9534f" points="1227,-906 1025,-906 1025,-882 1227,-882 1227,-906"/>
+<text text-anchor="middle" x="1126" y="-891.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_t%bt_wide_entry_exchange</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~bt_wide_entry_exchange -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge94" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~bt_wide_entry_exchange</title>
+<path fill="none" stroke="#e7ff00" d="M693.5,-725.39C700.36,-755.8 722.57,-834.09 775,-868 858.56,-922.05 977.95,-917.72 1053.45,-907.5"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="1054.39,-910.9 1063.8,-906.02 1053.41,-903.97 1054.39,-910.9"/>
+</g>
+<!-- proc~bt_wide_substep -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node49" class="node">
+<title>proc~bt_wide_substep</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node49"><a xlink:href="../proc/bt_wide_substep.html" xlink:title="bt_wide_substep">
+<polygon fill="#d9534f" stroke="#d9534f" points="932,-826 832,-826 832,-802 932,-802 932,-826"/>
+<text text-anchor="middle" x="882" y="-811.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_substep</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~bt_wide_substep -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge95" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~bt_wide_substep</title>
+<path fill="none" stroke="#5cff00" d="M700.07,-725.26C714.05,-743.18 742.64,-776.22 775,-793 789.28,-800.4 805.88,-805.2 821.65,-808.31"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="821.4,-811.82 831.85,-810.12 822.62,-804.93 821.4,-811.82"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node55" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node55"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="943.5,-586 820.5,-586 820.5,-562 943.5,-562 943.5,-586"/>
+<text text-anchor="middle" x="882" y="-571.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge103" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#e700ff" d="M696.44,-700.94C707.62,-677.6 735.49,-626.23 775,-600 785.59,-592.97 797.9,-587.84 810.32,-584.1"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="811.53,-587.39 820.26,-581.38 809.69,-580.64 811.53,-587.39"/>
+</g>
+<!-- interface~rdb_debug_chksum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node46" class="node">
+<title>interface~rdb_debug_chksum</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node46"><a xlink:href="../interface/rdb_debug_chksum.html" xlink:title="rdb_debug_chksum">
+<polygon fill="#a7506f" stroke="#a7506f" points="1184,-55 1068,-55 1068,-31 1184,-31 1184,-55"/>
+<text text-anchor="middle" x="1126" y="-40.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum</text>
+</a>
+</g>
+</g>
+<!-- interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_2d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge88" class="edge">
+<title>interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_2d</title>
+<path fill="none" stroke="#b600ff" stroke-dasharray="5,2" d="M1184.2,-48.44C1210.74,-50.96 1242.68,-53.99 1271.28,-56.71"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="1270.95,-60.19 1281.24,-57.66 1271.61,-53.23 1270.95,-60.19"/>
+</g>
+<!-- interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_3d -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge89" class="edge">
+<title>interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_3d</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M1184.2,-37.56C1210.74,-35.04 1242.68,-32.01 1271.28,-29.29"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1271.61,-32.77 1281.24,-28.34 1270.95,-25.81 1271.61,-32.77"/>
+</g>
+<!-- proc~barotropic_substep_nonlinear_interior&#45;&gt;proc~barotropic_substep_nonlinear -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge67" class="edge">
+<title>proc~barotropic_substep_nonlinear_interior&#45;&gt;proc~barotropic_substep_nonlinear</title>
+<path fill="none" stroke="#ff0000" d="M963.92,-784.04C986.42,-787.38 1011.01,-791.04 1034.04,-794.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1033.75,-797.96 1044.16,-795.97 1034.78,-791.04 1033.75,-797.96"/>
+</g>
+<!-- proc~bt_wide_entry_exchange&#45;&gt;proc~bt_wide_entry_exchange_impl -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge69" class="edge">
+<title>proc~bt_wide_entry_exchange&#45;&gt;proc~bt_wide_entry_exchange_impl</title>
+<path fill="none" stroke="#ff6d00" d="M1182.48,-881.95C1212.83,-875.36 1250.6,-867.15 1282.4,-860.25"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="1283.47,-863.6 1292.49,-858.06 1281.98,-856.76 1283.47,-863.6"/>
+</g>
+<!-- proc~bt_wide_substep&#45;&gt;proc~barotropic_substep_nonlinear -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge68" class="edge">
+<title>proc~bt_wide_substep&#45;&gt;proc~barotropic_substep_nonlinear</title>
+<path fill="none" stroke="#ff0000" d="M932.26,-812.78C960.69,-812.07 997.39,-811.16 1031.13,-810.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1031.58,-813.82 1041.49,-810.07 1031.4,-806.82 1031.58,-813.82"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node50" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node50"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="599.5,-425 459.5,-425 459.5,-401 599.5,-401 599.5,-425"/>
+<text text-anchor="middle" x="529.5" y="-410.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge73" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff24" d="M550.38,-425.02C588.55,-448.5 674.1,-502.96 739,-558 756.5,-572.84 756.78,-581.05 775,-595 796.85,-611.73 824.01,-626.75 845.37,-637.45"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="843.91,-640.64 854.43,-641.91 847,-634.36 843.91,-640.64"/>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge75" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ff91" d="M546.87,-400.92C574.75,-380.34 631.61,-338.36 664.33,-314.21"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="666.52,-316.94 672.49,-308.19 662.36,-311.31 666.52,-316.94"/>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge85" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#4800ff" d="M953.57,-305.58C965.67,-308.45 977.9,-312.18 989,-317 1012.89,-327.38 1069.86,-371.16 1101.98,-396.55"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1099.94,-399.41 1109.95,-402.89 1104.29,-393.93 1099.94,-399.41"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge77" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M370.29,-612C394.77,-612 427.43,-612 456.72,-612"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="456.92,-615.5 466.92,-612 456.92,-608.5 456.92,-615.5"/>
+</g>
+<!-- proc~ocean_data_forcing_apply -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node53" class="node">
+<title>proc~ocean_data_forcing_apply</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node53"><a xlink:href="../proc/ocean_data_forcing_apply.html" xlink:title="ocean_data_forcing_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="605,-544 454,-544 454,-520 605,-520 605,-544"/>
+<text text-anchor="middle" x="529.5" y="-529.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge101" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply</title>
+<path fill="none" stroke="#002eff" d="M362.27,-599.85C396.28,-585.97 452.07,-563.2 489.52,-547.91"/>
+<polygon fill="#002eff" stroke="#002eff" points="491.16,-551.02 499.09,-544 488.51,-544.54 491.16,-551.02"/>
+</g>
+<!-- proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge86" class="edge">
+<title>proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#4800ff" d="M552.22,-519.91C574,-508.33 608.84,-491.29 641,-482 766.08,-445.86 915.15,-428.98 1014.48,-421.24"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1014.83,-424.73 1024.54,-420.48 1014.3,-417.75 1014.83,-424.73"/>
+</g>
+<!-- proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge87" class="edge">
+<title>proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#4800ff" d="M953.89,-350.05C965.71,-352.63 977.77,-355.61 989,-359 1024.49,-369.71 1063.46,-386.28 1090.56,-398.62"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1089.42,-401.95 1099.97,-402.96 1092.35,-395.6 1089.42,-401.95"/>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge71" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#b6ff00" d="M920.02,-561.92C962.45,-548.06 1032.08,-525.33 1078.23,-510.27"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="1079.57,-513.51 1087.99,-507.08 1077.39,-506.86 1079.57,-513.51"/>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_halo_exchange_ml_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge83" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_halo_exchange_ml_state</title>
+<path fill="none" stroke="#0024ff" d="M943.75,-574.5C968.44,-574.71 997.63,-574.95 1025.28,-575.18"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1025.36,-578.68 1035.39,-575.26 1025.42,-571.68 1025.36,-578.68"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node56" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node56"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="914.5,-392 849.5,-392 849.5,-368 914.5,-368 914.5,-392"/>
+<text text-anchor="middle" x="882" y="-377.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge72" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#b6ff00" d="M908.44,-392.09C952.01,-412.8 1040.98,-455.07 1090.24,-478.48"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="1089,-481.77 1099.54,-482.9 1092.01,-475.45 1089,-481.77"/>
+</g>
+<!-- proc~chksum_bt -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node57" class="node">
+<title>proc~chksum_bt</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node57"><a xlink:href="../proc/chksum_bt.html" xlink:title="chksum_bt">
+<polygon fill="#d9534f" stroke="#d9534f" points="917,-24 847,-24 847,0 917,0 917,-24"/>
+<text text-anchor="middle" x="882" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_bt</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_bt&#45;&gt;interface~rdb_debug_chksum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge91" class="edge">
+<title>proc~chksum_bt&#45;&gt;interface~rdb_debug_chksum</title>
+<path fill="none" stroke="#ff0000" d="M917.16,-16.38C953.5,-21.03 1011.92,-28.51 1057.58,-34.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1057.35,-37.86 1067.71,-35.66 1058.24,-30.92 1057.35,-37.86"/>
+</g>
+<!-- proc~chksum_state -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node58" class="node">
+<title>proc~chksum_state</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node58"><a xlink:href="../proc/chksum_state.html" xlink:title="chksum_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="924.5,-66 839.5,-66 839.5,-42 924.5,-42 924.5,-66"/>
+<text text-anchor="middle" x="882" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_state</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_state&#45;&gt;interface~rdb_debug_chksum -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge92" class="edge">
+<title>proc~chksum_state&#45;&gt;interface~rdb_debug_chksum</title>
+<path fill="none" stroke="#ff0000" d="M924.6,-52.11C961.13,-50.45 1014.95,-48 1057.62,-46.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1057.82,-49.56 1067.65,-45.61 1057.51,-42.56 1057.82,-49.56"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node59" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node59"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="739,-392 641,-392 641,-368 739,-368 739,-392"/>
+<text text-anchor="middle" x="690" y="-377.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge104" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff008b" d="M739.44,-380C770.18,-380 809.58,-380 839,-380"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="839.35,-383.5 849.35,-380 839.35,-376.5 839.35,-383.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node60" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node60"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="407,-425 256,-425 256,-401 407,-401 407,-425"/>
+<text text-anchor="middle" x="331.5" y="-410.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge96" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#00ff2e" d="M407.16,-413C420.91,-413 435.32,-413 449.2,-413"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="449.21,-416.5 459.21,-413 449.21,-409.5 449.21,-416.5"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node61" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node61"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="418,-467 245,-467 245,-443 418,-443 418,-467"/>
+<text text-anchor="middle" x="331.5" y="-452.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge97" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#00ff2e" d="M388.67,-442.96C411.63,-438.04 438.37,-432.31 462.27,-427.19"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="463.28,-430.55 472.33,-425.04 461.81,-423.71 463.28,-430.55"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_node62" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~comm_env_compute_comm~~CalledByGraph_node62"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-624 107.5,-624 107.5,-600 204.5,-600 204.5,-624"/>
+<text text-anchor="middle" x="156" y="-609.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~comm_env_compute_comm~~CalledByGraph_edge100" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00b9ff" d="M204.87,-612C229.18,-612 258.63,-612 282.9,-612"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="282.96,-615.5 292.96,-612 282.96,-608.5 282.96,-615.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccomm_env_compute_commCalledByGraph = svgPanZoom('#proccomm_env_compute_commCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">function </span><span class="n">comm_env_compute_comm</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Return the compute-only communicator</span>
+<span class="w">      </span><span class="c">!! Falls back to comm_world() if comm_env_init has not been called</span>
+<span class="w">      </span><span class="c">!! (e.g. tests that use raw MPI_Init).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cached_rank</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_compute</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_world</span><span class="p">()</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end function </span><span class="n">comm_env_compute_comm</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

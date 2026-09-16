@@ -1,0 +1,640 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_dyn_is_thermo_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_dyn_is_thermo_step
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">9 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_dyn.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_dyn.f90.html'>rdb_ocean_dyn.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_dyn_is_thermo_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_dyn_is_thermo_step.html#src">ocean_dyn_is_thermo_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure function ocean_dyn_is_thermo_step(this) result(yes)  
+</h2>
+    
+
+    <p>Returns <code>.true.</code> if the thermodynamic / tracer kernels should
+fire on this outer step.  <code>dt_therm_ratio &lt;= 1</code> (default) →
+always true (every step is a thermo step, bit-identical to
+prior behaviour).  <code>ratio &gt;= 2</code> → fires every Nth step,
+aligned to <code>outer_step_count = 0</code> for the IC snapshot.</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/ocean_dyn_t.html'>ocean_dyn_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~250"></span>
+              class(<a href='../type/ocean_dyn_t.html'>ocean_dyn_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-yes~3"></span>
+          logical
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_dyn_is_thermo_step~~CalledByGraph Pages: 1 -->
+<svg id="prococean_dyn_is_thermo_stepCalledByGraph" width="641pt" height="203pt"
+ viewBox="0.00 0.00 641.00 202.91" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph" class="graph" transform="scale(0.59 0.59) rotate(0) translate(4 342)">
+<title>proc~~ocean_dyn_is_thermo_step~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-342 1089,-342 1089,4 -4,4"/>
+<!-- proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node1" class="node">
+<title>proc~ocean_dyn_is_thermo_step</title>
+<polygon fill="none" stroke="black" points="1085,-184 853,-184 853,-160 1085,-160 1085,-184"/>
+<text text-anchor="middle" x="969" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_dyn_t%ocean_dyn_is_thermo_step</text>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node2" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node2"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="366,-338 245,-338 245,-314 366,-314 366,-338"/>
+<text text-anchor="middle" x="305.5" y="-323.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M366.13,-326.71C463.34,-326.11 660.8,-317.49 817,-263 865.98,-245.92 916.28,-211.57 944.69,-190.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="946.94,-193 952.78,-184.16 942.7,-187.42 946.94,-193"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node3" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node3"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="354.5,-296 256.5,-296 256.5,-272 354.5,-272 354.5,-296"/>
+<text text-anchor="middle" x="305.5" y="-281.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M354.84,-284.35C446.45,-283.94 651.07,-277.9 817,-236 860.1,-225.12 906.78,-203.71 936.65,-188.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="938.42,-191.69 945.74,-184.02 935.24,-185.45 938.42,-191.69"/>
+</g>
+<!-- proc~gm_refreshes_varmix -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node4" class="node">
+<title>proc~gm_refreshes_varmix</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node4"><a xlink:href="../proc/gm_refreshes_varmix.html" xlink:title="gm_refreshes_varmix">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="817,-24 691,-24 691,0 817,0 817,-24"/>
+<text text-anchor="middle" x="754" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_refreshes_varmix</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_refreshes_varmix&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge3" class="edge">
+<title>proc~gm_refreshes_varmix&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M789.47,-24.1C798.72,-27.97 808.5,-32.66 817,-38 870.2,-71.46 922.95,-123.78 949.78,-152.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="947.56,-154.88 956.95,-159.79 952.67,-150.09 947.56,-154.88"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="513.5,-254 415.5,-254 415.5,-230 513.5,-230 513.5,-254"/>
+<text text-anchor="middle" x="464.5" y="-239.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M513.69,-241.23C581.82,-239.43 709.93,-233.36 817,-213 852.12,-206.32 891.05,-195.67 920.58,-186.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="921.64,-190.24 930.21,-184.01 919.63,-183.53 921.64,-190.24"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node8" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node8"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="641.5,-222 576.5,-222 576.5,-198 641.5,-198 641.5,-222"/>
+<text text-anchor="middle" x="609" y="-207.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#0000ff" d="M513.74,-231.17C530.86,-227.32 549.96,-223.03 566.47,-219.33"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="567.38,-222.71 576.37,-217.1 565.85,-215.88 567.38,-222.71"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="527,-84 402,-84 402,-60 527,-60 527,-84"/>
+<text text-anchor="middle" x="464.5" y="-69.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M527.29,-70.19C598.41,-69.65 718.11,-73.46 817,-100 862.05,-112.09 910.01,-137.35 939.5,-154.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="938,-157.68 948.39,-159.75 941.56,-151.65 938,-157.68"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~gm_refreshes_varmix -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~gm_refreshes_varmix</title>
+<path fill="none" stroke="#aaff00" d="M495.34,-59.85C514.41,-52.53 539.82,-43.57 563,-38 601.3,-28.8 644.79,-22.55 680.48,-18.49"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="681.25,-21.92 690.81,-17.35 680.49,-14.97 681.25,-21.92"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node9" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node9"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="655,-123 563,-123 563,-99 655,-99 655,-123"/>
+<text text-anchor="middle" x="609" y="-108.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge19" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#aa00ff" d="M509.42,-84.02C523.5,-87.87 539.27,-92.19 553.99,-96.22"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="553.41,-99.69 563.98,-98.95 555.26,-92.94 553.41,-99.69"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node7" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node7"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="815.5,-142 692.5,-142 692.5,-118 815.5,-118 815.5,-142"/>
+<text text-anchor="middle" x="754" y="-127.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge6" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M815.75,-141.98C841.05,-146.97 870.6,-152.79 896.89,-157.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="896.31,-161.43 906.8,-159.93 897.66,-154.56 896.31,-161.43"/>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M641.62,-207.96C682.26,-205.21 755,-199.85 817,-193 836.69,-190.82 857.78,-188.12 877.76,-185.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="878.35,-188.85 887.78,-184.01 877.4,-181.91 878.35,-188.85"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node10" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node10"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="815,-184 693,-184 693,-160 815,-160 815,-184"/>
+<text text-anchor="middle" x="754" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge20" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff00aa" d="M641.74,-201.57C658.27,-197.17 678.97,-191.67 698.01,-186.61"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="699.03,-189.96 707.79,-184.01 697.23,-183.2 699.03,-189.96"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M655.41,-109.68C667.01,-109.4 679.47,-109.14 691,-109 747,-108.31 762.09,-98 817,-109 860.73,-117.76 907.62,-139.47 937.34,-154.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="935.89,-158.14 946.36,-159.74 939.17,-151.96 935.89,-158.14"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge17" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00a9ff" d="M655.25,-117.01C663.9,-118.16 673.15,-119.39 682.38,-120.62"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="681.98,-124.09 692.36,-121.94 682.9,-117.16 681.98,-124.09"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge21" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff00aa" d="M632.33,-123.02C648.39,-131.42 670.71,-142.6 691,-151 695.49,-152.86 700.21,-154.68 704.95,-156.43"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="704.08,-159.83 714.67,-159.9 706.43,-153.24 704.08,-159.83"/>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge9" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M815.18,-172C823.86,-172 833.04,-172 842.42,-172"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="842.68,-175.5 852.68,-172 842.68,-168.5 842.68,-175.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node11" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node11"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-275 103,-275 103,-251 209,-251 209,-275"/>
+<text text-anchor="middle" x="156" y="-260.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge10" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M188.94,-275.05C195.65,-277.82 202.62,-280.87 209,-284 225.63,-292.16 228.19,-297.22 245,-305 249.02,-306.86 253.26,-308.66 257.54,-310.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="256.34,-313.66 266.93,-313.95 258.84,-307.12 256.34,-313.66"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge12" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ffaa00" d="M209,-270.4C221.06,-272.12 233.96,-273.96 246.26,-275.71"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="246.02,-279.21 256.42,-277.15 247.01,-272.28 246.02,-279.21"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node12" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node12"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="344,-254 267,-254 267,-230 344,-230 344,-254"/>
+<text text-anchor="middle" x="305.5" y="-239.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge23" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00ff00" d="M209,-255.6C224.5,-253.39 241.41,-250.98 256.63,-248.82"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="257.46,-252.23 266.86,-247.36 256.47,-245.3 257.46,-252.23"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge15" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff00" d="M344.11,-242C362.42,-242 384.86,-242 405.31,-242"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="405.48,-245.5 415.48,-242 405.48,-238.5 405.48,-245.5"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffa9" d="M317.79,-229.77C344.61,-200.74 412.33,-127.4 445.13,-91.89"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="448.1,-93.84 452.31,-84.12 442.96,-89.09 448.1,-93.84"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-317 107.5,-317 107.5,-293 204.5,-293 204.5,-317"/>
+<text text-anchor="middle" x="156" y="-302.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M204.89,-311.82C214.48,-313.18 224.74,-314.64 234.89,-316.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.58,-319.58 244.98,-317.53 235.57,-312.65 234.58,-319.58"/>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge13" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ffaa00" d="M204.89,-298.18C218.03,-296.31 232.42,-294.26 246.08,-292.32"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="246.94,-295.73 256.35,-290.86 245.95,-288.8 246.94,-295.73"/>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge24" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00ff00" d="M188.94,-292.95C195.65,-290.18 202.62,-287.13 209,-284 225.63,-275.84 228.19,-270.78 245,-263 249.02,-261.14 253.26,-259.34 257.54,-257.63"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="258.84,-260.88 266.93,-254.05 256.34,-254.34 258.84,-260.88"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node14" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_dyn_is_thermo_step~~CalledByGraph_node14"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-275 0,-275 0,-251 67,-251 67,-275"/>
+<text text-anchor="middle" x="33.5" y="-260.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_dyn_is_thermo_step~~CalledByGraph_edge22" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-263C75.11,-263 83.94,-263 92.83,-263"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-266.5 102.85,-263 92.85,-259.5 92.85,-266.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_dyn_is_thermo_stepCalledByGraph = svgPanZoom('#prococean_dyn_is_thermo_stepCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure function </span><span class="n">ocean_dyn_is_thermo_step</span><span class="p">(</span><span class="n">this</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">yes</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Returns `.true.` if the thermodynamic / tracer kernels should</span>
+<span class="w">      </span><span class="c">!! fire on this outer step.  `dt_therm_ratio &lt;= 1` (default) →</span>
+<span class="w">      </span><span class="c">!! always true (every step is a thermo step, bit-identical to</span>
+<span class="w">      </span><span class="c">!! prior behaviour).  `ratio &gt;= 2` → fires every Nth step,</span>
+<span class="w">      </span><span class="c">!! aligned to `outer_step_count = 0` for the IC snapshot.</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_dyn_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">yes</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">yes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">yes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nb">mod</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">outer_step_count</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end function </span><span class="n">ocean_dyn_is_thermo_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

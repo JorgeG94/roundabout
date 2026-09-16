@@ -1,0 +1,1307 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_hdiff_tracer.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_hdiff_tracer.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">176 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_hdiff_tracer.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_hdiff_tracer.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_hdiff_tracer.html">rdb_ocean_hdiff_tracer</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_hdiff_tracer.f90.html#src">rdb_ocean_hdiff_tracer.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Constant-coefficient horizontal tracer diffusion for the ocean
+multilayer C-grid.  Conservative curvilinear flux-form Laplacian
+on <code>T = hTr/h</code> (design §2, mirrors continuity):</p>
+<p>F_x(i,j,k) = kappa * h_face_x * (T(i,j,k) - T(i-1,j,k)) * idxCu * dy_cu
+  hTr(i,j,k) += dt * [(F_x(i+1)-F_x(i)) + (F_y(j+1)-F_y(j))] * iareaT</p>
+<p>The face flux carries the width-weighted transport [tracer·m³/s]
+and the divergence is area-normalised by <code>iareaT</code>; on uniform
+Cartesian this collapses to the <code>/dx</code>/<code>/dy</code> form to round-off.
+<code>h_face_x = 0.5 * (h(i-1, j, k) + h(i, j, k))</code> keeps the kernel
+conservative under variable thickness — the divergence of an
+h-weighted flux integrates to zero over the closed-wall domain.</p>
+<p>Wall faces force <code>F = 0</code> (closed-wall, no tracer flux across the
+boundary).  Vanishing-layer guards on the <code>T = hTr/h</code> division
+mirror the horizontal advection kernel.</p>
+<p>Phase Tier-1 ships the constant-<code>kappa_h</code> variant; Phase 5+ may
+drop in a Smagorinsky-style isotropic closure or a Redi-style
+isopycnal rotation.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_hdiff_tracerf90EfferentGraph" width="641pt" height="402pt"
+ viewBox="0.00 0.00 641.00 401.69" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 555.61)">
+<title>sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-555.61 889,-555.61 889,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<polygon fill="none" stroke="black" points="885,-381.26 728,-381.26 728,-357.26 885,-357.26 885,-381.26"/>
+<text text-anchor="middle" x="806.5" y="-366.86" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_hdiff_tracer.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="110,-281.26 1,-281.26 1,-257.26 110,-257.26 110,-281.26"/>
+<text text-anchor="middle" x="55.5" y="-266.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-469.26C569.62,-481.73 561.75,-499.36 512,-510.26 385.83,-537.9 342.33,-576.21 222,-529.26"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="260.5,-341.26 181.5,-341.26 181.5,-317.26 260.5,-317.26 260.5,-341.26"/>
+<text text-anchor="middle" x="221" y="-326.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-329.26C555.16,-310.52 361.83,-320.05 270.62,-325.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="270.29,-322.38 260.54,-326.52 270.74,-329.36 270.29,-322.38"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="283,-421.26 159,-421.26 159,-397.26 283,-397.26 283,-421.26"/>
+<text text-anchor="middle" x="221" y="-406.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-469.26C555.97,-485.09 374.15,-446.03 280.02,-423.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="280.63,-420.19 270.09,-421.27 279,-427 280.63,-420.19"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="692,-381.26 548,-381.26 548,-357.26 692,-357.26 692,-381.26"/>
+<text text-anchor="middle" x="620" y="-366.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M727.79,-369.26C719.39,-369.26 710.82,-369.26 702.38,-369.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="702.16,-365.76 692.16,-369.26 702.16,-372.76 702.16,-365.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_boundary_types.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_boundary_types.f90.html" xlink:title="rdb_ocean_boundary_types.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="512,-301.26 331,-301.26 331,-277.26 512,-277.26 512,-301.26"/>
+<text text-anchor="middle" x="421.5" y="-286.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_boundary_types.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-329.26C582.82,-318.64 542.08,-309.85 507.12,-303.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="507.41,-299.73 496.94,-301.34 506.13,-306.61 507.41,-299.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_metrics.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_metrics.f90.html" xlink:title="rdb_ocean_metrics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="489.5,-157.26 353.5,-157.26 353.5,-133.26 489.5,-133.26 489.5,-157.26"/>
+<text text-anchor="middle" x="421.5" y="-142.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_metrics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M738.74,-357.2C703.43,-350.21 659.52,-340.57 621,-329.26"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-329.26C530.82,-303.38 462.18,-208.7 435.08,-166.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="437.91,-164.12 429.65,-157.48 431.97,-167.82 437.91,-164.12"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_scratch_3d.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_scratch_3d.f90.html" xlink:title="rdb_scratch_3d.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="479.5,-501.26 363.5,-501.26 363.5,-477.26 479.5,-477.26 479.5,-501.26"/>
+<text text-anchor="middle" x="421.5" y="-486.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_scratch_3d.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_scratch_3d.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_scratch_3d.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-469.26C576.72,-479.88 527.97,-484.89 489.6,-487.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="489.36,-483.74 479.58,-487.8 489.76,-490.73 489.36,-483.74"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="466,-421.26 377,-421.26 377,-397.26 466,-397.26 466,-421.26"/>
+<text text-anchor="middle" x="421.5" y="-406.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M789.87,-381.34C759.43,-403.99 689.2,-452.13 621,-469.26"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M619,-469.26C570.6,-481.42 559.74,-449.78 512,-435.26 499.91,-431.58 486.86,-427.73 474.57,-424.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="475.48,-420.77 464.9,-421.34 473.53,-427.49 475.48,-420.77"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M185.79,-317.21C173.54,-312.86 159.63,-307.88 147,-303.26 130.97,-297.39 113.39,-290.82 98.02,-285.03"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="98.87,-281.61 88.28,-281.35 96.4,-288.16 98.87,-281.61"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M173.67,-397.16C164.36,-393.54 154.99,-388.97 147,-383.26 111.83,-358.1 83.24,-315.63 68.15,-290.24"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="71.08,-288.32 63.04,-281.42 65.02,-291.83 71.08,-288.32"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M420.5,-369.26C298.65,-369.26 259.24,-397.68 147,-350.26 115.87,-337.11 88.24,-308.67 71.94,-289.25"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="74.49,-286.84 65.47,-281.3 69.06,-291.26 74.49,-286.84"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M547.6,-369.26C510.32,-369.26 463.95,-369.26 422.5,-369.26"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M420.5,-369.26C367.67,-369.26 308.47,-355.48 268.58,-344.09"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="269.45,-340.7 258.87,-341.26 267.49,-347.42 269.45,-340.7"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M420.5,-369.26C367.67,-369.26 308.47,-383.04 268.58,-394.43"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="267.49,-391.1 258.87,-397.26 269.45,-397.82 267.49,-391.1"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M560.04,-381.26C533.4,-386.69 502.13,-393.05 476.15,-398.34"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="475.21,-394.96 466.11,-400.38 476.61,-401.82 475.21,-394.96"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="111,-35.26 0,-35.26 0,-11.26 111,-11.26 111,-35.26"/>
+<text text-anchor="middle" x="55.5" y="-20.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M565.99,-357.19C559.15,-353.67 552.85,-349.13 548,-343.26 485.11,-267.27 571.47,-202.96 512,-124.26 427.8,-12.84 360.81,-18.6 222,-3.26"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M220,-3.26C182.94,3.49 140.72,-2.01 108.47,-8.93"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="107.35,-5.59 98.37,-11.21 108.89,-12.42 107.35,-5.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M330.99,-284.34C265.66,-280.75 178.67,-275.97 120.29,-272.77"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="120.27,-269.26 110.09,-272.21 119.88,-276.25 120.27,-269.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M360.94,-301.26C332.08,-307.08 297.86,-313.97 270.61,-319.47"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="269.64,-316.09 260.52,-321.5 271.02,-322.95 269.64,-316.09"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M400.37,-301.43C364.91,-322.87 291.21,-367.42 250.52,-392.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="248.63,-389.07 241.88,-397.24 252.25,-395.06 248.63,-389.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="285,-219.26 157,-219.26 157,-195.26 285,-195.26 285,-219.26"/>
+<text text-anchor="middle" x="221" y="-204.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M398.35,-277.04C373.67,-263.78 332.32,-242.58 295,-228.26 289.56,-226.17 283.82,-224.18 278.05,-222.31"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="278.94,-218.92 268.35,-219.29 276.86,-225.61 278.94,-218.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_tide_astro.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_tide_astro.f90.html" xlink:title="rdb_ocean_tide_astro.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="295,-261.26 147,-261.26 147,-237.26 295,-237.26 295,-261.26"/>
+<text text-anchor="middle" x="221" y="-246.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_tide_astro.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M360.94,-277.26C339.16,-272.87 314.32,-267.86 291.72,-263.31"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="292.35,-259.87 281.86,-261.32 290.97,-266.73 292.35,-259.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M375.96,-133.23C319.34,-120.5 220.16,-106.91 147,-144.26 104.52,-165.95 77.36,-217.91 64.75,-247.56"/>
+<polygon fill="#003fff" stroke="#003fff" points="61.43,-246.45 60.9,-257.04 67.91,-249.09 61.43,-246.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M409.13,-157.4C387.56,-180.23 338.94,-230.82 295,-270.26 279.19,-284.46 260.54,-299.5 246.05,-310.84"/>
+<polygon fill="#003fff" stroke="#003fff" points="243.8,-308.16 238.06,-317.06 248.1,-313.69 243.8,-308.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M410.14,-157.57C392.4,-179.05 355.73,-225.21 331,-268.26 311.18,-302.77 319.16,-318.63 295,-350.26 282.68,-366.39 265.07,-380.79 250.23,-391.33"/>
+<polygon fill="#003fff" stroke="#003fff" points="248.13,-388.52 241.87,-397.07 252.1,-394.29 248.13,-388.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M411.63,-133.01C392.96,-108.17 347.04,-51.71 295,-22.26 265.82,-5.75 255.32,-6.94 222,-3.26"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_io_netcdf.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_io_netcdf.f90.html" xlink:title="rdb_io_netcdf.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="274,-55.26 168,-55.26 168,-31.26 274,-31.26 274,-55.26"/>
+<text text-anchor="middle" x="221" y="-40.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_io_netcdf.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_io_netcdf.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M405.12,-133.19C382.28,-115.77 337.49,-83.58 295,-64.26 290.58,-62.25 285.92,-60.39 281.19,-58.66"/>
+<polygon fill="#003fff" stroke="#003fff" points="282,-55.24 271.4,-55.33 279.74,-61.87 282,-55.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_bipolar.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_bipolar.f90.html" xlink:title="rdb_ocean_bipolar.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="287.5,-97.26 154.5,-97.26 154.5,-73.26 287.5,-73.26 287.5,-97.26"/>
+<text text-anchor="middle" x="221" y="-82.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_bipolar.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M380.33,-133.12C348.88,-123.61 304.99,-110.35 271.4,-100.19"/>
+<polygon fill="#003fff" stroke="#003fff" points="272.36,-96.83 261.77,-97.28 270.33,-103.53 272.36,-96.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_fold.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_fold.f90.html" xlink:title="rdb_ocean_fold.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="279.5,-177.26 162.5,-177.26 162.5,-153.26 279.5,-153.26 279.5,-177.26"/>
+<text text-anchor="middle" x="221" y="-162.86" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_fold.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_fold.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M353.3,-152.03C332.8,-154.1 310.27,-156.37 289.74,-158.44"/>
+<polygon fill="#003fff" stroke="#003fff" points="289.12,-154.98 279.52,-159.46 289.82,-161.94 289.12,-154.98"/>
+</g>
+<!-- sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_metrics.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M384.9,-157.26C359.84,-165.62 325.46,-176.91 295,-186.26 288.48,-188.26 281.61,-190.31 274.8,-192.31"/>
+<polygon fill="#003fff" stroke="#003fff" points="273.55,-189.03 264.92,-195.19 275.5,-195.75 273.55,-189.03"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M374.01,-501.37C319.86,-515.04 236,-534.72 222,-529.26"/>
+</g>
+<!-- sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_scratch_3d.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M373.06,-477.17C359.33,-473.22 344.42,-468.49 331,-463.26 303.74,-452.65 274.07,-437.71 252.58,-426.24"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="254.07,-423.07 243.61,-421.4 250.75,-429.23 254.07,-423.07"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M402.19,-421.41C354.9,-452.64 231.68,-533.04 222,-529.26"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M220,-529.26C118.01,-489.47 74.45,-346.27 61.2,-291.12"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="64.59,-290.28 58.94,-281.32 57.77,-291.85 64.59,-290.28"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M376.74,-398.22C362.02,-394.07 345.63,-388.96 331,-383.26 303.74,-372.65 274.07,-357.71 252.58,-346.24"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="254.07,-343.07 243.61,-341.4 250.75,-349.23 254.07,-343.07"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M376.94,-409.26C352.44,-409.26 321.26,-409.26 293.29,-409.26"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="293.15,-405.76 283.15,-409.26 293.15,-412.76 293.15,-405.76"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M167.63,-52.19C160.14,-55.14 152.96,-59.06 147,-64.26 90.36,-113.69 67.67,-205.3 59.94,-247.25"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="56.47,-246.79 58.21,-257.24 63.36,-247.98 56.47,-246.79"/>
+</g>
+<!-- sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_io_netcdf.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M167.82,-36.88C152.95,-35.06 136.56,-33.05 121.05,-31.16"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="121.35,-27.67 111,-29.93 120.5,-34.62 121.35,-27.67"/>
+</g>
+<!-- sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_bipolar.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M170.69,-97.4C162.21,-100.94 153.92,-105.48 147,-111.26 102.58,-148.4 75.39,-213.29 63.52,-247.19"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="60.08,-246.45 60.2,-257.04 66.71,-248.68 60.08,-246.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_fold.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M166.98,-177.34C160.05,-179.83 153.21,-182.78 147,-186.26 117.52,-202.79 89.85,-230.68 73.05,-249.52"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="70.26,-247.38 66.33,-257.22 75.54,-251.98 70.26,-247.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M146.86,-258.21C138.06,-259.28 129.12,-260.38 120.47,-261.44"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="119.96,-257.97 110.46,-262.66 120.81,-264.92 119.96,-257.97"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_hdiff_tracerf90EfferentGraph = svgPanZoom('#sourcefilerdb_ocean_hdiff_tracerf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_hdiff_tracerf90AfferentGraph" width="641pt" height="117pt"
+ viewBox="0.00 0.00 641.00 117.40" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph" class="graph" transform="scale(0.49 0.49) rotate(0) translate(4 235.19)">
+<title>sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-235.19 1302,-235.19 1302,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<polygon fill="none" stroke="black" points="157,-127.19 0,-127.19 0,-103.19 157,-103.19 157,-127.19"/>
+<text text-anchor="middle" x="78.5" y="-112.79" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_hdiff_tracer.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="309,-147.19 193,-147.19 193,-123.19 309,-123.19 309,-147.19"/>
+<text text-anchor="middle" x="251" y="-132.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M192.75,-128.47C184.55,-127.51 175.95,-126.5 167.32,-125.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="167.54,-121.99 157.2,-124.3 166.72,-128.94 167.54,-121.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="468,-107.19 345,-107.19 345,-83.19 468,-83.19 468,-107.19"/>
+<text text-anchor="middle" x="406.5" y="-92.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M344.95,-98.9C295.02,-101.97 223.54,-106.35 167.33,-109.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="166.78,-106.33 157.02,-110.43 167.21,-113.31 166.78,-106.33"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M359.44,-107.19C343.28,-111.4 324.94,-116.18 308.04,-120.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="307.08,-117.22 298.29,-123.13 308.85,-123.99 307.08,-117.22"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1145.5,-176.19 1057.5,-176.19 1057.5,-152.19 1145.5,-152.19 1145.5,-176.19"/>
+<text text-anchor="middle" x="1101.5" y="-161.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M574.5,-193.19C501.22,-181.4 481.05,-203.12 407.5,-193.19"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1057.46,-172.24C967.62,-187.81 753.75,-218.37 576.5,-193.19"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M574.5,-193.19C515.34,-183.67 457.6,-139.9 427.99,-114.19"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="430.21,-111.47 420.4,-107.46 425.56,-116.71 430.21,-111.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1018,-87.19 885,-87.19 885,-63.19 1018,-63.19 1018,-87.19"/>
+<text text-anchor="middle" x="951.5" y="-72.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1080.54,-152.19C1055.05,-136.86 1010.76,-110.22 981.53,-92.65"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="982.99,-89.44 972.62,-87.29 979.38,-95.44 982.99,-89.44"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1149,-107.19 1054,-107.19 1054,-83.19 1149,-83.19 1149,-107.19"/>
+<text text-anchor="middle" x="1101.5" y="-92.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1053.82,-95.85C1042.12,-95.99 1029.6,-96.12 1018,-96.19 869.08,-97.09 831.41,-101.49 683,-89.19 635.42,-85.25 624.24,-74.75 576.5,-75.19"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1053.67,-88.86C1045.58,-87.77 1036.98,-86.6 1028.34,-85.44"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1028.6,-81.94 1018.22,-84.07 1027.66,-88.88 1028.6,-81.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1298,-107.19 1185,-107.19 1185,-83.19 1298,-83.19 1298,-107.19"/>
+<text text-anchor="middle" x="1241.5" y="-92.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1231.86,-107.21C1217.15,-126.74 1185.3,-165.19 1149,-185.19 1070.44,-228.47 1042.19,-231.19 952.5,-231.19 952.5,-231.19 952.5,-231.19 765,-231.19 605.22,-231.19 565.85,-214.57 407.5,-193.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1184.77,-95.19C1176.37,-95.19 1167.69,-95.19 1159.27,-95.19"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1159.15,-91.69 1149.15,-95.19 1159.15,-98.69 1159.15,-91.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="849,-47.19 683,-47.19 683,-23.19 849,-23.19 849,-47.19"/>
+<text text-anchor="middle" x="766" y="-32.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M950.5,-35.19C920.91,-33.6 888.59,-33.16 859.43,-33.25"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="859.24,-29.75 849.26,-33.31 859.28,-36.75 859.24,-29.75"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="647,-47.19 504,-47.19 504,-23.19 647,-23.19 647,-47.19"/>
+<text text-anchor="middle" x="575.5" y="-32.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1221.84,-83.1C1196.2,-67.45 1148.05,-41.43 1102.5,-35.19"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1100.5,-35.19C1035.33,-26.26 1018.18,-38.72 952.5,-35.19"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M950.5,-35.19C904.5,-32.72 894.83,-18.88 849,-14.19 775.61,-6.68 756.43,-7.02 683,-14.19 667.99,-15.65 651.96,-18.26 637,-21.14"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="635.97,-17.78 626.85,-23.17 637.35,-24.64 635.97,-17.78"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1100.5,-35.19C1080.25,-32.41 1031.04,-47.36 994.9,-59.77"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="993.38,-56.59 985.09,-63.18 995.68,-63.2 993.38,-56.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M729.12,-23.08C677.6,-7.71 580.46,13.65 504,-14.19 470.73,-26.3 440.95,-55.48 423.55,-75.3"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="420.69,-73.26 416.88,-83.15 426.02,-77.8 420.69,-73.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M682.87,-35.19C674.41,-35.19 665.81,-35.19 657.36,-35.19"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="657.14,-31.69 647.14,-35.19 657.14,-38.69 657.14,-31.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M540.71,-47.33C514.7,-56.67 478.59,-69.65 450.52,-79.73"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="449.19,-76.49 440.96,-83.17 451.55,-83.08 449.19,-76.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M765,-155.19C649.84,-172.74 619.68,-165.49 504,-179.19 460.96,-184.29 450.52,-198.42 407.5,-193.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M765,-75.19C681.34,-70.81 660.27,-74.42 576.5,-75.19"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M574.5,-75.19C542.9,-75.48 508.16,-79.1 478.6,-83.18"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="477.77,-79.76 468.37,-84.64 478.76,-86.69 477.77,-79.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M895.44,-63.19C875.58,-58.86 852.96,-53.93 832.3,-49.42"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="832.85,-45.96 822.33,-47.25 831.36,-52.8 832.85,-45.96"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M884.64,-76.85C849.66,-77.32 805.97,-77.23 767,-75.19"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M765,-75.19C716.85,-72.67 663.17,-60.31 625.45,-49.99"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="626.31,-46.59 615.74,-47.28 624.43,-53.33 626.31,-46.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="638.5,-127.19 512.5,-127.19 512.5,-103.19 638.5,-103.19 638.5,-127.19"/>
+<text text-anchor="middle" x="575.5" y="-112.79" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M931.95,-87.2C899.91,-107.02 831.42,-145.37 767,-155.19"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M765,-155.19C738.89,-159.17 673.27,-143.02 626.81,-130.06"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="627.49,-126.61 616.92,-127.27 625.59,-133.35 627.49,-126.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M538.6,-127.32C527.39,-131.4 515.06,-136.2 504,-141.19 459.59,-161.22 455.86,-199.07 407.5,-193.19"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M405.5,-193.19C361.1,-187.79 313.42,-167.19 283.19,-152.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="284.51,-148.82 274.01,-147.39 281.32,-155.05 284.51,-148.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_hdiff_tracer.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M512.32,-107.74C501.24,-106.41 489.63,-105.02 478.33,-103.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="478.42,-100.16 468.07,-102.44 477.58,-107.11 478.42,-100.16"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_hdiff_tracerf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_hdiff_tracerf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Constant-coefficient horizontal tracer diffusion for the ocean</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!! multilayer C-grid.  Conservative curvilinear flux-form Laplacian</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! on `T = hTr/h` (design §2, mirrors continuity):</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!!</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!!   F_x(i,j,k) = kappa * h_face_x * (T(i,j,k) - T(i-1,j,k)) * idxCu * dy_cu</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="c">!!   hTr(i,j,k) += dt * [(F_x(i+1)-F_x(i)) + (F_y(j+1)-F_y(j))] * iareaT</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="c">!!</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="c">!! The face flux carries the width-weighted transport [tracer·m³/s]</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="c">!! and the divergence is area-normalised by `iareaT`; on uniform</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="c">!! Cartesian this collapses to the `/dx`/`/dy` form to round-off.</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="c">!! `h_face_x = 0.5 * (h(i-1, j, k) + h(i, j, k))` keeps the kernel</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="c">!! conservative under variable thickness — the divergence of an</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="c">!! h-weighted flux integrates to zero over the closed-wall domain.</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="c">!!</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="c">!! Wall faces force `F = 0` (closed-wall, no tracer flux across the</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="c">!! boundary).  Vanishing-layer guards on the `T = hTr/h` division</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="c">!! mirror the horizontal advection kernel.</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="c">!!</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="c">!! Phase Tier-1 ships the constant-`kappa_h` variant; Phase 5+ may</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="c">!! drop in a Smagorinsky-style isotropic closure or a Redi-style</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="c">!! isopycnal rotation.</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="k">module </span><span class="n">rdb_ocean_hdiff_tracer</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!! Kernel state for the per-tracer horizontal-diffusion sweep.</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! Sits alongside `rdb_ocean_horizontal_viscosity` (which does</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! the momentum half of horizontal mixing); this module is the</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! tracer-side counterpart.  Same compute-then-apply pattern,</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! same scratch-buffer two-pass design for race-free</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!! `do concurrent` parallelism.</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ocean_metrics</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_metrics_t</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ocean_boundary_types</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_bc_state_t</span><span class="p">,</span><span class="w"> </span><span class="n">OBC_WALL</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_tracer</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">TRACER_BUDGET_HEAT</span><span class="p">,</span><span class="w"> </span><span class="n">TRACER_BUDGET_SALT</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_scratch_3d</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">scratch_3d_buffer_t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">                             </span><span class="n">scratch_3d_buffer_enter_data_impl</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">                             </span><span class="n">scratch_3d_buffer_exit_data_impl</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="k">use</span><span class="p">,</span><span class="w"> </span><span class="k">intrinsic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iso_fortran_env</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">int64</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_mem_report</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">arr_bytes</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="k">   private</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_t</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tracer_hdiff</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_t</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">         </span><span class="c">!! True between `init` and `destroy`.</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">         </span><span class="c">!! Constant horizontal tracer diffusivity (m^2/s).  Zero</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">         </span><span class="c">!! is a no-op — the kernel short-circuits without</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">         </span><span class="c">!! touching hTr.  Stability bound (explicit forward-Euler):</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">         </span><span class="c">!!   kappa_h * dt * (1/dx^2 + 1/dy^2) &lt;= 0.5</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">scratch_3d_buffer_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_centre</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">         </span><span class="c">!! `T = hTr/h` at cell centres.  Shape (nx, ny, nz_ml).</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">         </span><span class="c">!! Filled per tracer at the start of each impl call;</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">         </span><span class="c">!! reused across the F_x / F_y face passes so the</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">         </span><span class="c">!! divergence step reads a consistent snapshot.</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">scratch_3d_buffer_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">F_x_face</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">         </span><span class="c">!! East-face tracer flux `kappa * h_face * dT/dx`.</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">         </span><span class="c">!! Shape (nx+1, ny, nz_ml).</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">scratch_3d_buffer_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">F_y_face</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">         </span><span class="c">!! North-face counterpart.  Shape (nx, ny+1, nz_ml).</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">   </span><span class="k">contains</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="k">      procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_init</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">destroy</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_destroy</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enter_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_enter_data</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">exit_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_exit_data</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_hdiff_tracer_bytes</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">   </span><span class="k">end type </span><span class="n">ocean_hdiff_tracer_t</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="k">contains</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="k">   subroutine </span><span class="n">ocean_hdiff_tracer_init</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">nz_ml</span><span class="p">)</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz_ml</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nz_ml</span><span class="p">))</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz_ml</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="s2">"ocean_hdiff_T_centre"</span><span class="p">)</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="s2">"ocean_hdiff_F_x_face"</span><span class="p">)</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="s2">"ocean_hdiff_F_y_face"</span><span class="p">)</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_hdiff_tracer_init</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_hdiff_tracer_destroy</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="n">destroy</span><span class="p">()</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="n">destroy</span><span class="p">()</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="n">destroy</span><span class="p">()</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_hdiff_tracer_destroy</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_hdiff_tracer_enter_data</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">         </span><span class="k">call </span><span class="n">ocean_hdiff_tracer_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="k">   end subroutine </span><span class="n">ocean_hdiff_tracer_enter_data</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_hdiff_tracer_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">)</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">)</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_hdiff_tracer_enter_data_impl</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_hdiff_tracer_exit_data</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">)</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">         </span><span class="k">call </span><span class="n">ocean_hdiff_tracer_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="k">   end subroutine </span><span class="n">ocean_hdiff_tracer_exit_data</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_hdiff_tracer_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">)</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">call </span><span class="n">scratch_3d_buffer_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">)</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_hdiff_tracer_exit_data_impl</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">tracer_hdiff</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">)</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="c">!! Iterate the tracer registry and apply constant-`kappa_h`</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="c">!! horizontal Laplacian diffusion to every tracer whose</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="c">!! `do_horizontal_diffusion` flag is set.  Outer-shim:</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="c">!! forwards each tracer's hTr to the flat-impl below.</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="c">!! Reuses the same scratch buffers across all tracers in one</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="c">!! call.</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="c">!! Optional `active` — when present and false the kernel is a</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="c">!! no-op (used by the dyn step to gate on</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="c">!! thermodynamics + thermo-substep cadence).</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="c">!! Optional `bc` — per-edge OBC tags, resolved to plain host</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="c">!! logicals before the kernel call (mirrors</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="c">!! `continuity_zonal_flux`; a derived-type dummy must never</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="c">!! reach a `do concurrent` kernel — mem:separate).  Absent =&gt;</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="c">!! WALL on every edge (single-rank default).  A non-WALL edge,</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="c">!! or an MPI seam (`has_* = .false.`), leaves the physical-edge</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="c">!! flux computed rather than hard-zeroed — the halo/periodic-wrap</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">!! preamble the split-solver caller runs immediately before this</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!! call has already filled the ghost band with the correct</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="c">!! neighbour/periodic value there.</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_bc_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bc</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">it</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">active</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="k">      end if</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kappa_h</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="c">! Resolve the physical-edge wall flags on the host — see</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="c">! `continuity_zonal_flux` for the identical pattern.  Default</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="c">! .true. =&gt; single-rank, all-wall closed boundary (bit-identical</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="c">! to a run with no `bc`).</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="n">wall_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="n">wall_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="n">wall_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="n">wall_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">bc</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="k">         </span><span class="n">wall_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">bc</span><span class="p">%</span><span class="n">west</span><span class="p">%</span><span class="n">bc_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OBC_WALL</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_west</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">         </span><span class="n">wall_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">bc</span><span class="p">%</span><span class="n">east</span><span class="p">%</span><span class="n">bc_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OBC_WALL</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_east</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">         </span><span class="n">wall_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">bc</span><span class="p">%</span><span class="n">south</span><span class="p">%</span><span class="n">bc_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OBC_WALL</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_south</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">         </span><span class="n">wall_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">bc</span><span class="p">%</span><span class="n">north</span><span class="p">%</span><span class="n">bc_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">OBC_WALL</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_north</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="k">      do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">do_horizontal_diffusion</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="k">         select case</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">budget_id</span><span class="p">)</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_HEAT</span><span class="p">)</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">            </span><span class="k">call </span><span class="n">tracer_hdiff_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">               </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">               </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">               </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">               </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_hdiff</span><span class="p">)</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_SALT</span><span class="p">)</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">            </span><span class="k">call </span><span class="n">tracer_hdiff_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">               </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">               </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">               </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">               </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">salt_budget_hdiff</span><span class="p">)</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">         </span><span class="k">case </span><span class="n">default</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">            </span><span class="k">call </span><span class="n">tracer_hdiff_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">               </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">               </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">               </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">               </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">               </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">)</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">         </span><span class="k">end select</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="k">      end do</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="k">   end subroutine </span><span class="n">tracer_hdiff</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">tracer_hdiff_one_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kappa</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">                                         </span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="w">                                         </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">T_centre</span><span class="p">,</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">,</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">                                         </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">)</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">      </span><span class="c">!! Four-pass flat-impl horizontal-Laplacian tracer diffusion in</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">      </span><span class="c">!! conservative curvilinear form (design §2, mirrors continuity):</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">      </span><span class="c">!!   1. Compute T = hTr / h at every cell centre (vanishing</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="c">!!      layer → T = 0).</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="c">!!   2. East-face TRANSPORT flux [tracer·m³/s]:</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="c">!!        F_x(i) = kappa · 0.5·(h(i-1)+h(i)) · (T(i)-T(i-1))</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">      </span><span class="c">!!                 · idxCu(i) · dy_cu(i)</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="c">!!      PHYSICAL wall faces (i = nghost+1, i = nghost+nx_phys+1):</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="c">!!      zeroed when `wall_w`/`wall_e` (mirrors</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="c">!!      `continuity_zonal_flux`'s host-resolved has_*/OBC_WALL</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">      </span><span class="c">!!      gate).  ARRAY-bound faces (i = 1, i = nx+1) are always</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="c">!!      zeroed too — the pass-4 divergence reads F_x_face(1,...)</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">      </span><span class="c">!!      and F_x_face(nx+1,...) at the domain edge cells even</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="c">!!      when the physical wall sits inside the ghost band, so</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">      </span><span class="c">!!      those two faces must stay initialised.</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="c">!!   3. North-face flux, mirror of pass 2 (idyCv · dx_cv).</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">      </span><span class="c">!!   4. Divergence into hTr:</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="c">!!        hTr(i,j,k) += dt · [(F_x(i+1)-F_x(i))</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="c">!!                            + (F_y(j+1)-F_y(j))] · iareaT(i,j)</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="c">!! On uniform Cartesian `dy_cu=dy`, `idxCu=1/dx`,</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">      </span><span class="c">!! `iareaT=1/(dx·dy)`, so the form collapses to the old</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">      </span><span class="c">!! `Δ(kappa·h·ΔT/dx)/dx` to round-off.  Each pass writes a</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="c">!! different buffer than it reads, so `do concurrent` is</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="c">!! race-free.  Constancy: uniform T → zero face fluxes → hTr</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="c">!! unchanged.  Conservation over the PHYSICAL domain: closed</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="c">!! physical-wall + flux-form divergence over the area-weighted</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="c">!! cells integrates to zero exactly (see `tracer_hdiff`'s</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="c">!! host-side wall-flag resolution for the OBC/MPI-seam gate).</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">      </span><span class="c">!! Stability (per cell, explicit forward-Euler):</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="c">!!   kappa · dt · (idxT² + idyT²) &lt;= 0.5.</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">kappa</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dy_cu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">dx_cv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idxCu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">idyCv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iareaT</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_centre</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_face</span><span class="p">,</span><span class="w"> </span><span class="n">delta</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="c">! ---- Pass 1: T = hTr/h at centres ----</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="k">            </span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="k">            </span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="k">      end do</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">      </span><span class="c">! ---- Pass 2: east-face transport flux ----</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">h_face</span><span class="p">)</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">         </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">         </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">                             </span><span class="p">(</span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">                             </span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dy_cu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">      </span><span class="c">! Array-bound faces: always zeroed (pass-4 divergence at the</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">      </span><span class="c">! domain-edge cells reads them even when the physical wall is</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">      </span><span class="c">! elsewhere inside the ghost band).</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">         </span><span class="n">F_x_face</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">         </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">      </span><span class="c">! Physical wall faces: zero only when the edge is actually a</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">      </span><span class="c">! closed wall here (single-rank all-wall default; OBC/MPI-seam</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">      </span><span class="c">! edges keep the computed flux read from a correctly-filled</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">      </span><span class="c">! ghost column — see `tracer_hdiff`).</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wall_w</span><span class="p">)</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wall_e</span><span class="p">)</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">      </span><span class="c">! ---- Pass 3: north-face transport flux ----</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">h_face</span><span class="p">)</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">         </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">         </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">                             </span><span class="p">(</span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">T_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">                             </span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dx_cv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="k">      do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="w">         </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">         </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="k">      do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wall_s</span><span class="p">)</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wall_n</span><span class="p">)</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">      </span><span class="c">! ---- Pass 4: apply area-weighted divergence ----</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">budget</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">delta</span><span class="p">)</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">            </span><span class="n">delta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">                    </span><span class="p">(</span><span class="n">F_x_face</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">                    </span><span class="p">(</span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">            </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">delta</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">            </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">delta</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="k">      else</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">            </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">                           </span><span class="p">(</span><span class="n">F_x_face</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">F_x_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">                           </span><span class="p">(</span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">F_y_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="k">      end if</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="k">   end subroutine </span><span class="n">tracer_hdiff_one_impl</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">   </span><span class="k">pure function </span><span class="n">ocean_hdiff_tracer_bytes</span><span class="p">(</span><span class="n">this</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">nbytes</span><span class="p">)</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="c">!! Counted allocatable footprint of the horizontal tracer diffusion slot (0 when</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="c">!! unallocated).</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_hdiff_tracer_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nbytes</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">      </span><span class="n">nbytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">T_centre</span><span class="p">%</span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">               </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">F_x_face</span><span class="p">%</span><span class="n">bytes</span><span class="p">()</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">               </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">F_y_face</span><span class="p">%</span><span class="n">bytes</span><span class="p">()</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">   </span><span class="k">end function </span><span class="n">ocean_hdiff_tracer_bytes</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a>
+<a id="ln-355" name="ln-355" href="#ln-355"></a><span class="k">end module </span><span class="n">rdb_ocean_hdiff_tracer</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

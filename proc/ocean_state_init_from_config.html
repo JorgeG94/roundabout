@@ -1,0 +1,976 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_state_init_from_config &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_state_init_from_config
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">107 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_state.f90.html'>rdb_ocean_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_state_init_from_config</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_state_init_from_config.html#src">ocean_state_init_from_config</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine ocean_state_init_from_config(this, cfg, grid)  
+</h2>
+    
+
+    <p>Seed the cfg-derived scalars the slot inits read up front (layer
+count, ideal-age toggle), allocate via init(grid), then override the
+linear-EOS params (after eos%init has set its defaults).  Carries the
+ocean branch that state_init_from_config held before the coastal /
+ocean state split — the order (nz_ml + ideal_age before init, eos
+after) is load-bearing and matches the pre-split behaviour.</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/ocean_state_t.html'>ocean_state_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~470"></span>
+              class(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~86"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~242"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_init_from_config~~CallsGraph Pages: 1 -->
+<svg id="prococean_state_init_from_configCallsGraph" width="641pt" height="105pt"
+ viewBox="0.00 0.00 641.00 104.65" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_init_from_config~~CallsGraph" class="graph" transform="scale(0.52 0.52) rotate(0) translate(4 196)">
+<title>proc~~ocean_state_init_from_config~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 1221,-196 1221,4 -4,4"/>
+<!-- proc~ocean_state_init_from_config -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node1" class="node">
+<title>proc~ocean_state_init_from_config</title>
+<polygon fill="none" stroke="black" points="250,-87 0,-87 0,-63 250,-63 250,-87"/>
+<text text-anchor="middle" x="125" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_t%ocean_state_init_from_config</text>
+</g>
+<!-- proc~ice_hlim_count -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node2" class="node">
+<title>proc~ice_hlim_count</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node2"><a xlink:href="../proc/ice_hlim_count.html" xlink:title="ice_hlim_count">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="423,-150 331,-150 331,-126 423,-126 423,-150"/>
+<text text-anchor="middle" x="377" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_hlim_count</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init_from_config&#45;&gt;proc~ice_hlim_count -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_state_init_from_config&#45;&gt;proc~ice_hlim_count</title>
+<path fill="none" stroke="#ff0000" d="M170.4,-87.01C202.47,-95.59 246.84,-107.29 286,-117 297.2,-119.78 309.21,-122.65 320.7,-125.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="320.08,-128.8 330.62,-127.67 321.68,-121.98 320.08,-128.8"/>
+</g>
+<!-- proc~ocean_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node3" class="node">
+<title>proc~ocean_state_init</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node3"><a xlink:href="../proc/ocean_state_init.html" xlink:title="ocean_state_t%ocean_state_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="468,-108 286,-108 286,-84 468,-84 468,-108"/>
+<text text-anchor="middle" x="377" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_t%ocean_state_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init_from_config&#45;&gt;proc~ocean_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_state_init_from_config&#45;&gt;proc~ocean_state_init</title>
+<path fill="none" stroke="#ff0000" d="M250.27,-85.44C258.81,-86.16 267.35,-86.87 275.74,-87.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="275.62,-91.08 285.88,-88.43 276.21,-84.11 275.62,-91.08"/>
+</g>
+<!-- proc~parse_opgf_variant -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node4" class="node">
+<title>proc~parse_opgf_variant</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node4"><a xlink:href="../proc/parse_opgf_variant.html" xlink:title="parse_opgf_variant">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="434.5,-66 319.5,-66 319.5,-42 434.5,-42 434.5,-66"/>
+<text text-anchor="middle" x="377" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_opgf_variant</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init_from_config&#45;&gt;proc~parse_opgf_variant -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_state_init_from_config&#45;&gt;proc~parse_opgf_variant</title>
+<path fill="none" stroke="#ff0000" d="M250.27,-64.56C270.54,-62.86 290.84,-61.15 309.04,-59.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="309.53,-63.1 319.2,-58.77 308.94,-56.12 309.53,-63.1"/>
+</g>
+<!-- proc~pgf_nonoverlap_gate_on -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node5" class="node">
+<title>proc~pgf_nonoverlap_gate_on</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node5"><a xlink:href="../proc/pgf_nonoverlap_gate_on.html" xlink:title="pgf_nonoverlap_gate_on">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="449,-24 305,-24 305,0 449,0 449,-24"/>
+<text text-anchor="middle" x="377" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pgf_nonoverlap_gate_on</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init_from_config&#45;&gt;proc~pgf_nonoverlap_gate_on -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_state_init_from_config&#45;&gt;proc~pgf_nonoverlap_gate_on</title>
+<path fill="none" stroke="#ff0000" d="M170.4,-62.99C202.47,-54.41 246.84,-42.71 286,-33 294.81,-30.82 304.11,-28.57 313.27,-26.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="314.19,-29.78 323.12,-24.08 312.58,-22.97 314.19,-29.78"/>
+</g>
+<!-- proc~barotropic_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node6" class="node">
+<title>proc~barotropic_state_init</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node6"><a xlink:href="../proc/barotropic_state_init.html" xlink:title="barotropic_state_t%barotropic_state_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="728,-108 504,-108 504,-84 728,-84 728,-108"/>
+<text text-anchor="middle" x="616" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_state_t%barotropic_state_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init&#45;&gt;proc~barotropic_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_state_init&#45;&gt;proc~barotropic_state_init</title>
+<path fill="none" stroke="#7fff00" d="M468.28,-96C476.64,-96 485.21,-96 493.8,-96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="493.87,-99.5 503.87,-96 493.87,-92.5 493.87,-99.5"/>
+</g>
+<!-- proc~ocean_bc_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node7" class="node">
+<title>proc~ocean_bc_state_init</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node7"><a xlink:href="../proc/ocean_bc_state_init.html" xlink:title="ocean_bc_state_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="674.5,-66 557.5,-66 557.5,-42 674.5,-42 674.5,-66"/>
+<text text-anchor="middle" x="616" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_state_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init&#45;&gt;proc~ocean_bc_state_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_state_init&#45;&gt;proc~ocean_bc_state_init</title>
+<path fill="none" stroke="#7fff00" d="M445.91,-83.96C477.64,-78.34 515.31,-71.67 547.04,-66.04"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="547.88,-69.45 557.11,-64.26 546.65,-62.56 547.88,-69.45"/>
+</g>
+<!-- proc~ocean_pseudo_salt_register -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node8" class="node">
+<title>proc~ocean_pseudo_salt_register</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node8"><a xlink:href="../proc/ocean_pseudo_salt_register.html" xlink:title="ocean_pseudo_salt_register">
+<polygon fill="#d9534f" stroke="#d9534f" points="696,-150 536,-150 536,-126 696,-126 696,-150"/>
+<text text-anchor="middle" x="616" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_pseudo_salt_register</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_init&#45;&gt;proc~ocean_pseudo_salt_register -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_state_init&#45;&gt;proc~ocean_pseudo_salt_register</title>
+<path fill="none" stroke="#7fff00" d="M445.91,-108.04C474.3,-113.07 507.46,-118.94 536.85,-124.15"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="536.62,-127.66 547.08,-125.96 537.84,-120.77 536.62,-127.66"/>
+</g>
+<!-- proc~parse_ocean_vcoord_type -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node9" class="node">
+<title>proc~parse_ocean_vcoord_type</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node9"><a xlink:href="../proc/parse_ocean_vcoord_type.html" xlink:title="parse_ocean_vcoord_type">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="691.5,-24 540.5,-24 540.5,0 691.5,0 691.5,-24"/>
+<text text-anchor="middle" x="616" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_ocean_vcoord_type</text>
+</a>
+</g>
+</g>
+<!-- proc~pgf_nonoverlap_gate_on&#45;&gt;proc~parse_ocean_vcoord_type -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge8" class="edge">
+<title>proc~pgf_nonoverlap_gate_on&#45;&gt;proc~parse_ocean_vcoord_type</title>
+<path fill="none" stroke="#7f00ff" d="M449.11,-12C474.62,-12 503.64,-12 530.19,-12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="530.24,-15.5 540.24,-12 530.24,-8.5 530.24,-15.5"/>
+</g>
+<!-- error -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node10" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="1185,-192 1131,-192 1131,-168 1185,-168 1185,-192"/>
+<text text-anchor="middle" x="1158" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~ocean_pseudo_salt_register&#45;&gt;error -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_pseudo_salt_register&#45;&gt;error</title>
+<path fill="none" stroke="#00ffff" d="M692.01,-150.02C715.05,-153.36 740.52,-156.7 764,-159 894.71,-171.8 1050.7,-177.22 1120.31,-179.12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1120.63,-182.63 1130.72,-179.4 1120.82,-175.64 1120.63,-182.63"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node11" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node11"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1206,-108 1110,-108 1110,-84 1206,-84 1206,-108"/>
+<text text-anchor="middle" x="1158" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pseudo_salt_register&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_pseudo_salt_register&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#00ffff" d="M692.01,-125.98C715.05,-122.64 740.52,-119.3 764,-117 882.85,-105.36 1022.6,-99.82 1099.32,-97.48"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1099.82,-100.97 1109.71,-97.18 1099.61,-93.97 1099.82,-100.97"/>
+</g>
+<!-- proc~multilayer_register_passive_tracer -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node12" class="node">
+<title>proc~multilayer_register_passive_tracer</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node12"><a xlink:href="../proc/multilayer_register_passive_tracer.html" xlink:title="multilayer_state_t%multilayer_register_passive_tracer">
+<polygon fill="#d9534f" stroke="#d9534f" points="1063,-150 764,-150 764,-126 1063,-126 1063,-150"/>
+<text text-anchor="middle" x="913.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">multilayer_state_t%multilayer_register_passive_tracer</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pseudo_salt_register&#45;&gt;proc~multilayer_register_passive_tracer -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_pseudo_salt_register&#45;&gt;proc~multilayer_register_passive_tracer</title>
+<path fill="none" stroke="#00ffff" d="M696.19,-138C714.1,-138 733.75,-138 753.66,-138"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="753.77,-141.5 763.77,-138 753.77,-134.5 753.77,-141.5"/>
+</g>
+<!-- proc~parse_vcoord_type -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node13" class="node">
+<title>proc~parse_vcoord_type</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node13"><a xlink:href="../proc/parse_vcoord_type.html" xlink:title="parse_vcoord_type">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="970,-24 857,-24 857,0 970,0 970,-24"/>
+<text text-anchor="middle" x="913.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_vcoord_type</text>
+</a>
+</g>
+</g>
+<!-- proc~parse_ocean_vcoord_type&#45;&gt;proc~parse_vcoord_type -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge12" class="edge">
+<title>proc~parse_ocean_vcoord_type&#45;&gt;proc~parse_vcoord_type</title>
+<path fill="none" stroke="#7f00ff" d="M691.57,-12C739.25,-12 800.55,-12 846.47,-12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="846.61,-15.5 856.61,-12 846.61,-8.5 846.61,-15.5"/>
+</g>
+<!-- proc~multilayer_register_passive_tracer&#45;&gt;error -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge13" class="edge">
+<title>proc~multilayer_register_passive_tracer&#45;&gt;error</title>
+<path fill="none" stroke="#00ffff" d="M983.99,-150.04C1028.57,-157.76 1084.65,-167.47 1120.66,-173.71"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1120.26,-177.19 1130.71,-175.45 1121.46,-170.29 1120.26,-177.19"/>
+</g>
+<!-- proc~multilayer_register_passive_tracer&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge14" class="edge">
+<title>proc~multilayer_register_passive_tracer&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#00ffff" d="M983.99,-125.96C1020.68,-119.61 1065.15,-111.91 1099.81,-105.9"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1100.52,-109.33 1109.78,-104.18 1099.33,-102.44 1100.52,-109.33"/>
+</g>
+<!-- proc~tracer_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_node14" class="node">
+<title>proc~tracer_init</title>
+<g id="a_proc~~ocean_state_init_from_config~~CallsGraph_node14"><a xlink:href="../proc/tracer_init.html" xlink:title="tracer_t%tracer_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="1217,-150 1099,-150 1099,-126 1217,-126 1217,-150"/>
+<text text-anchor="middle" x="1158" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tracer_t%tracer_init</text>
+</a>
+</g>
+</g>
+<!-- proc~multilayer_register_passive_tracer&#45;&gt;proc~tracer_init -->
+<g id="proc~~ocean_state_init_from_config~~CallsGraph_edge15" class="edge">
+<title>proc~multilayer_register_passive_tracer&#45;&gt;proc~tracer_init</title>
+<path fill="none" stroke="#00ffff" d="M1063.24,-138C1072,-138 1080.55,-138 1088.71,-138"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1088.81,-141.5 1098.81,-138 1088.81,-134.5 1088.81,-141.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_init_from_configCallsGraph = svgPanZoom('#prococean_state_init_from_configCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_init_from_config~~CalledByGraph Pages: 1 -->
+<svg id="prococean_state_init_from_configCalledByGraph" width="641pt" height="97pt"
+ viewBox="0.00 0.00 641.00 97.45" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph" class="graph" transform="scale(0.84 0.84) rotate(0) translate(4 112)">
+<title>proc~~ocean_state_init_from_config~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 759,-112 759,4 -4,4"/>
+<!-- proc~ocean_state_init_from_config -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node1" class="node">
+<title>proc~ocean_state_init_from_config</title>
+<polygon fill="none" stroke="black" points="755,-45 505,-45 505,-21 755,-21 755,-45"/>
+<text text-anchor="middle" x="630" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_t%ocean_state_init_from_config</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-45 385,-45 385,-21 469,-21 469,-45"/>
+<text text-anchor="middle" x="427" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_state_init_from_config -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_state_init_from_config</title>
+<path fill="none" stroke="#ff0000" d="M469.16,-33C477.09,-33 485.79,-33 494.9,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.93,-36.5 504.93,-33 494.93,-29.5 494.93,-36.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-44.05C357.85,-42.8 366.62,-41.54 374.97,-40.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.51,-43.8 384.91,-38.91 374.51,-36.87 375.51,-43.8"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-24 226,-24 226,0 332,0 332,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-19.52C345.99,-21.49 360.74,-23.61 374.4,-25.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.19,-29.08 384.59,-27.04 375.19,-22.16 374.19,-29.08"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-24 53,-24 53,0 120,0 120,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-12C146.45,-12 183.96,-12 215.83,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-15.5 225.95,-12 215.95,-8.5 215.95,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-108 11,-108 11,-84 162,-84 162,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-83.96C164.41,-79.04 190.39,-73.31 213.63,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-71.61 223.4,-66.04 212.88,-64.77 214.39,-71.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_state_init_from_config~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-66 0,-66 0,-42 173,-42 173,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_init_from_config~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-54C181.77,-54 190.37,-54 198.79,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-57.5 208.97,-54 198.97,-50.5 198.97,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_init_from_configCalledByGraph = svgPanZoom('#prococean_state_init_from_configCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_state_init_from_config</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Seed the cfg-derived scalars the slot inits read up front (layer</span>
+<span class="w">      </span><span class="c">!! count, ideal-age toggle), allocate via init(grid), then override the</span>
+<span class="w">      </span><span class="c">!! linear-EOS params (after eos%init has set its defaults).  Carries the</span>
+<span class="w">      </span><span class="c">!! ocean branch that state_init_from_config held before the coastal /</span>
+<span class="w">      </span><span class="c">!! ocean state split — the order (nz_ml + ideal_age before init, eos</span>
+<span class="w">      </span><span class="c">!! after) is load-bearing and matches the pre-split behaviour.</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">nz_ml</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">nz_layers</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">enable_ideal_age</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tracers</span><span class="p">%</span><span class="n">enable_ideal_age</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">enable_pseudo_salt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tracers</span><span class="p">%</span><span class="n">enable_pseudo_salt</span>
+
+<span class="w">      </span><span class="c">! Enable flags govern CONDITIONAL ALLOCATION (ocean_state_init gates</span>
+<span class="w">      </span><span class="c">! each default-off closure's array allocation on its `enable`), so</span>
+<span class="w">      </span><span class="c">! they must be latched BEFORE init(grid).  The full per-closure knob</span>
+<span class="w">      </span><span class="c">! copy still runs after init (below) and re-sets these idempotently;</span>
+<span class="w">      </span><span class="c">! MEKE and Fox-Kemper/MLE otherwise get their enable only in the</span>
+<span class="w">      </span><span class="c">! later configure_ocean_* pass, so they are seeded from cfg here too.</span>
+<span class="w">      </span><span class="c">! Windowed tracer advection (Phase 2/6b): its 13-array workspace</span>
+<span class="w">      </span><span class="c">! (~3.7 GiB at 600²x100) is only consumed at ratio &gt; 1, so the</span>
+<span class="w">      </span><span class="c">! allocation gate latches here like the closures below.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">continuity</span><span class="p">%</span><span class="n">windowed_advection</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="c">! Pressure-force scratch: 11 of the 16 buffers are FV_MOM6- or</span>
+<span class="w">      </span><span class="c">! in-layer-reconstruction-only (~3.5 GB at 1000x800x50) and are</span>
+<span class="w">      </span><span class="c">! unreachable on the shipped gprime / montgomery / fv_lite envelope.</span>
+<span class="w">      </span><span class="c">! `variant` + `reconstruct_for_pressure` therefore latch HERE, ahead</span>
+<span class="w">      </span><span class="c">! of init(grid), and `scratch_gated` turns the per-variant gate on;</span>
+<span class="w">      </span><span class="c">! `configure_ocean_pgf` re-sets both idempotently later.  Direct</span>
+<span class="w">      </span><span class="c">! `pgf%init(...)` call sites leave `scratch_gated = .false.` and keep</span>
+<span class="w">      </span><span class="c">! the allocate-everything behaviour.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">variant</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parse_opgf_variant</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">form</span><span class="p">)</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">reconstruct_for_pressure</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">reconstruct_for_pressure</span>
+<span class="w">      </span><span class="c">! Grounded-layer PGF gate: for FV_MOM6 the `z_centre` buffer exists only</span>
+<span class="w">      </span><span class="c">! to feed this gate, so the flag has to be known BEFORE the allocation</span>
+<span class="w">      </span><span class="c">! gate runs.  It is a pure config-time decision, so latch it here next to</span>
+<span class="w">      </span><span class="c">! `variant`; `configure_ocean_pgf` recomputes it (and error-stops if the</span>
+<span class="w">      </span><span class="c">! latch drifted) for the FV_LITE / FV_WRIGHT paths too.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">skip_nonoverlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">pgf_nonoverlap_gate_on</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">variant</span><span class="p">)</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">scratch_gated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">vmix_tidal</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tidal_mixing</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">mle</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">foxkemper</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! Sea ice (PR 0 scaffold): enable gates the slot's init +</span>
+<span class="w">      </span><span class="c">! enter_data/exit_data; ncat/nk_ice size the per-category arrays</span>
+<span class="w">      </span><span class="c">! once PR 3+ allocates them, so all three latch before init like</span>
+<span class="w">      </span><span class="c">! the closures above.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">nk_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">nk_ice</span>
+<span class="w">      </span><span class="c">! PR 4b: transport latches before init too (gates the workspace</span>
+<span class="w">      </span><span class="c">! allocation, memory Rule 2 — see rdb_ice_state%init).</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">transport</span>
+<span class="w">      </span><span class="c">! PR 5: EVP dynamics master flag (gates the driver's ice_evp_step</span>
+<span class="w">      </span><span class="c">! call + the transport sampler skip; no per-slot allocation gate —</span>
+<span class="w">      </span><span class="c">! str_d/str_t/str_s/tau_a_*/fxoc/fyoc are unconditional whenever the</span>
+<span class="w">      </span><span class="c">! ice slot is live, same contract as u_ice/v_ice).</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">dynamics</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">dynamics</span>
+<span class="w">      </span><span class="c">! PR-23: enable gates the sponge's (potentially large, 4-D</span>
+<span class="w">      </span><span class="c">! nx*ny*nz*n_tracers) reference-state allocation, so it latches</span>
+<span class="w">      </span><span class="c">! before init like the closures above (`ocean_sponge_init` is only</span>
+<span class="w">      </span><span class="c">! called when `this%sponge%enable`, see below).</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">sponge</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">sponge</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! PR-58: hlim latches before init (ice_itd_category_bounds runs</span>
+<span class="w">      </span><span class="c">! inside ice%init). Unallocated =&gt; the hardcoded SIS2 default table.</span>
+<span class="w">      </span><span class="k">block</span>
+<span class="k">         </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_hlim</span>
+<span class="w">         </span><span class="n">n_hlim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_hlim_count</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">hlim</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_hlim</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">hlim_cfg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">hlim</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">n_hlim</span><span class="p">)</span><span class="w">  </span><span class="c">! allocate-on-assign</span>
+<span class="w">      </span><span class="k">end block</span>
+<span class="w">      </span><span class="c">! PR 26: snowfall's host-side dispatch gate — latches before init</span>
+<span class="w">      </span><span class="c">! like transport/dynamics above (no per-slot allocation gate;</span>
+<span class="w">      </span><span class="c">! atm_fprec/snow_part_ocn/fprec_ocn_diag are unconditional whenever</span>
+<span class="w">      </span><span class="c">! the ice slot is live, same contract as u_ice/v_ice). This is what</span>
+<span class="w">      </span><span class="c">! makes `snowfall=0` byte-identical BY CONSTRUCTION.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">has_snowfall</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">snowfall</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! PR 27: Archimedes snow-ice flood master flag — latches before</span>
+<span class="w">      </span><span class="c">! init like has_snowfall/transport/dynamics above (no per-slot</span>
+<span class="w">      </span><span class="c">! allocation gate; snow_to_ice is unconditional whenever the ice</span>
+<span class="w">      </span><span class="c">! slot is live, same contract as sw_thru). This is what makes</span>
+<span class="w">      </span><span class="c">! `snow_ice=.false.` byte-identical BY CONSTRUCTION.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">snow_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">snow_ice</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span>
+<span class="cp">#ifndef RDB_NO_NETCDF</span>
+<span class="w">      </span><span class="c">! `this%init(grid)` above already built a default-sized (16 slot,</span>
+<span class="w">      </span><span class="c">! quiet) reader — safe to re-run with the real config now, since</span>
+<span class="w">      </span><span class="c">! nothing can have been registered between the two calls (grid</span>
+<span class="w">      </span><span class="c">! init happens before any consumer registration, and registration</span>
+<span class="w">      </span><span class="c">! itself only happens after this returns — see the seam contract</span>
+<span class="w">      </span><span class="c">! in rdb_ocean_data_input's module docstring).</span>
+<span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">data_input</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
+<span class="cp">#endif</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">alpha_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">alpha_T</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">rho_0</span>
+<span class="w">      </span><span class="c">! EPBL master switch is read here (before the configure_ocean_*</span>
+<span class="w">      </span><span class="c">! pass) because diag registration — which gates the MLD_EPBL /</span>
+<span class="w">      </span><span class="c">! Kd_EPBL variables on it — runs before configure in the driver.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">wavespeed</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">wavespeed</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">kd_smooth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">kd_smooth</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">min_dz_for_n2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">min_dz_for_n2</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">rho_0</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth_max_cfl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth_max_cfl</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth_slope_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">khth_slope_max</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">rho_0</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">continuous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">continuous</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">khtr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">khtr</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">use_visbeck</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">use_visbeck</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">resoln_scaled_khth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">resoln_scaled_khth</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">resoln_scaled_khtr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">resoln_scaled_khtr</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">gill_equatorial_ld</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">gill_equatorial_ld</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">interpolate_res_fn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">interpolate_res_fn</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">kh_res_fn_power</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">kh_res_fn_power</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">kh_res_scale_coef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">kh_res_scale_coef</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_slope_cff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_slope_cff</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_slope_cff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_slope_cff</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_min</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_max</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_min</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khtr_max</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">visbeck_l_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">visbeck_l_scale</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">visbeck_max_slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">visbeck_max_slope</span>
+
+<span class="w">      </span><span class="c">! ---- MEKE (capability [5]) ----</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">gmcoeff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">gmcoeff</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">frcoeff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">frcoeff</span>
+<span class="w">      </span><span class="c">! Turn the hvisc KE-dissipation diagnostic on ONLY when MEKE's</span>
+<span class="w">      </span><span class="c">! frictional source is active; otherwise the viscous apply skips it</span>
+<span class="w">      </span><span class="c">! (zero extra work, bit-identical).</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">compute_ke_diss</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">frcoeff</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">bgsrc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">bgsrc</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">damping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">damping</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">kh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">kh</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">k4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">k4</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khcoeff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khcoeff</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cd_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cd_scale</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cb</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">ct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">ct</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">min_gamma2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">min_gamma2</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">uscale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">uscale</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">use_bbl_drag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">use_bbl_drag</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">dtscale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">dtscale</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khth_fac</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khth_fac</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khtr_fac</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khtr_fac</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">backscatter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">backscatter</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">visc_coeff_ku</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">backscatter_visc_coeff_ku</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khmeke_fac</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">khmeke_fac</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">advection_factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">advection_factor</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_deform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_deform</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_rhines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_rhines</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_eady</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_eady</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_frict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_frict</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">alpha_grid</span>
+<span class="w">      </span><span class="c">! cdrag: prefer the side-drag coefficient if set (&gt; 0), else the</span>
+<span class="w">      </span><span class="c">! MEKE-specific knob default.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bdrag</span><span class="p">%</span><span class="n">cdrag_side</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cdrag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bdrag</span><span class="p">%</span><span class="n">cdrag_side</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">this</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cdrag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">cdrag</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">this</span><span class="p">%</span><span class="n">vmix_tidal</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tidal_mixing</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">tides</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tides</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">p_surf</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">psurf</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_state_init_from_config</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

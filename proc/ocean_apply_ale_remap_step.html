@@ -1,0 +1,1379 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_apply_ale_remap_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_apply_ale_remap_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">74 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_remap.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_remap.f90.html'>rdb_ocean_remap.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_apply_ale_remap_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-conserve_ke~4">conserve_ke</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-do_tfilter~2">do_tfilter</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-i~323">i</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-j~294">j</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-k~243">k</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-m~15">m</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-nx~298">nx</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-ny~298">ny</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-nz~294">nz</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-t~30">t</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#variable-wtd~2">wtd</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_apply_ale_remap_step.html#src">ocean_apply_ale_remap_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine ocean_apply_ale_remap_step(grid, vcoord, ms, bt_eta, bt_H_ref, method, eos, dt)  
+</h2>
+    
+
+    <p>Top-level entry the driver calls between outer steps: snapshot h_old once,
+remap centres (h_layer + tracers) AND faces using the same snapshot, then
+re-derive bt_eta. Returns early for EULERIAN_Z/LAGRANGIAN.
+<code>eos</code> (optional): required ONLY for VCOORD_RHO (isopycnal density inversion).
+<code>dt</code> (optional, s): only for the grid time-filter (regrid_time_scale &gt; 0);
+absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~176"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord~4"></span>
+              type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vcoord</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~103"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_eta~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_eta</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_h_ref~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_H_ref</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~12"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~27"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~109"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_apply_ale_remap_step~~CallsGraph Pages: 1 -->
+<svg id="prococean_apply_ale_remap_stepCallsGraph" width="641pt" height="212pt"
+ viewBox="0.00 0.00 641.00 211.87" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph" class="graph" transform="scale(0.49 0.49) rotate(0) translate(4 428)">
+<title>proc~~ocean_apply_ale_remap_step~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-428 1303,-428 1303,4 -4,4"/>
+<!-- proc~ocean_apply_ale_remap_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node1" class="node">
+<title>proc~ocean_apply_ale_remap_step</title>
+<polygon fill="none" stroke="black" points="169,-146 0,-146 0,-122 169,-122 169,-146"/>
+<text text-anchor="middle" x="84.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_apply_ale_remap_step</text>
+</g>
+<!-- local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="917,-166 863,-166 863,-142 917,-142 917,-166"/>
+<text text-anchor="middle" x="890" y="-151.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M142.07,-121.98C161.87,-118.33 184.33,-114.8 205,-113 463.57,-90.45 534.34,-62.82 789,-113 812.94,-117.72 838.36,-128.22 857.58,-137.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="856.23,-140.65 866.75,-141.93 859.32,-134.37 856.23,-140.65"/>
+</g>
+<!-- proc~build_ts_concentration -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node3" class="node">
+<title>proc~build_ts_concentration</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node3"><a xlink:href="../proc/build_ts_concentration.html" xlink:title="build_ts_concentration">
+<polygon fill="#d9534f" stroke="#d9534f" points="425,-24 292,-24 292,0 425,0 425,-24"/>
+<text text-anchor="middle" x="358.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">build_ts_concentration</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~build_ts_concentration -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~build_ts_concentration</title>
+<path fill="none" stroke="#ff0000" d="M95.53,-121.86C114.41,-99.95 157.61,-54.12 205,-33 228.71,-22.43 256.38,-16.86 281.59,-14.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="282.25,-17.47 291.85,-12.99 281.55,-10.5 282.25,-17.47"/>
+</g>
+<!-- proc~ocean_remap_tracer_field -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node4" class="node">
+<title>proc~ocean_remap_tracer_field</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node4"><a xlink:href="../proc/ocean_remap_tracer_field.html" xlink:title="ocean_remap_tracer_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="434,-304 283,-304 283,-280 434,-280 434,-304"/>
+<text text-anchor="middle" x="358.5" y="-289.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#ff0000" d="M92.98,-146.35C109.55,-172.56 152.12,-233.72 205,-263 225.54,-274.37 249.75,-281.36 272.77,-285.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="272.45,-289.13 282.89,-287.36 273.62,-282.23 272.45,-289.13"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node5" class="node">
+<title>proc~ocean_vcoord_compute_target_h</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node5"><a xlink:href="../proc/ocean_vcoord_compute_target_h.html" xlink:title="ocean_vcoord_t%ocean_vcoord_compute_target_h">
+<polygon fill="#d9534f" stroke="#d9534f" points="500,-146 217,-146 217,-122 500,-122 500,-146"/>
+<text text-anchor="middle" x="358.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_t%ocean_vcoord_compute_target_h</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h</title>
+<path fill="none" stroke="#ff0000" d="M169.33,-134C181.28,-134 193.86,-134 206.61,-134"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="206.87,-137.5 216.87,-134 206.87,-130.5 206.87,-137.5"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node6" class="node">
+<title>proc~ocean_vcoord_compute_target_h_rho</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node6"><a xlink:href="../proc/ocean_vcoord_compute_target_h_rho.html" xlink:title="ocean_vcoord_t%ocean_vcoord_compute_target_h_rho">
+<polygon fill="#d9534f" stroke="#d9534f" points="512,-66 205,-66 205,-42 512,-42 512,-66"/>
+<text text-anchor="middle" x="358.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_t%ocean_vcoord_compute_target_h_rho</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h_rho -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h_rho</title>
+<path fill="none" stroke="#ff0000" d="M107.74,-121.87C131.24,-109.54 169.73,-90.78 205,-80 220.63,-75.22 237.45,-71.25 254.01,-67.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="255.11,-71.31 264.28,-66 253.8,-64.44 255.11,-71.31"/>
+</g>
+<!-- proc~remap_x_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node7" class="node">
+<title>proc~remap_x_face_velocity</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node7"><a xlink:href="../proc/remap_x_face_velocity.html" xlink:title="remap_x_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="425,-254 292,-254 292,-230 425,-230 425,-254"/>
+<text text-anchor="middle" x="358.5" y="-239.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#ff0000" d="M102.07,-146.04C124.41,-161.73 165.89,-189.06 205,-205 229.39,-214.94 257.1,-222.65 282.15,-228.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="281.45,-231.83 291.97,-230.58 282.97,-224.99 281.45,-231.83"/>
+</g>
+<!-- proc~remap_y_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node8" class="node">
+<title>proc~remap_y_face_velocity</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node8"><a xlink:href="../proc/remap_y_face_velocity.html" xlink:title="remap_y_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="425,-196 292,-196 292,-172 425,-172 425,-196"/>
+<text text-anchor="middle" x="358.5" y="-181.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#ff0000" d="M151,-146.04C190.5,-153.3 240.97,-162.58 282.12,-170.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="281.63,-173.61 292.1,-171.98 282.9,-166.73 281.63,-173.61"/>
+</g>
+<!-- proc~ocean_remap_tracer_field&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_remap_tracer_field&#45;&gt;local</title>
+<path fill="none" stroke="#48ff00" d="M434.39,-303.4C523.6,-313.43 674.9,-318.98 789,-264 799.68,-258.85 846.54,-204.44 872.14,-174.12"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="874.99,-176.17 878.75,-166.27 869.64,-171.67 874.99,-176.17"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node11" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node11"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="714.5,-344 622.5,-344 622.5,-320 714.5,-320 714.5,-344"/>
+<text text-anchor="middle" x="668.5" y="-329.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#48ff00" d="M434.06,-301.68C489.02,-308.82 562.58,-318.37 612.32,-324.83"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="611.88,-328.31 622.25,-326.12 612.78,-321.36 611.88,-328.31"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_impl -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node9" class="node">
+<title>proc~ocean_vcoord_compute_target_h_impl</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node9"><a xlink:href="../proc/ocean_vcoord_compute_target_h_impl.html" xlink:title="ocean_vcoord_compute_target_h_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="777.5,-146 559.5,-146 559.5,-122 777.5,-122 777.5,-146"/>
+<text text-anchor="middle" x="668.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_compute_target_h_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h&#45;&gt;proc~ocean_vcoord_compute_target_h_impl -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_vcoord_compute_target_h&#45;&gt;proc~ocean_vcoord_compute_target_h_impl</title>
+<path fill="none" stroke="#00ff91" d="M500.43,-134C516.67,-134 533.11,-134 549.01,-134"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="549.38,-137.5 559.38,-134 549.38,-130.5 549.38,-137.5"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho_impl -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node10" class="node">
+<title>proc~ocean_vcoord_compute_target_h_rho_impl</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node10"><a xlink:href="../proc/ocean_vcoord_compute_target_h_rho_impl.html" xlink:title="ocean_vcoord_compute_target_h_rho_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="789,-66 548,-66 548,-42 789,-42 789,-66"/>
+<text text-anchor="middle" x="668.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_compute_target_h_rho_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho&#45;&gt;proc~ocean_vcoord_compute_target_h_rho_impl -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_vcoord_compute_target_h_rho&#45;&gt;proc~ocean_vcoord_compute_target_h_rho_impl</title>
+<path fill="none" stroke="#0091ff" d="M512.15,-54C520.64,-54 529.14,-54 537.55,-54"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="537.74,-57.5 547.74,-54 537.74,-50.5 537.74,-57.5"/>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge12" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;local</title>
+<path fill="none" stroke="#4800ff" d="M425.19,-253.84C511.56,-266.55 666.69,-279.45 789,-235 822.96,-222.66 853.92,-193.59 872.12,-173.85"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="874.82,-176.07 878.89,-166.29 869.61,-171.4 874.82,-176.07"/>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge13" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#4800ff" d="M425.06,-251.72C452.23,-256.45 483.9,-262.89 512,-271 554.11,-283.15 600.7,-302.22 631.8,-315.8"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="630.77,-319.17 641.33,-320 633.59,-312.76 630.77,-319.17"/>
+</g>
+<!-- proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node12" class="node">
+<title>proc~rescale_anomaly_ke</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node12"><a xlink:href="../proc/rescale_anomaly_ke.html" xlink:title="rescale_anomaly_ke">
+<polygon fill="#d9534f" stroke="#d9534f" points="729,-226 608,-226 608,-202 729,-202 729,-226"/>
+<text text-anchor="middle" x="668.5" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rescale_anomaly_ke</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge14" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~rescale_anomaly_ke</title>
+<path fill="none" stroke="#4800ff" d="M425.2,-236.03C475.96,-231.41 546.06,-225.04 597.81,-220.34"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="598.26,-223.81 607.9,-219.42 597.63,-216.84 598.26,-223.81"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge15" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;local</title>
+<path fill="none" stroke="#ff00da" d="M425.22,-180.28C537.94,-173.89 764.47,-161.06 852.68,-156.06"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="852.95,-159.55 862.73,-155.49 852.55,-152.56 852.95,-159.55"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge16" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff00da" d="M425.14,-194.21C452.76,-199.95 484.75,-208.53 512,-221 564.99,-245.24 618.47,-288.47 646.82,-313.23"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="644.65,-315.98 654.46,-319.98 649.29,-310.73 644.65,-315.98"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge17" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~rescale_anomaly_ke</title>
+<path fill="none" stroke="#ff00da" d="M425.2,-190.4C475.96,-195.34 546.06,-202.17 597.81,-207.21"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="597.61,-210.71 607.9,-208.19 598.29,-203.74 597.61,-210.71"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_impl&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_vcoord_compute_target_h_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M777.64,-143.85C804.73,-146.32 831.96,-148.8 852.71,-150.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="852.65,-154.2 862.93,-151.62 853.29,-147.23 852.65,-154.2"/>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M747.86,-66.06C761.9,-69.61 776.14,-74.17 789,-80 819.64,-93.89 850.01,-118.27 869.1,-135.23"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="866.8,-137.87 876.56,-142 871.5,-132.69 866.8,-137.87"/>
+</g>
+<!-- proc~eos_density_point -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node13" class="node">
+<title>proc~eos_density_point</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node13"><a xlink:href="../proc/eos_density_point.html" xlink:title="eos_density_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="943.5,-87 836.5,-87 836.5,-63 943.5,-63 943.5,-87"/>
+<text text-anchor="middle" x="890" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_point</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;proc~eos_density_point -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;proc~eos_density_point</title>
+<path fill="none" stroke="#7fff00" d="M789.21,-65.45C802.01,-66.68 814.63,-67.88 826.36,-69.01"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="826.14,-72.5 836.43,-69.97 826.81,-65.53 826.14,-72.5"/>
+</g>
+<!-- proc~invert_density_targets -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node14" class="node">
+<title>proc~invert_density_targets</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node14"><a xlink:href="../proc/invert_density_targets.html" xlink:title="invert_density_targets">
+<polygon fill="#d9534f" stroke="#d9534f" points="955,-45 825,-45 825,-21 955,-21 955,-45"/>
+<text text-anchor="middle" x="890" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">invert_density_targets</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;proc~invert_density_targets -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge21" class="edge">
+<title>proc~ocean_vcoord_compute_target_h_rho_impl&#45;&gt;proc~invert_density_targets</title>
+<path fill="none" stroke="#7fff00" d="M789.21,-42.55C797.91,-41.72 806.52,-40.89 814.84,-40.1"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="815.19,-43.58 824.81,-39.14 814.52,-36.61 815.19,-43.58"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node15" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node15"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="950.5,-424 829.5,-424 829.5,-400 950.5,-400 950.5,-424"/>
+<text text-anchor="middle" x="890" y="-409.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ffff" d="M702.84,-344.15C741.25,-358.15 804.47,-381.19 846.41,-396.48"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="845.47,-399.86 856.07,-400 847.87,-393.28 845.47,-399.86"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node16" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node16"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1299,-344 1181,-344 1181,-320 1299,-320 1299,-344"/>
+<text text-anchor="middle" x="1240" y="-329.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ffff" d="M714.56,-338.59C799.17,-349.94 987.51,-370.38 1145,-353 1157.85,-351.58 1171.52,-349.1 1184.33,-346.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1185.41,-349.68 1194.39,-344.07 1183.87,-342.85 1185.41,-349.68"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node17" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node17"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1128.5,-302 1007.5,-302 1007.5,-278 1128.5,-278 1128.5,-302"/>
+<text text-anchor="middle" x="1068" y="-287.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge24" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M714.71,-327.22C783.69,-319.93 915.77,-305.98 997.15,-297.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="997.72,-300.84 1007.3,-296.31 996.99,-293.88 997.72,-300.84"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node18" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node18"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1138,-344 998,-344 998,-320 1138,-320 1138,-344"/>
+<text text-anchor="middle" x="1068" y="-329.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge25" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ffff" d="M714.71,-332C781.13,-332 906.03,-332 987.86,-332"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="987.86,-335.5 997.86,-332 987.86,-328.5 987.86,-335.5"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node19" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node19"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="950.5,-262 829.5,-262 829.5,-238 950.5,-238 950.5,-262"/>
+<text text-anchor="middle" x="890" y="-247.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge26" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ffff" d="M714.65,-326.85C737.66,-323.08 765.64,-316.68 789,-306 807.19,-297.68 807.79,-289.19 825,-279 832.7,-274.44 841.25,-270.11 849.52,-266.26"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="851.01,-269.42 858.69,-262.12 848.13,-263.04 851.01,-269.42"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node22" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node22"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="1119.5,-87 1016.5,-87 1016.5,-63 1119.5,-63 1119.5,-87"/>
+<text text-anchor="middle" x="1068" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_point&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge27" class="edge">
+<title>proc~eos_density_point&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff0000" d="M943.81,-75C963.47,-75 985.94,-75 1006.26,-75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1006.35,-78.5 1016.35,-75 1006.35,-71.5 1006.35,-78.5"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge28" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0091ff" d="M1117.72,-302.04C1137.28,-306.87 1159.99,-312.48 1180.44,-317.53"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1179.73,-320.96 1190.28,-319.96 1181.41,-314.17 1179.73,-320.96"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge29" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#4800ff" d="M1138.15,-332C1148.87,-332 1159.95,-332 1170.66,-332"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1170.79,-335.5 1180.79,-332 1170.79,-328.5 1170.79,-335.5"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge32" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#ff00da" d="M943.81,-262C962.78,-266.31 984.36,-271.22 1004.1,-275.7"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1003.4,-279.13 1013.93,-277.94 1004.95,-272.31 1003.4,-279.13"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node20" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node20"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1125.5,-218 1010.5,-218 1010.5,-194 1125.5,-194 1125.5,-218"/>
+<text text-anchor="middle" x="1068" y="-203.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge30" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#ff00da" d="M939.09,-237.98C960.73,-232.57 986.44,-226.14 1009.12,-220.47"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1010.11,-223.83 1018.97,-218.01 1008.42,-217.04 1010.11,-223.83"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_node21" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CallsGraph_node21"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="1145,-260 991,-260 991,-236 1145,-236 1145,-260"/>
+<text text-anchor="middle" x="1068" y="-245.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_ale_remap_step~~CallsGraph_edge31" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#ff00da" d="M950.59,-249.32C960.31,-249.21 970.55,-249.1 980.76,-248.98"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="980.98,-252.48 990.94,-248.86 980.9,-245.48 980.98,-252.48"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_apply_ale_remap_stepCallsGraph = svgPanZoom('#prococean_apply_ale_remap_stepCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_apply_ale_remap_step~~CalledByGraph Pages: 1 -->
+<svg id="prococean_apply_ale_remap_stepCalledByGraph" width="641pt" height="68pt"
+ viewBox="0.00 0.00 641.00 68.15" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph" class="graph" transform="scale(0.92 0.92) rotate(0) translate(4 70)">
+<title>proc~~ocean_apply_ale_remap_step~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 692,-70 692,4 -4,4"/>
+<!-- proc~ocean_apply_ale_remap_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node1" class="node">
+<title>proc~ocean_apply_ale_remap_step</title>
+<polygon fill="none" stroke="black" points="688,-45 519,-45 519,-21 688,-21 688,-45"/>
+<text text-anchor="middle" x="603.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_apply_ale_remap_step</text>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node2" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CalledByGraph_node2"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-45 358,-45 358,-21 483,-21 483,-45"/>
+<text text-anchor="middle" x="420.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step</title>
+<path fill="none" stroke="#ff0000" d="M483.03,-33C491.28,-33 499.89,-33 508.54,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="508.7,-36.5 518.7,-33 508.7,-29.5 508.7,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node3" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CalledByGraph_node3"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-33C330.15,-33 338.91,-33 347.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.78,-36.5 357.78,-33 347.78,-29.5 347.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_apply_ale_remap_step~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_apply_ale_remap_step~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_apply_ale_remap_stepCalledByGraph = svgPanZoom('#prococean_apply_ale_remap_stepCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conserve_ke~4"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conserve_ke</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_tfilter~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_tfilter</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~323"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~294"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~243"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~15"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~298"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~298"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~294"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~30"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wtd~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wtd</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_apply_ale_remap_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">,</span><span class="w"> </span><span class="n">bt_H_ref</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Top-level entry the driver calls between outer steps: snapshot h_old once,</span>
+<span class="w">      </span><span class="c">!! remap centres (h_layer + tracers) AND faces using the same snapshot, then</span>
+<span class="w">      </span><span class="c">!! re-derive bt_eta. Returns early for EULERIAN_Z/LAGRANGIAN.</span>
+<span class="w">      </span><span class="c">!! `eos` (optional): required ONLY for VCOORD_RHO (isopycnal density inversion).</span>
+<span class="w">      </span><span class="c">!! `dt` (optional, s): only for the grid time-filter (regrid_time_scale &gt; 0);</span>
+<span class="w">      </span><span class="c">!! absent or τ=0 (default) ⇒ filter skipped, bit-identical.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vcoord_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vcoord</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: outer-driver allocatable; grid%nx_total available; deferred.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_H_ref</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: outer-driver allocatable; grid%nx_total available; deferred</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wtd</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_tfilter</span><span class="p">,</span><span class="w"> </span><span class="n">conserve_ke</span>
+
+<span class="w">      </span><span class="c">! Eulerian-z and Lagrangian/isopycnal both skip remap: the former</span>
+<span class="w">      </span><span class="c">! holds h at H·dsig via vert-advection cancellation, the latter</span>
+<span class="w">      </span><span class="c">! lets h evolve freely (target = current h).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VCOORD_EULERIAN_Z</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VCOORD_LAGRANGIAN</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">REMAP_PPM</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">method</span><span class="p">))</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+
+<span class="w">      </span><span class="c">! 1. Column total + target_h (persistent scratch on vcoord — per-call</span>
+<span class="w">      </span><span class="c">! allocates here generate H↔D transfers, not being in the present table).</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_total_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_total_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_total_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="o">+</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end do</span>
+<span class="k">      do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_ref</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_total_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! 2. Snapshot h_old on-device (host source= reads stale memory after a</span>
+<span class="w">      </span><span class="c">! dynamics-side OpenACC kernel). Before target_h for VCOORD_RHO's inversion.</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! 3. Populate target_h. Geometric coords use compute_target_h; isopycnal</span>
+<span class="w">      </span><span class="c">! needs per-layer T/S concentrations + EOS via compute_target_h_rho.</span>
+<span class="w">      </span><span class="c">! Concentrations built into persistent scratch (guarded c = hTr/h).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VCOORD_RHO</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VCOORD_HYCOM</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">eos</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">build_ts_concentration</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_conc_t</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_conc_s</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! HYCOM = RHO inversion + z*-floor/monotonize deltas (hybrid=.true.);</span>
+<span class="w">         </span><span class="c">! pure RHO passes hybrid=.false. (bit-identical to RHO-only kernel).</span>
+<span class="w">         </span><span class="k">call </span><span class="n">vcoord</span><span class="p">%</span><span class="n">compute_target_h_rho</span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_ref</span><span class="p">,</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_conc_t</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_conc_s</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">hybrid</span><span class="o">=</span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VCOORD_HYCOM</span><span class="p">))</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">vcoord</span><span class="p">%</span><span class="n">compute_target_h</span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_ref</span><span class="p">,</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! 3b. Grid time-filter (White &amp; Adcroft 2008): relax target toward it from</span>
+<span class="w">      </span><span class="c">! the old grid by wtd = dt/(τ+dt). Convex blend ⇒ column total conserved.</span>
+<span class="w">      </span><span class="c">! τ=0 (default) or dt absent ⇒ skipped, bit-identical.</span>
+<span class="w">      </span><span class="n">do_tfilter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">regrid_time_scale</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_tfilter</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">wtd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">/</span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">regrid_time_scale</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="o">+</span><span class="w"> </span><span class="n">wtd</span><span class="o">*</span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! 4. Tracer remap (centre cells)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">            select case</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">budget_id</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_HEAT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">ocean_remap_tracer_field</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_remap</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_SALT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">ocean_remap_tracer_field</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">salt_budget_remap</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case </span><span class="n">default</span>
+<span class="w">               </span><span class="k">call </span><span class="n">ocean_remap_tracer_field</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end select</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! 5. Face-velocity remap (h_old → target_h). KE-conserving anomaly rescale</span>
+<span class="w">      </span><span class="c">! gated on the vcoord knob (default off ⇒ momentum-only, bit-identical).</span>
+<span class="w">      </span><span class="n">conserve_ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_vel_conserve_ke</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">remap_x_face_velocity</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">conserve_ke</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">remap_y_face_velocity</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">,</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">conserve_ke</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! 6. h_layer = target_h; capture mass-budget delta</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_budget_remap</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_budget_remap</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">remap_h_old</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcoord</span><span class="p">%</span><span class="n">target_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! 7. Re-derive bt_eta</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">bt_eta</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">bt_H_ref</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">bt_eta</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bt_eta</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">ocean_apply_ale_remap_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

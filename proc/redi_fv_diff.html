@@ -1,0 +1,668 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>redi_fv_diff &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>redi_fv_diff
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">13 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_redi.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_redi.f90.html'>rdb_ocean_redi.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_redi.html'>rdb_ocean_redi</a></li>
+            <li class="breadcrumb-item active" aria-current="page">redi_fv_diff</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/redi_fv_diff.html#variable-h_sum~6">h_sum</a>
+            <a class="list-group-item" href="../proc/redi_fv_diff.html#variable-hm~2">hm</a>
+            <a class="list-group-item" href="../proc/redi_fv_diff.html#variable-hp~2">hp</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/redi_fv_diff.html#src">redi_fv_diff</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure function redi_fv_diff(hkm1, hk, hkp1, skm1, sk, skp1) result(d)  
+</h2>
+    
+
+    <p>Second-order centred finite-volume slope of a layer scalar (MOM6
+<code>fv_diff</code>; Colella &amp; Woodward 1984).  Returns the cell-centred difference
+across layer k given the three layer thicknesses and values.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hkm1~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hkm1</strong></td>
+            <td>
+                <p>layer thicknesses (above/centre/below)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hk~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hk</strong></td>
+            <td>
+                <p>layer thicknesses (above/centre/below)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hkp1~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hkp1</strong></td>
+            <td>
+                <p>layer thicknesses (above/centre/below)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-skm1"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>skm1</strong></td>
+            <td>
+                <p>layer scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sk"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sk</strong></td>
+            <td>
+                <p>layer scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-skp1"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>skp1</strong></td>
+            <td>
+                <p>layer scalar values</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-d~14"></span>
+          real(kind=wp)
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~redi_fv_diff~~CalledByGraph Pages: 1 -->
+<svg id="procredi_fv_diffCalledByGraph" width="641pt" height="93pt"
+ viewBox="0.00 0.00 641.00 93.18" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~redi_fv_diff~~CalledByGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 112)">
+<title>proc~~redi_fv_diff~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 794,-112 794,4 -4,4"/>
+<!-- proc~redi_fv_diff -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node1" class="node">
+<title>proc~redi_fv_diff</title>
+<polygon fill="none" stroke="black" points="790,-45 720,-45 720,-21 790,-21 790,-45"/>
+<text text-anchor="middle" x="755" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">redi_fv_diff</text>
+</g>
+<!-- proc~redi_plm_diff -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node2" class="node">
+<title>proc~redi_plm_diff</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node2"><a xlink:href="../proc/redi_plm_diff.html" xlink:title="redi_plm_diff">
+<polygon fill="#d9534f" stroke="#d9534f" points="684,-45 603,-45 603,-21 684,-21 684,-45"/>
+<text text-anchor="middle" x="643.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_plm_diff</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_plm_diff&#45;&gt;proc~redi_fv_diff -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge1" class="edge">
+<title>proc~redi_plm_diff&#45;&gt;proc~redi_fv_diff</title>
+<path fill="none" stroke="#ff0000" d="M684.03,-33C692.39,-33 701.27,-33 709.79,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="709.95,-36.5 719.95,-33 709.95,-29.5 709.95,-36.5"/>
+</g>
+<!-- proc~redi_interface_scalar -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node3" class="node">
+<title>proc~redi_interface_scalar</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node3"><a xlink:href="../proc/redi_interface_scalar.html" xlink:title="redi_interface_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="567,-45 443,-45 443,-21 567,-21 567,-45"/>
+<text text-anchor="middle" x="505" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_interface_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge2" class="edge">
+<title>proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff</title>
+<path fill="none" stroke="#ff0000" d="M567.06,-33C575.55,-33 584.18,-33 592.44,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="592.64,-36.5 602.64,-33 592.64,-29.5 592.64,-36.5"/>
+</g>
+<!-- proc~redi_build_column -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node4" class="node">
+<title>proc~redi_build_column</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node4"><a xlink:href="../proc/redi_build_column.html" xlink:title="redi_build_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="404,-66 295,-66 295,-42 404,-42 404,-66"/>
+<text text-anchor="middle" x="349.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_build_column</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_build_column&#45;&gt;proc~redi_interface_scalar -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge3" class="edge">
+<title>proc~redi_build_column&#45;&gt;proc~redi_interface_scalar</title>
+<path fill="none" stroke="#ff0000" d="M404.19,-46.66C413.49,-45.38 423.29,-44.04 432.97,-42.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="433.56,-46.17 442.99,-41.35 432.61,-39.23 433.56,-46.17"/>
+</g>
+<!-- proc~redi_tracer_column -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node5" class="node">
+<title>proc~redi_tracer_column</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node5"><a xlink:href="../proc/redi_tracer_column.html" xlink:title="redi_tracer_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="407,-24 292,-24 292,0 407,0 407,-24"/>
+<text text-anchor="middle" x="349.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_tracer_column</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_tracer_column&#45;&gt;proc~redi_interface_scalar -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge4" class="edge">
+<title>proc~redi_tracer_column&#45;&gt;proc~redi_interface_scalar</title>
+<path fill="none" stroke="#ff0000" d="M407.22,-19.76C415.57,-20.9 424.26,-22.09 432.85,-23.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="432.49,-26.75 442.87,-24.64 433.44,-19.81 432.49,-26.75"/>
+</g>
+<!-- proc~redi_face_coeffs -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node6" class="node">
+<title>proc~redi_face_coeffs</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node6"><a xlink:href="../proc/redi_face_coeffs.html" xlink:title="redi_face_coeffs">
+<polygon fill="#d9534f" stroke="#d9534f" points="256,-66 157,-66 157,-42 256,-42 256,-66"/>
+<text text-anchor="middle" x="206.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_face_coeffs</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_coeffs&#45;&gt;proc~redi_build_column -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge5" class="edge">
+<title>proc~redi_face_coeffs&#45;&gt;proc~redi_build_column</title>
+<path fill="none" stroke="#ff0000" d="M256.02,-54C265.15,-54 274.82,-54 284.34,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="284.57,-57.5 294.57,-54 284.57,-50.5 284.57,-57.5"/>
+</g>
+<!-- proc~redi_face_flux -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node7" class="node">
+<title>proc~redi_face_flux</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node7"><a xlink:href="../proc/redi_face_flux.html" xlink:title="redi_face_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="249.5,-24 163.5,-24 163.5,0 249.5,0 249.5,-24"/>
+<text text-anchor="middle" x="206.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_face_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_flux&#45;&gt;proc~redi_tracer_column -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge6" class="edge">
+<title>proc~redi_face_flux&#45;&gt;proc~redi_tracer_column</title>
+<path fill="none" stroke="#00ffff" d="M249.8,-12C259.82,-12 270.75,-12 281.57,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="281.88,-15.5 291.88,-12 281.88,-8.5 281.88,-15.5"/>
+</g>
+<!-- proc~redi_apply_flux_impl -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node8" class="node">
+<title>proc~redi_apply_flux_impl</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node8"><a xlink:href="../proc/redi_apply_flux_impl.html" xlink:title="redi_apply_flux_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="121,-24 0,-24 0,0 121,0 121,-24"/>
+<text text-anchor="middle" x="60.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_apply_flux_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_apply_flux_impl&#45;&gt;proc~redi_face_flux -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge9" class="edge">
+<title>proc~redi_apply_flux_impl&#45;&gt;proc~redi_face_flux</title>
+<path fill="none" stroke="#00ffff" d="M121.32,-12C131.87,-12 142.77,-12 153.1,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="153.19,-15.5 163.19,-12 153.19,-8.5 153.19,-15.5"/>
+</g>
+<!-- proc~redi_calc_coeffs_x -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node9" class="node">
+<title>proc~redi_calc_coeffs_x</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node9"><a xlink:href="../proc/redi_calc_coeffs_x.html" xlink:title="redi_calc_coeffs_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="115,-108 6,-108 6,-84 115,-84 115,-108"/>
+<text text-anchor="middle" x="60.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_calc_coeffs_x</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs_x&#45;&gt;proc~redi_face_coeffs -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge7" class="edge">
+<title>proc~redi_calc_coeffs_x&#45;&gt;proc~redi_face_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M102.76,-83.96C118.88,-79.26 137.53,-73.82 154.48,-68.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.61,-72.2 164.23,-66.04 153.65,-65.48 155.61,-72.2"/>
+</g>
+<!-- proc~redi_calc_coeffs_y -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_node10" class="node">
+<title>proc~redi_calc_coeffs_y</title>
+<g id="a_proc~~redi_fv_diff~~CalledByGraph_node10"><a xlink:href="../proc/redi_calc_coeffs_y.html" xlink:title="redi_calc_coeffs_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="115,-66 6,-66 6,-42 115,-42 115,-66"/>
+<text text-anchor="middle" x="60.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_calc_coeffs_y</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs_y&#45;&gt;proc~redi_face_coeffs -->
+<g id="proc~~redi_fv_diff~~CalledByGraph_edge8" class="edge">
+<title>proc~redi_calc_coeffs_y&#45;&gt;proc~redi_face_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M115.12,-54C125.32,-54 136.04,-54 146.39,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.59,-57.5 156.59,-54 146.59,-50.5 146.59,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocredi_fv_diffCalledByGraph = svgPanZoom('#procredi_fv_diffCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_sum~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_sum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hm~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hp~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure function </span><span class="n">redi_fv_diff</span><span class="p">(</span><span class="n">hkm1</span><span class="p">,</span><span class="w"> </span><span class="n">hk</span><span class="p">,</span><span class="w"> </span><span class="n">hkp1</span><span class="p">,</span><span class="w"> </span><span class="n">skm1</span><span class="p">,</span><span class="w"> </span><span class="n">sk</span><span class="p">,</span><span class="w"> </span><span class="n">skp1</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hkm1</span><span class="p">,</span><span class="w"> </span><span class="n">hk</span><span class="p">,</span><span class="w"> </span><span class="n">hkp1</span><span class="w">  </span><span class="c">!! layer thicknesses (above/centre/below)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">skm1</span><span class="p">,</span><span class="w"> </span><span class="n">sk</span><span class="p">,</span><span class="w"> </span><span class="n">skp1</span><span class="w">  </span><span class="c">!! layer scalar values</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_sum</span><span class="p">,</span><span class="w"> </span><span class="n">hp</span><span class="p">,</span><span class="w"> </span><span class="n">hm</span>
+
+<span class="w">      </span><span class="n">h_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">hkm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hkp1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hk</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_sum</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">h_sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">h_sum</span>
+<span class="w">      </span><span class="n">hm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hkm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hk</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hm</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">hm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">hm</span>
+<span class="w">      </span><span class="n">hp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hkp1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hk</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hp</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">hp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">hp</span>
+<span class="w">      </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">hk</span><span class="o">*</span><span class="n">h_sum</span><span class="p">)</span><span class="o">*</span><span class="p">((</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">hkm1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hk</span><span class="p">)</span><span class="o">*</span><span class="n">hp</span><span class="o">*</span><span class="p">(</span><span class="n">skp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sk</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">hkp1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hk</span><span class="p">)</span><span class="o">*</span><span class="n">hm</span><span class="o">*</span><span class="p">(</span><span class="n">sk</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">skm1</span><span class="p">))</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">redi_fv_diff</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

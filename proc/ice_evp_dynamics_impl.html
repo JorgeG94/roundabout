@@ -1,0 +1,2383 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_evp_dynamics_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_evp_dynamics_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">103 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_evp.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_evp.f90.html'>rdb_ice_evp.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_evp.html'>rdb_ice_evp</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_evp_dynamics_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-a_face_on">a_face_on</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-cdrho">cdrho</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-do_trunc_fin">do_trunc_fin</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-do_trunc_its">do_trunc_its</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-dt~118">dt</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-dt_2tdamp">dt_2tdamp</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-dt_cum">dt_cum</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-dt_tr">dt_tr</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-ec2">ec2</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-i_1pdt_t">i_1pdt_t</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-i_cdrhodt">i_cdrhodt</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-i_ec2">i_ec2</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-m_neglect">m_neglect</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-m_neglect2">m_neglect2</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-m_neglect4">m_neglect4</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-n~45">n</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-n_out">n_out</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-nghost~72">nghost</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-nx_phys~31">nx_phys</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-ny_phys~31">ny_phys</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-p0_rho">p0_rho</a>
+            <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#variable-tdamp_eff">tdamp_eff</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_evp_dynamics_impl.html#src">ice_evp_dynamics_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine ice_evp_dynamics_impl(grid, metrics, f_corner, mis, mice, ci, uo, vo, tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, fxoc, fyoc, dt_slow, par, periodic_x, periodic_y, nx, ny, mis_w, mice_w, ci_w, pres_mice_w, del_sh_min_pr_w, sh_dd_w, sh_dt_w, zeta_w, del_sh_w, mask_t_w, mi_u_w, mask_u_w, u_tmp_w, mi_v_w, mask_v_w, a_u_w, a_v_w, sh_ds_w, mi_ratio_a_q_w, q_w, mask_q_w, dt_transport, n_trunc)  
+</h2>
+    
+
+    <p>Flat-impl core of <code>ice_evp_dynamics</code>: the EVP subcycle body with
+the persistent scratch passed as EXPLICIT-SHAPE dummies (memory:
+never assumed-shape into a <code>do concurrent</code> feeder — NVHPC would
+emit descriptor-walk memcpys per launch).  The <code>*_w</code> scratch names
+mirror the retired module workspace 1:1, so the body below is
+unchanged from the pre-slot version.</p>
+<p><strong>Ghost policy is SPLIT — not &ldquo;all owned here&rdquo;.</strong>  This routine
+owns the ghost policy (periodic wrap or zero) for the workspace
+copies of <code>mis</code>/<code>mice</code>/<code>ci</code>, for <code>ui</code>/<code>vi</code>, and for
+<code>str_d</code>/<code>str_t</code>/<code>str_s</code> — it wraps those below.  The <code>intent(in)</code>
+<code>uo</code>/<code>vo</code>/<code>tau_ax</code>/<code>tau_ay</code> are consumed DIRECTLY (the momentum
+kernel reads their ghost rows, e.g. <code>uo(i,j)</code>, <code>vo(i-1,j+1)</code>), so
+their ghosts are the CALLER&rsquo;s responsibility: a test in a periodic
+config must fill those four with their ghosts already wrapped.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~207"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~62"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_corner</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mis~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mis</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mice~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mice</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ci~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ci</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uo~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uo</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vo~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vo</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_ax~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_ax</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_ay~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_ay</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ui~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ui</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vi~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vi</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str_d~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str_d</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str_t~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str_t</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str_s~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str_s</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fxoc~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fxoc</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fyoc~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fyoc</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_slow~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_slow</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-par~5"></span>
+              type(<a href='../type/ice_evp_params_t.html'>ice_evp_params_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>par</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x~8"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_y~8"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_y</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~346"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                <p>T-cell extents (declared before the explicit-shape scratch that
+uses them — decl-order rule).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~346"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                <p>T-cell extents (declared before the explicit-shape scratch that
+uses them — decl-order rule).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mis_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mis_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mice_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mice_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ci_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ci_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pres_mice_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pres_mice_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-del_sh_min_pr_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>del_sh_min_pr_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sh_dd_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sh_dd_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sh_dt_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sh_dt_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zeta_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zeta_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-del_sh_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>del_sh_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_t_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_t_w</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mi_u_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mi_u_w</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_u_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_u_w</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_tmp_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_tmp_w</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mi_v_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mi_v_w</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_v_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_v_w</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_u_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a_u_w</strong>(nx+1,ny)</td>
+            <td>
+                <p>PR 62: face ice concentration, valid ONLY when <code>par%a_face_stress</code>
+(uninitialised device memory otherwise — never read off-gate).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_v_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a_v_w</strong>(nx,ny+1)</td>
+            <td>
+                <p>PR 62: face ice concentration, valid ONLY when <code>par%a_face_stress</code>
+(uninitialised device memory otherwise — never read off-gate).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sh_ds_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sh_ds_w</strong>(nx+1,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mi_ratio_a_q_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mi_ratio_a_q_w</strong>(nx+1,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_w</strong>(nx+1,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_q_w~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_q_w</strong>(nx+1,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_transport~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_transport</strong></td>
+            <td>
+                <p>PR 36: the dt TRANSPORT will actually consume
+(<code>ocean_dyn%therm_dt(dt)</code>), NOT this call&rsquo;s <code>dt_slow</code> — EVP
+runs every outer step, transport at thermo cadence
+(<code>rdb_driver.F90</code>). Absent =&gt; <code>dt_slow</code> (SIS2&rsquo;s own assumption:
+<code>SIS_C_dynamics</code> and <code>SIS_transport</code> share <code>dt_slow</code>). Read
+only when <code>par%cfl_trunc &gt; 0</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_trunc~3"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_trunc</strong></td>
+            <td>
+                <p>PR 36: count of ice-bearing faces (<code>mi_u</code>/<code>mi_v &gt; m_neglect</code>)
+the FINAL clip touched. <code>0</code> when <code>par%cfl_trunc &lt;= 0</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_evp_dynamics_impl~~CallsGraph Pages: 1 -->
+<svg id="procice_evp_dynamics_implCallsGraph" width="590pt" height="994pt"
+ viewBox="0.00 0.00 590.00 994.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 990)">
+<title>proc~~ice_evp_dynamics_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-990 586,-990 586,4 -4,4"/>
+<!-- proc~ice_evp_dynamics_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node1" class="node">
+<title>proc~ice_evp_dynamics_impl</title>
+<polygon fill="none" stroke="black" points="138,-507 0,-507 0,-483 138,-483 138,-507"/>
+<text text-anchor="middle" x="69" y="-492.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_evp_dynamics_impl</text>
+</g>
+<!-- proc~evp_average_stress_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node2" class="node">
+<title>proc~evp_average_stress_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node2"><a xlink:href="../proc/evp_average_stress_impl.html" xlink:title="evp_average_stress_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="340.5,-986 195.5,-986 195.5,-962 340.5,-962 340.5,-986"/>
+<text text-anchor="middle" x="268" y="-971.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_average_stress_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_average_stress_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge1" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_average_stress_impl</title>
+<path fill="none" stroke="#ff0000" d="M71.14,-507.25C77.47,-572.77 110.36,-881.3 174,-948 177.67,-951.84 181.85,-955.13 186.37,-957.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.95,-961.16 195.42,-962.8 188.26,-954.99 184.95,-961.16"/>
+</g>
+<!-- proc~evp_build_masks_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node3" class="node">
+<title>proc~evp_build_masks_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node3"><a xlink:href="../proc/evp_build_masks_impl.html" xlink:title="evp_build_masks_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="333.5,-906 202.5,-906 202.5,-882 333.5,-882 333.5,-906"/>
+<text text-anchor="middle" x="268" y="-891.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_build_masks_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_build_masks_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge2" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_build_masks_impl</title>
+<path fill="none" stroke="#ff0000" d="M71.66,-507.17C79.91,-565.96 118.37,-819.89 174,-873 179.43,-878.19 185.86,-882.19 192.76,-885.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.82,-888.66 202.42,-888.93 194.3,-882.12 191.82,-888.66"/>
+</g>
+<!-- proc~evp_copy_u_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node4" class="node">
+<title>proc~evp_copy_u_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node4"><a xlink:href="../proc/evp_copy_u_impl.html" xlink:title="evp_copy_u_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="319.5,-360 216.5,-360 216.5,-336 319.5,-336 319.5,-360"/>
+<text text-anchor="middle" x="268" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_copy_u_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_copy_u_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge3" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_copy_u_impl</title>
+<path fill="none" stroke="#ff0000" d="M76.44,-482.67C90.48,-457.11 126.4,-398.27 174,-369 183.81,-362.96 195.17,-358.66 206.5,-355.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="207.51,-358.94 216.41,-353.19 205.87,-352.14 207.51,-358.94"/>
+</g>
+<!-- proc~evp_fill_cell_fields_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node5" class="node">
+<title>proc~evp_fill_cell_fields_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node5"><a xlink:href="../proc/evp_fill_cell_fields_impl.html" xlink:title="evp_fill_cell_fields_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="336,-318 200,-318 200,-294 336,-294 336,-318"/>
+<text text-anchor="middle" x="268" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_fill_cell_fields_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_fill_cell_fields_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge4" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_fill_cell_fields_impl</title>
+<path fill="none" stroke="#ff0000" d="M73.77,-482.97C84.18,-451.81 116.46,-368.02 174,-327 178.92,-323.49 184.33,-320.56 189.99,-318.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.6,-321.24 199.71,-314.41 189.11,-314.69 191.6,-321.24"/>
+</g>
+<!-- proc~evp_mi_face_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node6" class="node">
+<title>proc~evp_mi_face_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node6"><a xlink:href="../proc/evp_mi_face_impl.html" xlink:title="evp_mi_face_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-276 214,-276 214,-252 322,-252 322,-276"/>
+<text text-anchor="middle" x="268" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_mi_face_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_mi_face_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge5" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_mi_face_impl</title>
+<path fill="none" stroke="#ff0000" d="M72.2,-482.99C79.5,-446.83 106.37,-338.2 174,-285 182.67,-278.18 193.12,-273.49 203.84,-270.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.91,-273.62 213.72,-267.73 203.16,-266.84 204.91,-273.62"/>
+</g>
+<!-- proc~evp_pres_mice_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node7" class="node">
+<title>proc~evp_pres_mice_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node7"><a xlink:href="../proc/evp_pres_mice_impl.html" xlink:title="evp_pres_mice_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="328,-738 208,-738 208,-714 328,-714 328,-738"/>
+<text text-anchor="middle" x="268" y="-723.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_pres_mice_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_pres_mice_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge6" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_pres_mice_impl</title>
+<path fill="none" stroke="#ff0000" d="M72.2,-507.01C79.5,-543.17 106.37,-651.8 174,-705 181.17,-710.64 189.55,-714.82 198.3,-717.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.32,-721.27 207.9,-720.86 199.37,-714.58 197.32,-721.27"/>
+</g>
+<!-- proc~evp_project_ci_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node8" class="node">
+<title>proc~evp_project_ci_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node8"><a xlink:href="../proc/evp_project_ci_impl.html" xlink:title="evp_project_ci_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="326.5,-696 209.5,-696 209.5,-672 326.5,-672 326.5,-696"/>
+<text text-anchor="middle" x="268" y="-681.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_project_ci_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_project_ci_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge7" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_project_ci_impl</title>
+<path fill="none" stroke="#ff0000" d="M73.77,-507.03C84.18,-538.19 116.46,-621.98 174,-663 181.7,-668.49 190.6,-672.58 199.78,-675.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.82,-678.98 209.4,-678.41 200.78,-672.26 198.82,-678.98"/>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node9" class="node">
+<title>proc~evp_q_and_mi_ratio_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node9"><a xlink:href="../proc/evp_q_and_mi_ratio_impl.html" xlink:title="evp_q_and_mi_ratio_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="341.5,-864 194.5,-864 194.5,-840 341.5,-840 341.5,-864"/>
+<text text-anchor="middle" x="268" y="-849.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_q_and_mi_ratio_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_q_and_mi_ratio_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge8" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_q_and_mi_ratio_impl</title>
+<path fill="none" stroke="#ff0000" d="M69.74,-507.32C69.43,-556.37 75.15,-739.58 174,-831 177.37,-834.12 181.11,-836.81 185.08,-839.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.62,-842.31 194.13,-843.62 186.74,-836.04 183.62,-842.31"/>
+</g>
+<!-- proc~evp_sh_dd_dt_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node10" class="node">
+<title>proc~evp_sh_dd_dt_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node10"><a xlink:href="../proc/evp_sh_dd_dt_impl.html" xlink:title="evp_sh_dd_dt_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="324,-234 212,-234 212,-210 324,-210 324,-234"/>
+<text text-anchor="middle" x="268" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_sh_dd_dt_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_dd_dt_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge9" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_dd_dt_impl</title>
+<path fill="none" stroke="#ff0000" d="M71.16,-482.73C75.73,-441.76 96.22,-308.61 174,-243 182.05,-236.21 191.85,-231.49 202.03,-228.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="203.14,-231.57 211.86,-225.56 201.29,-224.82 203.14,-231.57"/>
+</g>
+<!-- proc~evp_sh_ds_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node11" class="node">
+<title>proc~evp_sh_ds_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node11"><a xlink:href="../proc/evp_sh_ds_impl.html" xlink:title="evp_sh_ds_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="315.5,-654 220.5,-654 220.5,-630 315.5,-630 315.5,-654"/>
+<text text-anchor="middle" x="268" y="-639.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_sh_ds_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_ds_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge10" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_sh_ds_impl</title>
+<path fill="none" stroke="#ff0000" d="M76.44,-507.33C90.48,-532.89 126.4,-591.73 174,-621 184.9,-627.71 197.7,-632.28 210.26,-635.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.72,-638.85 220.24,-637.59 211.23,-632.02 209.72,-638.85"/>
+</g>
+<!-- proc~evp_str_s_relax_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node12" class="node">
+<title>proc~evp_str_s_relax_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node12"><a xlink:href="../proc/evp_str_s_relax_impl.html" xlink:title="evp_str_s_relax_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="328.5,-612 207.5,-612 207.5,-588 328.5,-588 328.5,-612"/>
+<text text-anchor="middle" x="268" y="-597.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_str_s_relax_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_str_s_relax_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge11" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_str_s_relax_impl</title>
+<path fill="none" stroke="#ff0000" d="M81.22,-507.08C99.05,-525.52 135.77,-560.5 174,-579 181.31,-582.54 189.23,-585.49 197.26,-587.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.51,-591.38 207.08,-590.72 198.41,-584.64 196.51,-591.38"/>
+</g>
+<!-- proc~evp_stress_relax_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node13" class="node">
+<title>proc~evp_stress_relax_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node13"><a xlink:href="../proc/evp_stress_relax_impl.html" xlink:title="evp_stress_relax_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="331.5,-192 204.5,-192 204.5,-168 331.5,-168 331.5,-192"/>
+<text text-anchor="middle" x="268" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_stress_relax_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_stress_relax_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge12" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_stress_relax_impl</title>
+<path fill="none" stroke="#ff0000" d="M70.35,-482.98C72.33,-438.2 85.57,-279.57 174,-201 180.07,-195.61 187.23,-191.51 194.84,-188.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.01,-191.71 204.29,-185.1 193.7,-185.1 196.01,-191.71"/>
+</g>
+<!-- proc~evp_truncate_final_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node14" class="node">
+<title>proc~evp_truncate_final_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node14"><a xlink:href="../proc/evp_truncate_final_impl.html" xlink:title="evp_truncate_final_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="337.5,-402 198.5,-402 198.5,-378 337.5,-378 337.5,-402"/>
+<text text-anchor="middle" x="268" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_truncate_final_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_final_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge13" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_final_impl</title>
+<path fill="none" stroke="#ff0000" d="M81.22,-482.92C99.05,-464.48 135.77,-429.5 174,-411 178.63,-408.76 183.51,-406.75 188.5,-404.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.82,-408.21 198.22,-401.76 187.63,-401.56 189.82,-408.21"/>
+</g>
+<!-- proc~evp_truncate_velocity_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node15" class="node">
+<title>proc~evp_truncate_velocity_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node15"><a xlink:href="../proc/evp_truncate_velocity_impl.html" xlink:title="evp_truncate_velocity_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="346.5,-570 189.5,-570 189.5,-546 346.5,-546 346.5,-570"/>
+<text text-anchor="middle" x="268" y="-555.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_truncate_velocity_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_velocity_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge14" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_truncate_velocity_impl</title>
+<path fill="none" stroke="#ff0000" d="M96.5,-507.09C117.27,-516.22 147.05,-528.58 174,-537 181.44,-539.33 189.3,-541.51 197.16,-543.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.54,-546.97 207.08,-545.97 198.22,-540.18 196.54,-546.97"/>
+</g>
+<!-- proc~evp_u_momentum_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node16" class="node">
+<title>proc~evp_u_momentum_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node16"><a xlink:href="../proc/evp_u_momentum_impl.html" xlink:title="evp_u_momentum_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="338,-528 198,-528 198,-504 338,-504 338,-528"/>
+<text text-anchor="middle" x="268" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_u_momentum_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_u_momentum_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge15" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_u_momentum_impl</title>
+<path fill="none" stroke="#ff0000" d="M138.07,-502.26C154.1,-503.96 171.31,-505.8 187.78,-507.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.61,-511.06 197.92,-508.64 188.35,-504.1 187.61,-511.06"/>
+</g>
+<!-- proc~evp_v_momentum_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node17" class="node">
+<title>proc~evp_v_momentum_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node17"><a xlink:href="../proc/evp_v_momentum_impl.html" xlink:title="evp_v_momentum_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="337.5,-486 198.5,-486 198.5,-462 337.5,-462 337.5,-486"/>
+<text text-anchor="middle" x="268" y="-471.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_v_momentum_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_v_momentum_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge16" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_v_momentum_impl</title>
+<path fill="none" stroke="#ff0000" d="M138.07,-487.74C154.19,-486.03 171.51,-484.18 188.07,-482.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.68,-485.87 198.26,-481.33 187.94,-478.91 188.68,-485.87"/>
+</g>
+<!-- proc~evp_wrap_corner_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node18" class="node">
+<title>proc~evp_wrap_corner_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node18"><a xlink:href="../proc/evp_wrap_corner_impl.html" xlink:title="evp_wrap_corner_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="334.5,-150 201.5,-150 201.5,-126 334.5,-126 334.5,-150"/>
+<text text-anchor="middle" x="268" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_wrap_corner_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_wrap_corner_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge17" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_wrap_corner_impl</title>
+<path fill="none" stroke="#ff0000" d="M69.74,-482.68C69.43,-433.63 75.15,-250.42 174,-159 179.14,-154.24 185.13,-150.48 191.54,-147.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.15,-150.65 201.18,-143.74 190.59,-144.14 193.15,-150.65"/>
+</g>
+<!-- proc~evp_zero_massless_velocity_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node19" class="node">
+<title>proc~evp_zero_massless_velocity_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node19"><a xlink:href="../proc/evp_zero_massless_velocity_impl.html" xlink:title="evp_zero_massless_velocity_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="362,-444 174,-444 174,-420 362,-420 362,-444"/>
+<text text-anchor="middle" x="268" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zero_massless_velocity_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_massless_velocity_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge18" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_massless_velocity_impl</title>
+<path fill="none" stroke="#ff0000" d="M96.5,-482.91C117.27,-473.78 147.05,-461.42 174,-453 181.44,-450.67 189.3,-448.49 197.16,-446.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.22,-449.82 207.08,-444.03 196.54,-443.03 198.22,-449.82"/>
+</g>
+<!-- proc~evp_zero_stress_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node20" class="node">
+<title>proc~evp_zero_stress_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node20"><a xlink:href="../proc/evp_zero_stress_impl.html" xlink:title="evp_zero_stress_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="330,-108 206,-108 206,-84 330,-84 330,-108"/>
+<text text-anchor="middle" x="268" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zero_stress_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_stress_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge19" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zero_stress_impl</title>
+<path fill="none" stroke="#ff0000" d="M71.66,-482.83C79.91,-424.04 118.37,-170.11 174,-117 180.28,-111 187.9,-106.58 196.03,-103.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.41,-106.57 205.77,-100.06 195.18,-99.94 197.41,-106.57"/>
+</g>
+<!-- proc~evp_zeta_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node21" class="node">
+<title>proc~evp_zeta_impl</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node21"><a xlink:href="../proc/evp_zeta_impl.html" xlink:title="evp_zeta_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="312,-822 224,-822 224,-798 312,-798 312,-822"/>
+<text text-anchor="middle" x="268" y="-807.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_zeta_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zeta_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge20" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~evp_zeta_impl</title>
+<path fill="none" stroke="#ff0000" d="M70.35,-507.02C72.33,-551.8 85.57,-710.43 174,-789 184.85,-798.64 199.19,-804.14 213.34,-807.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="213.1,-810.72 223.56,-809.03 214.33,-803.83 213.1,-810.72"/>
+</g>
+<!-- proc~ice_limit_stresses -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node22" class="node">
+<title>proc~ice_limit_stresses</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node22"><a xlink:href="../proc/ice_limit_stresses.html" xlink:title="ice_limit_stresses">
+<polygon fill="#d9534f" stroke="#d9534f" points="320,-780 216,-780 216,-756 320,-756 320,-780"/>
+<text text-anchor="middle" x="268" y="-765.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_limit_stresses</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ice_limit_stresses -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge21" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ice_limit_stresses</title>
+<path fill="none" stroke="#ff0000" d="M71.16,-507.27C75.73,-548.24 96.22,-681.39 174,-747 183.09,-754.67 194.41,-759.69 205.99,-762.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.19,-766.35 215.73,-765.28 206.82,-759.54 205.19,-766.35"/>
+</g>
+<!-- proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node23" class="node">
+<title>proc~ocean_periodic_wrap_centre_2d</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node23"><a xlink:href="../proc/ocean_periodic_wrap_centre_2d.html" xlink:title="ocean_periodic_wrap_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="582,-926 398,-926 398,-902 582,-902 582,-926"/>
+<text text-anchor="middle" x="490" y="-911.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge22" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d</title>
+<path fill="none" stroke="#ff0000" d="M71.04,-507.08C76.75,-570.31 106.56,-862.22 174,-915 206.63,-940.53 310.98,-935.49 390.73,-927.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.25,-930.59 400.82,-926.03 390.5,-923.63 391.25,-930.59"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node24" class="node">
+<title>proc~ocean_periodic_wrap_face_x_2d</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node24"><a xlink:href="../proc/ocean_periodic_wrap_face_x_2d.html" xlink:title="ocean_periodic_wrap_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="360,-66 176,-66 176,-42 360,-42 360,-66"/>
+<text text-anchor="middle" x="268" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge23" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d</title>
+<path fill="none" stroke="#ff0000" d="M71.31,-482.77C78.28,-420 112.96,-134.79 174,-75 175.11,-73.91 176.26,-72.88 177.45,-71.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="179.61,-74.66 185.83,-66.08 175.62,-68.91 179.61,-74.66"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node25" class="node">
+<title>proc~ocean_periodic_wrap_face_y_2d</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node25"><a xlink:href="../proc/ocean_periodic_wrap_face_y_2d.html" xlink:title="ocean_periodic_wrap_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="360,-24 176,-24 176,0 360,0 360,-24"/>
+<text text-anchor="middle" x="268" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge24" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d</title>
+<path fill="none" stroke="#ff0000" d="M71.01,-482.89C76.74,-416.73 107.46,-99.59 174,-33 174.95,-32.05 175.94,-31.13 176.96,-30.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="179.24,-32.92 185.31,-24.24 175.15,-27.24 179.24,-32.92"/>
+</g>
+<!-- proc~evp_build_masks_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge26" class="edge">
+<title>proc~evp_build_masks_impl&#45;&gt;proc~ocean_periodic_wrap_centre_2d</title>
+<path fill="none" stroke="#ff3f00" d="M333.52,-899.87C350.53,-901.41 369.3,-903.12 387.74,-904.79"/>
+<polygon fill="#ff3f00" stroke="#ff3f00" points="387.66,-908.3 397.94,-905.72 388.3,-901.33 387.66,-908.3"/>
+</g>
+<!-- local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node26" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="517,-654 463,-654 463,-630 517,-630 517,-654"/>
+<text text-anchor="middle" x="490" y="-639.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~evp_build_masks_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge25" class="edge">
+<title>proc~evp_build_masks_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff3f00" d="M333.67,-886.88C343.8,-883.73 353.67,-879.27 362,-873 399.28,-844.94 457.75,-715.03 480,-663.32"/>
+<polygon fill="#ff3f00" stroke="#ff3f00" points="483.24,-664.64 483.95,-654.07 476.8,-661.89 483.24,-664.64"/>
+</g>
+<!-- proc~evp_pres_mice_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge27" class="edge">
+<title>proc~evp_pres_mice_impl&#45;&gt;local</title>
+<path fill="none" stroke="#bfff00" d="M328.15,-714.87C339.52,-712.11 351.24,-708.82 362,-705 396.76,-692.66 434.34,-673.18 459.53,-659.14"/>
+<polygon fill="#bfff00" stroke="#bfff00" points="461.56,-662.02 468.55,-654.06 458.12,-655.92 461.56,-662.02"/>
+</g>
+<!-- proc~evp_project_ci_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge28" class="edge">
+<title>proc~evp_project_ci_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M326.52,-673.02C366.44,-665.4 418.4,-655.48 452.69,-648.93"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="453.56,-652.33 462.73,-647.02 452.25,-645.45 453.56,-652.33"/>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge29" class="edge">
+<title>proc~evp_q_and_mi_ratio_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3fff00" d="M341.87,-841.3C349,-838.59 355.86,-835.21 362,-831 424.57,-788.14 464.69,-703.37 480.86,-663.58"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="484.21,-664.64 484.62,-654.05 477.69,-662.07 484.21,-664.64"/>
+</g>
+<!-- proc~ice_evp_mi_ratio_point -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node27" class="node">
+<title>proc~ice_evp_mi_ratio_point</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CallsGraph_node27"><a xlink:href="../proc/ice_evp_mi_ratio_point.html" xlink:title="ice_evp_mi_ratio_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="557,-864 423,-864 423,-840 557,-840 557,-864"/>
+<text text-anchor="middle" x="490" y="-849.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_mi_ratio_point</text>
+</a>
+</g>
+</g>
+<!-- proc~evp_q_and_mi_ratio_impl&#45;&gt;proc~ice_evp_mi_ratio_point -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge30" class="edge">
+<title>proc~evp_q_and_mi_ratio_impl&#45;&gt;proc~ice_evp_mi_ratio_point</title>
+<path fill="none" stroke="#3fff00" d="M341.65,-852C364.43,-852 389.64,-852 412.68,-852"/>
+<polygon fill="#3fff00" stroke="#3fff00" points="412.74,-855.5 422.74,-852 412.74,-848.5 412.74,-855.5"/>
+</g>
+<!-- proc~evp_sh_ds_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge31" class="edge">
+<title>proc~evp_sh_ds_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff3f" d="M315.66,-642C356.41,-642 414.76,-642 452.27,-642"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="452.73,-645.5 462.73,-642 452.73,-638.5 452.73,-645.5"/>
+</g>
+<!-- proc~evp_str_s_relax_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge32" class="edge">
+<title>proc~evp_str_s_relax_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff7f" d="M328.54,-611.37C368.32,-618.96 419.35,-628.7 453.06,-635.14"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="452.46,-638.59 462.93,-637.02 453.77,-631.71 452.46,-638.59"/>
+</g>
+<!-- proc~evp_truncate_final_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge33" class="edge">
+<title>proc~evp_truncate_final_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M337.51,-398.39C346.28,-401.43 354.73,-405.53 362,-411 434.28,-465.39 470.65,-573.5 483.48,-619.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="480.17,-621.11 486.12,-629.87 486.93,-619.31 480.17,-621.11"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_node28" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="517,-402 463,-402 463,-378 517,-378 517,-402"/>
+<text text-anchor="middle" x="490" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~evp_truncate_final_impl&#45;&gt;reduce -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge34" class="edge">
+<title>proc~evp_truncate_final_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#00ffff" d="M337.7,-390C375.71,-390 421.41,-390 452.57,-390"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="452.95,-393.5 462.95,-390 452.95,-386.5 452.95,-393.5"/>
+</g>
+<!-- proc~evp_truncate_velocity_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge35" class="edge">
+<title>proc~evp_truncate_velocity_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00bfff" d="M332.11,-570.11C342.22,-572.66 352.49,-575.62 362,-579 396.76,-591.34 434.34,-610.82 459.53,-624.86"/>
+<polygon fill="#00bfff" stroke="#00bfff" points="458.12,-628.08 468.55,-629.94 461.56,-621.98 458.12,-628.08"/>
+</g>
+<!-- proc~evp_u_momentum_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge36" class="edge">
+<title>proc~evp_u_momentum_impl&#45;&gt;local</title>
+<path fill="none" stroke="#007fff" d="M338.31,-527.82C346.5,-530.33 354.57,-533.35 362,-537 406.07,-558.64 448.12,-598.45 471.06,-622.34"/>
+<polygon fill="#007fff" stroke="#007fff" points="468.67,-624.92 478.08,-629.79 473.77,-620.11 468.67,-624.92"/>
+</g>
+<!-- proc~evp_v_momentum_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge37" class="edge">
+<title>proc~evp_v_momentum_impl&#45;&gt;local</title>
+<path fill="none" stroke="#003fff" d="M337.98,-484.32C346.4,-487.08 354.62,-490.57 362,-495 415.18,-526.89 457.48,-588.79 477.1,-621.15"/>
+<polygon fill="#003fff" stroke="#003fff" points="474.12,-623 482.23,-629.81 480.14,-619.43 474.12,-623"/>
+</g>
+<!-- proc~evp_zero_massless_velocity_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge38" class="edge">
+<title>proc~evp_zero_massless_velocity_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3f00ff" d="M345.17,-444.02C351.11,-446.48 356.81,-449.45 362,-453 424.57,-495.86 464.69,-580.63 480.86,-620.42"/>
+<polygon fill="#3f00ff" stroke="#3f00ff" points="477.69,-621.93 484.62,-629.95 484.21,-619.36 477.69,-621.93"/>
+</g>
+<!-- proc~evp_zeta_impl&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge39" class="edge">
+<title>proc~evp_zeta_impl&#45;&gt;local</title>
+<path fill="none" stroke="#bf00ff" d="M312.34,-806.03C328.77,-803.08 347.09,-797.94 362,-789 415.18,-757.11 457.48,-695.21 477.1,-662.85"/>
+<polygon fill="#bf00ff" stroke="#bf00ff" points="480.14,-664.57 482.23,-654.19 474.12,-661 480.14,-664.57"/>
+</g>
+<!-- proc~ice_limit_stresses&#45;&gt;local -->
+<g id="proc~~ice_evp_dynamics_impl~~CallsGraph_edge40" class="edge">
+<title>proc~ice_limit_stresses&#45;&gt;local</title>
+<path fill="none" stroke="#ff00ff" d="M320.18,-760.93C334.19,-757.81 349.07,-753.35 362,-747 406.07,-725.36 448.12,-685.55 471.06,-661.66"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="473.77,-663.89 478.08,-654.21 468.67,-659.08 473.77,-663.89"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_evp_dynamics_impl~~CalledByGraph Pages: 1 -->
+<svg id="procice_evp_dynamics_implCalledByGraph" width="641pt" height="60pt"
+ viewBox="0.00 0.00 641.00 60.27" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph" class="graph" transform="scale(0.81 0.81) rotate(0) translate(4 70)">
+<title>proc~~ice_evp_dynamics_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 783,-70 783,4 -4,4"/>
+<!-- proc~ice_evp_dynamics_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node1" class="node">
+<title>proc~ice_evp_dynamics_impl</title>
+<polygon fill="none" stroke="black" points="779,-45 641,-45 641,-21 779,-21 779,-45"/>
+<text text-anchor="middle" x="710" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_evp_dynamics_impl</text>
+</g>
+<!-- proc~ice_evp_dynamics -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node2" class="node">
+<title>proc~ice_evp_dynamics</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node2"><a xlink:href="../proc/ice_evp_dynamics.html" xlink:title="ice_evp_dynamics">
+<polygon fill="#d9534f" stroke="#d9534f" points="605,-45 496,-45 496,-21 605,-21 605,-45"/>
+<text text-anchor="middle" x="550.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl</title>
+<path fill="none" stroke="#ff0000" d="M605.26,-33C613.52,-33 622.2,-33 630.86,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="631,-36.5 641,-33 631,-29.5 631,-36.5"/>
+</g>
+<!-- proc~ice_evp_step -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node3" class="node">
+<title>proc~ice_evp_step</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node3"><a xlink:href="../proc/ice_evp_step.html" xlink:title="ice_evp_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="460,-45 379,-45 379,-21 460,-21 460,-45"/>
+<text text-anchor="middle" x="419.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics</title>
+<path fill="none" stroke="#ff0000" d="M460.26,-33C468.34,-33 477.04,-33 485.73,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="485.87,-36.5 495.87,-33 485.87,-29.5 485.87,-36.5"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node4" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node4"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-45 245,-45 245,-21 343,-21 343,-45"/>
+<text text-anchor="middle" x="294" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_evp_step -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_evp_step</title>
+<path fill="none" stroke="#ff0000" d="M343.1,-33C351.48,-33 360.21,-33 368.64,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.71,-36.5 378.71,-33 368.71,-29.5 368.71,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M209.19,-45.94C217.5,-44.66 226.14,-43.32 234.58,-42.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.39,-45.44 244.74,-40.45 234.32,-38.52 235.39,-45.44"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M204.57,-19.34C214.33,-20.85 224.72,-22.46 234.81,-24.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.35,-27.49 244.77,-25.55 235.42,-20.57 234.35,-27.49"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_evp_dynamics_impl~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_evp_dynamics_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_evp_dynamics_implCalledByGraph = svgPanZoom('#procice_evp_dynamics_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_face_on"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a_face_on</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cdrho"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cdrho</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_trunc_fin"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_trunc_fin</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_trunc_its"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_trunc_its</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~118"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_2tdamp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_2tdamp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_cum"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_cum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_tr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_tr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ec2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ec2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_1pdt_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_1pdt_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_cdrhodt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_cdrhodt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_ec2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_ec2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_neglect"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_neglect</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_neglect2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_neglect2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_neglect4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_neglect4</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~45"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_out"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_out</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~72"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~31"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~31"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p0_rho"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p0_rho</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tdamp_eff"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tdamp_eff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ice_evp_dynamics_impl</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="n">mis</span><span class="p">,</span><span class="w"> </span><span class="n">mice</span><span class="p">,</span><span class="w"> </span><span class="n">ci</span><span class="p">,</span><span class="w"> </span><span class="n">uo</span><span class="p">,</span><span class="w"> </span><span class="n">vo</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">tau_ax</span><span class="p">,</span><span class="w"> </span><span class="n">tau_ay</span><span class="p">,</span><span class="w"> </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_slow</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">del_sh_min_pr_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">sh_dd_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dt_w</span><span class="p">,</span><span class="w"> </span><span class="n">zeta_w</span><span class="p">,</span><span class="w"> </span><span class="n">del_sh_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_t_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">mi_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">u_tmp_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_v_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">sh_ds_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_ratio_a_q_w</span><span class="p">,</span><span class="w"> </span><span class="n">q_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_q_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">dt_transport</span><span class="p">,</span><span class="w"> </span><span class="n">n_trunc</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Flat-impl core of `ice_evp_dynamics`: the EVP subcycle body with</span>
+<span class="w">      </span><span class="c">!! the persistent scratch passed as EXPLICIT-SHAPE dummies (memory:</span>
+<span class="w">      </span><span class="c">!! never assumed-shape into a `do concurrent` feeder — NVHPC would</span>
+<span class="w">      </span><span class="c">!! emit descriptor-walk memcpys per launch).  The `*_w` scratch names</span>
+<span class="w">      </span><span class="c">!! mirror the retired module workspace 1:1, so the body below is</span>
+<span class="w">      </span><span class="c">!! unchanged from the pre-slot version.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Ghost policy is SPLIT — not "all owned here".**  This routine</span>
+<span class="w">      </span><span class="c">!! owns the ghost policy (periodic wrap or zero) for the workspace</span>
+<span class="w">      </span><span class="c">!! copies of `mis`/`mice`/`ci`, for `ui`/`vi`, and for</span>
+<span class="w">      </span><span class="c">!! `str_d`/`str_t`/`str_s` — it wraps those below.  The `intent(in)`</span>
+<span class="w">      </span><span class="c">!! `uo`/`vo`/`tau_ax`/`tau_ay` are consumed DIRECTLY (the momentum</span>
+<span class="w">      </span><span class="c">!! kernel reads their ghost rows, e.g. `uo(i,j)`, `vo(i-1,j+1)`), so</span>
+<span class="w">      </span><span class="c">!! their ghosts are the CALLER's responsibility: a test in a periodic</span>
+<span class="w">      </span><span class="c">!! config must fill those four with their ghosts already wrapped.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_corner</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mis</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">mice</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">ci</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uo</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">vo</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tau_ax</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">tau_ay</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ui</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">vi</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">str_d</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">str_t</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">str_s</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fxoc</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">fyoc</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_slow</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ice_evp_params_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">par</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">         </span><span class="c">!! T-cell extents (declared before the explicit-shape scratch that</span>
+<span class="w">         </span><span class="c">!! uses them — decl-order rule).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mis_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">mice_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">ci_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">del_sh_min_pr_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sh_dd_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">sh_dt_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zeta_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">del_sh_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mask_t_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mi_u_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">mask_u_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">u_tmp_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a_u_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">a_v_w</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! PR 62: face ice concentration, valid ONLY when `par%a_face_stress`</span>
+<span class="w">         </span><span class="c">!! (uninitialised device memory otherwise — never read off-gate).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sh_ds_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">mi_ratio_a_q_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">mask_q_w</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_transport</span>
+<span class="w">         </span><span class="c">!! PR 36: the dt TRANSPORT will actually consume</span>
+<span class="w">         </span><span class="c">!! (`ocean_dyn%therm_dt(dt)`), NOT this call's `dt_slow` — EVP</span>
+<span class="w">         </span><span class="c">!! runs every outer step, transport at thermo cadence</span>
+<span class="w">         </span><span class="c">!! (`rdb_driver.F90`). Absent =&gt; `dt_slow` (SIS2's own assumption:</span>
+<span class="w">         </span><span class="c">!! `SIS_C_dynamics` and `SIS_transport` share `dt_slow`). Read</span>
+<span class="w">         </span><span class="c">!! only when `par%cfl_trunc &gt; 0`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_trunc</span>
+<span class="w">         </span><span class="c">!! PR 36: count of ice-bearing faces (`mi_u`/`mi_v &gt; m_neglect`)</span>
+<span class="w">         </span><span class="c">!! the FINAL clip touched. `0` when `par%cfl_trunc &lt;= 0`.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">tdamp_eff</span><span class="p">,</span><span class="w"> </span><span class="n">dt_2tdamp</span><span class="p">,</span><span class="w"> </span><span class="n">i_1pdt_t</span><span class="p">,</span><span class="w"> </span><span class="n">ec2</span><span class="p">,</span><span class="w"> </span><span class="n">i_ec2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cdrho</span><span class="p">,</span><span class="w"> </span><span class="n">i_cdrhodt</span><span class="p">,</span><span class="w"> </span><span class="n">p0_rho</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect2</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect4</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_tr</span><span class="p">,</span><span class="w"> </span><span class="n">dt_cum</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a_face_on</span><span class="p">,</span><span class="w"> </span><span class="n">do_trunc_its</span><span class="p">,</span><span class="w"> </span><span class="n">do_trunc_fin</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_out</span>
+
+<span class="w">      </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span>
+<span class="w">      </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span>
+<span class="w">      </span><span class="n">nghost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+
+<span class="w">      </span><span class="c">! ---- Scalar precompute (hoisted before the substep loop) ----</span>
+<span class="w">      </span><span class="n">a_face_on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">a_face_stress</span>
+<span class="w">      </span><span class="n">dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_slow</span><span class="o">/</span><span class="kt">real</span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">evp_sub_steps</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">tdamp</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">tdamp_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">tdamp</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">tdamp</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">tdamp_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.2_wp</span><span class="o">*</span><span class="n">dt_slow</span><span class="p">,</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">tdamp_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="o">-</span><span class="n">par</span><span class="p">%</span><span class="n">tdamp</span><span class="o">*</span><span class="n">dt_slow</span><span class="p">,</span><span class="w"> </span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      </span><span class="n">dt_2tdamp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">/</span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">tdamp_eff</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ec2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">ec</span><span class="o">*</span><span class="n">par</span><span class="p">%</span><span class="n">ec</span>
+<span class="w">      </span><span class="n">i_ec2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ec2</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">i_ec2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">ec2</span>
+<span class="w">      </span><span class="n">i_1pdt_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt_2tdamp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">cdrho</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">cdw</span><span class="o">*</span><span class="n">par</span><span class="p">%</span><span class="n">rho_ocean</span>
+<span class="w">      </span><span class="n">i_cdrhodt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">cdw</span><span class="o">*</span><span class="n">par</span><span class="p">%</span><span class="n">rho_ocean</span><span class="o">*</span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="n">p0_rho</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">p0</span><span class="o">/</span><span class="n">ICE_RHO_ICE</span>
+<span class="w">      </span><span class="n">m_neglect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">M_NEGLECT_FACTOR</span>
+<span class="w">      </span><span class="n">m_neglect2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_neglect</span><span class="o">*</span><span class="n">m_neglect</span>
+<span class="w">      </span><span class="n">m_neglect4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_neglect2</span><span class="o">*</span><span class="n">m_neglect2</span>
+
+<span class="w">      </span><span class="c">! ---- PR 36: CFL-truncation gates + the dt the bound must use.</span>
+<span class="w">      </span><span class="c">! The bound is against the dt TRANSPORT will consume, NOT this call's</span>
+<span class="w">      </span><span class="c">! `dt_slow` -- Roundabout decouples EVP (every outer step) from transport</span>
+<span class="w">      </span><span class="c">! (thermo cadence); SIS2's structure assumes they are the same dt.</span>
+<span class="w">      </span><span class="c">! Absent `dt_transport` =&gt; `dt_slow`, matching SIS2's own assumption. ----</span>
+<span class="w">      </span><span class="n">dt_tr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_slow</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">dt_transport</span><span class="p">))</span><span class="w"> </span><span class="n">dt_tr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_transport</span>
+<span class="w">      </span><span class="n">do_trunc_its</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">cfl_trunc_dyn_its</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">dt_tr</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">do_trunc_fin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">dt_tr</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Effective masks (SIS2 mask2dT/Cu/Cv/Bu), built once ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_build_masks_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">mask_t_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_q_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Category fields into the workspace, ghost-wrapped/zeroed ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_fill_cell_fields_impl</span><span class="p">(</span><span class="n">mask_t_w</span><span class="p">,</span><span class="w"> </span><span class="n">mis</span><span class="p">,</span><span class="w"> </span><span class="n">mice</span><span class="p">,</span><span class="w"> </span><span class="n">ci</span><span class="p">,</span><span class="w"> </span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Zero ice velocities with no mass (SIS2 :899-907) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_zero_massless_velocity_impl</span><span class="p">(</span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- pres_mice + del_sh_min_pr precompute (:877-890) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_pres_mice_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">dxT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dyT</span><span class="p">,</span><span class="w"> </span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">p0_rho</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">c0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">par</span><span class="p">%</span><span class="n">del_sh_min_scale</span><span class="p">,</span><span class="w"> </span><span class="n">tdamp_eff</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">del_sh_min_pr_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- mi_u / mi_v (:967-974) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_mi_face_impl</span><span class="p">(</span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- PR 62: face ice concentration a_u/a_v, ONLY when a_face_stress.</span>
+<span class="w">      </span><span class="c">! Reuses evp_mi_face_impl's 0.5-face-average — same expression/edge</span>
+<span class="w">      </span><span class="c">! convention `ice_ocean_stress_flux_impl`'s `a_u` already uses, so the</span>
+<span class="w">      </span><span class="c">! momentum budget it closes matches the coupler bit-for-bit (§5.4). ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">a_face_on</span><span class="p">)</span><span class="w"> </span><span class="k">call </span><span class="n">evp_mi_face_impl</span><span class="p">(</span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- q + mi_ratio_A_q (:926-982) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_q_and_mi_ratio_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="n">mask_t_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">mask_q_w</span><span class="p">,</span><span class="w"> </span><span class="n">mis_w</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect2</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect4</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">q_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_ratio_a_q_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- limit_stresses ONCE before the substep loop (:896) — req (2) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_limit_stresses</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">mask_t_w</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">ec</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_wrap_corner_impl</span><span class="p">(</span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Zero the subcycle-averaged ice-&gt;ocean stress (F1: an explicit</span>
+<span class="w">      </span><span class="c">! device kernel, NOT a bare host whole-array assignment — fxoc/fyoc</span>
+<span class="w">      </span><span class="c">! are copyin-mapped, so a host `= 0.0_wp` would leave the DEVICE copy</span>
+<span class="w">      </span><span class="c">! stale and each outer call would accumulate onto the prior call's</span>
+<span class="w">      </span><span class="c">! average). ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_zero_stress_impl</span><span class="p">(</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- The EVP subcycle loop — device-resident, no per-substep H&lt;-&gt;D ----</span>
+<span class="w">      </span><span class="n">dt_cum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">evp_sub_steps</span>
+<span class="w">         </span><span class="c">! PR 36: cumulative elapsed time within THIS call, at the TOP of the</span>
+<span class="w">         </span><span class="c">! loop (SIS2 :1023,1028) =&gt; subcycle n sees t_cum = n*dt. Host</span>
+<span class="w">         </span><span class="c">! scalar by value -- the substep loop is host-driven, so this costs</span>
+<span class="w">         </span><span class="c">! nothing and breaks no device residency.</span>
+<span class="w">         </span><span class="n">dt_cum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_cum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span>
+
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_x_2d</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_y_2d</span><span class="p">(</span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+
+<span class="w">         </span><span class="k">call </span><span class="n">evp_sh_ds_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_dyBu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_dxBu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">mask_q_w</span><span class="p">,</span><span class="w"> </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">sh_ds_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">evp_sh_dd_dt_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_dxT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_dyT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dyCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dxCv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dd_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dt_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! ---- PR 36: PROJECT_ICE_CONCENTRATION -- SIS2's position exactly</span>
+<span class="w">         </span><span class="c">! (:1077 -&gt; :1082): after sh_Dd, before zeta. ci_w is the CALL's</span>
+<span class="w">         </span><span class="c">! initial (entry-gathered) concentration, never mutated by this --</span>
+<span class="w">         </span><span class="c">! keep it that way (the projection is `ci*exp(-t_cum*sh_dd)`, not</span>
+<span class="w">         </span><span class="c">! an incremental accumulator). del_sh_min_pr_w is NOT recomputed</span>
+<span class="w">         </span><span class="c">! (no ci dependence). ----</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">project_ci</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">evp_project_ci_impl</span><span class="p">(</span><span class="n">ci_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dd_w</span><span class="p">,</span><span class="w"> </span><span class="n">dt_cum</span><span class="p">,</span><span class="w"> </span><span class="n">p0_rho</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">c0</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+
+<span class="k">         call </span><span class="n">evp_zeta_impl</span><span class="p">(</span><span class="n">sh_dd_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dt_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_ds_w</span><span class="p">,</span><span class="w"> </span><span class="n">i_ec2</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">del_sh_min_pr_w</span><span class="p">,</span><span class="w"> </span><span class="n">del_sh_w</span><span class="p">,</span><span class="w"> </span><span class="n">zeta_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">evp_stress_relax_impl</span><span class="p">(</span><span class="n">zeta_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dd_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_dt_w</span><span class="p">,</span><span class="w"> </span><span class="n">pres_mice_w</span><span class="p">,</span><span class="w"> </span><span class="n">mice_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">i_1pdt_t</span><span class="p">,</span><span class="w"> </span><span class="n">dt_2tdamp</span><span class="p">,</span><span class="w"> </span><span class="n">i_ec2</span><span class="p">,</span><span class="w"> </span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">evp_str_s_relax_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">zeta_w</span><span class="p">,</span><span class="w"> </span><span class="n">sh_ds_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_ratio_a_q_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">i_1pdt_t</span><span class="p">,</span><span class="w"> </span><span class="n">dt_2tdamp</span><span class="p">,</span><span class="w"> </span><span class="n">i_ec2</span><span class="p">,</span><span class="w"> </span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">         </span><span class="k">call </span><span class="n">evp_copy_u_impl</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">u_tmp_w</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">         </span><span class="k">call </span><span class="n">evp_u_momentum_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy2h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx2q</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaCu</span><span class="p">,</span><span class="w"> </span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">q_w</span><span class="p">,</span><span class="w"> </span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">uo</span><span class="p">,</span><span class="w"> </span><span class="n">vo</span><span class="p">,</span><span class="w"> </span><span class="n">tau_ax</span><span class="p">,</span><span class="w"> </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect</span><span class="p">,</span><span class="w"> </span><span class="n">i_cdrhodt</span><span class="p">,</span><span class="w"> </span><span class="n">cdrho</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">a_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_face_on</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">evp_v_momentum_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCv</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx2h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy2q</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">iareaCv</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_u_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">q_w</span><span class="p">,</span><span class="w"> </span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="n">uo</span><span class="p">,</span><span class="w"> </span><span class="n">vo</span><span class="p">,</span><span class="w"> </span><span class="n">tau_ay</span><span class="p">,</span><span class="w"> </span><span class="n">u_tmp_w</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="n">m_neglect</span><span class="p">,</span><span class="w"> </span><span class="n">i_cdrhodt</span><span class="p">,</span><span class="w"> </span><span class="n">cdrho</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">a_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">a_face_on</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! ---- PR 36: in-loop CFL clip (cfl_trunc_dyn_its) -- SIS2's</span>
+<span class="w">         </span><span class="c">! position (:1338, bottom of the loop, after both momentum</span>
+<span class="w">         </span><span class="c">! solves). Exact bound, no count. No re-wrap needed: the next</span>
+<span class="w">         </span><span class="c">! iteration's wrap at the top of the loop does it. ----</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_trunc_its</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">evp_truncate_velocity_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_tr</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+
+<span class="w">      </span><span class="c">! ---- PR 36: FINAL CFL clip (cfl_trunc) -- always on when cfl_trunc&gt;0</span>
+<span class="w">      </span><span class="c">! and dt_tr&gt;0. 0.95*bound back-off; counts ice-bearing faces touched.</span>
+<span class="w">      </span><span class="c">! The clip walks PHYSICAL faces only -- the periodic re-wrap after it</span>
+<span class="w">      </span><span class="c">! is MANDATORY (without it a periodic ghost face keeps its unclipped</span>
+<span class="w">      </span><span class="c">! value, transport's PPM reads it as a donor velocity, and the run</span>
+<span class="w">      </span><span class="c">! aborts anyway for a reason no test would name). ----</span>
+<span class="w">      </span><span class="n">n_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_trunc_fin</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">evp_truncate_final_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">mi_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mi_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_tr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">m_neglect</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">n_out</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_x_2d</span><span class="p">(</span><span class="n">ui</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_y_2d</span><span class="p">(</span><span class="n">vi</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">periodic_y</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">n_trunc</span><span class="p">))</span><span class="w"> </span><span class="n">n_trunc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_out</span>
+
+<span class="w">      </span><span class="c">! ---- fxoc/fyoc average + mask (:1415-1441) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">evp_average_stress_impl</span><span class="p">(</span><span class="n">mask_u_w</span><span class="p">,</span><span class="w"> </span><span class="n">mask_v_w</span><span class="p">,</span><span class="w"> </span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">%</span><span class="n">evp_sub_steps</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_evp_dynamics_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

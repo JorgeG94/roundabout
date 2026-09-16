@@ -1,0 +1,793 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>configure_ocean_bt_split &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>configure_ocean_bt_split
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">27 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_setup.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_setup.f90.html'>rdb_ocean_setup.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></li>
+            <li class="breadcrumb-item active" aria-current="page">configure_ocean_bt_split</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/configure_ocean_bt_split.html#src">configure_ocean_bt_split</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine configure_ocean_bt_split(cfg, ocean_state, grid, compute_rank)  
+</h2>
+    
+
+    <p>Auto-derive the barotropic substep count n_inner from the external
+gravity-wave CFL (MOM6 set_dtbt) when requested, then latch the
+mode-split reference column depth bt_H_ref from the seeded bathymetry.
+<code>cfg</code> is intent(inout) because auto_n_inner writes cfg%ocean%bt%n_inner.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~119"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ocean_state~24"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ocean_state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~276"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-compute_rank~25"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>compute_rank</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_bt_split~~CallsGraph Pages: 1 -->
+<svg id="procconfigure_ocean_bt_splitCallsGraph" width="629pt" height="242pt"
+ viewBox="0.00 0.00 629.00 242.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_bt_split~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 238)">
+<title>proc~~configure_ocean_bt_split~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-238 625,-238 625,4 -4,4"/>
+<!-- proc~configure_ocean_bt_split -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node1" class="node">
+<title>proc~configure_ocean_bt_split</title>
+<polygon fill="none" stroke="black" points="144,-129 0,-129 0,-105 144,-105 144,-129"/>
+<text text-anchor="middle" x="72" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_bt_split</text>
+</g>
+<!-- info -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node2" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="269.5,-234 215.5,-234 215.5,-210 269.5,-210 269.5,-234"/>
+<text text-anchor="middle" x="242.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;info -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge1" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M85.5,-129.15C104.5,-147.06 142.43,-180.61 180,-201 188,-205.34 197.06,-209.03 205.72,-212.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.66,-215.38 215.25,-215.17 206.84,-208.73 204.66,-215.38"/>
+</g>
+<!-- proc~bt_auto_n_inner -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node3" class="node">
+<title>proc~bt_auto_n_inner</title>
+<g id="a_proc~~configure_ocean_bt_split~~CallsGraph_node3"><a xlink:href="../proc/bt_auto_n_inner.html" xlink:title="bt_auto_n_inner">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="291,-192 194,-192 194,-168 291,-168 291,-192"/>
+<text text-anchor="middle" x="242.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_auto_n_inner</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~bt_auto_n_inner -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge2" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~bt_auto_n_inner</title>
+<path fill="none" stroke="#ff0000" d="M102.84,-129.13C124.23,-137.72 153.77,-149.38 180,-159 185.1,-160.87 190.45,-162.78 195.79,-164.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.71,-167.98 205.31,-167.94 197,-161.36 194.71,-167.98"/>
+</g>
+<!-- proc~halo_allreduce_max -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node4" class="node">
+<title>proc~halo_allreduce_max</title>
+<g id="a_proc~~configure_ocean_bt_split~~CallsGraph_node4"><a xlink:href="../proc/halo_allreduce_max.html" xlink:title="halo_allreduce_max">
+<polygon fill="#d9534f" stroke="#d9534f" points="302,-150 183,-150 183,-126 302,-126 302,-150"/>
+<text text-anchor="middle" x="242.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_max</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge3" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff0000" d="M144.46,-125.91C153.88,-127.08 163.52,-128.28 172.89,-129.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.57,-132.94 182.93,-130.7 173.44,-125.99 172.57,-132.94"/>
+</g>
+<!-- proc~halo_allreduce_min -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node5" class="node">
+<title>proc~halo_allreduce_min</title>
+<g id="a_proc~~configure_ocean_bt_split~~CallsGraph_node5"><a xlink:href="../proc/halo_allreduce_min.html" xlink:title="halo_allreduce_min">
+<polygon fill="#d9534f" stroke="#d9534f" points="300.5,-108 184.5,-108 184.5,-84 300.5,-84 300.5,-108"/>
+<text text-anchor="middle" x="242.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_min</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_min -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge4" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~halo_allreduce_min</title>
+<path fill="none" stroke="#ff0000" d="M144.46,-108.09C154.38,-106.86 164.54,-105.59 174.38,-104.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.99,-107.82 184.48,-103.11 174.13,-100.87 174.99,-107.82"/>
+</g>
+<!-- proc~metrics_bt_cfl_length -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node6" class="node">
+<title>proc~metrics_bt_cfl_length</title>
+<g id="a_proc~~configure_ocean_bt_split~~CallsGraph_node6"><a xlink:href="../proc/metrics_bt_cfl_length.html" xlink:title="metrics_bt_cfl_length">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="305,-66 180,-66 180,-42 305,-42 305,-66"/>
+<text text-anchor="middle" x="242.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_bt_cfl_length</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;proc~metrics_bt_cfl_length -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge5" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;proc~metrics_bt_cfl_length</title>
+<path fill="none" stroke="#ff0000" d="M102.84,-104.87C124.23,-96.28 153.77,-84.62 180,-75 185.1,-73.13 190.45,-71.22 195.79,-69.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197,-72.64 205.31,-66.06 194.71,-66.02 197,-72.64"/>
+</g>
+<!-- to_string -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node7" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="271.5,-24 213.5,-24 213.5,0 271.5,0 271.5,-24"/>
+<text text-anchor="middle" x="242.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~configure_ocean_bt_split&#45;&gt;to_string -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge6" class="edge">
+<title>proc~configure_ocean_bt_split&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M85.5,-104.85C104.5,-86.94 142.43,-53.39 180,-33 187.4,-28.98 195.72,-25.52 203.78,-22.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.05,-25.9 213.42,-19.4 202.82,-19.27 205.05,-25.9"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node8" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="453.5,-150 391.5,-150 391.5,-126 453.5,-126 453.5,-150"/>
+<text text-anchor="middle" x="422.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;allreduce -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge7" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;allreduce</title>
+<path fill="none" stroke="#00ff00" d="M302.28,-138C328.09,-138 357.76,-138 381.04,-138"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="381.26,-141.5 391.26,-138 381.26,-134.5 381.26,-141.5"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node9" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~configure_ocean_bt_split~~CallsGraph_node9"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="504,-108 341,-108 341,-84 504,-84 504,-108"/>
+<text text-anchor="middle" x="422.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge8" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#00ff00" d="M294.51,-125.96C315.08,-121.11 338.99,-115.47 360.48,-110.4"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="361.56,-113.74 370.48,-108.04 359.95,-106.93 361.56,-113.74"/>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;allreduce -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge9" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;allreduce</title>
+<path fill="none" stroke="#00ffff" d="M294.51,-108.04C322.17,-114.56 355.86,-122.51 381.58,-128.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="380.84,-132 391.38,-130.89 382.45,-125.19 380.84,-132"/>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge10" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#00ffff" d="M300.8,-96C310.4,-96 320.57,-96 330.78,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="330.97,-99.5 340.97,-96 330.97,-92.5 330.97,-99.5"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_node10" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="621,-108 540,-108 540,-84 621,-84 621,-108"/>
+<text text-anchor="middle" x="580.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~configure_ocean_bt_split~~CallsGraph_edge11" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ffff" d="M504.24,-96C512.92,-96 521.55,-96 529.71,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="529.75,-99.5 539.75,-96 529.75,-92.5 529.75,-99.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_bt_split~~CalledByGraph Pages: 1 -->
+<svg id="procconfigure_ocean_bt_splitCalledByGraph" width="641pt" height="113pt"
+ viewBox="0.00 0.00 641.00 113.18" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph" class="graph" transform="scale(0.98 0.98) rotate(0) translate(4 112)">
+<title>proc~~configure_ocean_bt_split~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 653,-112 653,4 -4,4"/>
+<!-- proc~configure_ocean_bt_split -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node1" class="node">
+<title>proc~configure_ocean_bt_split</title>
+<polygon fill="none" stroke="black" points="649,-45 505,-45 505,-21 649,-21 649,-45"/>
+<text text-anchor="middle" x="577" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_bt_split</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-45 385,-45 385,-21 469,-21 469,-45"/>
+<text text-anchor="middle" x="427" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_bt_split</title>
+<path fill="none" stroke="#ff0000" d="M469.23,-33C477.3,-33 486.04,-33 494.91,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.95,-36.5 504.95,-33 494.95,-29.5 494.95,-36.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-44.05C357.85,-42.8 366.62,-41.54 374.97,-40.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.51,-43.8 384.91,-38.91 374.51,-36.87 375.51,-43.8"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-24 226,-24 226,0 332,0 332,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-19.52C345.99,-21.49 360.74,-23.61 374.4,-25.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.19,-29.08 384.59,-27.04 375.19,-22.16 374.19,-29.08"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-24 53,-24 53,0 120,0 120,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-12C146.45,-12 183.96,-12 215.83,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-15.5 225.95,-12 215.95,-8.5 215.95,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-108 11,-108 11,-84 162,-84 162,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-83.96C164.41,-79.04 190.39,-73.31 213.63,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-71.61 223.4,-66.04 212.88,-64.77 214.39,-71.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~configure_ocean_bt_split~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-66 0,-66 0,-42 173,-42 173,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_bt_split~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-54C181.77,-54 190.37,-54 198.79,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-57.5 208.97,-54 198.97,-50.5 198.97,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocconfigure_ocean_bt_splitCalledByGraph = svgPanZoom('#procconfigure_ocean_bt_splitCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">configure_ocean_bt_split</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">compute_rank</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Auto-derive the barotropic substep count n_inner from the external</span>
+<span class="w">      </span><span class="c">!! gravity-wave CFL (MOM6 set_dtbt) when requested, then latch the</span>
+<span class="w">      </span><span class="c">!! mode-split reference column depth bt_H_ref from the seeded bathymetry.</span>
+<span class="w">      </span><span class="c">!! `cfg` is intent(inout) because auto_n_inner writes cfg%ocean%bt%n_inner.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_state</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_rank</span>
+
+<span class="w">      </span><span class="c">! Auto-derive n_inner from the external gravity-wave CFL (MOM6 set_dtbt):</span>
+<span class="w">      </span><span class="c">! smallest n_inner with dt_outer/n_inner &lt;= cfl_bt_safety·l_cfl/√(g·H_max),</span>
+<span class="w">      </span><span class="c">! where l_cfl = 1/√(1/dx²+1/dy²) is the 2-D CFL length (NOT a single</span>
+<span class="w">      </span><span class="c">! grid length — the cross-direction term matters: on square cells it is</span>
+<span class="w">      </span><span class="c">! the √2 factor the legacy dx_min/c estimate omitted, which left the</span>
+<span class="w">      </span><span class="c">! effective 2-D CFL marginal at fine resolution).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">auto_n_inner</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         block</span>
+<span class="k">            </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng_</span><span class="p">,</span><span class="w"> </span><span class="n">n_inner_derived</span>
+<span class="w">            </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_ext_max</span><span class="p">,</span><span class="w"> </span><span class="n">l_cfl</span><span class="p">,</span><span class="w"> </span><span class="n">l_cfl_local</span><span class="p">,</span><span class="w"> </span><span class="n">dt_bt_safe</span><span class="p">,</span><span class="w"> </span><span class="n">b_max_interior</span><span class="p">,</span><span class="w"> </span><span class="n">b_max_local</span>
+<span class="w">            </span><span class="n">ng_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<span class="w">            </span><span class="c">! Interior-only max — ghost cells may hold extrapolated values.</span>
+<span class="w">            </span><span class="n">b_max_local</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span><span class="p">(</span><span class="n">ng_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">ng_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">ng_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">ng_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">))</span>
+<span class="w">            </span><span class="c">! Reduce to the GLOBAL H_max so every rank derives the same n_inner.</span>
+<span class="w">            </span><span class="c">! On a single rank, halo_allreduce_max is an identity (stub returns</span>
+<span class="w">            </span><span class="c">! the input unchanged) — byte-identical single-rank path.</span>
+<span class="w">            </span><span class="k">call </span><span class="n">halo_allreduce_max</span><span class="p">(</span><span class="n">b_max_local</span><span class="p">,</span><span class="w"> </span><span class="n">b_max_interior</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_ext_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">GRAVITY</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="n">b_max_interior</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">))</span>
+<span class="w">            </span><span class="c">! Reduce to the GLOBAL minimum CFL length so every rank derives the</span>
+<span class="w">            </span><span class="c">! SAME n_inner.  On a spherical grid dxT = R·cos(lat)·dlon shrinks</span>
+<span class="w">            </span><span class="c">! poleward, so a meridional (py&gt;1) decomposition gives each rank a</span>
+<span class="w">            </span><span class="c">! DIFFERENT local min length; without this reduction the ranks pick</span>
+<span class="w">            </span><span class="c">! different n_inner, run a different number of barotropic substeps,</span>
+<span class="w">            </span><span class="c">! and desync their per-substep grouped halo exchanges — the Isend /</span>
+<span class="w">            </span><span class="c">! Irecv pairing crosses between substeps and MPI aborts with</span>
+<span class="w">            </span><span class="c">! MPI_ERR_TRUNCATE at the first N/S exchange.  Cartesian (uniform</span>
+<span class="w">            </span><span class="c">! dxT) and a zonal (px&gt;1) spherical split give every rank the same</span>
+<span class="w">            </span><span class="c">! local length, which is why only spherical py&gt;1 exposed it.</span>
+<span class="w">            </span><span class="c">! Single-rank: halo_allreduce_min is an identity stub (bit-identical).</span>
+<span class="w">            </span><span class="n">l_cfl_local</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">metrics_bt_cfl_length</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">halo_allreduce_min</span><span class="p">(</span><span class="n">l_cfl_local</span><span class="p">,</span><span class="w"> </span><span class="n">l_cfl</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dt_bt_safe</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">cfl_bt_safety</span><span class="o">*</span><span class="n">l_cfl</span><span class="o">/</span><span class="n">c_ext_max</span>
+<span class="w">            </span><span class="n">n_inner_derived</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bt_auto_n_inner</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">dt_fixed</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">cfl_bt_safety</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">c_ext_max</span><span class="p">,</span><span class="w"> </span><span class="n">l_cfl</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Auto n_inner: H_max = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">b_max_interior</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" m, c_ext = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">c_ext_max</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" m/s, dt_bt = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt_bt_safe</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" s → n_inner = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">n_inner_derived</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" (was "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">n_inner</span><span class="p">)</span><span class="o">//</span><span class="s2">")"</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">n_inner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_inner_derived</span>
+<span class="w">         </span><span class="k">end block</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Mode-split contract: bt_H_ref = seeded bathymetry (Σh_layer = b).</span>
+<span class="w">      </span><span class="c">! Unsplit (n_inner = 0) doesn't read this.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">n_inner</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_H_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">b</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">configure_ocean_bt_split</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

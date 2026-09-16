@@ -1,0 +1,975 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>epbl_compute &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>epbl_compute
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">19 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_epbl.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_epbl.f90.html'>rdb_ocean_epbl.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_epbl.html'>rdb_ocean_epbl</a></li>
+            <li class="breadcrumb-item active" aria-current="page">epbl_compute</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/epbl_compute.html#variable-nx~130">nx</a>
+            <a class="list-group-item" href="../proc/epbl_compute.html#variable-ny~130">ny</a>
+            <a class="list-group-item" href="../proc/epbl_compute.html#variable-sw_ctke_active">sw_ctke_active</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/epbl_compute.html#src">epbl_compute</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine epbl_compute(grid, this, ms, ss, dt, sf)  
+</h2>
+    
+
+    <p>Run EPBL over the domain: fill <code>this%kd_int</code> (interface
+diffusivity) and <code>this%mld</code>.  Call at thermo cadence with
+the thermo dt.  Outer shim: dereferences the tracer-registry
+hTr arrays + the 2D Q_heat/Q_salt forcing fields on the host
+(array-of-DT and allocatable indirection blocks NVHPC device
+codegen), then forwards to the column kernel which reads
+q_T_kin(i,j) / q_S_kin(i,j) per column inside the DC.</p>
+<p><code>sf</code> (surface-flux slot) is REQUIRED — EPBL computes B_0 from
+the per-column kinematic fluxes.  The dispatch in
+<code>vmix_apply_in_stage</code> already errors before reaching here when
+<code>sf</code> is absent and EPBL is active.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~83"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~138"></span>
+              type(<a href='../type/ocean_epbl_t.html'>ocean_epbl_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~33"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~4"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~34"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~8"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~epbl_compute~~CallsGraph Pages: 1 -->
+<svg id="procepbl_computeCallsGraph" width="553pt" height="326pt"
+ viewBox="0.00 0.00 553.00 326.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~epbl_compute~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 322)">
+<title>proc~~epbl_compute~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-322 549,-322 549,4 -4,4"/>
+<!-- proc~epbl_compute -->
+<g id="proc~~epbl_compute~~CallsGraph_node1" class="node">
+<title>proc~epbl_compute</title>
+<polygon fill="none" stroke="black" points="88,-171 0,-171 0,-147 88,-147 88,-171"/>
+<text text-anchor="middle" x="44" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50">epbl_compute</text>
+</g>
+<!-- proc~epbl_column_kernel -->
+<g id="proc~~epbl_compute~~CallsGraph_node2" class="node">
+<title>proc~epbl_column_kernel</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node2"><a xlink:href="../proc/epbl_column_kernel.html" xlink:title="epbl_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="244,-171 124,-171 124,-147 244,-147 244,-171"/>
+<text text-anchor="middle" x="184" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_compute&#45;&gt;proc~epbl_column_kernel -->
+<g id="proc~~epbl_compute~~CallsGraph_edge1" class="edge">
+<title>proc~epbl_compute&#45;&gt;proc~epbl_column_kernel</title>
+<path fill="none" stroke="#ff0000" d="M88.29,-159C96.41,-159 105.09,-159 113.77,-159"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="113.94,-162.5 123.94,-159 113.94,-155.5 113.94,-162.5"/>
+</g>
+<!-- local -->
+<g id="proc~~epbl_compute~~CallsGraph_node3" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="370,-318 316,-318 316,-294 370,-294 370,-318"/>
+<text text-anchor="middle" x="343" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;local -->
+<g id="proc~~epbl_compute~~CallsGraph_edge2" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M191.04,-171.34C203.91,-196.4 236.48,-253.55 280,-285 287.78,-290.62 297.17,-294.82 306.27,-297.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="305.35,-301.3 315.93,-300.87 307.39,-294.6 305.35,-301.3"/>
+</g>
+<!-- proc~eos_specvol_derivs -->
+<g id="proc~~epbl_compute~~CallsGraph_node4" class="node">
+<title>proc~eos_specvol_derivs</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node4"><a xlink:href="../proc/eos_specvol_derivs.html" xlink:title="eos_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="400.5,-276 285.5,-276 285.5,-252 400.5,-252 400.5,-276"/>
+<text text-anchor="middle" x="343" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~epbl_compute~~CallsGraph_edge3" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#ff0000" d="M195.81,-171.26C212.31,-189.3 245.52,-223.02 280,-243 283.04,-244.76 286.25,-246.41 289.55,-247.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="288.42,-251.26 299,-251.93 291.15,-244.81 288.42,-251.26"/>
+</g>
+<!-- proc~epbl_find_mstar -->
+<g id="proc~~epbl_compute~~CallsGraph_node5" class="node">
+<title>proc~epbl_find_mstar</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node5"><a xlink:href="../proc/epbl_find_mstar.html" xlink:title="epbl_find_mstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="391.5,-234 294.5,-234 294.5,-210 391.5,-210 391.5,-234"/>
+<text text-anchor="middle" x="343" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_find_mstar</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar -->
+<g id="proc~~epbl_compute~~CallsGraph_edge4" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar</title>
+<path fill="none" stroke="#ff0000" d="M210.54,-171.04C229.52,-179.8 256.14,-191.71 280,-201 284.84,-202.89 289.93,-204.77 295.02,-206.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="294.16,-209.99 304.76,-209.99 296.47,-203.39 294.16,-209.99"/>
+</g>
+<!-- proc~epbl_lf17_la -->
+<g id="proc~~epbl_compute~~CallsGraph_node6" class="node">
+<title>proc~epbl_lf17_la</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node6"><a xlink:href="../proc/epbl_lf17_la.html" xlink:title="epbl_lf17_la">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="381,-192 305,-192 305,-168 381,-168 381,-192"/>
+<text text-anchor="middle" x="343" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_la</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la -->
+<g id="proc~~epbl_compute~~CallsGraph_edge5" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la</title>
+<path fill="none" stroke="#ff0000" d="M244.35,-166.94C261.02,-169.17 278.92,-171.56 294.78,-173.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="294.5,-177.18 304.87,-175.03 295.42,-170.24 294.5,-177.18"/>
+</g>
+<!-- proc~epbl_lf17_wave_state -->
+<g id="proc~~epbl_compute~~CallsGraph_node7" class="node">
+<title>proc~epbl_lf17_wave_state</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node7"><a xlink:href="../proc/epbl_lf17_wave_state.html" xlink:title="epbl_lf17_wave_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="406,-150 280,-150 280,-126 406,-126 406,-150"/>
+<text text-anchor="middle" x="343" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_wave_state</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state -->
+<g id="proc~~epbl_compute~~CallsGraph_edge6" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state</title>
+<path fill="none" stroke="#ff0000" d="M244.35,-151.06C252.72,-149.94 261.39,-148.78 269.96,-147.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="270.5,-151.1 279.95,-146.3 269.57,-144.16 270.5,-151.1"/>
+</g>
+<!-- proc~epbl_lt_enhance -->
+<g id="proc~~epbl_compute~~CallsGraph_node8" class="node">
+<title>proc~epbl_lt_enhance</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node8"><a xlink:href="../proc/epbl_lt_enhance.html" xlink:title="epbl_lt_enhance">
+<polygon fill="#d9534f" stroke="#d9534f" points="393,-108 293,-108 293,-84 393,-84 393,-108"/>
+<text text-anchor="middle" x="343" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lt_enhance</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance -->
+<g id="proc~~epbl_compute~~CallsGraph_edge7" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance</title>
+<path fill="none" stroke="#ff0000" d="M210.54,-146.96C229.52,-138.2 256.14,-126.29 280,-117 284.84,-115.11 289.93,-113.23 295.02,-111.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="296.47,-114.61 304.76,-108.01 294.16,-108.01 296.47,-114.61"/>
+</g>
+<!-- proc~epbl_mixlen_shape -->
+<g id="proc~~epbl_compute~~CallsGraph_node9" class="node">
+<title>proc~epbl_mixlen_shape</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node9"><a xlink:href="../proc/epbl_mixlen_shape.html" xlink:title="epbl_mixlen_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="400.5,-66 285.5,-66 285.5,-42 400.5,-42 400.5,-66"/>
+<text text-anchor="middle" x="343" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_mixlen_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape -->
+<g id="proc~~epbl_compute~~CallsGraph_edge8" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape</title>
+<path fill="none" stroke="#ff0000" d="M195.81,-146.74C212.31,-128.7 245.52,-94.98 280,-75 283.04,-73.24 286.25,-71.59 289.55,-70.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="291.15,-73.19 299,-66.07 288.42,-66.74 291.15,-73.19"/>
+</g>
+<!-- proc~sw_pe_cost_shape -->
+<g id="proc~~epbl_compute~~CallsGraph_node10" class="node">
+<title>proc~sw_pe_cost_shape</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node10"><a xlink:href="../proc/sw_pe_cost_shape.html" xlink:title="sw_pe_cost_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="397.5,-24 288.5,-24 288.5,0 397.5,0 397.5,-24"/>
+<text text-anchor="middle" x="343" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_pe_cost_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape -->
+<g id="proc~~epbl_compute~~CallsGraph_edge9" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape</title>
+<path fill="none" stroke="#ff0000" d="M191.04,-146.66C203.91,-121.6 236.48,-64.45 280,-33 282.21,-31.4 284.56,-29.92 286.98,-28.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="288.69,-31.61 296.08,-24.02 285.57,-25.34 288.69,-31.61"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~epbl_compute~~CallsGraph_node12" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node12"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="545,-276 442,-276 442,-252 545,-252 545,-276"/>
+<text text-anchor="middle" x="493.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~epbl_compute~~CallsGraph_edge10" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ffbf00" d="M400.57,-264C410.77,-264 421.45,-264 431.77,-264"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="431.93,-267.5 441.93,-264 431.93,-260.5 431.93,-267.5"/>
+</g>
+<!-- proc~one_m_exp_x -->
+<g id="proc~~epbl_compute~~CallsGraph_node11" class="node">
+<title>proc~one_m_exp_x</title>
+<g id="a_proc~~epbl_compute~~CallsGraph_node11"><a xlink:href="../proc/one_m_exp_x.html" xlink:title="one_m_exp_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="535.5,-192 451.5,-192 451.5,-168 535.5,-168 535.5,-192"/>
+<text text-anchor="middle" x="493.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">one_m_exp_x</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x -->
+<g id="proc~~epbl_compute~~CallsGraph_edge11" class="edge">
+<title>proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x</title>
+<path fill="none" stroke="#00ff3f" d="M381.09,-180C399.31,-180 421.54,-180 441.34,-180"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="441.44,-183.5 451.44,-180 441.44,-176.5 441.44,-183.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~epbl_compute~~CalledByGraph Pages: 1 -->
+<svg id="procepbl_computeCalledByGraph" width="641pt" height="59pt"
+ viewBox="0.00 0.00 641.00 59.44" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~epbl_compute~~CalledByGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 70)">
+<title>proc~~epbl_compute~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 794,-70 794,4 -4,4"/>
+<!-- proc~epbl_compute -->
+<g id="proc~~epbl_compute~~CalledByGraph_node1" class="node">
+<title>proc~epbl_compute</title>
+<polygon fill="none" stroke="black" points="790,-45 702,-45 702,-21 790,-21 790,-45"/>
+<text text-anchor="middle" x="746" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">epbl_compute</text>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_compute~~CalledByGraph_node2" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node2"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="666,-45 544,-45 544,-21 666,-21 666,-45"/>
+<text text-anchor="middle" x="605" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge1" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~epbl_compute</title>
+<path fill="none" stroke="#ff0000" d="M666.16,-33C674.71,-33 683.46,-33 691.87,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="691.92,-36.5 701.92,-33 691.92,-29.5 691.92,-36.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~epbl_compute~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="494.5,-66 429.5,-66 429.5,-42 494.5,-42 494.5,-66"/>
+<text text-anchor="middle" x="462" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M494.64,-49.29C506.34,-47.55 520.11,-45.49 533.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.46,-46.9 543.84,-41.96 533.43,-39.97 534.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~epbl_compute~~CalledByGraph_node4" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node4"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="508,-24 416,-24 416,0 508,0 508,-24"/>
+<text text-anchor="middle" x="462" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M508,-18.7C516.32,-19.94 525.18,-21.26 534.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="533.58,-26.05 543.99,-24.06 534.61,-19.13 533.58,-26.05"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="366.5,-66 268.5,-66 268.5,-42 366.5,-42 366.5,-66"/>
+<text text-anchor="middle" x="317.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M366.74,-54C383.7,-54 402.6,-54 419,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="419.37,-57.5 429.37,-54 419.37,-50.5 419.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~epbl_compute~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-24 255,-24 255,0 380,0 380,-24"/>
+<text text-anchor="middle" x="317.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M380.17,-12C388.73,-12 397.47,-12 405.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="405.99,-15.5 415.99,-12 405.99,-8.5 405.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-38.85C231.29,-40.75 245.1,-42.89 258.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="258.05,-48.45 268.47,-46.53 259.13,-41.53 258.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M219.11,-27.15C227.15,-25.9 235.91,-24.54 244.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="245.44,-26.6 254.78,-21.6 244.36,-19.68 245.44,-26.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~epbl_compute~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~epbl_compute~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~epbl_compute~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocepbl_computeCalledByGraph = svgPanZoom('#procepbl_computeCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~130"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~130"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sw_ctke_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sw_ctke_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">epbl_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Run EPBL over the domain: fill `this%kd_int` (interface</span>
+<span class="w">      </span><span class="c">!! diffusivity) and `this%mld`.  Call at thermo cadence with</span>
+<span class="w">      </span><span class="c">!! the thermo dt.  Outer shim: dereferences the tracer-registry</span>
+<span class="w">      </span><span class="c">!! hTr arrays + the 2D Q_heat/Q_salt forcing fields on the host</span>
+<span class="w">      </span><span class="c">!! (array-of-DT and allocatable indirection blocks NVHPC device</span>
+<span class="w">      </span><span class="c">!! codegen), then forwards to the column kernel which reads</span>
+<span class="w">      </span><span class="c">!! q_T_kin(i,j) / q_S_kin(i,j) per column inside the DC.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `sf` (surface-flux slot) is REQUIRED — EPBL computes B_0 from</span>
+<span class="w">      </span><span class="c">!! the per-column kinematic fluxes.  The dispatch in</span>
+<span class="w">      </span><span class="c">!! `vmix_apply_in_stage` already errors before reaching here when</span>
+<span class="w">      </span><span class="c">!! `sf` is absent and EPBL is active.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_epbl_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_stress_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ss</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_ctke_active</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+
+<span class="w">      </span><span class="c">! Kinematic scale factors (column-invariant multipliers):</span>
+<span class="w">      </span><span class="c">!   q_T_kin(i,j) = Q_heat(i,j) / (rho0 · cp)  [degC·m/s]</span>
+<span class="w">      </span><span class="c">!   q_S_kin(i,j) = Q_salt(i,j) / rho0           [PSU·m/s]</span>
+<span class="w">      </span><span class="c">! The column kernel reads these at (i,j) inside the DC so that</span>
+<span class="w">      </span><span class="c">! spatially-varying forcing (Area-A3/A4) is handled correctly.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! (PR-21) Penetrating-SW TKE ledger: active only when the ledger is</span>
+<span class="w">      </span><span class="c">! enabled AND penetrating SW is on.  The irradiance source is</span>
+<span class="w">      </span><span class="c">! selected HOST-SIDE (`sf%sw_from_qsw`); the conditionally-allocated</span>
+<span class="w">      </span><span class="c">! `q_sw` is passed only on the guarded branch (validate_config</span>
+<span class="w">      </span><span class="c">! forces enable_components when sw_source="q_sw", making it total).</span>
+<span class="w">      </span><span class="c">! When inactive, the source array is irrelevant (kernel never reads</span>
+<span class="w">      </span><span class="c">! it), so the legacy `Q_heat` argument is passed on both branches.</span>
+<span class="w">      </span><span class="n">sw_ctke_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">epbl_sw_ctke</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">has_sw</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sw_ctke_active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_from_qsw</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">epbl_column_kernel</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="o">*</span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sw</span><span class="p">,</span><span class="w"> </span><span class="n">sw_ctke_active</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_pen_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_band_ratio</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta1</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">epbl_column_kernel</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="o">*</span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sw_ctke_active</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_pen_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_band_ratio</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta1</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_zeta2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">epbl_compute</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

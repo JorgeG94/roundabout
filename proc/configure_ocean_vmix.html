@@ -1,0 +1,973 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>configure_ocean_vmix &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>configure_ocean_vmix
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for procedures.">144 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_setup.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_setup.f90.html'>rdb_ocean_setup.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></li>
+            <li class="breadcrumb-item active" aria-current="page">configure_ocean_vmix</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/configure_ocean_vmix.html#src">configure_ocean_vmix</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine configure_ocean_vmix(cfg, ocean_state, compute_rank, ierr)  
+</h2>
+    
+
+    <p>Thermodynamics on/off, velocity-truncation clamp (MAXVEL), DIRECT_STRESS
+surface-stress distribution, KV_ML_INVZ2 surface-band viscosity,
+HARMONIC_VISC face-thickness mean, and the DT_THERM thermo/tracer
+cadence — with their rank-0 log lines.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~100"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ocean_state~6"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ocean_state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-compute_rank~10"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>compute_rank</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~98"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                <p>Non-zero on a vertical-mixing configuration conflict when
+present; absent behaves as today (<code>error stop</code>).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_vmix~~CallsGraph Pages: 1 -->
+<svg id="procconfigure_ocean_vmixCallsGraph" width="501pt" height="284pt"
+ viewBox="0.00 0.00 501.00 284.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_vmix~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 280)">
+<title>proc~~configure_ocean_vmix~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-280 497,-280 497,4 -4,4"/>
+<!-- proc~configure_ocean_vmix -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node1" class="node">
+<title>proc~configure_ocean_vmix</title>
+<polygon fill="none" stroke="black" points="132,-150 0,-150 0,-126 132,-126 132,-150"/>
+<text text-anchor="middle" x="66" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_vmix</text>
+</g>
+<!-- info -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node2" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="291.5,-276 237.5,-276 237.5,-252 291.5,-252 291.5,-276"/>
+<text text-anchor="middle" x="264.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;info -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge1" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M75.08,-150.3C90.37,-172.56 125.85,-219.39 168,-243 186.04,-253.1 208.52,-258.35 227.14,-261.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="226.96,-264.57 237.32,-262.36 227.84,-257.63 226.96,-264.57"/>
+</g>
+<!-- proc~bkgnd_henyey_conflicts_profile -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node3" class="node">
+<title>proc~bkgnd_henyey_conflicts_profile</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node3"><a xlink:href="../proc/bkgnd_henyey_conflicts_profile.html" xlink:title="bkgnd_henyey_conflicts_profile">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="353.5,-234 175.5,-234 175.5,-210 353.5,-210 353.5,-234"/>
+<text text-anchor="middle" x="264.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bkgnd_henyey_conflicts_profile</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;proc~bkgnd_henyey_conflicts_profile -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge2" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;proc~bkgnd_henyey_conflicts_profile</title>
+<path fill="none" stroke="#ff0000" d="M82.52,-150.06C101.6,-164.31 135.47,-187.74 168,-201 173.49,-203.24 179.26,-205.26 185.13,-207.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.49,-210.53 195.07,-209.94 186.43,-203.8 184.49,-210.53"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node4" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node4"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="291.5,-192 237.5,-192 237.5,-168 291.5,-168 291.5,-192"/>
+<text text-anchor="middle" x="264.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;proc~fail -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge3" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M123.31,-150.04C156.74,-157.18 198.15,-166.03 227.27,-172.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="226.89,-175.75 237.4,-174.42 228.35,-168.91 226.89,-175.75"/>
+</g>
+<!-- proc~ocean_dt_tracer_advect_ratios_ok -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node5" class="node">
+<title>proc~ocean_dt_tracer_advect_ratios_ok</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node5"><a xlink:href="../proc/ocean_dt_tracer_advect_ratios_ok.html" xlink:title="ocean_dt_tracer_advect_ratios_ok">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="361,-150 168,-150 168,-126 361,-126 361,-150"/>
+<text text-anchor="middle" x="264.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dt_tracer_advect_ratios_ok</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;proc~ocean_dt_tracer_advect_ratios_ok -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge4" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;proc~ocean_dt_tracer_advect_ratios_ok</title>
+<path fill="none" stroke="#ff0000" d="M132.16,-138C140.43,-138 149.05,-138 157.76,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="157.99,-141.5 167.99,-138 157.99,-134.5 157.99,-141.5"/>
+</g>
+<!-- proc~parse_tracer_recon -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node6" class="node">
+<title>proc~parse_tracer_recon</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node6"><a xlink:href="../proc/parse_tracer_recon.html" xlink:title="parse_tracer_recon">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="322,-108 207,-108 207,-84 322,-84 322,-108"/>
+<text text-anchor="middle" x="264.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_tracer_recon</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;proc~parse_tracer_recon -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge5" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;proc~parse_tracer_recon</title>
+<path fill="none" stroke="#ff0000" d="M123.31,-125.96C146.33,-121.04 173.14,-115.31 197.1,-110.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.14,-113.55 207.18,-108.04 196.67,-106.7 198.14,-113.55"/>
+</g>
+<!-- proc~vmix_resolve_kd_min -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node7" class="node">
+<title>proc~vmix_resolve_kd_min</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node7"><a xlink:href="../proc/vmix_resolve_kd_min.html" xlink:title="vmix_resolve_kd_min">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="327,-66 202,-66 202,-42 327,-42 327,-66"/>
+<text text-anchor="middle" x="264.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_resolve_kd_min</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;proc~vmix_resolve_kd_min -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge6" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;proc~vmix_resolve_kd_min</title>
+<path fill="none" stroke="#ff0000" d="M82.52,-125.94C101.6,-111.69 135.47,-88.26 168,-75 175.68,-71.87 183.91,-69.17 192.2,-66.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.15,-70.22 201.93,-64.29 191.37,-63.45 193.15,-70.22"/>
+</g>
+<!-- to_string -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node8" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="293.5,-24 235.5,-24 235.5,0 293.5,0 293.5,-24"/>
+<text text-anchor="middle" x="264.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~configure_ocean_vmix&#45;&gt;to_string -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge7" class="edge">
+<title>proc~configure_ocean_vmix&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M75.08,-125.7C90.37,-103.44 125.85,-56.61 168,-33 185.41,-23.24 206.98,-18.02 225.2,-15.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="225.77,-18.68 235.22,-13.87 224.84,-11.74 225.77,-18.68"/>
+</g>
+<!-- error -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node9" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="472,-213 418,-213 418,-189 472,-189 472,-213"/>
+<text text-anchor="middle" x="445" y="-198.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge8" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#48ff00" d="M291.84,-183.1C322.51,-186.71 373.35,-192.69 407.74,-196.73"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="407.5,-200.23 417.84,-197.92 408.32,-193.28 407.5,-200.23"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_node10" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~configure_ocean_vmix~~CallsGraph_node10"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="493,-171 397,-171 397,-147 493,-147 493,-171"/>
+<text text-anchor="middle" x="445" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~configure_ocean_vmix~~CallsGraph_edge9" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#48ff00" d="M291.84,-176.9C316.69,-173.98 354.78,-169.5 386.64,-165.75"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="387.21,-169.2 396.74,-164.56 386.4,-162.25 387.21,-169.2"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_vmix~~CalledByGraph Pages: 1 -->
+<svg id="procconfigure_ocean_vmixCalledByGraph" width="641pt" height="115pt"
+ viewBox="0.00 0.00 641.00 115.28" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_vmix~~CalledByGraph" class="graph" transform="scale(0.99 0.99) rotate(0) translate(4 112)">
+<title>proc~~configure_ocean_vmix~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 641,-112 641,4 -4,4"/>
+<!-- proc~configure_ocean_vmix -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node1" class="node">
+<title>proc~configure_ocean_vmix</title>
+<polygon fill="none" stroke="black" points="637,-45 505,-45 505,-21 637,-21 637,-45"/>
+<text text-anchor="middle" x="571" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_vmix</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-45 385,-45 385,-21 469,-21 469,-45"/>
+<text text-anchor="middle" x="427" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_vmix -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_vmix</title>
+<path fill="none" stroke="#ff0000" d="M469.07,-33C477.23,-33 486.02,-33 494.91,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.94,-36.5 504.94,-33 494.94,-29.5 494.94,-36.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-44.05C357.85,-42.8 366.62,-41.54 374.97,-40.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.51,-43.8 384.91,-38.91 374.51,-36.87 375.51,-43.8"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-24 226,-24 226,0 332,0 332,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-19.52C345.99,-21.49 360.74,-23.61 374.4,-25.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.19,-29.08 384.59,-27.04 375.19,-22.16 374.19,-29.08"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-24 53,-24 53,0 120,0 120,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-12C146.45,-12 183.96,-12 215.83,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-15.5 225.95,-12 215.95,-8.5 215.95,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-108 11,-108 11,-84 162,-84 162,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-83.96C164.41,-79.04 190.39,-73.31 213.63,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-71.61 223.4,-66.04 212.88,-64.77 214.39,-71.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~configure_ocean_vmix~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-66 0,-66 0,-42 173,-42 173,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_vmix~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-54C181.77,-54 190.37,-54 198.79,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-57.5 208.97,-54 198.97,-50.5 198.97,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocconfigure_ocean_vmixCalledByGraph = svgPanZoom('#procconfigure_ocean_vmixCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">configure_ocean_vmix</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">,</span><span class="w"> </span><span class="n">compute_rank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Thermodynamics on/off, velocity-truncation clamp (MAXVEL), DIRECT_STRESS</span>
+<span class="w">      </span><span class="c">!! surface-stress distribution, KV_ML_INVZ2 surface-band viscosity,</span>
+<span class="w">      </span><span class="c">!! HARMONIC_VISC face-thickness mean, and the DT_THERM thermo/tracer</span>
+<span class="w">      </span><span class="c">!! cadence — with their rank-0 log lines.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_state</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_rank</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">         </span><span class="c">!! Non-zero on a vertical-mixing configuration conflict when</span>
+<span class="w">         </span><span class="c">!! present; absent behaves as today (`error stop`).</span>
+
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">thermo</span><span class="p">%</span><span class="n">enable_thermodynamics</span>
+
+<span class="w">      </span><span class="c">! Velocity-truncation clamp (MOM6 MAXVEL); 0 = off.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">maxvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">maxvel</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">maxvel</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Velocity clamp:   "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">maxvel</span><span class="p">)</span><span class="o">//</span><span class="s2">" m/s"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Advective-CFL velocity truncation (E7, MOM6 CFL_trunc); 0 = off.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">cfl_trunc</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"CFL truncation:   threshold "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">pgf</span><span class="p">%</span><span class="n">cfl_trunc</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! DIRECT_STRESS — wind stress spread over the top hmix_stress metres.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">direct_stress</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">direct_stress</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">hmix_stress</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">hmix_stress</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">direct_stress</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Surface stress:   DIRECT (over top "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">hmix_stress</span><span class="p">)</span><span class="o">//</span><span class="s2">" m)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! KV_ML_INVZ2 — extra surface-band vertical viscosity (MOM6).</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_ml_invz2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_ml_invz2</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">hmix_fixed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">hmix_fixed</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_ml_invz2</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"KV_ML_INVZ2:      "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_ml_invz2</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" m²/s in top "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">hmix_fixed</span><span class="p">)</span><span class="o">//</span><span class="s2">" m"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! C11 assembly gate — ceilings / smoothing / guard.  Backgrounds</span>
+<span class="w">      </span><span class="c">! stay on the slot defaults (= pp81_*_bg, set in ocean_vmix_init)</span>
+<span class="w">      </span><span class="c">! so the floor is a no-op for the closure path; only the ceilings /</span>
+<span class="w">      </span><span class="c">! smoothing / guard are config-exposed.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_max</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_max</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_smooth_iterations</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_smooth_iterations</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">vmix_guard</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">vmix_guard</span>
+
+<span class="w">      </span><span class="c">! C7 Bryan-Lewis depth-varying background (default off = bit-identical).</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_profile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_profile</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_sfc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_sfc</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_deep</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_deep</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_z0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_z0</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_delta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_delta</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_prandtl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_prandtl</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_min</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_n0_2omega</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_n0_2omega</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_max_lat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_max_lat</span>
+<span class="w">      </span><span class="c">! Backstop for the two `validate_config` guards (Bryan-Lewis and Henyey</span>
+<span class="w">      </span><span class="c">! mutually exclusive; non-cartesian grid_config required) — reached only</span>
+<span class="w">      </span><span class="c">! by a caller that bypassed validation, since the namelist path stops</span>
+<span class="w">      </span><span class="c">! there first.  Repeated here because a Henyey run with either</span>
+<span class="w">      </span><span class="c">! precondition violated is silent (wrong background field), not noisy.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bkgnd_henyey_conflicts_profile</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_profile</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_vmix_nml: bkgnd_henyey and bkgnd_profile are "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"mutually exclusive background schemes — the Henyey factor "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"scales the SCALAR background, it does not compose with the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"Bryan-Lewis depth profile"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="nb">trim</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">grid_config</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">"cartesian"</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_vmix_nml: bkgnd_henyey requires a non-cartesian "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"grid_config — geolatT is identically zero on cartesian, so "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"every column would take the equatorial L(0 deg)=0 and the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"background would flatten to a uniform bkgnd_kd_min"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_profile</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Background mixing: Bryan-Lewis profile (Kd_sfc="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_sfc</span><span class="p">)</span><span class="o">//</span><span class="s2">" Kd_deep="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_deep</span><span class="p">)</span><span class="o">//</span><span class="s2">" z0="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_z0</span><span class="p">)</span><span class="o">//</span><span class="s2">" m)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Background mixing: Henyey IGW latitude factor on the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">"scalar background (N0_2Omega="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_n0_2omega</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" max_lat="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_henyey_max_lat</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" degN Kd_min="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">vmix_resolve_kd_min</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bkgnd_kd_min</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                           </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">pp81_kappa_bg</span><span class="p">))</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" m^2/s)"</span><span class="p">)</span>
+<span class="w">            </span><span class="c">! `pp81_kappa_bg` (not `ocean_state%vmix%kt_bg`) because</span>
+<span class="w">            </span><span class="c">! `seed_backgrounds` — which re-derives kt_bg from it — runs</span>
+<span class="w">            </span><span class="c">! later in this same routine; reading the slot here would log</span>
+<span class="w">            </span><span class="c">! the stale type default whenever the user retuned kappa_bg.</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! smooth_scratch is allocated ONLY when smoothing is requested —</span>
+<span class="w">      </span><span class="c">! here, after kd_smooth_iterations is known, before enter_data.</span>
+<span class="w">      </span><span class="c">! The enter_data path guards on allocated() so the not-allocated</span>
+<span class="w">      </span><span class="c">! case (smoothing off) is handled correctly.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_smooth_iterations</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">smooth_scratch</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            associate</span><span class="w"> </span><span class="p">(</span><span class="n">kv</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">)</span>
+<span class="w">               </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">smooth_scratch</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">size</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end associate</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_max</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_max</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vmix assembly:    kv_max="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_max</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" kd_max="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_max</span><span class="p">)</span><span class="o">//</span><span class="s2">" m²/s"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_smooth_iterations</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vmix assembly:    "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kd_smooth_iterations</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">" 1-2-1 smoothing pass(es) on kv/kt (wet-mask aware)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">vmix_guard</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vmix assembly:    negative/NaN guard ON"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! HARMONIC_VISC — vdiff face-thickness mean (better at thin layers).</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">use_harmonic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">harmonic_visc</span>
+<span class="w">      </span><span class="c">! MOM6 HARMONIC_VISC parity for the momentum face thickness (hvel) +</span>
+<span class="w">      </span><span class="c">! arithmetic h_shear.  Off by default =&gt; historical arithmetic h_u.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_mom6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_mom6</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hbbl_visc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hbbl_visc</span>
+<span class="w">      </span><span class="c">! MOM6 bottomdraglaw coupling parity: kv_bbl botfn glue + piston bed</span>
+<span class="w">      </span><span class="c">! drag (PGF_BUG.md §9).  Preconditions (hvel_mom6, implicit_drag,</span>
+<span class="w">      </span><span class="c">! linear bdrag form) validated at configure.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">bbl_glue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">bbl_glue</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">bbl_piston</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">bbl_piston</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_upwind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_upwind</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_mom6</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_upwind</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"vdiff: hvel near-bed upwind blend OFF (pure harmonic hvel)"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">hvel_mom6</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"vdiff: MOM6 hvel (harmonic + near-bed upwind blend, "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">"arithmetic h_shear) ON"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">bbl_glue</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"vdiff: MOM6 bottomdraglaw BBL coupling glue ON "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">"(kv_bbl botfn interfaces + piston bed row)"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">harmonic_visc</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vertical visc:    harmonic-mean face thickness"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Implicit stress/drag folding into the vdiff tridiagonal</span>
+<span class="w">      </span><span class="c">! (`&amp;ocean_vdiff_nml`).  When on, the corresponding explicit</span>
+<span class="w">      </span><span class="c">! pre-solve apply is gated off in run_stage (see rdb_ocean_dyn), and</span>
+<span class="w">      </span><span class="c">! the bottom-drag slot fills the bed-layer Rayleigh-rate field</span>
+<span class="w">      </span><span class="c">! `lambda_bot_u/v` that the vdiff diagonal consumes.  Mutual</span>
+<span class="w">      </span><span class="c">! exclusions validated at configure (validate_config).</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_stress</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_stress</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_drag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_drag</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">bdrag</span><span class="p">%</span><span class="n">implicit_fold</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_drag</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_stress</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vertical visc:    wind stress folded into vdiff "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">"surface (k=nz) RHS (implicit_stress)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">implicit_drag</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Vertical visc:    bottom drag folded into vdiff "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">"bed (k=1) diagonal (implicit_drag)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! DT_THERM ratio — thermo/tracer kernels fire every Nth outer step.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Thermo ratio:     "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">"·dt (DT_THERM = ratio · dt_dynamic)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! DT_TRACER_ADVECT ratio — horizontal tracer advect fires every</span>
+<span class="w">      </span><span class="c">! Nth outer step over the accumulated face transports.  Must be</span>
+<span class="w">      </span><span class="c">! &gt;= 1 and dt_therm_ratio must be an integer multiple of it so the</span>
+<span class="w">      </span><span class="c">! ALE remap (which fires at DT_THERM cadence) never lands inside an</span>
+<span class="w">      </span><span class="c">! open accumulation window.  Fail loud, host-side.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_vmix_nml: dt_tracer_advect_ratio must be &gt;= 1 (got "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="p">)</span><span class="o">//</span><span class="s2">")"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="w">      </span><span class="c">! `&lt; 1` already error-stopped above, so the value is &gt;= 1 here.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ocean_dt_tracer_advect_ratios_ok</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_vmix_nml: dt_therm_ratio ("</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">") must be an integer multiple of dt_tracer_advect_ratio ("</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">") so the ALE remap never fires mid-accumulation-window"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Tracer advect:    "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">to_string</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">dt_tracer_advect_ratio</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="s2">"·dt (DT_TRACER_ADVECT = ratio · dt_dynamic)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Q6: windowed-drain tracer face reconstruction (ppm | weno5/7/9).</span>
+<span class="w">      </span><span class="c">! The per-rung nghost minimum is validated fail-loud in validate_config</span>
+<span class="w">      </span><span class="c">! (cfg%nghost is the ocean grid nghost); here we only map the parsed</span>
+<span class="w">      </span><span class="c">! code onto the continuity slot.  ppm (default) ⇒ bit-identical.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">continuity</span><span class="p">%</span><span class="n">tracer_recon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">parse_tracer_recon</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">tracer_recon</span><span class="p">))</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">continuity</span><span class="p">%</span><span class="n">tracer_recon</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">TRACER_RECON_PPM</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Tracer recon:     "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">tracer_recon</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">" (windowed-drain WENO-Z swept-average face)"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">thermo</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Thermodynamics:   on"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Thermodynamics:   OFF (adiabatic — EOS/tracer kernels skipped)"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">configure_ocean_vmix</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

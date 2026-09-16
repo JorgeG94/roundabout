@@ -1,0 +1,2289 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_porous &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_porous
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.6% of total for modules and submodules.">342 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_porous.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_porous.f90.html'>rdb_ocean_porous.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_porous</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_eta_arith">POROUS_ETA_ARITH</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_eta_harm">POROUS_ETA_HARM</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_eta_max">POROUS_ETA_MAX</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_eta_min">POROUS_ETA_MIN</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_source_file">POROUS_SOURCE_FILE</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#variable-porous_source_resolved">POROUS_SOURCE_RESOLVED</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-parse_porous_eta_interp">parse_porous_eta_interp</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-parse_porous_source">parse_porous_source</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_cum_area">porous_cum_area</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_eta_face">porous_eta_face</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_open_width">porous_open_width</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_stats_are_ordered">porous_stats_are_ordered</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-clamp_fraction">clamp_fraction</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-corner_is_wet">corner_is_wet</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_fill_stats_resolved">porous_fill_stats_resolved</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_narrow_3d">porous_narrow_3d</a>
+            <a class="list-group-item" href="../module/rdb_ocean_porous.html#proc-porous_update_face_areas">porous_update_face_areas</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Adcroft (2013) three-parameter porous-barrier fit for the ocean
+C-grid dyn-core.</p>
+<p>A model face is a straight segment of length <code>dy_cu</code> (u-face) or
+<code>dx_cv</code> (v-face), but the real seafloor along that segment is not
+flat: a strait or a sill leaves only PART of the segment open at a
+given depth.  Porous barriers replace the binary open/closed face
+with a depth-dependent OPEN FRACTION, so a deep sill blocks the
+bottom layers while the surface layers stay fully open.  The face
+stays a single C-grid degree of freedom — only the transport
+width narrows.</p>
+<p>The along-face seafloor is summarised by three numbers per face,
+all TOPOGRAPHIC HEIGHTS (positive up, negative below the sea
+surface) so they compare directly against interface heights.  NOTE
+the ocean path&rsquo;s <code>barotropic%b</code> is the opposite sign — a reference
+column DEPTH, positive down (<code>SSH = sum(h_layer) - b</code>) — so the
+caller negates it once when filling <code>metrics%por_bed</code>:
+  * <code>d_min</code> — deepest along-face point (most negative),
+  * <code>d_max</code> — shallowest along-face point (least negative),
+  * <code>d_avg</code> — mean along-face height, <code>d_min &lt;= d_avg &lt;= d_max</code>.</p>
+<p>Adcroft&rsquo;s fit picks the one-parameter family of monotone profiles
+that reproduces exactly those three numbers.  With
+  <code>m    = (d_avg - d_min) / (d_max - d_min)</code>   (nondim, in [0,1])
+  <code>zeta = (eta   - d_min) / (d_max - d_min)</code>   (nondim)
+  <code>a    = (1 - m) / m</code>
+the OPEN WIDTH FRACTION at an interface of height <code>eta</code> is
+  <code>w(eta) = 0</code>                        for <code>eta &lt;= d_min</code>,
+  <code>w(eta) = zeta**(1/a)</code>              for <code>m &lt; 1/2</code>,
+  <code>w(eta) = zeta</code>                     for <code>m = 1/2</code>,
+  <code>w(eta) = 1 - (1 - zeta)**a</code>        for <code>m &gt; 1/2</code>,
+  <code>w(eta) = 1</code>                        for <code>eta &gt; d_max</code>,
+and its vertical integral from the bottom (units of length) is
+  <code>A(eta) = 0</code>                                      <code>eta &lt;= d_min</code>,
+  <code>A(eta) = (d_max-d_min) * (1-m) * zeta**(1/(1-m))</code>   <code>m &lt; 1/2</code>,
+  <code>A(eta) = (d_max-d_min) * 0.5*zeta*zeta</code>             <code>m = 1/2</code>,
+  <code>A(eta) = (d_max-d_min) * (zeta - m + m*(1-zeta)**(1/m))</code>  <code>m &gt; 1/2</code>,
+  <code>A(eta) = eta - d_avg</code>                             <code>eta &gt; d_max</code>.
+<code>dA/d(eta) = w(eta)</code> identically, and both branches join
+continuously at <code>eta = d_max</code> where <code>A = (d_max-d_min)*(1-m)</code>.</p>
+<p>The LAYER-AVERAGED open AREA fraction of layer <code>k</code>, whose lower and
+upper interfaces sit at face heights <code>eta_lo</code> / <code>eta_hi</code>, is the
+mean of <code>w</code> over the layer, obtained exactly from the cumulative
+integral:
+  <code>por_face_area(k) = min(1, (A(eta_hi) - A(eta_lo))/(eta_hi - eta_lo))</code>
+with a zero fallback for a vanishing layer.  It multiplies the face
+width in the transport: <code>uh = u * h_face * dy_cu * por_face_area_u</code>.</p>
+<p>Reference: Adcroft, A. (2013), &ldquo;Representation of topography by
+porous barriers and objective interpolation of topographic data&rdquo;,
+Ocean Modelling 67, 13-27.  MOM6&rsquo;s <code>MOM_porous_barriers</code> was the
+inspiration for the discrete layer-averaging and the eta-at-velocity
+interpolation options; this is an independent implementation
+re-derived from the paper&rsquo;s fit.</p>
+<p>SUBGRID DATA CAVEAT.  The fit needs min/max/mean of the
+HIGH-RESOLUTION seafloor along each face — a statistic that can only
+come from a bathymetry dataset finer than the model grid (MOM6 reads
+it from an offline-generated <code>topog_edge.nc</code>).  Roundabout has no such
+file plumbing yet, so the shipped source is <code>POROUS_SOURCE_RESOLVED</code>:
+min/max/mean of the RESOLVED bathymetry sampled at three along-face
+points (south corner, midpoint, north corner for a u-face).  That is
+a genuine along-face statistic of the data we have, NOT true subgrid
+information — it captures along-face slope but cannot see structure
+below the grid scale.  <code>POROUS_SOURCE_FILE</code> is the honest
+MOM6-parity path and fails loud pending the file-forcing backend
+(the same gate the barotropic wave-drag <code>form="file"</code> waits on).</p>
+<p>WHAT THE PROXY ACTUALLY DOES — read this before trusting it.  All
+three samples are CELL-CENTRE AVERAGES, so the statistic only sees
+variation ALONG the face.
+  * Bathymetry uniform ALONG the face — a ridge or shelf break that
+    runs parallel to it, the common case — collapses all three
+    samples onto one value.  The fit would then be a STEP at the
+    two-cell mean height: a hard wall on every layer below it, on a
+    face the grid already resolves as open.  That wall is
+    manufactured by the fill routine, not information, so
+    <code>porous_update_face_areas</code> treats a DEGENERATE face
+    (<code>d_max &lt;= d_min</code>) as FULLY OPEN and blocks nothing.  A flat
+    seafloor is the same degenerate case, which is also what makes
+    the resolved source a literal no-op on a flat basin.
+  * Where the bathymetry DOES vary along the face, the narrowing is
+    set by the spread of the three corner-mean samples.  A face
+    whose along-face spread is small compared with the water depth
+    still yields a near-step over that narrow spread — the fit is
+    only ever as smooth as the sampled spread.  Genuinely graded
+    narrowing needs real subgrid data (<code>source="file"</code>).</p>
+<p>WET-CELL GATING.  A corner sample averages four cells; if any of
+them is LAND its elevation would pull <code>d_max</code> up and manufacture
+blockage on a face the grid resolves as fully open.
+<code>porous_fill_stats_resolved</code> therefore drops a corner sample whose
+four-cell stencil is not entirely wet, falling back to the two-cell
+face midpoint for that sample.</p>
+<p>VANISHING-LAYER THRESHOLD.  A layer whose face thickness is at or
+below <code>H_VANISHED</code> (1.5e-4 m) is given <code>por = 0</code>.  MOM6 instead uses
+<code>Angstrom_Z</code> (1e-10 m), 1.5 million times smaller, so a layer
+between the two thresholds gets a real open fraction there and zero
+here.  The consequence is that <code>por_col</code> (the column-integrated
+fraction the barotropic width carries) is the thickness-weighted
+mean of the per-layer fractions only over the NON-vanished layers.
+<code>H_VANISHED</code> is the repo-wide dynamic-vanish constant
+(<code>rdb_constants</code>), not a porous-barrier choice.</p>
+<p>NOT NARROWED.  <code>areaCu</code> / <code>areaCv</code> keep their full geometric value:
+only the TRANSPORT widths are narrowed (<code>dy_cu</code> / <code>dx_cv</code> per layer
+and <code>dy_cu_bt</code> / <code>dx_cv_bt</code> for the barotropic mode).  The
+barotropic Coriolis and KE terms therefore combine a narrowed
+transport with an un-narrowed cell area — the same split MOM6 has,
+but worth knowing before reading a BT energy budget under a strong
+barrier.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/ieee_arithmetic'>ieee_arithmetic</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_porous~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ocean_porousUsesGraph" width="348pt" height="74pt"
+ viewBox="0.00 0.00 348.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_porous~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>module~~rdb_ocean_porous~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 344,-70 344,4 -4,4"/>
+<!-- module~rdb_ocean_porous -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_node1" class="node">
+<title>module~rdb_ocean_porous</title>
+<polygon fill="none" stroke="black" points="340,-45 230,-45 230,-21 340,-21 340,-45"/>
+<text text-anchor="middle" x="285" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_porous</text>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_node2" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_ocean_porous~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="194,-66 98,-66 98,-42 194,-42 194,-66"/>
+<text text-anchor="middle" x="146" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_porous&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ocean_porous&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M229.85,-41.3C221.36,-42.6 212.56,-43.95 204,-45.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="203.46,-41.8 194.11,-46.78 204.52,-48.72 203.46,-41.8"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_node3" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ocean_porous~~UsesGraph_node3"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="189.5,-24 102.5,-24 102.5,0 189.5,0 189.5,-24"/>
+<text text-anchor="middle" x="146" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_porous&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ocean_porous&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M229.85,-24.7C219.97,-23.19 209.68,-21.61 199.83,-20.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.19,-16.61 189.78,-18.56 199.13,-23.53 200.19,-16.61"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_node4" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-24 0,-24 0,0 62,0 62,-24"/>
+<text text-anchor="middle" x="31" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ocean_porous~~UsesGraph_edge3" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M102.28,-12C92.46,-12 82.04,-12 72.33,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="72.12,-8.5 62.12,-12 72.12,-15.5 72.12,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_porous~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ocean_porousUsedByGraph" width="641pt" height="173pt"
+ viewBox="0.00 0.00 641.00 173.01" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_porous~~UsedByGraph" class="graph" transform="scale(0.44 0.44) rotate(0) translate(4 389.25)">
+<title>module~~rdb_ocean_porous~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-389.25 1453,-389.25 1453,4 -4,4"/>
+<!-- module~rdb_ocean_porous -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node1" class="node">
+<title>module~rdb_ocean_porous</title>
+<polygon fill="none" stroke="black" points="110,-256.25 0,-256.25 0,-232.25 110,-232.25 110,-256.25"/>
+<text text-anchor="middle" x="55" y="-241.85" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_porous</text>
+</g>
+<!-- module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node2" class="node">
+<title>module~rdb_coriolis_adv</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node2"><a xlink:href="../module/rdb_coriolis_adv.html" xlink:title="rdb_coriolis_adv">
+<polygon fill="#337ab7" stroke="#337ab7" points="245,-256.25 146,-256.25 146,-232.25 245,-232.25 245,-256.25"/>
+<text text-anchor="middle" x="195.5" y="-241.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_coriolis_adv</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_coriolis_adv&#45;&gt;module~rdb_ocean_porous -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_coriolis_adv&#45;&gt;module~rdb_ocean_porous</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M145.67,-244.25C137.39,-244.25 128.67,-244.25 120.07,-244.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="120.05,-240.75 110.05,-244.25 120.05,-247.75 120.05,-240.75"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="574,-193.25 480,-193.25 480,-169.25 574,-169.25 574,-193.25"/>
+<text text-anchor="middle" x="527" y="-178.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_porous -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_porous</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M523.49,-193.68C516.74,-223.38 495.15,-298.21 444,-328.25 322.53,-399.58 147.7,-303.47 82.14,-261.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="83.93,-258.8 73.63,-256.32 80.14,-264.68 83.93,-258.8"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M505.11,-169.16C474.06,-152.75 413.98,-127.04 363.5,-141.25"/>
+</g>
+<!-- module~rdb_barotropic_coupling -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node5" class="node">
+<title>module~rdb_barotropic_coupling</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node5"><a xlink:href="../module/rdb_barotropic_coupling.html" xlink:title="rdb_barotropic_coupling">
+<polygon fill="#337ab7" stroke="#337ab7" points="433,-277.25 292,-277.25 292,-253.25 433,-253.25 433,-277.25"/>
+<text text-anchor="middle" x="362.5" y="-262.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_coupling</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_coupling -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_coupling</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M513.74,-193.26C498.58,-207.45 471.41,-230.83 444,-244.25 439.76,-246.32 435.3,-248.21 430.73,-249.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="429.56,-246.62 421.25,-253.2 431.85,-253.24 429.56,-246.62"/>
+</g>
+<!-- module~rdb_ocean_bt_budget_probe -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_bt_budget_probe</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_bt_budget_probe.html" xlink:title="rdb_ocean_bt_budget_probe">
+<polygon fill="#337ab7" stroke="#337ab7" points="444,-235.25 281,-235.25 281,-211.25 444,-211.25 444,-235.25"/>
+<text text-anchor="middle" x="362.5" y="-220.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_budget_probe</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_budget_probe -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_budget_probe</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M479.87,-193.17C461.17,-198.01 439.39,-203.63 419.76,-208.71"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="418.83,-205.33 410.03,-211.22 420.59,-212.11 418.83,-205.33"/>
+</g>
+<!-- module~rdb_ocean_ke_probe -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_ke_probe</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_ke_probe.html" xlink:title="rdb_ocean_ke_probe">
+<polygon fill="#337ab7" stroke="#337ab7" points="424,-193.25 301,-193.25 301,-169.25 424,-169.25 424,-193.25"/>
+<text text-anchor="middle" x="362.5" y="-178.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ke_probe</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_ke_probe -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_ke_probe</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M479.87,-181.25C465.63,-181.25 449.61,-181.25 434.11,-181.25"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="434.03,-177.75 424.03,-181.25 434.03,-184.75 434.03,-177.75"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="858,-154.25 755,-154.25 755,-130.25 858,-130.25 858,-154.25"/>
+<text text-anchor="middle" x="806.5" y="-139.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_porous -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_porous</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M754.95,-140.5C727.18,-139.97 692.15,-140.03 661,-142.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M659,-142.25C600.92,-146.38 586.11,-144.81 528,-141.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M526,-141.25C489.1,-138.98 480.84,-130.37 444,-127.25 371.81,-121.13 351.37,-110.04 281,-127.25 202.27,-146.49 120.43,-198.56 80.66,-226.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="78.52,-223.51 72.37,-232.14 82.56,-229.23 78.52,-223.51"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M526,-141.25C453.91,-136.83 433.2,-122.32 363.5,-141.25"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M659,-142.25C626.26,-144.57 590.65,-155.77 564.84,-165.58"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="563.49,-162.35 555.45,-169.25 566.04,-168.87 563.49,-162.35"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="710,-114.25 610,-114.25 610,-90.25 710,-90.25 710,-114.25"/>
+<text text-anchor="middle" x="660" y="-99.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M762.15,-130.25C747.28,-126.13 730.46,-121.48 714.86,-117.16"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="715.39,-113.67 704.82,-114.38 713.53,-120.42 715.39,-113.67"/>
+</g>
+<!-- module~rdb_barotropic_coupling&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_barotropic_coupling&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M291.53,-256.34C279.43,-254.8 266.97,-253.22 255.22,-251.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="255.46,-248.22 245.1,-250.43 254.57,-255.17 255.46,-248.22"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node6" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node6"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1319,-150.25 1252,-150.25 1252,-126.25 1319,-126.25 1319,-150.25"/>
+<text text-anchor="middle" x="1285.5" y="-135.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1146.5,-140.25C1068.72,-143.73 1052.55,-167.11 975.5,-178.25"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1203,-111.25 1092,-111.25 1092,-87.25 1203,-87.25 1203,-111.25"/>
+<text text-anchor="middle" x="1147.5" y="-96.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1251.92,-128.91C1236.55,-124.5 1217.83,-119.13 1200.56,-114.18"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="1201.18,-110.71 1190.6,-111.32 1199.25,-117.44 1201.18,-110.71"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1251.77,-137.86C1224.2,-137.75 1183.73,-138.06 1148.5,-140.25"/>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1146.5,-140.25C1037.96,-146.98 1010.94,-129.47 903,-116.25 860.42,-111.03 850.4,-102.16 807.5,-102.25"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1449,-90.25 1358,-90.25 1358,-66.25 1449,-66.25 1449,-90.25"/>
+<text text-anchor="middle" x="1403.5" y="-75.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1392.52,-90.36C1378.17,-107.25 1350.31,-138.17 1322,-159.25 1307.65,-169.93 1302.81,-170.89 1286.5,-178.25"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1284.5,-178.25C1221.9,-206.46 1043.46,-168.42 975.5,-178.25"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1357.97,-81.93C1317.89,-85.24 1258.5,-90.15 1213.19,-93.9"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="1212.84,-90.42 1203.16,-94.73 1213.42,-97.39 1212.84,-90.42"/>
+</g>
+<!-- module~rdb_ocean_halo_width -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_halo_width</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_halo_width.html" xlink:title="rdb_ocean_halo_width">
+<polygon fill="#337ab7" stroke="#337ab7" points="1213,-230.25 1082,-230.25 1082,-206.25 1213,-206.25 1213,-230.25"/>
+<text text-anchor="middle" x="1147.5" y="-215.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_width</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_halo_width -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_halo_width</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1284.5,-178.25C1261.43,-188.65 1234.96,-197.14 1211.53,-203.59"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1210.45,-200.26 1201.7,-206.23 1212.26,-207.02 1210.45,-200.26"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node14" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node14"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1322,-70.25 1249,-70.25 1249,-46.25 1322,-46.25 1322,-70.25"/>
+<text text-anchor="middle" x="1285.5" y="-55.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1357.98,-70.57C1349.53,-69.12 1340.68,-67.59 1332.2,-66.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1332.53,-62.63 1322.08,-64.38 1331.34,-69.53 1332.53,-62.63"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="1046,-74.25 903,-74.25 903,-50.25 1046,-50.25 1046,-74.25"/>
+<text text-anchor="middle" x="974.5" y="-59.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1146.5,-1.25C1095.11,-4.5 1039.67,-28.45 1006.28,-45.35"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1004.33,-42.41 997.06,-50.12 1007.55,-48.63 1004.33,-42.41"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="867,-74.25 746,-74.25 746,-50.25 867,-50.25 867,-74.25"/>
+<text text-anchor="middle" x="806.5" y="-59.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge34" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1382.65,-66.25C1366.75,-57.11 1343.6,-44.84 1322,-37.25 1247.7,-11.15 1227.1,3.73 1148.5,-1.25"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1146.5,-1.25C1041.52,1.15 921.05,-28.44 855.74,-47.27"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="854.36,-44.03 845.74,-50.19 856.32,-50.74 854.36,-44.03"/>
+</g>
+<!-- module~rdb_ocean_bt_budget_probe&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_bt_budget_probe&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M280.93,-233.5C272.21,-234.61 263.46,-235.73 255.07,-236.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="254.51,-233.34 245.04,-238.07 255.4,-240.28 254.51,-233.34"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1116.8,-111.26C1105.81,-115.81 1093.28,-121.14 1082,-126.25 1034.02,-147.98 1027.78,-171.8 975.5,-178.25"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M973.5,-178.25C834.41,-195.41 669.03,-189.78 584.26,-185.03"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="584.27,-181.52 574.08,-184.44 583.86,-188.51 584.27,-181.52"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M973.5,-102.25C929.98,-102.63 881.78,-115.73 848.58,-126.83"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="847.1,-123.64 838.78,-130.2 849.38,-130.26 847.1,-123.64"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M973.5,-102.25C899.72,-102.89 881.28,-102.1 807.5,-102.25"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1091.92,-87.44C1075.66,-83.92 1057.68,-80.03 1040.81,-76.38"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1041.54,-72.96 1031.03,-74.26 1040.06,-79.8 1041.54,-72.96"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge36" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1091.83,-100.45C1058.26,-101.13 1014.4,-101.91 975.5,-102.25"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M973.5,-102.25C929.58,-102.63 880.89,-89.17 847.66,-77.76"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="848.47,-74.33 837.87,-74.31 846.14,-80.93 848.47,-74.33"/>
+</g>
+<!-- module~rdb_ocean_halo_width&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_halo_width&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1133.46,-230.26C1090.46,-268.55 947.9,-385.25 807.5,-385.25 807.5,-385.25 807.5,-385.25 526,-385.25 414.2,-385.25 378.81,-382.39 281,-328.25 252.28,-312.35 226.69,-283.88 211.4,-264.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="213.99,-262.17 205.12,-256.37 208.44,-266.43 213.99,-262.17"/>
+</g>
+<!-- module~rdb_ocean_ke_probe&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_ke_probe&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M309.05,-193.26C299.6,-195.89 289.93,-198.91 281,-202.25 262.58,-209.15 242.85,-218.81 227.09,-227.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="224.99,-224.29 217.84,-232.1 228.3,-230.45 224.99,-224.29"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M609.77,-104.44C550.4,-108.07 448.06,-117.45 363.5,-141.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M361.5,-141.25C326.02,-150.88 313.13,-142.4 281,-160.25 252.3,-176.19 226.71,-204.65 211.41,-223.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.45,-222.08 205.12,-232.14 214,-226.35 208.45,-222.08"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M634.4,-114.35C626.46,-118.5 617.72,-123.34 610,-128.25 593.12,-138.97 590.74,-144.3 574,-155.25 569.39,-158.26 564.42,-161.29 559.5,-164.16"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="557.76,-161.12 550.81,-169.12 561.23,-167.2 557.76,-161.12"/>
+</g>
+<!-- proc~validate_config -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_node13" class="node">
+<title>proc~validate_config</title>
+<g id="a_module~~rdb_ocean_porous~~UsedByGraph_node13"><a xlink:href="../proc/validate_config.html" xlink:title="validate_config">
+<polygon fill="#d9534f" stroke="#d9534f" points="409.5,-319.25 315.5,-319.25 315.5,-295.25 409.5,-295.25 409.5,-319.25"/>
+<text text-anchor="middle" x="362.5" y="-304.85" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">validate_config</text>
+</a>
+</g>
+</g>
+<!-- proc~validate_config&#45;&gt;module~rdb_coriolis_adv -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge11" class="edge">
+<title>proc~validate_config&#45;&gt;module~rdb_coriolis_adv</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M315.44,-296.98C304.04,-293.96 291.96,-290.35 281,-286.25 262.58,-279.35 242.85,-269.68 227.09,-261.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="228.3,-258.04 217.84,-256.39 224.99,-264.21 228.3,-258.04"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1248.77,-69.02C1233.24,-73.7 1214.79,-79.26 1197.98,-84.33"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="1196.87,-81.01 1188.31,-87.25 1198.89,-87.71 1196.87,-81.01"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1248.71,-49.04C1160.6,-28.08 927.2,17.04 746,-41.25 720.53,-49.44 696.22,-68.41 680.18,-83.03"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="677.45,-80.79 672.58,-90.2 682.25,-85.89 677.45,-80.79"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M942.52,-74.32C909.57,-86.06 855.67,-102.15 807.5,-102.25"/>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M805.5,-102.25C777.48,-102.3 746.41,-102.31 720.28,-102.3"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="720.16,-98.8 710.16,-102.3 720.16,-105.8 720.16,-98.8"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge35" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M902.62,-62.25C894.22,-62.25 885.66,-62.25 877.28,-62.25"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="877.18,-58.75 867.18,-62.25 877.18,-65.75 877.18,-58.75"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_porous~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M762.15,-74.25C747.28,-78.36 730.46,-83.02 714.86,-87.34"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="713.53,-84.08 704.82,-90.12 715.39,-90.82 713.53,-84.08"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_porousUsedByGraph = svgPanZoom('#modulerdb_ocean_porousUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_eta_arith"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_ETA_ARITH</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Arithmetic mean of the two adjacent interface heights.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_eta_harm"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_ETA_HARM</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>Harmonic mean of the two adjacent interface heights.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_eta_max"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_ETA_MAX</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Higher (shallower) of the two adjacent interface heights — the
+default, and the LEAST blocking of the four rules: <code>w</code> is
+monotone increasing in the interface height, so raising both
+interfaces raises the layer-averaged open fraction.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_eta_min"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_ETA_MIN</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Lower (deeper) of the two adjacent interface heights — the MOST
+blocking rule, by the same monotonicity.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_source_file"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_SOURCE_FILE</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Offline subgrid-bathymetry file (MOM6 <code>topog_edge.nc</code>).  Not
+implemented — fails loud at configure.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-porous_source_resolved"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>POROUS_SOURCE_RESOLVED</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Along-face min/max/mean of the RESOLVED bathymetry (three
+samples: the two face corners + the face midpoint).  A proxy
+for true subgrid statistics — see the module caveat.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_porous_eta_interp"></span> <h3>public pure function <a href='../proc/parse_porous_eta_interp.html'>parse_porous_eta_interp</a>(name) result(interp)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Map <code>&amp;ocean_porous_nml eta_interp</code> onto <code>POROUS_ETA_*</code>.  An
+unrecognised string returns -1 so the caller can fail loud.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~32"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_porous_source"></span> <h3>public pure function <a href='../proc/parse_porous_source.html'>parse_porous_source</a>(name) result(src)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Map <code>&amp;ocean_porous_nml source</code> onto <code>POROUS_SOURCE_*</code>.  An
+unrecognised string returns -1 so the caller can fail loud.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-name~31"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>name</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_cum_area"></span> <h3>public pure function <a href='../proc/porous_cum_area.html'>porous_cum_area</a>(d_min, d_max, d_avg, eta) result(area)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Cumulative open area of a face from the deepest along-face point
+up to interface height <code>eta</code>, per unit face length (m — it is
+the vertical integral of <code>porous_open_width</code>).  Layer-averaged
+open fractions are differences of this function divided by the
+layer thickness, which is exact (no quadrature error) because
+<code>d(area)/d(eta) = porous_open_width(eta)</code> identically.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_min~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_min</strong></td>
+            <td>
+<p>Deepest along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_max~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_max</strong></td>
+            <td>
+<p>Shallowest along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_avg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_avg</strong></td>
+            <td>
+<p>Mean along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta</strong></td>
+            <td>
+<p>Interface height at the face (m, positive up).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_eta_face"></span> <h3>public pure function <a href='../proc/porous_eta_face.html'>porous_eta_face</a>(z_a, z_b, interp) result(eta)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Interface height at a velocity point from the two adjacent
+cell-centre interface heights.  MOM6&rsquo;s <code>PORBAR_ETA_INTERP</code>
+options.  <code>POROUS_ETA_MAX</code> (the higher, i.e. shallower,
+interface) is the default and the LEAST blocking: the open width
+<code>w</code> is monotone increasing in the interface height, so the rule
+that returns the larger height leaves the most of the face open.
+<code>POROUS_ETA_MIN</code> is the most blocking.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_a"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_a</strong></td>
+            <td>
+<p>Interface height in the first adjacent cell (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_b"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_b</strong></td>
+            <td>
+<p>Interface height in the second adjacent cell (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-interp~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>interp</strong></td>
+            <td>
+<p>One of the <code>POROUS_ETA_*</code> enum values.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_open_width"></span> <h3>public pure function <a href='../proc/porous_open_width.html'>porous_open_width</a>(d_min, d_max, d_avg, eta) result(w)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Open WIDTH fraction of a face at interface height <code>eta</code>
+(dimensionless, in <code>[0, 1]</code>).  Zero when the interface is at or
+below the deepest along-face point, one when it is above the
+shallowest.  A degenerate face (<code>d_max &lt;= d_min</code>, i.e. a flat
+along-face seafloor) reduces to the binary open/closed step, so
+the fit never divides by zero.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_min"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_min</strong></td>
+            <td>
+<p>Deepest along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_max"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_max</strong></td>
+            <td>
+<p>Shallowest along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_avg"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_avg</strong></td>
+            <td>
+<p>Mean along-face topographic height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta</strong></td>
+            <td>
+<p>Interface height at the face (m, positive up).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_stats_are_ordered"></span> <h3>public pure function <a href='../proc/porous_stats_are_ordered.html'>porous_stats_are_ordered</a>(n1, n2, dmin, dmax, davg) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>.true.</code> iff every face satisfies <code>d_min &lt;= d_avg &lt;= d_max</code>, the
+invariant the whole fit rests on (<code>m = (d_avg-d_min)/(d_max-d_min)</code>
+must lie in <code>[0,1]</code>).</p><a href="../proc/porous_stats_are_ordered.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+<p>Face-array extents.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+<p>Face-array extents.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin</strong>(n1,n2)</td>
+            <td>
+<p>Along-face deepest / shallowest / mean height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmax"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmax</strong>(n1,n2)</td>
+            <td>
+<p>Along-face deepest / shallowest / mean height (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-davg"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>davg</strong>(n1,n2)</td>
+            <td>
+<p>Along-face deepest / shallowest / mean height (m, positive up).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-clamp_fraction"></span> <h3>private pure function <a href='../proc/clamp_fraction.html'>clamp_fraction</a>(x) result(f)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Clamp an open-area fraction into <code>[0,1]</code>, NaN-safely.</p><a href="../proc/clamp_fraction.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-corner_is_wet"></span> <h3>private pure function <a href='../proc/corner_is_wet.html'>corner_is_wet</a>(w1, w2, w3, w4) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>.true.</code> iff all four cells contributing to a corner sample are
+wet.  The masks are real 0/1 (<code>ocean_metrics_t%wet_T</code>), so the
+test is a mid-point comparison rather than an equality.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w1"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w3</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w4</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_fill_stats_resolved"></span> <h3>public pure subroutine <a href='../proc/porous_fill_stats_resolved.html'>porous_fill_stats_resolved</a>(nx, ny, b, wet_t, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Fill the per-face <code>d_min</code> / <code>d_max</code> / <code>d_avg</code> from the RESOLVED
+bottom elevation, sampled at three points ALONG each face: the
+two end corners and the midpoint.  A corner sample is the mean
+of the four cells around it, the midpoint the mean of the two
+cells the face separates — all three are genuine points on the
+resolved seafloor along the face segment.</p><a href="../proc/porous_fill_stats_resolved.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~107"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p><code>grid%nx_total</code>, <code>grid%ny_total</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~107"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p><code>grid%nx_total</code>, <code>grid%ny_total</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong>(nx,ny)</td>
+            <td>
+<p>Bottom elevation at cell centres (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_t~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_t</strong>(nx,ny)</td>
+            <td>
+<p>T-cell wet (1) / land (0) mask (<code>ocean_metrics_t%wet_T</code>).
+All-ones on a run with no land, where every corner sample is
+kept and the statistic is the un-gated one.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_u"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmax_u"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmax_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-davg_u"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>davg_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_v"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmax_v"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmax_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-davg_v"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>davg_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_narrow_3d"></span> <h3>public pure subroutine <a href='../proc/porous_narrow_3d.html'>porous_narrow_3d</a>(n1, n2, nz, por, arr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Multiply a face-staggered per-layer field by the open-area
+fraction: <code>arr &lt;- arr * por</code>.</p><a href="../proc/porous_narrow_3d.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+<p>Face-array extents (<code>nx+1, ny, nz</code> for u; <code>nx, ny+1, nz</code> for v).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+<p>Face-array extents (<code>nx+1, ny, nz</code> for u; <code>nx, ny+1, nz</code> for v).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~104"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Face-array extents (<code>nx+1, ny, nz</code> for u; <code>nx, ny+1, nz</code> for v).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-por"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>por</strong>(n1,n2,nz)</td>
+            <td>
+<p>Layer-averaged open-area fraction (nondim, <code>[0,1]</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arr~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>arr</strong>(n1,n2,nz)</td>
+            <td>
+<p>Face-staggered field to narrow (a mass transport).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-porous_update_face_areas"></span> <h3>public pure subroutine <a href='../proc/porous_update_face_areas.html'>porous_update_face_areas</a>(nx, ny, nz, interp, mask_depth, b, h_layer, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v, dy_cu, dx_cv, por_u, por_v, dy_cu_bt, dx_cv_bt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Recompute the layer-averaged open-area fractions from the
+CURRENT layer thicknesses.  Interface-height dependent, so this
+runs once per RK2 stage on the device.</p><a href="../proc/porous_update_face_areas.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~108"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p><code>grid%nx_total</code>, <code>grid%ny_total</code>, number of layers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~108"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p><code>grid%nx_total</code>, <code>grid%ny_total</code>, number of layers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~105"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p><code>grid%nx_total</code>, <code>grid%ny_total</code>, number of layers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-interp~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>interp</strong></td>
+            <td>
+<p>Interface-at-velocity-point rule, a <code>POROUS_ETA_*</code> value.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_depth"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_depth</strong></td>
+            <td>
+<p>Gate height (m, positive up, <code>&lt;= 0</code>): faces with
+<code>d_avg &gt;= mask_depth</code> stay fully open.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong>(nx,ny)</td>
+            <td>
+<p>Bottom elevation at cell centres (m, positive up).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~45"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+<p>Layer thicknesses (m), <code>k=1</code> the bed layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmax_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmax_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-davg_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>davg_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmin_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmin_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dmax_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dmax_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-davg_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>davg_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face along-face deepest / shallowest / mean height (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cu~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cu</strong>(nx+1,ny)</td>
+            <td>
+<p>Un-narrowed open u-face width for transport (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_cv~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_cv</strong>(nx,ny+1)</td>
+            <td>
+<p>Un-narrowed open v-face width for transport (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-por_u"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>por_u</strong>(nx+1,ny,nz)</td>
+            <td>
+<p>u-face layer-averaged open-area fraction (nondim, <code>[0,1]</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-por_v"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>por_v</strong>(nx,ny+1,nz)</td>
+            <td>
+<p>v-face layer-averaged open-area fraction (nondim, <code>[0,1]</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cu_bt~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cu_bt</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face width the BAROTROPIC substep transports on (m):
+<code>dy_cu</code> scaled by the COLUMN-INTEGRATED open fraction.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_cv_bt~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_cv_bt</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face twin (m).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

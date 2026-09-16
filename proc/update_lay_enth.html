@@ -1,0 +1,1286 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>update_lay_enth &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>update_lay_enth
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">87 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_column.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_column.f90.html'>rdb_ice_column.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_column.html'>rdb_ice_column</a></li>
+            <li class="breadcrumb-item active" aria-current="page">update_lay_enth</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-aa~2">aa</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-bb~2">bb</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-cc~4">cc</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-denom~14">denom</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-dflux_dtot_dt">dflux_dtot_dt</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-disc~2">disc</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-dt_denth">dt_denth</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-en_j">en_j</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-enth_fp">enth_fp</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-enth_in">enth_in</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-extra_enth">extra_enth</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-fb~2">fb</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-fbot_in">fbot_in</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-ftop_in">ftop_in</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-htg">htg</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-max_enth">max_enth</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-max_temp">max_temp</a>
+            <a class="list-group-item" href="../proc/update_lay_enth.html#variable-t_fr~2">t_fr</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/update_lay_enth.html#src">update_lay_enth</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine update_lay_enth(m_lay, sice, enth, ftop, ht_body, fbot, dftop_dt, dfbot_dt, dtt, hf_err_rat, extra_heat, new_temp, has_temp_max, temp_max)  
+</h2>
+    
+
+    <p>Conservative per-layer implicit enthalpy update — SIS2
+<code>update_lay_enth</code> (SIS2_ice_thm.F90:704-945), closed-form
+branches only. Port of prototype <code>sis2_column.py:58-135</code>.
+Four solution branches (massless layer; pin-to-max with
+banked <code>extra_enth</code>; fresh <code>sice==0</code> linear; salty quadratic),
+then the three-way explicit-vs-conservation-inverted flux
+bookkeeping (prototype :117-133, incl. the <code>denom &gt; 0</code> guard).</p>
+<p><code>temp_max</code> is optional in the SIS2 signature; here it is a
+<code>has_temp_max</code> logical + <code>temp_max</code> value pair (device-routine
+<code>optional</code> dummies are avoided — same-module call sites only).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_lay"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_lay</strong></td>
+            <td>
+                <p>Layer mass (kg/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sice"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sice</strong></td>
+            <td>
+                <p>Layer bulk salinity (PSU); 0 for snow/fresh.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth</strong></td>
+            <td>
+                <p>Layer specific enthalpy (J/kg); in = prior step, out = new.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ftop"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ftop</strong></td>
+            <td>
+                <p>Heat flux at the layer&rsquo;s top interface (W/m²); in = prior
+estimate, out = updated (explicit or conservation-inverted).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ht_body"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ht_body</strong></td>
+            <td>
+                <p>In-layer heating (solar absorption) (W/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fbot"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fbot</strong></td>
+            <td>
+                <p>Heat flux at the layer&rsquo;s bottom interface (W/m²); in/out as
+<code>ftop</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dftop_dt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dftop_dt</strong></td>
+            <td>
+                <p>d(ftop)/d(new_temp) (W/m²/K).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dfbot_dt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dfbot_dt</strong></td>
+            <td>
+                <p>d(fbot)/d(new_temp) (W/m²/K).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtt~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtt</strong></td>
+            <td>
+                <p>Timestep (s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hf_err_rat"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hf_err_rat</strong></td>
+            <td>
+                <p>Precomputed <code>heat_flux_err_rat</code> (degC*s/J) deciding explicit
+vs conservation-inverted flux bookkeeping.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-extra_heat"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>extra_heat</strong></td>
+            <td>
+                <p>Banked excess heat when pinned to <code>temp_max</code> (J/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-new_temp~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>new_temp</strong></td>
+            <td>
+                <p>Resulting layer temperature (degC).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_temp_max"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_temp_max</strong></td>
+            <td>
+                <p>True when an explicit <code>temp_max</code> clamp applies (snow-branch
+call site); false uses the freezing point as the max.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp_max"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp_max</strong></td>
+            <td>
+                <p>Explicit temperature ceiling (degC), used only when
+<code>has_temp_max</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~update_lay_enth~~CallsGraph Pages: 1 -->
+<svg id="procupdate_lay_enthCallsGraph" width="297pt" height="158pt"
+ viewBox="0.00 0.00 297.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~update_lay_enth~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 154)">
+<title>proc~~update_lay_enth~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 293,-154 293,4 -4,4"/>
+<!-- proc~update_lay_enth -->
+<g id="proc~~update_lay_enth~~CallsGraph_node1" class="node">
+<title>proc~update_lay_enth</title>
+<polygon fill="none" stroke="black" points="100,-87 0,-87 0,-63 100,-63 100,-87"/>
+<text text-anchor="middle" x="50" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">update_lay_enth</text>
+</g>
+<!-- proc~ice_enth_from_ts -->
+<g id="proc~~update_lay_enth~~CallsGraph_node2" class="node">
+<title>proc~ice_enth_from_ts</title>
+<g id="a_proc~~update_lay_enth~~CallsGraph_node2"><a xlink:href="../proc/ice_enth_from_ts.html" xlink:title="ice_enth_from_ts">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="263.5,-150 161.5,-150 161.5,-126 263.5,-126 263.5,-150"/>
+<text text-anchor="middle" x="212.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enth_from_ts</text>
+</a>
+</g>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enth_from_ts -->
+<g id="proc~~update_lay_enth~~CallsGraph_edge1" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enth_from_ts</title>
+<path fill="none" stroke="#ff0000" d="M72.51,-87.03C89.4,-96.14 113.71,-108.48 136,-117 141.45,-119.09 147.2,-121.06 152.99,-122.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="152.14,-126.31 162.73,-125.88 154.19,-119.61 152.14,-126.31"/>
+</g>
+<!-- proc~ice_enthalpy_liquid -->
+<g id="proc~~update_lay_enth~~CallsGraph_node3" class="node">
+<title>proc~ice_enthalpy_liquid</title>
+<g id="a_proc~~update_lay_enth~~CallsGraph_node3"><a xlink:href="../proc/ice_enthalpy_liquid.html" xlink:title="ice_enthalpy_liquid">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="270,-108 155,-108 155,-84 270,-84 270,-108"/>
+<text text-anchor="middle" x="212.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enthalpy_liquid</text>
+</a>
+</g>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid -->
+<g id="proc~~update_lay_enth~~CallsGraph_edge2" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid</title>
+<path fill="none" stroke="#ff0000" d="M100.03,-81.41C114.11,-83.26 129.71,-85.3 144.67,-87.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.53,-90.77 154.9,-88.59 145.44,-83.83 144.53,-90.77"/>
+</g>
+<!-- proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~update_lay_enth~~CallsGraph_node4" class="node">
+<title>proc~ice_enthalpy_liquid_freeze</title>
+<g id="a_proc~~update_lay_enth~~CallsGraph_node4"><a xlink:href="../proc/ice_enthalpy_liquid_freeze.html" xlink:title="ice_enthalpy_liquid_freeze">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="289,-66 136,-66 136,-42 289,-42 289,-66"/>
+<text text-anchor="middle" x="212.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enthalpy_liquid_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~update_lay_enth~~CallsGraph_edge3" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid_freeze</title>
+<path fill="none" stroke="#ff0000" d="M100.03,-68.59C108.27,-67.51 117.02,-66.36 125.87,-65.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="126.41,-68.66 135.87,-63.9 125.5,-61.72 126.41,-68.66"/>
+</g>
+<!-- proc~ice_t_freeze -->
+<g id="proc~~update_lay_enth~~CallsGraph_node5" class="node">
+<title>proc~ice_t_freeze</title>
+<g id="a_proc~~update_lay_enth~~CallsGraph_node5"><a xlink:href="../proc/ice_t_freeze.html" xlink:title="ice_t_freeze">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="250.5,-24 174.5,-24 174.5,0 250.5,0 250.5,-24"/>
+<text text-anchor="middle" x="212.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_t_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_t_freeze -->
+<g id="proc~~update_lay_enth~~CallsGraph_edge4" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_t_freeze</title>
+<path fill="none" stroke="#ff0000" d="M72.51,-62.97C89.4,-53.86 113.71,-41.52 136,-33 145.05,-29.54 154.92,-26.38 164.44,-23.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.5,-26.96 174.19,-20.89 163.61,-20.21 165.5,-26.96"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~update_lay_enth~~CalledByGraph Pages: 1 -->
+<svg id="procupdate_lay_enthCalledByGraph" width="641pt" height="25pt"
+ viewBox="0.00 0.00 641.00 24.59" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~update_lay_enth~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 28)">
+<title>proc~~update_lay_enth~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 830,-28 830,4 -4,4"/>
+<!-- proc~update_lay_enth -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node1" class="node">
+<title>proc~update_lay_enth</title>
+<polygon fill="none" stroke="black" points="826,-24 726,-24 726,0 826,0 826,-24"/>
+<text text-anchor="middle" x="776" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">update_lay_enth</text>
+</g>
+<!-- proc~ice_temp_sis2 -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node2" class="node">
+<title>proc~ice_temp_sis2</title>
+<g id="a_proc~~update_lay_enth~~CalledByGraph_node2"><a xlink:href="../proc/ice_temp_sis2.html" xlink:title="ice_temp_sis2">
+<polygon fill="#d9534f" stroke="#d9534f" points="690,-24 603,-24 603,0 690,0 690,-24"/>
+<text text-anchor="middle" x="646.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_temp_sis2</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~update_lay_enth -->
+<g id="proc~~update_lay_enth~~CalledByGraph_edge1" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~update_lay_enth</title>
+<path fill="none" stroke="#ff0000" d="M690.31,-12C698.53,-12 707.26,-12 715.89,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="715.92,-15.5 725.92,-12 715.92,-8.5 715.92,-15.5"/>
+</g>
+<!-- proc~ice_column_step -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node3" class="node">
+<title>proc~ice_column_step</title>
+<g id="a_proc~~update_lay_enth~~CalledByGraph_node3"><a xlink:href="../proc/ice_column_step.html" xlink:title="ice_column_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="567,-24 466,-24 466,0 567,0 567,-24"/>
+<text text-anchor="middle" x="516.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_column_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_temp_sis2 -->
+<g id="proc~~update_lay_enth~~CalledByGraph_edge2" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_temp_sis2</title>
+<path fill="none" stroke="#ff0000" d="M567.35,-12C575.64,-12 584.26,-12 592.61,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="592.64,-15.5 602.64,-12 592.64,-8.5 592.64,-15.5"/>
+</g>
+<!-- proc~ice_thermo_columns -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node4" class="node">
+<title>proc~ice_thermo_columns</title>
+<g id="a_proc~~update_lay_enth~~CalledByGraph_node4"><a xlink:href="../proc/ice_thermo_columns.html" xlink:title="ice_thermo_columns">
+<polygon fill="#d9534f" stroke="#d9534f" points="430,-24 307,-24 307,0 430,0 430,-24"/>
+<text text-anchor="middle" x="368.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_thermo_columns</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_thermo_columns&#45;&gt;proc~ice_column_step -->
+<g id="proc~~update_lay_enth~~CalledByGraph_edge3" class="edge">
+<title>proc~ice_thermo_columns&#45;&gt;proc~ice_column_step</title>
+<path fill="none" stroke="#ff0000" d="M430.15,-12C438.62,-12 447.31,-12 455.76,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="455.91,-15.5 465.91,-12 455.91,-8.5 455.91,-15.5"/>
+</g>
+<!-- proc~ice_thermo_driver_step -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node5" class="node">
+<title>proc~ice_thermo_driver_step</title>
+<g id="a_proc~~update_lay_enth~~CalledByGraph_node5"><a xlink:href="../proc/ice_thermo_driver_step.html" xlink:title="ice_thermo_driver_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="271,-24 134,-24 134,0 271,0 271,-24"/>
+<text text-anchor="middle" x="202.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_thermo_driver_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_thermo_driver_step&#45;&gt;proc~ice_thermo_columns -->
+<g id="proc~~update_lay_enth~~CalledByGraph_edge4" class="edge">
+<title>proc~ice_thermo_driver_step&#45;&gt;proc~ice_thermo_columns</title>
+<path fill="none" stroke="#ff0000" d="M271.15,-12C279.56,-12 288.17,-12 296.62,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="296.83,-15.5 306.83,-12 296.83,-8.5 296.83,-15.5"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~update_lay_enth~~CalledByGraph_node6" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~update_lay_enth~~CalledByGraph_node6"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="98,-24 0,-24 0,0 98,0 98,-24"/>
+<text text-anchor="middle" x="49" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_thermo_driver_step -->
+<g id="proc~~update_lay_enth~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_thermo_driver_step</title>
+<path fill="none" stroke="#ff0000" d="M98.35,-12C106.51,-12 115.15,-12 123.83,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="124,-15.5 134,-12 124,-8.5 124,-15.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocupdate_lay_enthCalledByGraph = svgPanZoom('#procupdate_lay_enthCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-aa~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>aa</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bb~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cc~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-denom~14"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>denom</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dflux_dtot_dt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dflux_dtot_dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-disc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>disc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_denth"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_denth</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-en_j"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>en_j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_fp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_fp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_in"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_in</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-extra_enth"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>extra_enth</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fb~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fbot_in"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fbot_in</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ftop_in"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ftop_in</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htg"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>htg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_enth"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_enth</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_temp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_temp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_fr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_fr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">update_lay_enth</span><span class="p">(</span><span class="n">m_lay</span><span class="p">,</span><span class="w"> </span><span class="n">sice</span><span class="p">,</span><span class="w"> </span><span class="n">enth</span><span class="p">,</span><span class="w"> </span><span class="n">ftop</span><span class="p">,</span><span class="w"> </span><span class="n">ht_body</span><span class="p">,</span><span class="w"> </span><span class="n">fbot</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">dftop_dt</span><span class="p">,</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="p">,</span><span class="w"> </span><span class="n">dtt</span><span class="p">,</span><span class="w"> </span><span class="n">hf_err_rat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">extra_heat</span><span class="p">,</span><span class="w"> </span><span class="n">new_temp</span><span class="p">,</span><span class="w"> </span><span class="n">has_temp_max</span><span class="p">,</span><span class="w"> </span><span class="n">temp_max</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Conservative per-layer implicit enthalpy update — SIS2</span>
+<span class="w">      </span><span class="c">!! `update_lay_enth` (SIS2_ice_thm.F90:704-945), closed-form</span>
+<span class="w">      </span><span class="c">!! branches only. Port of prototype `sis2_column.py:58-135`.</span>
+<span class="w">      </span><span class="c">!! Four solution branches (massless layer; pin-to-max with</span>
+<span class="w">      </span><span class="c">!! banked `extra_enth`; fresh `sice==0` linear; salty quadratic),</span>
+<span class="w">      </span><span class="c">!! then the three-way explicit-vs-conservation-inverted flux</span>
+<span class="w">      </span><span class="c">!! bookkeeping (prototype :117-133, incl. the `denom &gt; 0` guard).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `temp_max` is optional in the SIS2 signature; here it is a</span>
+<span class="w">      </span><span class="c">!! `has_temp_max` logical + `temp_max` value pair (device-routine</span>
+<span class="w">      </span><span class="c">!! `optional` dummies are avoided — same-module call sites only).</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_lay</span>
+<span class="w">         </span><span class="c">!! Layer mass (kg/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sice</span>
+<span class="w">         </span><span class="c">!! Layer bulk salinity (PSU); 0 for snow/fresh.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth</span>
+<span class="w">         </span><span class="c">!! Layer specific enthalpy (J/kg); in = prior step, out = new.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ftop</span>
+<span class="w">         </span><span class="c">!! Heat flux at the layer's top interface (W/m²); in = prior</span>
+<span class="w">         </span><span class="c">!! estimate, out = updated (explicit or conservation-inverted).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ht_body</span>
+<span class="w">         </span><span class="c">!! In-layer heating (solar absorption) (W/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fbot</span>
+<span class="w">         </span><span class="c">!! Heat flux at the layer's bottom interface (W/m²); in/out as</span>
+<span class="w">         </span><span class="c">!! `ftop`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dftop_dt</span>
+<span class="w">         </span><span class="c">!! d(ftop)/d(new_temp) (W/m²/K).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dfbot_dt</span>
+<span class="w">         </span><span class="c">!! d(fbot)/d(new_temp) (W/m²/K).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dtt</span>
+<span class="w">         </span><span class="c">!! Timestep (s).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hf_err_rat</span>
+<span class="w">         </span><span class="c">!! Precomputed `heat_flux_err_rat` (degC*s/J) deciding explicit</span>
+<span class="w">         </span><span class="c">!! vs conservation-inverted flux bookkeeping.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">extra_heat</span>
+<span class="w">         </span><span class="c">!! Banked excess heat when pinned to `temp_max` (J/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">new_temp</span>
+<span class="w">         </span><span class="c">!! Resulting layer temperature (degC).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">has_temp_max</span>
+<span class="w">         </span><span class="c">!! True when an explicit `temp_max` clamp applies (snow-branch</span>
+<span class="w">         </span><span class="c">!! call site); false uses the freezing point as the max.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">temp_max</span>
+<span class="w">         </span><span class="c">!! Explicit temperature ceiling (degC), used only when</span>
+<span class="w">         </span><span class="c">!! `has_temp_max`.</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ftop_in</span><span class="p">,</span><span class="w"> </span><span class="n">fbot_in</span><span class="p">,</span><span class="w"> </span><span class="n">htg</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">t_fr</span><span class="p">,</span><span class="w"> </span><span class="n">enth_fp</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">max_temp</span><span class="p">,</span><span class="w"> </span><span class="n">max_enth</span><span class="p">,</span><span class="w"> </span><span class="n">enth_in</span><span class="p">,</span><span class="w"> </span><span class="n">extra_enth</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">en_j</span><span class="p">,</span><span class="w"> </span><span class="n">aa</span><span class="p">,</span><span class="w"> </span><span class="n">bb</span><span class="p">,</span><span class="w"> </span><span class="n">cc</span><span class="p">,</span><span class="w"> </span><span class="n">disc</span><span class="p">,</span><span class="w"> </span><span class="n">dt_denth</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">dflux_dtot_dt</span>
+
+<span class="w">      </span><span class="n">ftop_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ftop</span>
+<span class="w">      </span><span class="n">fbot_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fbot</span>
+<span class="w">      </span><span class="n">htg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ht_body</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ftop_in</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fbot_in</span>
+<span class="w">      </span><span class="n">fb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">dftop_dt</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">extra_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="n">extra_enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sice</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">t_fr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_t_freeze</span><span class="p">(</span><span class="n">sice</span><span class="p">)</span>
+<span class="w">         </span><span class="n">enth_fp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_enthalpy_liquid_freeze</span><span class="p">(</span><span class="n">sice</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">t_fr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">enth_fp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_enth_from_ts</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      </span><span class="n">max_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t_fr</span>
+<span class="w">      </span><span class="n">max_enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_fp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">has_temp_max</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">temp_max</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">t_fr</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">max_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">temp_max</span>
+<span class="w">            </span><span class="n">max_enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_enth_from_ts</span><span class="p">(</span><span class="n">temp_max</span><span class="p">,</span><span class="w"> </span><span class="n">sice</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">enth_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">m_lay</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">new_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">htg</span><span class="o">/</span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">max_temp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_enth_from_ts</span><span class="p">(</span><span class="n">new_temp</span><span class="p">,</span><span class="w"> </span><span class="n">sice</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">dtt</span><span class="o">*</span><span class="p">(</span><span class="n">htg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fb</span><span class="o">*</span><span class="n">max_temp</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">max_enth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_in</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Heat applied would push the layer above max_temp -&gt; pin and</span>
+<span class="w">         </span><span class="c">! bank the excess heat.</span>
+<span class="w">         </span><span class="n">extra_enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth_in</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">max_enth</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dtt</span><span class="o">*</span><span class="p">(</span><span class="n">htg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fb</span><span class="o">*</span><span class="n">max_temp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">extra_heat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">extra_enth</span>
+<span class="w">         </span><span class="n">new_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">max_temp</span>
+<span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">max_enth</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">sice</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">dt_denth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">ICE_CP_ICE</span>
+<span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_fp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">dtt</span><span class="o">*</span><span class="n">htg</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth_in</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_fp</span><span class="p">))</span><span class="o">/</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="p">(</span><span class="n">m_lay</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dtt</span><span class="o">*</span><span class="p">(</span><span class="n">fb</span><span class="o">*</span><span class="n">dt_denth</span><span class="p">))</span>
+<span class="w">         </span><span class="n">new_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_denth</span><span class="o">*</span><span class="p">((</span><span class="n">dtt</span><span class="o">*</span><span class="n">htg</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth_in</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_fp</span><span class="p">))</span><span class="o">/</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="p">(</span><span class="n">m_lay</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dtt</span><span class="o">*</span><span class="p">(</span><span class="n">fb</span><span class="o">*</span><span class="n">dt_denth</span><span class="p">)))</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">en_j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_in</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ice_enthalpy_liquid</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">aa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="n">ICE_CP_ICE</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">fb</span><span class="o">*</span><span class="n">dtt</span>
+<span class="w">         </span><span class="n">bb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">m_lay</span><span class="o">*</span><span class="p">((</span><span class="n">en_j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">ICE_CP_WATER</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ICE_CP_ICE</span><span class="p">)</span><span class="o">*</span><span class="n">t_fr</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_LAT_FUS</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">htg</span><span class="o">*</span><span class="n">dtt</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_lay</span><span class="o">*</span><span class="n">ICE_LAT_FUS</span><span class="o">*</span><span class="n">t_fr</span>
+<span class="w">         </span><span class="n">disc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">bb</span><span class="o">*</span><span class="n">bb</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">4.0_wp</span><span class="o">*</span><span class="n">aa</span><span class="o">*</span><span class="n">cc</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bb</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">new_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">bb</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">disc</span><span class="p">))</span><span class="o">/</span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">aa</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">new_temp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">cc</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="o">-</span><span class="n">bb</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">disc</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="w">         </span><span class="c">! Cp_ice == Cp_brine -&gt; "keep this solution" (SIS2:837).</span>
+<span class="w">         </span><span class="n">enth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_enth_from_ts</span><span class="p">(</span><span class="n">new_temp</span><span class="p">,</span><span class="w"> </span><span class="n">sice</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! Decide explicit vs. conservation-inverted flux bookkeeping</span>
+<span class="w">      </span><span class="c">! (SIS2:913-941; prototype :117-133).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">hf_err_rat</span><span class="o">*</span><span class="n">dftop_dt</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">m_lay</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">ftop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ftop_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dftop_dt</span><span class="o">*</span><span class="n">new_temp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hf_err_rat</span><span class="o">*</span><span class="n">dfbot_dt</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">m_lay</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">fbot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fbot_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="o">*</span><span class="n">new_temp</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">fbot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ht_body</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ftop</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_in</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">extra_enth</span><span class="p">)</span><span class="o">/</span><span class="n">dtt</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else if</span><span class="w"> </span><span class="p">(</span><span class="n">hf_err_rat</span><span class="o">*</span><span class="n">dfbot_dt</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">m_lay</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">fbot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fbot_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="o">*</span><span class="n">new_temp</span>
+<span class="w">         </span><span class="n">ftop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">fbot</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ht_body</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_in</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">extra_enth</span><span class="p">)</span><span class="o">/</span><span class="n">dtt</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dftop_dt</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">denom</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">dflux_dtot_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">htg</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">m_lay</span><span class="o">*</span><span class="p">(</span><span class="n">enth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">enth_in</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">extra_enth</span><span class="p">)</span><span class="o">/</span><span class="n">dtt</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">dflux_dtot_dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">ftop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ftop_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dftop_dt</span><span class="o">*</span><span class="n">dflux_dtot_dt</span>
+<span class="w">         </span><span class="n">fbot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fbot_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dfbot_dt</span><span class="o">*</span><span class="n">dflux_dtot_dt</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">update_lay_enth</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

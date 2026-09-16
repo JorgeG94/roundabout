@@ -1,0 +1,1570 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>renormalise_zonal_flux_to_uhbt &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>renormalise_zonal_flux_to_uhbt
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for procedures.">126 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">renormalise_zonal_flux_to_uhbt</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-du">du</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-du_hi">du_hi</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-du_k">du_k</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-du_lo">du_lo</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-flux0">flux0</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-h_face~9">h_face</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-has_e~2">has_e</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-has_w~2">has_w</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-i~153">i</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-iter">iter</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-j~148">j</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-k~104">k</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-nx~141">nx</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-ny~141">ny</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-nz~133">nz</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-skip_w">skip_w</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-sum_flux">sum_flux</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-sum_h">sum_h</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-target">target</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-u~6">u</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-u0~2">u0</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-u_lim">u_lim</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-upd_u">upd_u</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-use_vr">use_vr</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-vr_k">vr_k</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-w~2">w</a>
+            <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#variable-wk">wk</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/renormalise_zonal_flux_to_uhbt.html#src">renormalise_zonal_flux_to_uhbt</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, skip_walls, has_west, has_east, visc_rem, u_cor, use_por, por)  
+</h2>
+    
+
+    <p>Apply a uniform per-face velocity correction so
+<code>Σ_k mass_flux_x_layer(i, j, k) = uhbt(i, j)</code> at every face.
+Helper for <code>continuity_zonal_flux</code>.
+<code>skip_walls</code> (default true) bypasses the physical-wall faces
+where mass_flux was zeroed; pass <code>.false.</code> for periodic axes
+so the wall faces (which carry real transport) are renormalised.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~92"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~15"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~151"></span>
+              type(<a href='../type/continuity_t.html'>continuity_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                <p>Read-only here (only the PPM edge buffers are consulted).
+<code>intent(in)</code> is load-bearing, not tidiness: the knob-off call
+sites pass one of THESE buffers as the inert <code>por</code> stand-in,
+and <code>intent(in)</code> turns &ldquo;the callee never defines it&rdquo; from a
+comment into a compiler-enforced invariant, so the argument
+association can never become aliasing.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~40"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhbt~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhbt</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~39"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                <p>Outer-step dt (s), for the CFL bracket on <code>du</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-skip_walls"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>skip_walls</strong></td>
+            <td>
+                <p>When .true. (default), cycle the physical-wall faces.
+When .false. (periodic axis), include them in the renorm.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_west"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_west</strong></td>
+            <td>
+                <p>Physical-edge flags (default .true. = single-rank behaviour,
+bit-identical).  .false. at an MPI seam: the local &ldquo;wall
+position&rdquo; face <code>i = nghost+1</code> (west) / <code>i = nghost+nx_phys+1</code>
+(east) is a REAL interior face carrying transport, so it MUST
+be renormalised like any interior face (O4 seam fix — the
+un-renormalised seam face left per-layer fluxes inconsistent
+with <code>uhbt</code>; the Eulerian-z h-rescale hid it in h while
+tracers rode the raw fluxes, breaking hTr/h at the seam).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_east"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_east</strong></td>
+            <td>
+                <p>Physical-edge flags (default .true. = single-rank behaviour,
+bit-identical).  .false. at an MPI seam: the local &ldquo;wall
+position&rdquo; face <code>i = nghost+1</code> (west) / <code>i = nghost+nx_phys+1</code>
+(east) is a REAL interior face carrying transport, so it MUST
+be renormalised like any interior face (O4 seam fix — the
+un-renormalised seam face left per-layer fluxes inconsistent
+with <code>uhbt</code>; the Eulerian-z h-rescale hid it in h while
+tracers rode the raw fluxes, breaking hTr/h at the seam).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-visc_rem~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>visc_rem</strong>(:,:,:)</td>
+            <td>
+                <p>Per-layer viscous remnant γ_k weighting the barotropic increment
+(MOM6 <code>u_cor = u + du·visc_rem</code>; Jacobian
+<code>duhdu = dy·h_marg·visc_rem</code>).  ABSENT ⇒ γ ≡ 1 ⇒ the historical
+uniform-<code>du</code> form, bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_cor~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_cor</strong>(:,:,:)</td>
+            <td>
+                <p>MOM6&rsquo;s <code>u_cor</code> return: the
+transport-consistent velocity <code>u0 + du*gamma_k</code>, i.e. the velocity
+that yields <code>uhbt</code> as the depth-integrated transport.
+<strong>This is a SEPARATE time-mean field — it must NEVER be the
+prognostic velocity.</strong> MOM6 writes it to <code>u_av</code>
+and evaluates the slow
+tendencies on it; writing it back into the prognostic kills the
+run by step 5.  See docs/MOM6_SPLIT_RK2_SPEC.md §5 trap 1.
+Absent =&gt; flux-only, bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_por"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_por</strong></td>
+            <td>
+                <p>Porous barriers active.  <code>.false.</code> =&gt; <code>por</code> is never indexed and
+the arithmetic below stays byte-identical to the un-narrowed form.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-por~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>por</strong>(grid%nx_total+1,grid%ny_total,ms%nz_ml)</td>
+            <td>
+                <p>Layer-averaged open-area fraction at this stagger (nondim),
+read ONLY when <code>use_por</code>.</p>
+<p><code>use_por = .false.</code> callers must still pass a face-sized array
+that is genuinely device-present, and NOT the knob-off
+<code>(1,1,1)</code> placeholder: nvfortran builds the <code>do concurrent</code>
+data clause from the LOOP BOUNDS, not from the descriptor, so a
+placeholder is reported &ldquo;partially present&rdquo; and aborts under
+<code>mem:separate</code> even though the branch that indexes it is never
+taken.  The call sites therefore hand over one of this
+routine&rsquo;s own read-only PPM edge buffers as an inert stand-in
+(right shape, already mapped, never DEFINED here, so no
+argument aliasing) &ndash; which keeps the two full-size open-area
+fields off the allocation list entirely for a default run.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph Pages: 1 -->
+<svg id="procrenormalise_zonal_flux_to_uhbtCallsGraph" width="278pt" height="32pt"
+ viewBox="0.00 0.00 278.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 274,-28 274,4 -4,4"/>
+<!-- proc~renormalise_zonal_flux_to_uhbt -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph_node1" class="node">
+<title>proc~renormalise_zonal_flux_to_uhbt</title>
+<polygon fill="none" stroke="black" points="180,-24 0,-24 0,0 180,0 180,-24"/>
+<text text-anchor="middle" x="90" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">renormalise_zonal_flux_to_uhbt</text>
+</g>
+<!-- local -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="270,-24 216,-24 216,0 270,0 270,-24"/>
+<text text-anchor="middle" x="243" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~renormalise_zonal_flux_to_uhbt&#45;&gt;local -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CallsGraph_edge1" class="edge">
+<title>proc~renormalise_zonal_flux_to_uhbt&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M180.15,-12C189.1,-12 197.79,-12 205.69,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.92,-15.5 215.92,-12 205.92,-8.5 205.92,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph Pages: 1 -->
+<svg id="procrenormalise_zonal_flux_to_uhbtCalledByGraph" width="641pt" height="61pt"
+ viewBox="0.00 0.00 641.00 61.20" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph" class="graph" transform="scale(0.64 0.64) rotate(0) translate(4 91)">
+<title>proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-91 991,-91 991,4 -4,4"/>
+<!-- proc~renormalise_zonal_flux_to_uhbt -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node1" class="node">
+<title>proc~renormalise_zonal_flux_to_uhbt</title>
+<polygon fill="none" stroke="black" points="987,-66 807,-66 807,-42 987,-42 987,-66"/>
+<text text-anchor="middle" x="897" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">renormalise_zonal_flux_to_uhbt</text>
+</g>
+<!-- proc~continuity_zonal_flux -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node2" class="node">
+<title>proc~continuity_zonal_flux</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node2"><a xlink:href="../proc/continuity_zonal_flux.html" xlink:title="continuity_zonal_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="771,-66 647,-66 647,-42 771,-42 771,-66"/>
+<text text-anchor="middle" x="709" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_zonal_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~renormalise_zonal_flux_to_uhbt -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge1" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~renormalise_zonal_flux_to_uhbt</title>
+<path fill="none" stroke="#ff0000" d="M771.16,-54C779.38,-54 787.98,-54 796.65,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="796.84,-57.5 806.84,-54 796.84,-50.5 796.84,-57.5"/>
+</g>
+<!-- proc~continuity_step_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node3" class="node">
+<title>proc~continuity_step_split</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node3"><a xlink:href="../proc/continuity_step_split.html" xlink:title="continuity_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="592.5,-87 472.5,-87 472.5,-63 592.5,-63 592.5,-87"/>
+<text text-anchor="middle" x="532.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge2" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux</title>
+<path fill="none" stroke="#ff0000" d="M592.58,-67.89C606.8,-66.18 622.13,-64.33 636.84,-62.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="637.39,-66.02 646.9,-61.35 636.55,-59.07 637.39,-66.02"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node4" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node4"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-45 454,-45 454,-21 611,-21 611,-45"/>
+<text text-anchor="middle" x="532.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~continuity_zonal_flux -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge3" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~continuity_zonal_flux</title>
+<path fill="none" stroke="#ff0000" d="M611.05,-42.33C619.6,-43.36 628.26,-44.4 636.72,-45.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="636.57,-48.93 646.92,-46.65 637.41,-41.98 636.57,-48.93"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node5" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node5"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="418,-66 295,-66 295,-42 418,-42 418,-66"/>
+<text text-anchor="middle" x="356.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge4" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#00ffff" d="M418.36,-46.66C426.6,-45.66 435.18,-44.62 443.78,-43.59"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="444.35,-47.04 453.85,-42.37 443.51,-40.09 444.35,-47.04"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node6" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node6"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="389,-24 324,-24 324,0 389,0 389,-24"/>
+<text text-anchor="middle" x="356.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#00ffff" d="M389.01,-15.8C404.59,-17.68 424.25,-20.06 443.95,-22.43"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="443.57,-25.91 453.92,-23.64 444.41,-18.96 443.57,-25.91"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="259,-24 161,-24 161,0 259,0 259,-24"/>
+<text text-anchor="middle" x="210" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ffff" d="M259.12,-12C276.79,-12 296.65,-12 313.72,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="313.95,-15.5 323.95,-12 313.95,-8.5 313.95,-15.5"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node8" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node8"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="256,-66 164,-66 164,-42 256,-42 256,-66"/>
+<text text-anchor="middle" x="210" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge6" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#ff0000" d="M256.32,-54C265.42,-54 275.17,-54 284.89,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="284.97,-57.5 294.97,-54 284.97,-50.5 284.97,-57.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node9" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node9"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="101,-24 24,-24 24,0 101,0 101,-24"/>
+<text text-anchor="middle" x="62.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M101.35,-12C116.41,-12 134.09,-12 150.71,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="150.9,-15.5 160.9,-12 150.9,-8.5 150.9,-15.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node10" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_node10"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="125,-66 0,-66 0,-42 125,-42 125,-66"/>
+<text text-anchor="middle" x="62.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~renormalise_zonal_flux_to_uhbt~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M125.21,-54C134.66,-54 144.37,-54 153.67,-54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="153.97,-57.5 163.97,-54 153.97,-50.5 153.97,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocrenormalise_zonal_flux_to_uhbtCalledByGraph = svgPanZoom('#procrenormalise_zonal_flux_to_uhbtCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-flux0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>flux0</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_face~9"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_face</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_e~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_w~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~153"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-iter"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iter</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~148"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~104"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~141"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~141"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~133"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-skip_w"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>skip_w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sum_flux"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sum_flux</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sum_h"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sum_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-target"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>target</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u0</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_lim"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_lim</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-upd_u"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>upd_u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_vr"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_vr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vr_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vr_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wk"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wk</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">renormalise_zonal_flux_to_uhbt</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">uhbt</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">skip_walls</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">has_west</span><span class="p">,</span><span class="w"> </span><span class="n">has_east</span><span class="p">,</span><span class="w"> </span><span class="n">visc_rem</span><span class="p">,</span><span class="w"> </span><span class="n">u_cor</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">use_por</span><span class="p">,</span><span class="w"> </span><span class="n">por</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Apply a uniform per-face velocity correction so</span>
+<span class="w">      </span><span class="c">!! `Σ_k mass_flux_x_layer(i, j, k) = uhbt(i, j)` at every face.</span>
+<span class="w">      </span><span class="c">!! Helper for `continuity_zonal_flux`.</span>
+<span class="w">      </span><span class="c">!! `skip_walls` (default true) bypasses the physical-wall faces</span>
+<span class="w">      </span><span class="c">!! where mass_flux was zeroed; pass `.false.` for periodic axes</span>
+<span class="w">      </span><span class="c">!! so the wall faces (which carry real transport) are renormalised.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">continuity_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">         </span><span class="c">!! Read-only here (only the PPM edge buffers are consulted).</span>
+<span class="w">         </span><span class="c">!! `intent(in)` is load-bearing, not tidiness: the knob-off call</span>
+<span class="w">         </span><span class="c">!! sites pass one of THESE buffers as the inert `por` stand-in,</span>
+<span class="w">         </span><span class="c">!! and `intent(in)` turns "the callee never defines it" from a</span>
+<span class="w">         </span><span class="c">!! comment into a compiler-enforced invariant, so the argument</span>
+<span class="w">         </span><span class="c">!! association can never become aliasing.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: uhbt is a face-sized array (nx+1, ny); explicit-shape</span>
+<span class="w">      </span><span class="c">! would require a separate nu=nx+1 argument that the caller doesn't pass.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uhbt</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">         </span><span class="c">!! Outer-step dt (s), for the CFL bracket on `du`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">skip_walls</span>
+<span class="w">         </span><span class="c">!! When .true. (default), cycle the physical-wall faces.</span>
+<span class="w">         </span><span class="c">!! When .false. (periodic axis), include them in the renorm.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">has_west</span><span class="p">,</span><span class="w"> </span><span class="n">has_east</span>
+<span class="w">         </span><span class="c">!! Physical-edge flags (default .true. = single-rank behaviour,</span>
+<span class="w">         </span><span class="c">!! bit-identical).  .false. at an MPI seam: the local "wall</span>
+<span class="w">         </span><span class="c">!! position" face `i = nghost+1` (west) / `i = nghost+nx_phys+1`</span>
+<span class="w">         </span><span class="c">!! (east) is a REAL interior face carrying transport, so it MUST</span>
+<span class="w">         </span><span class="c">!! be renormalised like any interior face (O4 seam fix — the</span>
+<span class="w">         </span><span class="c">!! un-renormalised seam face left per-layer fluxes inconsistent</span>
+<span class="w">         </span><span class="c">!! with `uhbt`; the Eulerian-z h-rescale hid it in h while</span>
+<span class="w">         </span><span class="c">!! tracers rode the raw fluxes, breaking hTr/h at the seam).</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: mirrors the `uhbt` waiver above — visc_rem is a</span>
+<span class="w">      </span><span class="c">! (nx+1, ny, nz) face array the caller holds on `bt_work`, and the</span>
+<span class="w">      </span><span class="c">! routine is cadence-bounded (once per stage, not per substep).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">visc_rem</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Per-layer viscous remnant γ_k weighting the barotropic increment</span>
+<span class="w">         </span><span class="c">!! (MOM6 `u_cor = u + du·visc_rem`; Jacobian</span>
+<span class="w">         </span><span class="c">!! `duhdu = dy·h_marg·visc_rem`).  ABSENT ⇒ γ ≡ 1 ⇒ the historical</span>
+<span class="w">         </span><span class="c">!! uniform-`du` form, bit-identical.</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: face array, same waiver as `uhbt`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_cor</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! MOM6's `u_cor` return: the</span>
+<span class="w">         </span><span class="c">!! transport-consistent velocity `u0 + du*gamma_k`, i.e. the velocity</span>
+<span class="w">         </span><span class="c">!! that yields `uhbt` as the depth-integrated transport.</span>
+<span class="w">         </span><span class="c">!! **This is a SEPARATE time-mean field — it must NEVER be the</span>
+<span class="w">         </span><span class="c">!! prognostic velocity.** MOM6 writes it to `u_av`</span>
+<span class="w">         </span><span class="c">!! and evaluates the slow</span>
+<span class="w">         </span><span class="c">!! tendencies on it; writing it back into the prognostic kills the</span>
+<span class="w">         </span><span class="c">!! run by step 5.  See docs/MOM6_SPLIT_RK2_SPEC.md §5 trap 1.</span>
+<span class="w">         </span><span class="c">!! Absent =&gt; flux-only, bit-identical.</span>
+
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_por</span>
+<span class="w">         </span><span class="c">!! Porous barriers active.  `.false.` =&gt; `por` is never indexed and</span>
+<span class="w">         </span><span class="c">!! the arithmetic below stays byte-identical to the un-narrowed form.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">por</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Layer-averaged open-area fraction at this stagger (nondim),</span>
+<span class="w">         </span><span class="c">!! read ONLY when `use_por`.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! `use_por = .false.` callers must still pass a face-sized array</span>
+<span class="w">         </span><span class="c">!! that is genuinely device-present, and NOT the knob-off</span>
+<span class="w">         </span><span class="c">!! `(1,1,1)` placeholder: nvfortran builds the `do concurrent`</span>
+<span class="w">         </span><span class="c">!! data clause from the LOOP BOUNDS, not from the descriptor, so a</span>
+<span class="w">         </span><span class="c">!! placeholder is reported "partially present" and aborts under</span>
+<span class="w">         </span><span class="c">!! `mem:separate` even though the branch that indexes it is never</span>
+<span class="w">         </span><span class="c">!! taken.  The call sites therefore hand over one of this</span>
+<span class="w">         </span><span class="c">!! routine's own read-only PPM edge buffers as an inert stand-in</span>
+<span class="w">         </span><span class="c">!! (right shape, already mapped, never DEFINED here, so no</span>
+<span class="w">         </span><span class="c">!! argument aliasing) -- which keeps the two full-size open-area</span>
+<span class="w">         </span><span class="c">!! fields off the allocation list entirely for a default run.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">h_face</span><span class="p">,</span><span class="w"> </span><span class="n">sum_flux</span><span class="p">,</span><span class="w"> </span><span class="n">sum_h</span><span class="p">,</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">wk</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">flux0</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_lim</span><span class="p">,</span><span class="w"> </span><span class="n">du_hi</span><span class="p">,</span><span class="w"> </span><span class="n">du_lo</span><span class="p">,</span><span class="w"> </span><span class="n">vr_k</span><span class="p">,</span><span class="w"> </span><span class="n">du_k</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">skip_w</span><span class="p">,</span><span class="w"> </span><span class="n">has_w</span><span class="p">,</span><span class="w"> </span><span class="n">has_e</span><span class="p">,</span><span class="w"> </span><span class="n">use_vr</span><span class="p">,</span><span class="w"> </span><span class="n">upd_u</span>
+
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="n">skip_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">skip_walls</span><span class="p">))</span><span class="w"> </span><span class="n">skip_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">skip_walls</span>
+<span class="w">      </span><span class="n">has_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">has_west</span><span class="p">))</span><span class="w"> </span><span class="n">has_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">has_west</span>
+<span class="w">      </span><span class="n">has_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">has_east</span><span class="p">))</span><span class="w"> </span><span class="n">has_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">has_east</span>
+<span class="w">      </span><span class="n">upd_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">u_cor</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! gamma-weighting and the u_cor write-back are ONE behaviour: together they</span>
+<span class="w">      </span><span class="c">! make this renormalisation the barotropic correction (MOM6 does both in a</span>
+<span class="w">      </span><span class="c">! single `continuity(..., uhbt, visc_rem, u_cor)` call).  In the historical</span>
+<span class="w">      </span><span class="c">! mode `apply_bt_correction` owns the gamma-weighted Delta-u and this routine</span>
+<span class="w">      </span><span class="c">! must stay the unweighted flux-only renormaliser — so both are off.</span>
+<span class="w">      </span><span class="n">use_vr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">visc_rem</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">upd_u</span>
+
+<span class="w">      </span><span class="c">! Skip the array-edge faces (i=1, i=nx+1) and, unless skip_walls</span>
+<span class="w">      </span><span class="c">! is false (periodic) or the edge is an MPI seam (has_* false),</span>
+<span class="w">      </span><span class="c">! the two physical walls.</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span><span class="p">,</span><span class="w"> </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">h_face</span><span class="p">,</span><span class="w"> </span><span class="n">sum_flux</span><span class="p">,</span><span class="w"> </span><span class="n">sum_h</span><span class="p">,</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="k">target</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">wk</span><span class="p">,</span><span class="w"> </span><span class="n">flux0</span><span class="p">,</span><span class="w"> </span><span class="n">u0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">u_lim</span><span class="p">,</span><span class="w"> </span><span class="n">du_hi</span><span class="p">,</span><span class="w"> </span><span class="n">du_lo</span><span class="p">,</span><span class="w"> </span><span class="n">vr_k</span><span class="p">,</span><span class="w"> </span><span class="n">du_k</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Bypass physical walls when requested (mass_flux already 0 there</span>
+<span class="w">         </span><span class="c">! for wall BCs; for periodic, real transport is present).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">skip_w</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">             </span><span class="p">((</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">has_w</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">              </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">has_e</span><span class="p">)))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">         </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uhbt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">flux0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_flux_x_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="w">         </span><span class="c">! Legacy single-step form (wet/dry composition — see the</span>
+<span class="w">         </span><span class="c">! `renorm_legacy_single_step` docstring): one linear correction</span>
+<span class="w">         </span><span class="c">! with donors picked at the uncorrected velocity, bit-identical</span>
+<span class="w">         </span><span class="c">! to the pre-Newton renormalisation.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">renorm_legacy_single_step</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_por</span><span class="p">)</span><span class="w"> </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="o">*</span><span class="n">por</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_left_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_right_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">flux0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">sum_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">du</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="k">target</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_flux</span><span class="p">)</span><span class="o">/</span><span class="n">sum_h</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">                  </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_por</span><span class="p">)</span><span class="w"> </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="o">*</span><span class="n">por</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_left_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">else</span>
+<span class="k">                     </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_right_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">                  </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_flux_x_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">flux0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">            end if</span>
+<span class="k">            cycle</span>
+<span class="k">         end if</span>
+<span class="w">         </span><span class="c">! CFL bracket: the corrected velocity of EVERY layer must stay within</span>
+<span class="w">         </span><span class="c">! RENORM_CFL.  A residual `uhbt` mismatch is preferable to handing a</span>
+<span class="w">         </span><span class="c">! near-massless layer a super-CFL velocity (MOM6 does the same).</span>
+<span class="w">         </span><span class="n">u_lim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RENORM_CFL</span><span class="o">/</span><span class="p">(</span><span class="n">dt</span><span class="o">*</span><span class="n">metrics</span><span class="p">%</span><span class="n">idxCu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="n">du_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">du_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_vr</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! Layer increment is `du·γ_k`, so the CFL bound on `du` is</span>
+<span class="w">               </span><span class="c">! divided by γ_k.  A layer the implicit friction has fully</span>
+<span class="w">               </span><span class="c">! damped (γ→0) receives no increment and imposes no bound.</span>
+<span class="w">               </span><span class="n">vr_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">visc_rem</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vr_k</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">RENORM_VR_MIN</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">du_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">du_hi</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">u_lim</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="o">/</span><span class="n">vr_k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">du_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">du_lo</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="n">u_lim</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="o">/</span><span class="n">vr_k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            else</span>
+<span class="k">               </span><span class="n">du_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">du_hi</span><span class="p">,</span><span class="w"> </span><span class="n">u_lim</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">du_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">du_lo</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="n">u_lim</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">         </span><span class="n">du_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">du_hi</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">du_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">du_lo</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Newton on `du` with the DONOR RE-PICKED each iteration.  With</span>
+<span class="w">         </span><span class="c">! `visc_rem` present the per-layer increment is `du·γ_k` and the</span>
+<span class="w">         </span><span class="c">! Jacobian carries the same weight — MOM6 `duhdu = dy·h_marg·visc_rem`.</span>
+<span class="w">         </span><span class="c">! `du_k` is assigned (not multiplied</span>
+<span class="w">         </span><span class="c">! by 1) on the γ-absent path so the expression tree — and therefore</span>
+<span class="w">         </span><span class="c">! FP contraction — is unchanged: bit-identical by construction.</span>
+<span class="w">         </span><span class="n">du</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">iter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">RENORM_MAXIT</span>
+<span class="w">            </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_por</span><span class="p">)</span><span class="w"> </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="o">*</span><span class="n">por</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">du_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">du</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_vr</span><span class="p">)</span><span class="w"> </span><span class="n">du_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">du</span><span class="o">*</span><span class="n">visc_rem</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du_k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_left_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_right_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_flux</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">flux0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du_k</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_vr</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">visc_rem</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">sum_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">sum_h</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="k">target</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_flux</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">RENORM_TOL</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="k">target</span><span class="p">)))</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">            </span><span class="n">du</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">du</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="k">target</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sum_flux</span><span class="p">)</span><span class="o">/</span><span class="n">sum_h</span><span class="p">,</span><span class="w"> </span><span class="n">du_lo</span><span class="p">),</span><span class="w"> </span><span class="n">du_hi</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">sum_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_por</span><span class="p">)</span><span class="w"> </span><span class="n">wk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="o">*</span><span class="n">por</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">du_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">du</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_vr</span><span class="p">)</span><span class="w"> </span><span class="n">du_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">du</span><span class="o">*</span><span class="n">visc_rem</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du_k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_left_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_face_right_x</span><span class="p">%</span><span class="k">data</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_flux_x_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">flux0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du_k</span><span class="o">*</span><span class="n">h_face</span><span class="o">*</span><span class="n">wk</span>
+<span class="w">               </span><span class="c">! MOM6 `u_cor(I,j,k) = u(I,j,k) + du(I)*visc_rem(I,k)`.</span>
+<span class="w">               </span><span class="c">! Writing this makes the renormalisation the SOLE barotropic</span>
+<span class="w">               </span><span class="c">! correction; without it the velocity and the flux carry</span>
+<span class="w">               </span><span class="c">! differently-weighted corrections that can disagree.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">upd_u</span><span class="p">)</span><span class="w"> </span><span class="n">u_cor</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">du_k</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">renormalise_zonal_flux_to_uhbt</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-16 15:31 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
