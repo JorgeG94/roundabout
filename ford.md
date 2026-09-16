@@ -7,8 +7,7 @@ project_github: https://github.com/JorgeG94/roundabout
 project_download: https://github.com/JorgeG94/roundabout/archive/refs/heads/main.zip
 author: Jorge Luis Galvez Vallejo
 github: https://github.com/JorgeG94
-page_dir: docs
-media_dir: docs/codebase
+page_dir: docs/pages
 graph: true
 graph_maxnodes: 250
 graph_maxdepth: 5
@@ -38,7 +37,7 @@ GPU parallelism is expressed with `do concurrent` + OpenACC, portable across NVH
 (HLL/HLLC) path and the unstructured triangular backend were carved out into
 their own repository.
 
-The full architectural overview, repository map, and run lifecycle live in [`docs/codebase/INDEX.md`](page/codebase/INDEX.html); the god-state slot map and design rules are in [`src/core/ocean/README.md`](https://github.com/JorgeG94/roundabout/blob/main/src/core/ocean/README.md).
+The full architectural overview, repository map, and run lifecycle live in [`docs/codebase/INDEX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/INDEX.md); the god-state slot map and design rules are in [`src/core/ocean/README.md`](https://github.com/JorgeG94/roundabout/blob/main/src/core/ocean/README.md).
 
 ## Building
 
@@ -53,7 +52,7 @@ Key CMake options:
 
 | Option                       | Default | Description                                    |
 |------------------------------|---------|------------------------------------------------|
-| `RDB_ENABLE_GPU`          | `ON`    | OpenACC GPU offload via NVHPC                  |
+| `RDB_ENABLE_GPU`          | `OFF`   | OpenACC GPU offload via NVHPC (opt-in)         |
 | `RDB_ENABLE_MPI`          | `OFF`   | MPI multi-rank support                         |
 | `RDB_CUDA_AWARE_MPI`      | `OFF`   | GPU-direct halo exchange (requires CUDA-aware MPI) |
 | `RDB_GPU_ARCH`            | `cc70`  | Target GPU compute capability (cc70/80/90)     |
