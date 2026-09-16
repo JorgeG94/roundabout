@@ -275,7 +275,9 @@ production, HK as a guard option),
 non-hydrostatic on the C-grid, per-layer Orlanski
 phase-speed radiation + file-backed boundary-data backends (Flather +
 zero-gradient anomaly and the constant backend ship today), MPI
-multi-rank halo on the C-grid layout.
+per-feature multi-rank support for the
+single-rank closures (porous barriers, wet/dry, sea ice, tripolar fold,
+windowed tracer-advect drain) — the C-grid MPI halo itself ships.
 
 ### Vertical Coordinates
 

@@ -39,9 +39,12 @@ regional), GPU-native being the differentiator.
 eddy-resolving at ~34 s / simulated-day on one V100. Geometric + isopycnal/hybrid
 coordinates, mesoscale-eddy closures, PERIODIC (reentrant) boundaries, and
 windowed tracer advection all shipped, alongside the sea-ice train
-(`&ocean_ice_nml`). **Single-GPU**, closed / sponged / periodic
-basins; OBC dispatch and C-grid MPI are the remaining regional-enabling gaps
-(tidal forcing ships; its validation campaign does not). The user guide is a
+(`&ocean_ice_nml`). The C-grid MPI multi-rank halo ships and is gated by a
+decomposition-invariance suite (1 rank vs N, same answer) plus the
+`tests/mpi/` set; OBC dispatch is the remaining regional-enabling gap
+(tidal forcing ships; its validation campaign does not). Several individual
+features remain single-rank — porous barriers, wet/dry, sea ice, the
+tripolar north fold and the windowed tracer-advection drain. The user guide is a
 Sphinx site under `rdb_docs/` (theory, discretisation, coordinates, PGF,
 closures, running simulations, the Python driver, validation); per-procedure
 reference comes from the FORD `!!` docstrings and is built separately.
@@ -50,8 +53,8 @@ reference comes from the FORD `!!` docstrings and is built separately.
 
 Two directions the dyn-core can grow:
 
-- **Lane 1 — finish the regional tool:** OBCs, C-grid MPI, tidal validation (§1). PBCs are
-  done. Lets you run a *real* regional domain at scale; the GPU-native angle is
+- **Lane 1 — finish the regional tool:** OBCs and tidal validation (§1). PBCs and
+  the C-grid MPI halo are done. Lets you run a *real* regional domain at scale; the GPU-native angle is
   the differentiator. **This is the remaining near-term priority.**
 - **Lane 2 — isopycnal / water-mass fidelity:** *largely delivered* — the RHO +
   HYCOM coordinates and the neutral-diffusion / GM / VarMix / MEKE stack now ship
@@ -77,9 +80,14 @@ Two directions the dyn-core can grow:
   (`rdb_ocean_tide_astro`); configs in `validation_examples/ocean/tides/`.
   Remaining: the *validation* campaign. *Validate:* Australia-wide barotropic
   vs TPXO M2/S2/K1/O1; SAL phase shift ~10–15%.
-- [ ] `[M]` **C-grid MPI multi-rank halo** — single-GPU only today; staggered halos +
-  decomp-gated walls. Not expected to be hard. *Validate:* single- vs multi-rank
-  bit-comparison; strong scaling.
+- [x] `[M]` **C-grid MPI multi-rank halo** — **shipped:** staggered face/centre/corner
+  halos + decomp-gated walls, exercised by `tests/mpi/` (`test_halo_ocean_mpi`,
+  `test_ocean_dyn_mpi`, `test_ocean_bt_cfl_mpi`) and by the
+  decomposition-invariance gate (`tests/regression/decomp_invariance.py`), which
+  exists because two real bugs were invisible at one rank *by construction*.
+  Remaining: strong-scaling characterisation, and the features still flagged
+  single-rank (porous barriers, wet/dry, sea ice, tripolar fold, windowed
+  tracer-advect drain).
 - [ ] `[E]` **HK Coriolis** — `sadourny_hk` ships opt-in; PV / Sadourny is the validated
   default. Validate HK, then promote or leave opt-in. *Validate:* Hollingsworth instability
   suppressed on a pathology test.
@@ -121,7 +129,7 @@ Two directions the dyn-core can grow:
 ## 4. Scale
 
 - [ ] `[V]` **1 km global** — the original 1 km-submesoscale target (Phase 7+ in the phase
-  map): multi-GPU C-grid (depends on §1 MPI halo), throughput + load balance at basin / global scale. *Validate:*
+  map): multi-GPU throughput + load balance at basin / global scale on the shipped MPI halo. *Validate:*
   submesoscale-resolving global run at sustained throughput; conservation over a multi-month integration.
 
 ## 5. Sea ice
@@ -173,7 +181,7 @@ ice-shell / shelf-cavity interface kernel, and a polar validation campaign.
    than on goldens, runs every unpinned case under both outer schemes, and is the
    reason several silent defects surfaced at all. New physics lands with a case
    that fails without it.
-1. **Regional-enabling first** — OBC → C-grid MPI (PBC done; tidal forcing done, tidal validation open). Unlocks real regional domains; the distinctive GPU-native value.
+1. **Regional-enabling first** — OBC dispatch (PBC and the C-grid MPI halo done; tidal forcing done, tidal validation open). Unlocks real regional domains; the distinctive GPU-native value.
 2. ~~Fork decision~~ — *resolved*: the RHO/HYCOM coordinates + neutral/GM/VarMix/MEKE stack shipped. Remaining coordinate/mixing work is partial cells (§2) only.
 3. **NH-on-ocean + 1 km-global** — larger, later.
 
@@ -212,9 +220,9 @@ The `Phase N` anchors the ocean source cites (~152 comments). Tier-1 dyn-core is
 `ratio>1` path — see `docs/howto/tracer_advect_cadence.md`).
 - **Phase 6c** — Land/ocean mask + layer→fixed-z diag vremap + time-mean ops; budgets path. **shipped**
 - **Phase 6d** — Serial NetCDF emit (per-rank, CF-1.8). **shipped** (the MPI I/O-server rank was coastal-path machinery and left with the carve-out; the ocean path emits per-rank directly)
-- **Phase 7** — Multi-GPU C-grid MPI halo (face/centre/corner); single-GPU perf characterised. **TODO**
+- **Phase 7** — Multi-GPU C-grid MPI halo (face/centre/corner); single-GPU perf characterised. **shipped** (halo + decomp-invariance gate; multi-GPU strong scaling not yet characterised)
 - **Phase 8** — Deferred v2: TEOS-10, stochastic, rivers (**MEKE + internal-tide /
   tidal interior mixing + sea ice now shipped**; A↔C nesting is moot — there is
   no A-grid path in this repository any more). **partial**
 
-Dyn-core is Tier-1 operational on a single GPU in closed / sponged basins; the forward backlog (OBCs, PBCs, tides, C-grid MPI, isopycnal fork, NH-on-ocean, 1 km-global) lives in the sections above.
+Dyn-core is Tier-1 operational in closed / sponged / periodic basins, single- and multi-rank; the forward backlog (OBC dispatch, tidal validation, isopycnal fork, NH-on-ocean, 1 km-global) lives in the sections above.

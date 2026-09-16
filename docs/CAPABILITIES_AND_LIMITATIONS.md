@@ -811,7 +811,6 @@ restarted ice, on a mixed real edge set) and multi-rank.
   variance PLACEHOLDER for the real subgrid `⟨h²⟩`, not a substitute for
   it); `form="file"` (a real subgrid-roughness map) is registered but
   fails loud at configure — the NetCDF reader is PR-14.
-- **MPI multi-rank halo** for the C-grid face/centre/corner layout.
 - **MPI I/O server hand-off** for diag manager (serial NetCDF is
   the current emit path).
 - **Per-layer Orlanski phase-speed radiation** at open edges (v1

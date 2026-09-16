@@ -111,9 +111,10 @@ not before) and a time-op test.
   in / multiplies out by thickness so the column integral is preserved. `z_out`
   carries target INTERFACE depths (implicit 0 surface) clipped to the column total;
   density targets reuse the RHO `invert_density_targets` bracket+Newton solve.
-- **MPI I/O-server hand-off is pending.** The current writer is serial, one
-  `output_rank_NNNNNN.nc` per process; the manager has the design hooks but the
-  hand-off lands after C-grid MPI ships.
+- **MPI I/O-server hand-off is pending.** The current writer emits one
+  `output_rank_NNNNNN.nc` per process with no gather -- merge offline with
+  `tools/merge_output.py`. The manager has the design hooks; a gathering
+  I/O-server path is a separate, unscheduled piece of work.
 
 ## Source pointers
 
