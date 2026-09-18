@@ -39,6 +39,27 @@ endif()
 # NetCDF-Fortran: CMake config first (modern installs), then pkg-config
 # (autotools installs).
 if(RDB_ENABLE_NETCDF)
+  # C has to be enabled IN THIS SCOPE, before the search. A netcdf-fortran CMake
+  # config built against a netcdf-c that itself ships a config drags the whole C
+  # chain in behind it:
+  #
+  # netCDF-FortranConfig -> find_dependency(netCDF) -> netCDFConfig     ->
+  # find_dependency(HDF5) -> hdf5-config    -> find_dependency(Threads) ->
+  # FindThreads: "only works if either C or CXX language is enabled"
+  #
+  # Note this is a SCOPE problem, not a missing-compiler one. `pic` and
+  # `pic-mpi` both declare `LANGUAGES Fortran C`, so a C compiler is already
+  # found and configured by the time we get here -- but they are added as
+  # subprojects, and `CMAKE_C_COMPILER_LOADED` propagates DOWN into a
+  # subdirectory, never back UP into ours. FindThreads tests that variable in
+  # the calling scope, so it fails even though the compiler is right there.
+  #
+  # conda-forge installs are what expose it, because they ship a config for BOTH
+  # netcdf-c and HDF5. Where either lacks one, netcdf-fortran bakes an absolute
+  # path into its own config and never re-enters the chain -- which is why an
+  # apt-style netcdf-c configures fine without this line.
+  enable_language(C)
+
   find_package(netCDF-Fortran QUIET HINTS "$ENV{NETCDFF_DIR}"
                "$ENV{NETCDF_FORTRAN_DIR}")
 
