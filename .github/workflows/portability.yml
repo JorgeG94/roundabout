@@ -1,0 +1,254 @@
+# Tier 0 — compiler portability, serial, NetCDF OFF.
+#
+# WHY NetCDF OFF: netcdf-fortran writes compiler-specific `.mod` files, so a
+# prebuilt one (conda-forge's is built with gfortran 14) cannot be consumed by
+# gfortran 15+, ifx, nvfortran or flang. Building it per compiler is a separate,
+# slower job. This tier deliberately drops that dependency and still builds the
+# whole solver and 174 of the 187 tests -- `RDB_ENABLE_NETCDF` exists for
+# exactly this.
+#
+# gfortran 10-14 are NOT in the matrix: the ocean kernels use F2018
+# `do concurrent` locality specifiers, which GCC implements only from 15, and
+# `cmake/toolchain_guards.cmake` fails loud below that.
+#
+# LFortran is NOT here: `fortran-lang/setup-fortran` does not provide it.
+# It needs the conda-based `gha3mi/setup-fortran-conda` action in a job of its
+# own, the way pic does it -- and `tests/CMakeLists.txt` already carries
+# `RDB_LFORTRAN_UNBUILDABLE` / `RDB_LFORTRAN_RUNTIME_FAILURES`, so that job
+# wants its own expectations rather than this matrix's.
+#
+# EXPECTED COUNTS: 174/174 on gfortran 15 (verified locally). Other compilers
+# are unverified -- `fail-fast: false` so one compiler's failure does not hide
+# another's result, and `continue-on-error` marks the exploratory ones so a red
+# does not block a PR until its baseline is known. Promote a compiler out of
+# `exploratory` once it has a known-good count.
+
+name: Portability (serial, no NetCDF)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: portability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.toolchain.compiler }} ${{ matrix.toolchain.version }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.exploratory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Known-good baseline: 174/174.
+          - toolchain: {compiler: gcc, version: 15}
+            exploratory: false
+          # Unverified. Each needs one green run before losing the flag.
+          - toolchain: {compiler: intel, version: '2025.0'}
+            exploratory: true
+          - toolchain: {compiler: nvidia-hpc, version: 'latest'}
+            exploratory: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Fortran compiler
+        uses: fortran-lang/setup-fortran@v1.9.0
+        id: setup-fortran
+        with:
+          compiler: ${{ matrix.toolchain.compiler }}
+          version: ${{ matrix.toolchain.version }}
+
+      - name: Report toolchain
+        run: |
+          echo "FC=${{ env.FC }}"
+          ${{ env.FC }} --version || true
+
+      # For the canary leg this is the assertion: the build MUST fail, and
+      # must fail with the known accessor error rather than something else.
+      - name: Configure and build (expecting failure)
+        if: matrix.expect_configure_failure
+        run: |
+          set +e
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_Fortran_COMPILER="$RDB_FC" \
+                -DRDB_ENABLE_NETCDF=OFF -DRDB_ENABLE_MPI=OFF \
+                -DRDB_ENABLE_GPU=OFF -DRDB_ENABLE_TESTING=OFF > cfg.log 2>&1
+          cmake --build build --parallel > build.log 2>&1
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "::error::LFortran built the UNMODIFIED source. The"
+            echo "::error::imported-parameter bug appears FIXED -- re-measure and"
+            echo "::error::delete the LFORTRAN_PASSING workarounds (22 files)."
+            exit 1
+          fi
+          if grep -q "__lcompilers_get_" build.log; then
+            echo "Expected failure reproduced: the accessor bug is still present."
+            grep -m2 "__lcompilers_get_" build.log
+            exit 0
+          fi
+          echo "::error::Build failed, but NOT with the known accessor error."
+          echo "::error::That is a new failure and needs looking at."
+          tail -40 build.log
+          exit 1
+
+      - name: Configure
+        if: '!matrix.expect_configure_failure'
+        run: >-
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_Fortran_COMPILER=${{ env.FC }}
+          -DRDB_ENABLE_NETCDF=OFF
+          -DRDB_ENABLE_MPI=OFF
+          -DRDB_ENABLE_GPU=OFF
+          -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      # No `-j`: several tests share process-global state, and the suite is
+      # fast enough serially that parallelism buys nothing but flakiness.
+      - name: Test
+        working-directory: build
+        run: ctest -R rdb --output-on-failure
+
+  # LFortran and Flang get their own job: `fortran-lang/setup-fortran` provides
+  # neither, so this uses the conda-based action pic uses for LFortran.
+  #
+  # Neither has a known-good count, and for different reasons:
+  #   * LFortran -- `cmake/toolchain_guards.cmake` forces the static core, and
+  #     `tests/CMakeLists.txt` already excludes `test_config` / `test_profiler`
+  #     as unbuildable and marks `test_nml_schema` / `test_config_schema` as
+  #     runtime failures. A green run is "whatever LFortran can build today".
+  #   * Flang -- verified locally at 174/174 on LLVM Flang 22.1.5, but the
+  #     conda-forge build is 23.x, so the CI version is not the one measured.
+  #     Note `-fdo-concurrent-to-openmp=none` keeps `do concurrent` SERIAL
+  #     here, so this leg tests the code as written, not the threaded
+  #     lowering.
+  #
+  # pic drives LFortran through fpm; this drives CMake on purpose, because the
+  # compiler-specific handling this project wrote lives on the CMake side.
+  conda-compilers:
+    name: ${{ matrix.compiler }}${{ matrix.name_suffix }} (exploratory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both come from conda-forge because `fortran-lang/setup-fortran`
+        # provides neither. `fc` is the binary name to hand CMake: LLVM renamed
+        # `flang-new` to `flang` at LLVM 20, and conda-forge ships 23.x, so
+        # `flang` is the expected name -- the Report step prints whichever
+        # exists so a rename shows up plainly instead of as a config failure.
+        include:
+          # LFortran is BUILD-ONLY. Measured locally on 0.66.0:
+          #
+          #   unmodified source          -> semantic error, an imported
+          #     parameter used as an explicit-shape array bound inside a PURE
+          #     procedure is lowered to an impure `__lcompilers_get_*` getter.
+          #     (Still present in 0.66; the workarounds are NOT obsolete.)
+          #   + RDB_LFORTRAN_PASSING=ON  -> the whole solver compiles.
+          #   + tests                    -> Internal Compiler Error,
+          #     "visit_StructConstructor() not implemented", on the generated
+          #     test drivers (test-drive's `new_unittest(...)` constructors).
+          #
+          # So `RDB_ENABLE_TESTING=OFF`: the leg answers "does the solver still
+          # compile under LFortran", which it can, instead of sitting red on an
+          # upstream ICE nobody here can act on. Re-check on each lfortran
+          # upgrade -- if the ICE is fixed, turn testing back on.
+          - compiler: lfortran
+            version: "0.66.0"
+            lfortran_passing: true
+            testing: "OFF"
+            expect_configure_failure: false
+          # `flang-new`, NOT `flang`: that is the key this action takes, and it
+          # is what pic uses. Asking for `flang` pulls conda-forge's 23.1.1,
+          # which ships without its intrinsic modules on the driver search path
+          # -- `use, intrinsic :: iso_fortran_env` then fails with "Source file
+          # 'iso_fortran_env.mod' was not found" while building the first
+          # dependency. 22.1.8 is the version pic pins, and 22.1.5 is what I
+          # verified locally at 174/174.
+          - compiler: flang-new
+            version: "22.1.8"
+            testing: "ON"
+            expect_configure_failure: false
+          # The canary: UNMODIFIED source, workarounds OFF. This build is
+          # EXPECTED TO FAIL today -- LFortran 0.66 still lowers an imported
+          # parameter used as a dummy bound to an impure `__lcompilers_get_*`
+          # accessor when a PURE procedure calls it
+          # (written up on the project wiki).
+          #
+          # The step below INVERTS the result, so this leg is green while the
+          # bug exists and goes RED the day upstream fixes it -- which is the
+          # signal to delete the 22 `LFORTRAN_PASSING` workarounds.
+          - compiler: lfortran
+            version: "0.66.0"
+            name_suffix: " (unmodified source, expected to fail)"
+            lfortran_passing: false
+            testing: "OFF"
+            expect_configure_failure: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # `extra-packages` is deliberately EMPTY, matching pic. Adding anything
+      # here puts it in the same conda solve as the compiler, and the solver is
+      # free to downgrade LFortran to satisfy it -- asking for `cmake` here
+      # pulled LFortran 0.64 instead of the current 0.66.
+      - name: Set up compiler
+        uses: gha3mi/setup-fortran-conda@latest
+        with:
+          compiler: ${{ matrix.compiler }}
+          compiler-version: ${{ matrix.version }}
+
+      # CMake comes from pip instead, so its version cannot perturb the
+      # compiler solve. CMake only learned the LFortran compiler ID recently,
+      # so this should not be left to whatever the runner image ships.
+      - name: Install a recent CMake
+        run: pip install --upgrade "cmake>=4.0"
+
+      # Resolve the driver NAME rather than assuming it. LLVM renamed
+      # `flang-new` to `flang` at LLVM 20, so the action's compiler KEY and the
+      # installed BINARY do not necessarily match: the key stays `flang-new`
+      # while 22.x installs `flang`. Some builds ship both. Pick whichever is
+      # on PATH and fail loudly if neither is.
+      - name: Resolve the Fortran driver
+        run: |
+          for c in ${{ matrix.compiler }} flang flang-new lfortran; do
+            if command -v "$c" >/dev/null 2>&1; then
+              echo "RDB_FC=$c" >> "$GITHUB_ENV"
+              echo "driver: $c -> $(command -v "$c")"
+              "$c" --version | head -2
+              break
+            fi
+          done
+          if ! grep -q RDB_FC "$GITHUB_ENV"; then
+            echo "::error::no Fortran driver found for '${{ matrix.compiler }}'"
+            exit 1
+          fi
+          cmake --version | head -1
+
+      - name: Configure
+        run: >-
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_Fortran_COMPILER=${{ env.RDB_FC }}
+          -DRDB_ENABLE_NETCDF=OFF
+          -DRDB_ENABLE_MPI=OFF
+          -DRDB_ENABLE_GPU=OFF
+          -DRDB_ENABLE_TESTING=${{ matrix.testing }}
+          ${{ matrix.lfortran_passing && '-DRDB_LFORTRAN_PASSING=ON' || '' }}
+
+      - name: Build
+        if: '!matrix.expect_configure_failure'
+        run: cmake --build build --parallel
+
+      - name: Test
+        if: matrix.testing == 'ON'
+        working-directory: build
+        run: ctest -R rdb --output-on-failure
