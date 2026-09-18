@@ -46,10 +46,11 @@
 # smoke-tests the NetCDF half, so a bad toolchain fails in setup with its own
 # message rather than inside the solver build.
 #
-# `nvfortran + hpcx` and `ifx + intelmpi` are also supported by the action --
-# NVHPC's bundled HPC-X has nvfortran-built modules, so for the GPU toolchain
-# the MPI comes with the compiler. Worth adding as exploratory legs once this
-# one has a baseline.
+# `nvfortran + hpcx` and `ifx + intelmpi` ride along as EXPLORATORY legs
+# (`continue-on-error`), the same convention portability.yml uses: they do not
+# block a PR until each has a known-good count, and `fail-fast: false` keeps one
+# compiler's failure from hiding another's result. Promote a leg out of
+# `exploratory` once it has been green once.
 
 name: MPI (multi-rank)
 
@@ -68,13 +69,34 @@ jobs:
     defaults:
       run:
         shell: bash -el {0}
+    continue-on-error: ${{ matrix.exploratory }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Known-good baseline: 192/192 with the exclusions below.
           - compiler: gfortran
             compiler-version: "15"
             mpi: openmpi
+            exploratory: false
+          # NVHPC bundles HPC-X, whose Fortran modules are nvfortran-built, so
+          # here the MPI genuinely comes with the compiler and there is no ABI
+          # question to answer. Unverified in CI -- the NVHPC conda package is
+          # large and this leg has never run -- so it is exploratory until it
+          # has a green count of its own.
+          - compiler: nvfortran
+            compiler-version: ""
+            mpi: hpcx
+            exploratory: true
+          # Intel's own MPI, the only one the action pairs with ifx. Also
+          # unverified. Note ifx gets `-qopenmp` unconditionally from
+          # compiler_flags.cmake -- without it ifx silently miscompiles
+          # `do concurrent` locality specifiers -- so this leg is testing that
+          # combination under MPI for the first time.
+          - compiler: ifx
+            compiler-version: ""
+            mpi: intelmpi
+            exploratory: true
 
     steps:
       - name: Checkout
