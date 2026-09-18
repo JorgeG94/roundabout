@@ -452,10 +452,29 @@ Other routes, if the script does not suit:
 .. warning::
 
    An **MPI** build has a *second* compiler-coupled dependency: pic-mpi
-   uses ``mpi_f08``, so the MPI library's Fortran bindings must also match
-   your compiler. The script does not solve that one — use your site's
-   per-compiler MPI module, which is how HPC sites already ship it. A
-   serial build has only netcdf-fortran to worry about.
+   uses ``mpi_f08``, so the MPI library's Fortran bindings must match your
+   compiler too. A serial build has only netcdf-fortran to worry about.
+
+   Distro packages will not do here. Ubuntu's ``libopenmpi-dev`` is built
+   against the distro gfortran (13 on 24.04), below this project's floor of
+   15, and the mismatch is fatal::
+
+      Fatal Error: Cannot read module file 'mpi_f08.mod' opened at (1),
+      because it was created by a different version of GNU Fortran
+
+   Three things that do work:
+
+   * **Your site's MPI module**, built per compiler — how every HPC site
+     already ships it, and the right answer on a cluster.
+   * **conda-forge**, for gfortran: its ``openmpi`` is a gfortran-15 build,
+     so ``gfortran`` and ``openmpi`` resolved in one solve match. Nothing in
+     conda's metadata encodes ``.mod`` compatibility, so check the pair
+     rather than assume it — the ``gha3mi/setup-fortran-conda`` action does
+     exactly that, compiling each binding and running a two-rank job before
+     it reports success, which is what the MPI CI leg relies on.
+   * **NVHPC**, which bundles an HPC-X OpenMPI whose Fortran modules are
+     nvfortran-built, so for the GPU toolchain the MPI comes with the
+     compiler and there is nothing to match.
 
 There is also ``environments/roundabout_env_3.13.yml``, a conda environment for
 the Python post-processing and test tooling. It deliberately **excludes**

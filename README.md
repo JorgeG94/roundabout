@@ -147,8 +147,11 @@ which is most of what makes a NetCDF stack slow to build. `environments/spack.ya
 builds just the C layer for machines with no usable system one.
 
 Note that an **MPI** build adds a second compiler-coupled dependency: pic-mpi
-uses `mpi_f08`, so the MPI library's Fortran bindings must match too. Use your
-site's per-compiler MPI module.
+uses `mpi_f08`, so the MPI library's Fortran bindings must match too — distro
+packages generally will not, being built against the distro gfortran. Use your
+site's per-compiler MPI module, conda-forge's `openmpi` (a gfortran-15 build,
+resolved in the same solve as the compiler), or NVHPC's bundled HPC-X, whose
+modules are nvfortran-built.
 
 ## Project Layout
 
