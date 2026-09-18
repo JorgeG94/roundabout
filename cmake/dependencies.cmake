@@ -46,11 +46,40 @@ if(RDB_ENABLE_NETCDF)
     message(
       STATUS "NetCDF-Fortran found via CMake config: ${netCDF-Fortran_DIR}")
   else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(NETCDFF REQUIRED IMPORTED_TARGET netcdf-fortran)
-    add_library(netCDF::netcdff ALIAS PkgConfig::NETCDFF)
-    message(
-      STATUS "NetCDF-Fortran found via pkg-config: ${NETCDFF_LINK_LIBRARIES}")
+    find_package(PkgConfig)
+    if(PkgConfig_FOUND)
+      pkg_check_modules(NETCDFF IMPORTED_TARGET netcdf-fortran)
+    endif()
+    if(NETCDFF_FOUND)
+      add_library(netCDF::netcdff ALIAS PkgConfig::NETCDFF)
+      message(
+        STATUS "NetCDF-Fortran found via pkg-config: ${NETCDFF_LINK_LIBRARIES}")
+    else()
+      # Worth a real message: this is the single most common way a first build
+      # fails, and `netcdf-fortran` is the ONE dependency that has to match the
+      # Fortran compiler (`.mod` files are compiler-specific).
+      message(
+        FATAL_ERROR
+          "netcdf-fortran not found, and it must be a build made by THIS "
+          "Fortran compiler (${CMAKE_Fortran_COMPILER_ID}) -- Fortran .mod "
+          "files are not portable between compilers.\n"
+          "Ways to get one:\n"
+          "  * Build just the wrapper (~30 s) on top of any netcdf-c "
+          "you already have.\n"
+          "    The netcdf-c does NOT have to match your compiler:\n"
+          "      tools/build_netcdf_fortran.sh --fc <your compiler>\n"
+          "    then configure with the prefix it prints:\n"
+          "      -DCMAKE_PREFIX_PATH=<prefix>\n"
+          "  * Your site's module tree, if it ships one per compiler.\n"
+          "  * conda-forge's netcdf-fortran -- GFORTRAN BUILDS ONLY.\n"
+          "  * environments/spack.yaml for the underlying C libraries.\n"
+          "Or drop the I/O subsystem entirely and build kernels + tests "
+          "only:\n"
+          "      cmake -B build -S . -DRDB_ENABLE_NETCDF=OFF\n"
+          "CMake looked at the netCDF-Fortran CMake config package (hinted "
+          "by $NETCDFF_DIR / $NETCDF_FORTRAN_DIR) and at pkg-config's "
+          "netcdf-fortran.")
+    endif()
   endif()
 else()
   list(APPEND RDB_COMPILE_DEFS RDB_NO_NETCDF)
