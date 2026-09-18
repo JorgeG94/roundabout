@@ -1,11 +1,11 @@
 # Roundabout
 
 I had to learn about ocean dynamics so I wrote a code to do it. It runs on CPUs and GPUs
-with `do concurrent` being the way to access parallelism. MPI is availbale too. 
+with `do concurrent` being the way to access parallelism. MPI is availbale too.
 
 It is also a way to find bugs on Intel, AMD, and NVIDIA and check for LFortran portability.
 
-The code is called Roundabout in honour of the city of Canberra, which is where I work. It is 
+The code is called Roundabout in honour of the city of Canberra, which is where I work. It is
 an inland city and has no ocea. I thought it funny to write an ocean code from a non-ocean city,
 and one can think that a roundabout is like an Eddie.
 
@@ -55,6 +55,23 @@ Automatically generated from the main branch upon Pull-Request. It uses OpenMP o
 
 Automatically generated from the main branch upon Pull-Request. It uses OpenMP of both data movement and compute.
 
+
+## Contributing setup
+
+```bash
+# Install the git hooks -- ONCE, after cloning. `git init`/`git clone` does not
+# do this for you, and without it every commit skips the checks below.
+pre-commit install
+```
+
+They are not cosmetic. Alongside formatting (fprettify, cmake-format,
+fortitude) they carry the compiler traps this codebase has actually been
+bitten by: `dc-intrinsic-shadow` (a `do concurrent` local named after an
+intrinsic makes NVHPC/ifx silently pick approximate math), `dc-transfer`
+(`transfer()` inside `do concurrent` is miscompiled by nvfortran under
+`-stdpar`), `decl-order` (ifx #8586), `dc-assumed-shape`, and
+`no-mpi-in-rdb`. CI re-runs them on every pull request, but that is a
+backstop -- the hook is where they are cheap.
 
 ## Build
 
