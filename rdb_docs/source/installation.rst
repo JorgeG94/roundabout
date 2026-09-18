@@ -105,9 +105,11 @@ at configure time; you do not install them:
 
 .. note::
 
-   All three track their upstream ``main`` branch; they are not pinned to a
-   tag. If you need a reproducible build, pin them yourself with the stock
-   FetchContent override, e.g.
+   All three are pinned — ``pic`` and ``pic-mpi`` to release tags,
+   ``test-drive`` to a commit — in ``cmake/Findpic.cmake``,
+   ``cmake/Findpic-mpi.cmake`` and ``cmake/Findtest-drive.cmake``. A clone
+   builds the same dependency versions CI does. To develop against a local
+   checkout instead, use the stock FetchContent override, e.g.
    ``-DFETCHCONTENT_SOURCE_DIR_PIC=/path/to/local/pic``.
 
 
@@ -336,8 +338,8 @@ Roundabout ships no machine-specific environment scripts. Load a toolchain
 however your site does it — ``module load``, Spack, conda, or a hand-rolled
 script — and then configure and build. What the build needs on ``PATH``:
 
-* a Fortran compiler: gfortran 13+, NVHPC (``nvfortran``) for the GPU build,
-  or ifx;
+* a Fortran compiler: gfortran **15+**, NVHPC (``nvfortran``) for the GPU
+  build, ifx, or flang;
 * CMake 3.25+;
 * netcdf-fortran and its netcdf-c / hdf5;
 * MPI only if you configure ``RDB_ENABLE_MPI=ON``.
@@ -364,26 +366,96 @@ A module-based site typically looks like:
    toolchains need different scripts — and the tooling will source it in each
    stage's own subshell. Unset, they run in the environment they inherit.
 
-``environments/`` carries portable Spack environments for machines without a
-suitable module tree:
+.. _getting-netcdf-fortran:
+
+Getting netcdf-fortran
+======================
+
+This is the one dependency you have to supply, and it is worth two minutes
+of explanation because the obvious approach — "install the whole NetCDF
+stack with my package manager" — is both the slowest option and the one
+that most often fails.
+
+**Only one library in the tree is compiler-coupled.** Fortran ``.mod``
+files and module symbol manglings are compiler-specific, so a
+netcdf-fortran built by gfortran cannot be consumed by nvfortran, ifx or
+flang. You need one netcdf-fortran per compiler.
+
+**Everything below it is C, and one C build serves every compiler.**
+netcdf-c, HDF5 and zlib are C libraries following the platform ABI. You do
+*not* need a per-compiler netcdf-c. This is verified, not assumed: the full
+187-test suite passes with an ``nvfortran`` solver linked against a
+**gfortran-built** netcdf-c.
+
+So the fast path is to take a prebuilt netcdf-c from wherever is convenient
+and build only the Fortran wrapper on top:
+
+.. code-block:: bash
+
+   # any netcdf-c will do -- distro, module tree, conda, Spack
+   sudo apt install libnetcdf-dev          # or dnf install netcdf-devel
+
+   module load nvhpc                       # whatever compiler you want
+   tools/build_netcdf_fortran.sh --fc nvfortran
+
+That takes about 30 seconds. The script downloads a pinned, checksummed
+netcdf-fortran release, builds it against the netcdf-c it finds, runs a
+smoke test that writes and reads a file, and prints the exact ``cmake``
+line to configure Roundabout against the result.
+
+It locates netcdf-c in this order: ``--netcdf-c <prefix>``, then
+``$NETCDFC_DIR``, then ``nc-config --prefix`` from ``PATH``. Pass
+``--prefix`` to choose where it installs; the default embeds the compiler
+name so two compilers never collide.
+
+Two things Roundabout specifically does **not** need, which is most of what
+makes a NetCDF stack slow to build:
+
+* **Parallel NetCDF.** The I/O is per-rank serial ``nf90_create`` with an
+  offline merge (``tools/merge_output.py``). A serial netcdf-c is enough
+  even for an MPI build, and MPI-enabled HDF5 is the most fragile part of
+  that stack.
+* **HDF5's Fortran bindings.** The source imports ``netcdf`` and nothing
+  else, so ``hdf5 +fortran`` is pure build time.
+
+Other routes, if the script does not suit:
 
 .. list-table::
    :header-rows: 1
-   :widths: 34 66
+   :widths: 24 76
 
-   * - File
-     - For
-   * - ``environments/spack_env_nompi.yaml``
-     - Serial / threaded CPU build: gcc 15+, CMake 3.25+, netcdf-fortran,
-       serial netcdf-c and hdf5.
-   * - ``environments/spack_env_mpi.yaml``
-     - The same plus OpenMPI and MPI-enabled netcdf-c / hdf5.
-   * - ``environments/spack_env_full.yaml``
-     - Bare systems: bootstraps ``gcc@15`` from source first (30–60
-       minutes), then the rest.
+   * - Route
+     - Notes
+   * - Site modules
+     - Nothing to build. Most HPC sites ship netcdf-fortran per compiler.
+   * - conda-forge
+     - ``conda install -c conda-forge netcdf-fortran``. One minute, no
+       build — but **gfortran builds only**, so it is no help for
+       nvfortran, ifx or flang.
+   * - ``environments/spack.yaml``
+     - Builds the *C* layer (zlib, HDF5, netcdf-c) for machines with no
+       usable system one. Deliberately pins no compiler and builds no
+       netcdf-fortran: that half is compiler-agnostic, so you build it once
+       and reuse it, and a stock build gets binary-cache hits that
+       ``%nvhpc`` never would. Put the script on top.
+   * - ``-DRDB_ENABLE_NETCDF=OFF``
+     - No NetCDF at all. Kernels, unit tests and benchmarks build; the
+       ``rdb`` executable does not. This is the portability-testing
+       configuration, not a way to run simulations.
 
-All three note that ``pic``, ``pic-mpi`` and ``test-drive`` are fetched by
-CMake and are deliberately *not* managed by Spack.
+.. note::
+
+   Prefer a system or module netcdf-c over conda's when you have the
+   choice. Conda's drags its own libcurl and OpenSSL along with RPATHs
+   pointing into the conda prefix, which gets messy in a mixed link.
+
+.. warning::
+
+   An **MPI** build has a *second* compiler-coupled dependency: pic-mpi
+   uses ``mpi_f08``, so the MPI library's Fortran bindings must also match
+   your compiler. The script does not solve that one — use your site's
+   per-compiler MPI module, which is how HPC sites already ship it. A
+   serial build has only netcdf-fortran to worry about.
 
 There is also ``environments/roundabout_env_3.13.yml``, a conda environment for
 the Python post-processing and test tooling. It deliberately **excludes**
