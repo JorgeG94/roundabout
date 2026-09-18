@@ -301,6 +301,18 @@ The options you are most likely to touch:
      - ``128``
      - Maximum vertical layers for per-column stack workspaces. Lower it if
        a device link hits stack-frame limits.
+   * - ``RDB_EXTRA_FORTRAN_FLAGS``
+     - *(empty)*
+     - Extra Fortran flags, appended after every flag the project sets and
+       applied to the fetched dependencies too, so the whole build agrees.
+       The case that motivates it is CPU targeting: **nvfortran targets the
+       build host's CPU by default** — nothing in
+       ``cmake/compiler_flags.cmake`` sets ``-tp``, and neither ``-fast`` nor
+       the build type changes that. Build on a login node, run on a compute
+       node with a different CPU, and you get ``SIGILL``. Pin it with
+       ``-DRDB_EXTRA_FORTRAN_FLAGS=-tp=haswell`` on NVHPC, or
+       ``-march=x86-64-v3`` on GNU / ifx / flang. The value prints on the
+       configure summary as ``Extra flags:``.
 
 The full list, including the advanced knobs, is at the top of
 ``CMakeLists.txt``.

@@ -114,6 +114,7 @@ cmake -B build -S . -DRDB_ENABLE_NETCDF=OFF && cmake --build build
 | `RDB_GPU_ARCH` | `cc70` | GPU compute capability (e.g. `cc70`, `cc80`, `cc90`) |
 | `RDB_ENABLE_NETCDF` | `ON` | Build the NetCDF-backed I/O subsystem (driver, diagnostics, restart, forcing, main executable). Disable for portability testing on platforms where NetCDF is inconvenient — kernels and benchmarks still build |
 | `RDB_BUILD_SHARED` | `OFF` | Build `librdb_core` as a shared library instead of a static archive |
+| `RDB_EXTRA_FORTRAN_FLAGS` | *(empty)* | Extra Fortran flags, appended after every flag the project sets (so they win). Mainly for CPU targeting: **nvfortran targets the build host's CPU by default** — nothing here sets `-tp`, and neither `-fast` nor the build type changes it — so a binary built on a login node can die with SIGILL on a compute node. Pass e.g. `-DRDB_EXTRA_FORTRAN_FLAGS=-tp=haswell` (NVHPC) or `-march=x86-64-v3` (GNU/ifx/flang) to pin it |
 
 ### Dependencies
 

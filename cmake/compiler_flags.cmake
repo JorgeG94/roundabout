@@ -262,3 +262,23 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
   set(CMAKE_Fortran_FLAGS_DEBUG "")
   set(CMAKE_Fortran_FLAGS_RELEASE "")
 endif()
+
+# Applied LAST, and deliberately via add_compile_options rather than by
+# appending to CMAKE_Fortran_FLAGS. CMake emits CMAKE_Fortran_FLAGS, then
+# CMAKE_Fortran_FLAGS_<CONFIG>, then COMPILE_OPTIONS -- so only this form can
+# override something set on the Release line, and overriding is the whole point
+# of an escape hatch.
+#
+# Directory scope, set before any target or fetched dependency exists, so the
+# subprojects compile with it too. That matters for the `-tp` case: a core built
+# for one CPU target and a dependency built for another is exactly the mismatch
+# this is meant to prevent.
+if(RDB_EXTRA_FORTRAN_FLAGS)
+  separate_arguments(_rdb_extra_flags NATIVE_COMMAND
+                     "${RDB_EXTRA_FORTRAN_FLAGS}")
+  foreach(_rdb_flag IN LISTS _rdb_extra_flags)
+    add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:${_rdb_flag}>")
+  endforeach()
+  unset(_rdb_flag)
+  unset(_rdb_extra_flags)
+endif()
