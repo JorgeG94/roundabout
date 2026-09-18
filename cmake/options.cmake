@@ -37,6 +37,17 @@ option(
   RDB_USE_VAPAA
   "pic-mpi was built with PIC_USE_VAPAA: link MPI::MPI_C and let vapaa supply mpi_f08"
   OFF)
+
+# Escape hatch for flags this file has no opinion about. The motivating case is
+# `-tp` on NVHPC: nvfortran targets the BUILD HOST's CPU by default -- nothing
+# in compiler_flags.cmake sets it, and neither `-fast` nor the build type
+# changes that -- so a binary built on one machine can die with SIGILL on
+# another. CI pins it to a baseline on the NVHPC legs; a cluster user building
+# on a login node for differently-specced compute nodes wants the same.
+set(RDB_EXTRA_FORTRAN_FLAGS
+    ""
+    CACHE STRING
+          "Extra Fortran flags, appended after every flag this project sets")
 option(RDB_ENABLE_TESTING "Build test suite" ON)
 option(
   RDB_BUILD_BENCHMARKS
