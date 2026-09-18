@@ -32,6 +32,20 @@ if(RDB_ENABLE_NETCDF)
     rdb_analytical
     PRIVATE $<TARGET_PROPERTY:netCDF::netcdff,INTERFACE_INCLUDE_DIRECTORIES>)
 endif()
+# Same reasoning for pic. `rdb_constants` re-exports `pic_types`, so a compiler
+# that opens the TRANSITIVE .mod files while walking the chain needs pic's
+# module dir on the include path -- nvfortran does, and fails with "Unable to
+# open MODULE file pic_types.mod"; gfortran does not, because its .mod files are
+# self-contained, which is why this was invisible on gfortran.
+#
+# It was also invisible before pic was pinned: pic <= v0.8.1 emitted its .mod
+# files into ${CMAKE_BINARY_DIR}/modules, the same dir this target already adds,
+# so the include path was satisfied by coincidence. v0.9.0 emits them into its
+# own _deps/pic-build/modules instead. Take the include dirs alone, keeping the
+# no-link property the block above depends on.
+target_include_directories(
+  rdb_analytical
+  PRIVATE $<TARGET_PROPERTY:pic::pic,INTERFACE_INCLUDE_DIRECTORIES>)
 # Depend on the core for build ordering + the shared .mod dir, but do NOT LINK
 # it: a static lib propagates its PRIVATE link deps to consumers, so linking the
 # static core here would drag it into EVERY test and defeat the shared-core
@@ -484,8 +498,17 @@ foreach(row ${RDB_TESTS})
   # bug exists AND goes red the moment NVIDIA fixes it.  When that happens: drop
   # this block, drop the `dc-transfer` pre-commit lint, and rdb_ocean_chksum can
   # move to `do concurrent`.  Every other compiler runs it as an ordinary test.
+  #
+  # Scoped to builds that actually get `-stdpar`.  The miscompile needs `do
+  # concurrent` to be LOWERED to parallel code, which on NVHPC means
+  # `-stdpar=gpu` (RDB_ENABLE_GPU) or `-stdpar=multicore` (RDB_ENABLE_THREADS).
+  # A plain serial NVHPC build gets neither -- just `-Mfree -Mbackslash` -- so
+  # TRANSFER is correct there, the sentinel passes, and an unconditional
+  # WILL_FAIL would INVERT that into a red. Verified on nvfortran 26.5: serial
+  # build, sentinel exits 0.
   if(${test_name} STREQUAL "test_dc_transfer_sentinel"
-     AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+     AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC"
+     AND (RDB_ENABLE_GPU OR RDB_ENABLE_THREADS))
     set_tests_properties(rdb_${test_name} PROPERTIES WILL_FAIL TRUE)
   endif()
 endforeach()
@@ -616,7 +639,8 @@ if(NOT RDB_ENABLE_NETCDF)
   # The suite exercises the diagnostics path, and engine_configure_diag is
   # fail-loud on a build without NetCDF. Skipping keeps the NetCDF-off
   # portability configuration green; the suite runs in every NetCDF build.
-  message(STATUS "Python tests (python/tests): SKIPPED -- RDB_ENABLE_NETCDF=OFF")
+  message(
+    STATUS "Python tests (python/tests): SKIPPED -- RDB_ENABLE_NETCDF=OFF")
 elseif(NOT TARGET ${main_lib}_shared)
   message(STATUS "Python tests (python/tests): SKIPPED -- "
                  "RDB_BUILD_SHARED is OFF, no librdb_core.so to test "

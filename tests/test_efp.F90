@@ -126,7 +126,10 @@ contains
       !! drift is gfortran-only).  Both paths assert the same 1e-9 gate.
       real(real64), intent(in) :: vals(:)
       real(real64) :: s
-#ifdef __NVCOMPILER
+! LLVM Flang has no 128-bit real either: it defines `__flang__` and reports
+! `selected_real_kind(30) == -1`, so `real(..., real128)` is a hard semantic
+! error there just as it is on nvfortran. Same fallback, same 1e-9 gate.
+#if defined(__NVCOMPILER) || defined(__flang__)
       s = neumaier_sum(vals)
 #else
       block

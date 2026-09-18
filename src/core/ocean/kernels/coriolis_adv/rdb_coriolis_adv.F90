@@ -675,124 +675,135 @@ contains
       ! and `al81`).  The energy-conserving transport form
       ! (`form="sadourny_energy"`, MOM6 SADOURNY75_ENERGY) is a separate
       ! kernel, `coriolis_adv_compute_tendencies_sadourny_energy`.
-      associate (q_corner => this%q_corner%data, f_corner => this%f_corner)
-         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
-            local(f_at_u, h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE, &
-                  vh_sum, h_eff_sum)
-            h_vf_SW = 0.5_wp*(h(i - 1, max(1, j - 1), k) + h(i - 1, j, k))
-            h_vf_NW = 0.5_wp*(h(i - 1, j, k) + h(i - 1, min(ny, j + 1), k))
-            h_vf_SE = 0.5_wp*(h(i, max(1, j - 1), k) + h(i, j, k))
-            h_vf_NE = 0.5_wp*(h(i, j, k) + h(i, min(ny, j + 1), k))
-            vh_sum = (v(i - 1, j, k)*h_vf_SW + &
-                      v(i - 1, j + 1, k)*h_vf_NW) + &
-                     (v(i, j, k)*h_vf_SE + &
-                      v(i, j + 1, k)*h_vf_NE)
-            h_eff_sum = (h_vf_SW + h_vf_NW) + (h_vf_SE + h_vf_NE)
-            if (h_eff_sum > 0.0_wp) then
-               v_at_u = vh_sum/h_eff_sum
-            else
-               v_at_u = 0.0_wp
-            end if
-            ! Absolute vorticity (f+zeta) interpolated onto the u-face along j,
-            ! upwind on v_at_u.  WENO reconstructs it directly (f baked into the
-            ! stencil, MOM6 reconstructs f+zeta); centred = the 2-point average.
-            ! Each order falls back to centred within its stencil radius of the
-            ! j=1 / j=ny array edges (the nghost gate keeps every PHYSICAL face
-            ! inside the band, so only ghost faces degrade).
-            if (pv_scheme == PV_ADV_WENO7 .and. j >= 4 .and. j <= ny - 3) then
-               zeta_at_u = weno7_recon( &
-                           q_corner(i, j - 3, k) + f_corner(i, j - 3), &
-                           q_corner(i, j - 2, k) + f_corner(i, j - 2), &
-                           q_corner(i, j - 1, k) + f_corner(i, j - 1), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i, j + 1, k) + f_corner(i, j + 1), &
-                           q_corner(i, j + 2, k) + f_corner(i, j + 2), &
-                           q_corner(i, j + 3, k) + f_corner(i, j + 3), &
-                           q_corner(i, j + 4, k) + f_corner(i, j + 4), v_at_u)
-            else if (pv_scheme == PV_ADV_WENO5 .and. j >= 3 .and. j <= ny - 2) then
-               zeta_at_u = weno5_recon( &
-                           q_corner(i, j - 2, k) + f_corner(i, j - 2), &
-                           q_corner(i, j - 1, k) + f_corner(i, j - 1), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i, j + 1, k) + f_corner(i, j + 1), &
-                           q_corner(i, j + 2, k) + f_corner(i, j + 2), &
-                           q_corner(i, j + 3, k) + f_corner(i, j + 3), v_at_u)
-            else if (pv_scheme == PV_ADV_WENO3 .and. j >= 2 .and. j <= ny - 1) then
-               zeta_at_u = weno3_recon( &
-                           q_corner(i, j - 1, k) + f_corner(i, j - 1), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i, j + 1, k) + f_corner(i, j + 1), &
-                           q_corner(i, j + 2, k) + f_corner(i, j + 2), v_at_u)
-            else
-               zeta_at_u = 0.5_wp*(q_corner(i, j, k) + q_corner(i, j + 1, k)) + &
-                           0.5_wp*(f_corner(i, j) + f_corner(i, j + 1))
-            end if
-            this%pv_flux_x%data(i, j, k) = zeta_at_u*v_at_u
-         end do
-         ! ---- Pass 3c: subtract −∇KE from u-tendency ----
-         do concurrent(k=1:nz, j=1:ny, i=2:nx) local(ke_grad_x)
-            ke_grad_x = (this%ke_centre%data(i, j, k) - &
-                         this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
-            this%pv_flux_x%data(i, j, k) = this%pv_flux_x%data(i, j, k) - ke_grad_x
-         end do
-         do concurrent(k=1:nz, j=1:ny)
-            this%pv_flux_x%data(1, j, k) = 0.0_wp
-            this%pv_flux_x%data(nx + 1, j, k) = 0.0_wp
-         end do
+      ! NOTE: the natural `associate (q_corner => this%q_corner%data,
+      !       f_corner => this%f_corner)` shorthand is DELIBERATELY not used
+      !       here.  ifx (2025.0 and 2026.0) miscompiles a reference to an
+      !       ASSOCIATE name whose selector is an allocatable component of a
+      !       derived-type dummy when the reference sits inside a `do
+      !       concurrent` body that also contains a branch calling an inlined
+      !       pure module function: under `-qopenmp` (which is how ifx maps
+      !       `do concurrent` onto threads) the associate name reads as ZERO,
+      !       so `f_corner` vanished from `zeta_at_u`/`zeta_at_v` and the whole
+      !       Coriolis term silently went to 0.  gfortran 15.1 and nvfortran
+      !       26.5 are correct; standalone repro +  writeup in
+      !       the project wiki (ifx ASSOCIATE / do concurrent).  Spell the
+      !       components out until Intel fixes it.
+      do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+         local(f_at_u, h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE, &
+               vh_sum, h_eff_sum)
+         h_vf_SW = 0.5_wp*(h(i - 1, max(1, j - 1), k) + h(i - 1, j, k))
+         h_vf_NW = 0.5_wp*(h(i - 1, j, k) + h(i - 1, min(ny, j + 1), k))
+         h_vf_SE = 0.5_wp*(h(i, max(1, j - 1), k) + h(i, j, k))
+         h_vf_NE = 0.5_wp*(h(i, j, k) + h(i, min(ny, j + 1), k))
+         vh_sum = (v(i - 1, j, k)*h_vf_SW + &
+                   v(i - 1, j + 1, k)*h_vf_NW) + &
+                  (v(i, j, k)*h_vf_SE + &
+                   v(i, j + 1, k)*h_vf_NE)
+         h_eff_sum = (h_vf_SW + h_vf_NW) + (h_vf_SE + h_vf_NE)
+         if (h_eff_sum > 0.0_wp) then
+            v_at_u = vh_sum/h_eff_sum
+         else
+            v_at_u = 0.0_wp
+         end if
+         ! Absolute vorticity (f+zeta) interpolated onto the u-face along j,
+         ! upwind on v_at_u.  WENO reconstructs it directly (f baked into the
+         ! stencil, MOM6 reconstructs f+zeta); centred = the 2-point average.
+         ! Each order falls back to centred within its stencil radius of the
+         ! j=1 / j=ny array edges (the nghost gate keeps every PHYSICAL face
+         ! inside the band, so only ghost faces degrade).
+         if (pv_scheme == PV_ADV_WENO7 .and. j >= 4 .and. j <= ny - 3) then
+            zeta_at_u = weno7_recon( &
+                        this%q_corner%data(i, j - 3, k) + this%f_corner(i, j - 3), &
+                        this%q_corner%data(i, j - 2, k) + this%f_corner(i, j - 2), &
+                        this%q_corner%data(i, j - 1, k) + this%f_corner(i, j - 1), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i, j + 1, k) + this%f_corner(i, j + 1), &
+                        this%q_corner%data(i, j + 2, k) + this%f_corner(i, j + 2), &
+                        this%q_corner%data(i, j + 3, k) + this%f_corner(i, j + 3), &
+                        this%q_corner%data(i, j + 4, k) + this%f_corner(i, j + 4), v_at_u)
+         else if (pv_scheme == PV_ADV_WENO5 .and. j >= 3 .and. j <= ny - 2) then
+            zeta_at_u = weno5_recon( &
+                        this%q_corner%data(i, j - 2, k) + this%f_corner(i, j - 2), &
+                        this%q_corner%data(i, j - 1, k) + this%f_corner(i, j - 1), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i, j + 1, k) + this%f_corner(i, j + 1), &
+                        this%q_corner%data(i, j + 2, k) + this%f_corner(i, j + 2), &
+                        this%q_corner%data(i, j + 3, k) + this%f_corner(i, j + 3), v_at_u)
+         else if (pv_scheme == PV_ADV_WENO3 .and. j >= 2 .and. j <= ny - 1) then
+            zeta_at_u = weno3_recon( &
+                        this%q_corner%data(i, j - 1, k) + this%f_corner(i, j - 1), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i, j + 1, k) + this%f_corner(i, j + 1), &
+                        this%q_corner%data(i, j + 2, k) + this%f_corner(i, j + 2), v_at_u)
+         else
+            zeta_at_u = 0.5_wp*(this%q_corner%data(i, j, k) + this%q_corner%data(i, j + 1, k)) + &
+                        0.5_wp*(this%f_corner(i, j) + this%f_corner(i, j + 1))
+         end if
+         this%pv_flux_x%data(i, j, k) = zeta_at_u*v_at_u
+      end do
+      ! ---- Pass 3c: subtract −∇KE from u-tendency ----
+      do concurrent(k=1:nz, j=1:ny, i=2:nx) local(ke_grad_x)
+         ke_grad_x = (this%ke_centre%data(i, j, k) - &
+                      this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
+         this%pv_flux_x%data(i, j, k) = this%pv_flux_x%data(i, j, k) - ke_grad_x
+      end do
+      do concurrent(k=1:nz, j=1:ny)
+         this%pv_flux_x%data(1, j, k) = 0.0_wp
+         this%pv_flux_x%data(nx + 1, j, k) = 0.0_wp
+      end do
 
-         ! ---- Pass 4a: v-face Coriolis-advection term −(ζ+f)·u_at_v ----
-         ! Mirror of Pass 3a.  Writes −(ζ+f)·u_at_v ONLY; ∇KE handled in 4c.
-         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
-            local(f_at_v, h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE, &
-                  uh_sum, h_eff_sum)
-            h_uf_SW = 0.5_wp*(h(max(1, i - 1), j - 1, k) + h(i, j - 1, k))
-            h_uf_SE = 0.5_wp*(h(i, j - 1, k) + h(min(nx, i + 1), j - 1, k))
-            h_uf_NW = 0.5_wp*(h(max(1, i - 1), j, k) + h(i, j, k))
-            h_uf_NE = 0.5_wp*(h(i, j, k) + h(min(nx, i + 1), j, k))
-            uh_sum = (u(i, j - 1, k)*h_uf_SW + &
-                      u(i + 1, j - 1, k)*h_uf_SE) + &
-                     (u(i, j, k)*h_uf_NW + &
-                      u(i + 1, j, k)*h_uf_NE)
-            h_eff_sum = (h_uf_SW + h_uf_SE) + (h_uf_NW + h_uf_NE)
-            if (h_eff_sum > 0.0_wp) then
-               u_at_v = uh_sum/h_eff_sum
-            else
-               u_at_v = 0.0_wp
-            end if
-            ! Absolute vorticity onto the v-face along i, upwind on u_at_v.
-            ! Sign mirrors the centred form (CAv = -(f+zeta)*u_at_v).  Same
-            ! per-order boundary fallback as the u-face.
-            if (pv_scheme == PV_ADV_WENO7 .and. i >= 4 .and. i <= nx - 3) then
-               zeta_at_v = weno7_recon( &
-                           q_corner(i - 3, j, k) + f_corner(i - 3, j), &
-                           q_corner(i - 2, j, k) + f_corner(i - 2, j), &
-                           q_corner(i - 1, j, k) + f_corner(i - 1, j), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i + 1, j, k) + f_corner(i + 1, j), &
-                           q_corner(i + 2, j, k) + f_corner(i + 2, j), &
-                           q_corner(i + 3, j, k) + f_corner(i + 3, j), &
-                           q_corner(i + 4, j, k) + f_corner(i + 4, j), u_at_v)
-            else if (pv_scheme == PV_ADV_WENO5 .and. i >= 3 .and. i <= nx - 2) then
-               zeta_at_v = weno5_recon( &
-                           q_corner(i - 2, j, k) + f_corner(i - 2, j), &
-                           q_corner(i - 1, j, k) + f_corner(i - 1, j), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i + 1, j, k) + f_corner(i + 1, j), &
-                           q_corner(i + 2, j, k) + f_corner(i + 2, j), &
-                           q_corner(i + 3, j, k) + f_corner(i + 3, j), u_at_v)
-            else if (pv_scheme == PV_ADV_WENO3 .and. i >= 2 .and. i <= nx - 1) then
-               zeta_at_v = weno3_recon( &
-                           q_corner(i - 1, j, k) + f_corner(i - 1, j), &
-                           q_corner(i, j, k) + f_corner(i, j), &
-                           q_corner(i + 1, j, k) + f_corner(i + 1, j), &
-                           q_corner(i + 2, j, k) + f_corner(i + 2, j), u_at_v)
-            else
-               zeta_at_v = 0.5_wp*(q_corner(i, j, k) + q_corner(i + 1, j, k)) + &
-                           0.5_wp*(f_corner(i, j) + f_corner(i + 1, j))
-            end if
-            this%pv_flux_y%data(i, j, k) = -zeta_at_v*u_at_v
-         end do
-      end associate
+      ! ---- Pass 4a: v-face Coriolis-advection term −(ζ+f)·u_at_v ----
+      ! Mirror of Pass 3a.  Writes −(ζ+f)·u_at_v ONLY; ∇KE handled in 4c.
+      do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+         local(f_at_v, h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE, &
+               uh_sum, h_eff_sum)
+         h_uf_SW = 0.5_wp*(h(max(1, i - 1), j - 1, k) + h(i, j - 1, k))
+         h_uf_SE = 0.5_wp*(h(i, j - 1, k) + h(min(nx, i + 1), j - 1, k))
+         h_uf_NW = 0.5_wp*(h(max(1, i - 1), j, k) + h(i, j, k))
+         h_uf_NE = 0.5_wp*(h(i, j, k) + h(min(nx, i + 1), j, k))
+         uh_sum = (u(i, j - 1, k)*h_uf_SW + &
+                   u(i + 1, j - 1, k)*h_uf_SE) + &
+                  (u(i, j, k)*h_uf_NW + &
+                   u(i + 1, j, k)*h_uf_NE)
+         h_eff_sum = (h_uf_SW + h_uf_SE) + (h_uf_NW + h_uf_NE)
+         if (h_eff_sum > 0.0_wp) then
+            u_at_v = uh_sum/h_eff_sum
+         else
+            u_at_v = 0.0_wp
+         end if
+         ! Absolute vorticity onto the v-face along i, upwind on u_at_v.
+         ! Sign mirrors the centred form (CAv = -(f+zeta)*u_at_v).  Same
+         ! per-order boundary fallback as the u-face.
+         if (pv_scheme == PV_ADV_WENO7 .and. i >= 4 .and. i <= nx - 3) then
+            zeta_at_v = weno7_recon( &
+                        this%q_corner%data(i - 3, j, k) + this%f_corner(i - 3, j), &
+                        this%q_corner%data(i - 2, j, k) + this%f_corner(i - 2, j), &
+                        this%q_corner%data(i - 1, j, k) + this%f_corner(i - 1, j), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i + 1, j, k) + this%f_corner(i + 1, j), &
+                        this%q_corner%data(i + 2, j, k) + this%f_corner(i + 2, j), &
+                        this%q_corner%data(i + 3, j, k) + this%f_corner(i + 3, j), &
+                        this%q_corner%data(i + 4, j, k) + this%f_corner(i + 4, j), u_at_v)
+         else if (pv_scheme == PV_ADV_WENO5 .and. i >= 3 .and. i <= nx - 2) then
+            zeta_at_v = weno5_recon( &
+                        this%q_corner%data(i - 2, j, k) + this%f_corner(i - 2, j), &
+                        this%q_corner%data(i - 1, j, k) + this%f_corner(i - 1, j), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i + 1, j, k) + this%f_corner(i + 1, j), &
+                        this%q_corner%data(i + 2, j, k) + this%f_corner(i + 2, j), &
+                        this%q_corner%data(i + 3, j, k) + this%f_corner(i + 3, j), u_at_v)
+         else if (pv_scheme == PV_ADV_WENO3 .and. i >= 2 .and. i <= nx - 1) then
+            zeta_at_v = weno3_recon( &
+                        this%q_corner%data(i - 1, j, k) + this%f_corner(i - 1, j), &
+                        this%q_corner%data(i, j, k) + this%f_corner(i, j), &
+                        this%q_corner%data(i + 1, j, k) + this%f_corner(i + 1, j), &
+                        this%q_corner%data(i + 2, j, k) + this%f_corner(i + 2, j), u_at_v)
+         else
+            zeta_at_v = 0.5_wp*(this%q_corner%data(i, j, k) + this%q_corner%data(i + 1, j, k)) + &
+                        0.5_wp*(this%f_corner(i, j) + this%f_corner(i + 1, j))
+         end if
+         this%pv_flux_y%data(i, j, k) = -zeta_at_v*u_at_v
+      end do
 
       ! ---- Pass 4c: subtract −∇KE from v-tendency ----
       do concurrent(k=1:nz, j=2:ny, i=1:nx) local(ke_grad_y)

@@ -214,7 +214,7 @@ contains
          allocate (tfw_arr(nx, ny), fb_arr(nx, ny), sst_arr(nx, ny), s_surf_arr(nx, ny))
          allocate (tsurf_out(nx, ny, 1), h2o_ocn_to_ice(nx, ny, 1), &
                    h2o_ice_to_ocn(nx, ny, 1), heat_to_ocn(nx, ny, 1), sw_thru(nx, ny, 1), &
-                   snow_to_ice(nx, ny, 1))
+                   snow_to_ice(nx, ny, 1), source=0.0_wp)
 
          ! Stiff-SEB pin: SF(T) = sf_0 + dsf_dt*T, upward-positive,
          ! increasing in T, so tsurf tracks tsurf_target to O(1/stiff).
@@ -348,7 +348,7 @@ contains
          allocate (tfw_arr(nx, ny), fb_arr(nx, ny), sst_arr(nx, ny), s_surf_arr(nx, ny))
          allocate (tsurf_out(nx, ny, 1), h2o_ocn_to_ice(nx, ny, 1), &
                    h2o_ice_to_ocn(nx, ny, 1), heat_to_ocn(nx, ny, 1), sw_thru(nx, ny, 1), &
-                   snow_to_ice(nx, ny, 1))
+                   snow_to_ice(nx, ny, 1), source=0.0_wp)
 
          ! Warm stiff-SEB pin: tsurf tracks +2 degC; the tsurf>tsf melting
          ! branch pins to tsf and banks the excess into surface melt.
@@ -598,7 +598,7 @@ contains
          allocate (tfw_arr(nx, ny), fb_arr(nx, ny), sst_arr(nx, ny), s_surf_arr(nx, ny))
          allocate (tsurf_out(nx, ny, 1), h2o_ocn_to_ice(nx, ny, 1), &
                    h2o_ice_to_ocn(nx, ny, 1), heat_to_ocn(nx, ny, 1), sw_thru(nx, ny, 1), &
-                   snow_to_ice(nx, ny, 1))
+                   snow_to_ice(nx, ny, 1), source=0.0_wp)
 
          dsf_dt = 1.0e6_wp
          sf_0 = -1.0e6_wp*TSURF_TARGET
@@ -1102,7 +1102,7 @@ contains
          allocate (tfw_arr(nx, ny), fb_arr(nx, ny), sst_arr(nx, ny), s_surf_arr(nx, ny))
          allocate (tsurf_out(nx, ny, 1), h2o_ocn_to_ice(nx, ny, 1), &
                    h2o_ice_to_ocn(nx, ny, 1), heat_to_ocn(nx, ny, 1), sw_thru(nx, ny, 1), &
-                   snow_to_ice(nx, ny, 1))
+                   snow_to_ice(nx, ny, 1), source=0.0_wp)
 
          ! Stiff SEB pin AT tfw, combined with an isothermal-at-tfw seed
          ! (snow AND ice): a true fixed point, conduction moves nothing.
@@ -1284,7 +1284,7 @@ contains
       allocate (tfw_arr(nx, ny), fb_arr(nx, ny), sst_arr(nx, ny), s_surf_arr(nx, ny))
       allocate (tsurf_out(nx, ny, 1), h2o_ocn_to_ice(nx, ny, 1), &
                 h2o_ice_to_ocn(nx, ny, 1), heat_to_ocn(nx, ny, 1), sw_thru(nx, ny, 1), &
-                snow_to_ice(nx, ny, 1))
+                snow_to_ice(nx, ny, 1), source=0.0_wp)
 
       dsf_dt = 1.0e6_wp
       sf_0 = -1.0e6_wp*TSURF_TARGET

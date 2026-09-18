@@ -2959,7 +2959,12 @@ contains
       maxlen = max(maxlen, cur, 1)
 
       allocate (character(len=maxlen) :: lines(nl))
-      lines = ""
+      ! Blank-fill via a SECTION, not `lines = ""`.  `lines` has a DEFERRED
+      ! length, so whole-variable intrinsic assignment from a zero-length
+      ! scalar re-allocates it with len = 0 (F2018 10.2.1.3p3) — ifx does
+      ! exactly that, and every record then parses as empty.  A section
+      ! designator is not an allocatable variable, so it blank-pads in place.
+      lines(:) = ""
 
       ! Second pass: copy each record.
       n_lines = 0

@@ -1,6 +1,26 @@
 # External dependencies: test-drive, pic, NetCDF-Fortran, MPI, pic-mpi. Plain
 # include() so the RDB_COMPILE_DEFS appends and RDB_MPI_LANG reach the caller.
 
+# Do NOT build our dependencies' own test suites. They cost build time, they
+# register in our ctest (86 pic + 6 test-drive tests -- the reason every
+# instruction here says `ctest -R rdb`), and a failure in one of them fails OUR
+# build for a reason that is not ours: test-drive v0.6.1's `test-drive-tester`
+# does not link under LLVM Flang, which took the whole build down.
+#
+# This project's own tests are unaffected -- they go through `enable_testing()`
+# and `add_test` directly and never consult BUILD_TESTING.
+foreach(
+  _rdb_dep_tests
+  BUILD_TESTING # test-drive's fallback
+  TESTDRIVE_BUILD_TESTING # test-drive
+  PIC_ENABLE_TESTING # pic
+  ENABLE_TESTING) # pic-mpi
+  set(${_rdb_dep_tests}
+      OFF
+      CACHE BOOL "Build a dependency's own test suite" FORCE)
+endforeach()
+unset(_rdb_dep_tests)
+
 if(RDB_ENABLE_TESTING)
   enable_testing()
   # Expose unit-test-only module symbols (e.g. the unsplit reference routines +
