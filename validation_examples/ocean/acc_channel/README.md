@@ -40,7 +40,7 @@ end-to-end "everything on" integration case for the C-grid dyn-core.
 ## How to run
 
 Build once — load your NVHPC + NetCDF toolchain however your site does it
-(`module load`, Spack: `environments/spack_env_*.yaml`, conda). Use **exactly
+(`module load`, Spack: `environments/spack.yaml`, conda). Use **exactly
 one** toolchain per shell; stacking a gfortran and an NVHPC environment puts
 two incompatible NetCDF builds on the link line.
 

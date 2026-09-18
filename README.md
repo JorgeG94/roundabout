@@ -123,6 +123,33 @@ cmake -B build -S . -DRDB_ENABLE_NETCDF=OFF && cmake --build build
 - **Optional**: NetCDF-Fortran (bathymetry I/O, diagnostics, restart, forcing) — required for the main executable; skip with `-DRDB_ENABLE_NETCDF=OFF` for kernel-only portability builds
 - **Optional**: MPI (multi-GPU, via `mpi_f08`)
 
+#### Getting NetCDF-Fortran
+
+It is the only dependency coupled to your Fortran compiler — `.mod` files
+aren't portable between compilers, so you need one netcdf-fortran per
+compiler. Everything under it (netcdf-c, HDF5, zlib) is C, and **one C build
+serves every compiler**: the full suite passes with an `nvfortran` solver on a
+gfortran-built netcdf-c. So take a prebuilt netcdf-c from anywhere and build
+only the wrapper:
+
+```bash
+sudo apt install libnetcdf-dev     # any netcdf-c: distro, module, conda, spack
+module load nvhpc                  # whichever compiler you want
+tools/build_netcdf_fortran.sh --fc nvfortran
+```
+
+~30 seconds. It fetches a pinned, checksummed release, builds against the
+netcdf-c it finds, smoke-tests it, and prints the `cmake` line to use.
+
+Roundabout needs neither parallel NetCDF (I/O is per-rank serial with an
+offline merge) nor HDF5's Fortran bindings (`use netcdf` is the only import) —
+which is most of what makes a NetCDF stack slow to build. `environments/spack.yaml`
+builds just the C layer for machines with no usable system one.
+
+Note that an **MPI** build adds a second compiler-coupled dependency: pic-mpi
+uses `mpi_f08`, so the MPI library's Fortran bindings must match too. Use your
+site's per-compiler MPI module.
+
 ## Project Layout
 
 ```
