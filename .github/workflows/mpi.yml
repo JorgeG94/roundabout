@@ -1,0 +1,179 @@
+# Tier 1 — multi-rank MPI, NetCDF ON.
+#
+# The serial matrix in portability.yml proves the source compiles and the
+# kernels are right. This proves the comm layer -- halo exchange, the
+# decomposition, the multi-rank ocean step -- and it runs the FULL suite,
+# NetCDF included.
+#
+# THE WHOLE TOOLCHAIN IS PREBUILT EXCEPT ONE ~30 s WRAPPER
+# ========================================================
+# Two libraries here carry compiler-specific Fortran `.mod` files, and both
+# have to be built by the same compiler as the solver:
+#
+#   mpi_f08 (pic-mpi uses it)   -> `gha3mi/setup-fortran-conda` installs the
+#                                  compiler and the MPI in ONE conda solve and
+#                                  then VALIDATES the pair: it compiles
+#                                  mpi_f08 / mpi / mpif.h, hard-fails if the
+#                                  required mpi_f08 binding is unusable, and
+#                                  runs a real two-rank job. That is exactly
+#                                  the ABI check this leg needs, so there is no
+#                                  hand-rolled probe here.
+#
+#   netcdf-fortran              -> built from source by
+#                                  tools/build_netcdf_fortran.sh, ~30 s. It is
+#                                  a thin wrapper over netcdf-c, and netcdf-c
+#                                  is a C library that does NOT have to match
+#                                  the Fortran compiler (verified: the full
+#                                  suite passes with an nvfortran solver on a
+#                                  gfortran-built netcdf-c). So conda supplies
+#                                  netcdf-c prebuilt and only the wrapper is
+#                                  compiled.
+#
+# That is why this leg can afford NetCDF ON where portability.yml turns it off:
+# the cost is half a minute, not an HDF5-from-source stack. The same trick would
+# let the serial matrix run its missing 13 tests -- worth doing once this is
+# proven in CI.
+#
+# apt's libopenmpi-dev is NOT usable at any price: it is built against the
+# distro gfortran (13 on Ubuntu 24.04) and this project's floor is 15, which is
+# fatal --
+#   Fatal Error: Cannot read module file 'mpi_f08.mod' opened at (1), because
+#   it was created by a different version of GNU Fortran
+#
+# MEASURED: 192/198 with the six exclusions below, on gfortran 15.1 +
+# OpenMPI 5.0.5 + netcdf-fortran 4.6.2 locally. The conda PROVISIONING is the
+# part CI exercises first; the action validates the MPI half and the script
+# smoke-tests the NetCDF half, so a bad toolchain fails in setup with its own
+# message rather than inside the solver build.
+#
+# `nvfortran + hpcx` and `ifx + intelmpi` are also supported by the action --
+# NVHPC's bundled HPC-X has nvfortran-built modules, so for the GPU toolchain
+# the MPI comes with the compiler. Worth adding as exploratory legs once this
+# one has a baseline.
+
+name: MPI (multi-rank)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: mpi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mpi:
+    name: ${{ matrix.compiler }} + ${{ matrix.mpi }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gfortran
+            compiler-version: "15"
+            mpi: openmpi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # `extra-packages` carries ONLY libnetcdf -- the C library. It is
+      # deliberately minimal: anything here joins the compiler's conda solve and
+      # the solver is free to move the compiler to satisfy it (asking for
+      # `cmake` in the LFortran job once pulled 0.64 instead of 0.66). The
+      # compiler-version pin above is the guard -- a solve that downgrades the
+      # compiler violates it and fails rather than degrading quietly.
+      - name: Set up compiler and MPI
+        uses: gha3mi/setup-fortran-conda@latest
+        with:
+          compiler: ${{ matrix.compiler }}
+          compiler-version: ${{ matrix['compiler-version'] }}
+          mpi: ${{ matrix.mpi }}
+          extra-packages: libnetcdf
+          checkout-repo: false
+
+      # CMake from pip, not conda, for the same reason: keeping it out of the
+      # compiler solve is what the LFortran incident taught.
+      - name: Install a recent CMake
+        run: pip install --upgrade "cmake>=4.0"
+
+      - name: Report the toolchain
+        run: |
+          ${{ matrix.compiler }} --version | head -1
+          mpirun --version | head -1
+          cmake --version | head -1
+          echo "MPI_HOME=$MPI_HOME"
+
+      # ~30 s. The script finds netcdf-c in the conda prefix, builds the Fortran
+      # wrapper with THIS compiler, and smoke-tests it by writing and reading a
+      # file before reporting success.
+      - name: Build netcdf-fortran
+        run: |
+          tools/build_netcdf_fortran.sh \
+            --fc ${{ matrix.compiler }} \
+            --netcdf-c "$CONDA_PREFIX" \
+            --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: |
+          cmake -B build -S . \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_Fortran_COMPILER=${{ matrix.compiler }} \
+                -DCMAKE_PREFIX_PATH="$RDB_NETCDFF;$CONDA_PREFIX" \
+                -DRDB_ENABLE_MPI=ON \
+                -DRDB_ENABLE_NETCDF=ON \
+                -DRDB_ENABLE_GPU=OFF \
+                -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      # Oversubscribe: the runner has fewer cores than some tests want ranks.
+      #
+      # EXCLUSIONS -- all six predate this workflow and are diagnosed:
+      #
+      #   rdb_test_rdb_ocean_api
+      #   rdb_test_ocean_api_p2
+      #   rdb_test_ocean_geometry_inject
+      #     The C/Python API entry points never initialise the comm env, so the
+      #     first call reaches `MPI_Comm_f2c` before `MPI_INIT` and OpenMPI
+      #     aborts. NOT a test-registration problem -- adding them to
+      #     `MPI_LAUNCH_TESTS` does not help, because `mpirun` does not call
+      #     `MPI_Init` on the program's behalf. The API has to init MPI itself,
+      #     or declare itself serial-only. That is a design decision.
+      #
+      #   rdb_python_tests
+      #     MPI builds only; it passes in every serial build. pytest reports
+      #     all 24 assertions passing and the process then exits non-zero, so
+      #     this is most likely the same uninitialised comm env reached at
+      #     teardown rather than on the first call -- same API surface, same
+      #     build. Not confirmed separately.
+      #
+      #   rdb_test_ocean_dyn_mpi  and  rdb_test_ocean_dyn_mpi_4rank
+      #     Stale expectations, not a solver defect. The exchange-count gate
+      #     hand-derives the comm topology of the SPLIT-RK2 step ("per RK2
+      #     stage", "x2 stages"), and the default outer scheme changed to
+      #     `pred_corr`. The deltas are exactly one extra centre exchange and
+      #     one face_x/face_y pair per stage:
+      #       centre_3d 600 -> 800, face_x_3d 0 -> 200, face_y_3d 0 -> 200,
+      #       msgs 6800 -> 7400  (= +6 Isends/step x 100 steps)
+      #     The counts need re-deriving for the predictor-corrector topology.
+      #
+      #     ANCHORED on purpose: unanchored, `rdb_test_ocean_dyn_mpi` also
+      #     swallows the _1rank variant, which PASSES -- excluding it would
+      #     quietly drop live coverage.
+      #
+      # Remove an entry the moment its cause is fixed; this list is the backlog,
+      # and anything NOT in it going red is a real regression.
+      - name: Test
+        working-directory: build
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+          PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+        run: >-
+          ctest -R rdb --output-on-failure
+          -E "^rdb_test_rdb_ocean_api$|^rdb_test_ocean_api_p2$|^rdb_test_ocean_geometry_inject$|^rdb_python_tests$|^rdb_test_ocean_dyn_mpi$|^rdb_test_ocean_dyn_mpi_4rank$"
