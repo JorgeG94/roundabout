@@ -1,11 +1,23 @@
-# Tier 0 — compiler portability, serial, NetCDF OFF.
+# Tier 0 — compiler portability, serial.
 #
-# WHY NetCDF OFF: netcdf-fortran writes compiler-specific `.mod` files, so a
-# prebuilt one (conda-forge's is built with gfortran 14) cannot be consumed by
-# gfortran 15+, ifx, nvfortran or flang. Building it per compiler is a separate,
-# slower job. This tier deliberately drops that dependency and still builds the
-# whole solver and 174 of the 187 tests -- `RDB_ENABLE_NETCDF` exists for
-# exactly this.
+# NetCDF is ON in the compiler matrix below, and that used to be impractical.
+# netcdf-fortran writes compiler-specific `.mod` files, so a prebuilt one
+# cannot be consumed by another compiler and each leg needs its own -- which
+# read as "a separate, slower job" for as long as that meant building the whole
+# NetCDF stack per compiler.
+#
+# It does not. netcdf-c, HDF5 and zlib are C libraries that do NOT have to match
+# the Fortran compiler (verified: the full suite passes with an nvfortran solver
+# linked against a gfortran-built netcdf-c), so the C half comes prebuilt from
+# apt and only the thin Fortran wrapper is compiled --
+# `tools/build_netcdf_fortran.sh`, about 30 seconds, and it smoke-tests itself
+# before reporting success. That buys back the 13 tests this tier used to drop:
+# 187 rather than 174.
+#
+# `RDB_ENABLE_NETCDF=OFF` still exists and is still exercised -- the
+# conda-compilers job below keeps it off, because LFortran and Flang are being
+# asked "can you compile this source at all", and a NetCDF dependency would
+# only add a way for that question to go unanswered.
 #
 # gfortran 10-14 are NOT in the matrix: the ocean kernels use F2018
 # `do concurrent` locality specifiers, which GCC implements only from 15, and
@@ -17,13 +29,13 @@
 # `RDB_LFORTRAN_UNBUILDABLE` / `RDB_LFORTRAN_RUNTIME_FAILURES`, so that job
 # wants its own expectations rather than this matrix's.
 #
-# EXPECTED COUNTS: 174/174 on gfortran 15 (verified locally). Other compilers
-# are unverified -- `fail-fast: false` so one compiler's failure does not hide
-# another's result, and `continue-on-error` marks the exploratory ones so a red
-# does not block a PR until its baseline is known. Promote a compiler out of
-# `exploratory` once it has a known-good count.
+# EXPECTED COUNTS: 187/187 on gfortran 15 with NetCDF on (verified locally).
+# Other compilers are unverified -- `fail-fast: false` so one compiler's failure
+# does not hide another's result, and `continue-on-error` marks the exploratory
+# ones so a red does not block a PR until its baseline is known. Promote a
+# compiler out of `exploratory` once it has a known-good count.
 
-name: Portability (serial, no NetCDF)
+name: Portability (serial)
 
 on:
   pull_request:
@@ -42,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Known-good baseline: 174/174.
+          # Known-good baseline: 187/187 (NetCDF on).
           - toolchain: {compiler: gcc, version: 15}
             exploratory: false
           # Unverified. Each needs one green run before losing the flag.
@@ -96,13 +108,30 @@ jobs:
           tail -40 build.log
           exit 1
 
+      # The C half from apt -- ANY C build serves every Fortran compiler in this
+      # matrix -- and only the Fortran wrapper compiled, per compiler, in about
+      # 30 s. The script smoke-tests the result (writes a file, reads it back)
+      # before it reports success, so a broken pairing fails here rather than
+      # somewhere inside the solver build.
+      - name: Install netcdf-c and build netcdf-fortran
+        if: '!matrix.expect_configure_failure'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libnetcdf-dev
+          tools/build_netcdf_fortran.sh \
+            --fc "${{ env.FC }}" \
+            --netcdf-c /usr \
+            --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
+
       - name: Configure
         if: '!matrix.expect_configure_failure'
         run: >-
           cmake -B build -S .
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_Fortran_COMPILER=${{ env.FC }}
-          -DRDB_ENABLE_NETCDF=OFF
+          -DCMAKE_PREFIX_PATH="${{ env.RDB_NETCDFF }};/usr"
+          -DRDB_ENABLE_NETCDF=ON
           -DRDB_ENABLE_MPI=OFF
           -DRDB_ENABLE_GPU=OFF
           -DRDB_ENABLE_TESTING=ON
