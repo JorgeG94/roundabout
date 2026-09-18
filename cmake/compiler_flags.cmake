@@ -253,7 +253,12 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang")
                    "(serial do concurrent, -fdo-concurrent-to-openmp=none)")
   endif()
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 --cpp --std=f23")
+  # Only -O3. Do NOT add `--cpp` or `--std=`: CMake's own LFortran module
+  # already compiles with `--cpp-infer`, and LFortran rejects a second `--std`
+  # outright ("--std: At Most 1 required but received 2"), which kills the
+  # dependency builds before the project is reached. pic likewise sets no
+  # standard flags for LFortran.
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3")
   set(CMAKE_Fortran_FLAGS_DEBUG "")
   set(CMAKE_Fortran_FLAGS_RELEASE "")
 endif()
