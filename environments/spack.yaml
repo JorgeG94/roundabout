@@ -1,0 +1,61 @@
+# Roundabout — Spack environment for the C dependency layer
+#
+# This env deliberately builds ONLY the C libraries: zlib, HDF5, netcdf-c.
+# It does NOT build netcdf-fortran, and it does NOT pin a compiler.
+#
+# WHY: Roundabout's only compiler-coupled dependency is netcdf-fortran.
+# Fortran `.mod` files are compiler-specific, so that one library has to be
+# rebuilt for gfortran, nvfortran, ifx and flang separately. Everything
+# below it is C, and one C build serves all of them -- verified here by
+# running the full 187-test suite with an nvfortran solver on top of a
+# gcc-built netcdf-c.
+#
+# So the split is:
+#
+#   this env  ->  zlib, HDF5, netcdf-c      built ONCE, reused by every compiler
+#   the script->  netcdf-fortran            built per compiler, ~30 seconds
+#
+# Because this half is compiler-agnostic, let Spack use whatever system
+# compiler it finds. You get build-cache hits from binaries.spack.io for a
+# stock gcc build, which you would never get for %nvhpc.
+#
+# Usage:
+#
+#   spack env create rdb environments/spack.yaml
+#   spack env activate rdb
+#   spack install
+#
+#   # then the Fortran wrapper, once per compiler you care about:
+#   module load nvhpc                       # or oneapi, or gcc
+#   tools/build_netcdf_fortran.sh --fc nvfortran --netcdf-c "$(spack location -i netcdf-c)"
+#
+# If you already have netcdf-c from your distro (`apt install libnetcdf-dev`),
+# your module tree, or conda, you do not need this env at all -- go straight
+# to tools/build_netcdf_fortran.sh.
+#
+# NOT built here, on purpose:
+#
+#   hdf5 +fortran   Roundabout imports `netcdf` and nothing else. HDF5's
+#                   Fortran bindings are never used, and they are the part
+#                   of HDF5 that would need compiler matching.
+#   netcdf-c +mpi   The I/O is per-rank serial nf90_create with an offline
+#                   merge (tools/merge_output.py). There is no parallel
+#                   NetCDF anywhere in the source, and MPI-enabled HDF5 is
+#                   the slowest and most fragile part of this stack.
+#
+# pic, pic-mpi and test-drive are fetched and version-pinned by CMake; they
+# are deliberately not managed here.
+#
+# MPI: if you build with RDB_ENABLE_MPI=ON you need an MPI whose *Fortran*
+# bindings (mpi_f08) match your compiler -- that is a second compiler-coupled
+# dependency, and this env does not solve it. Use your site's per-compiler
+# MPI module, which is how every HPC site already ships it.
+
+spack:
+  specs:
+    - "cmake@3.25:"
+    - "hdf5 ~fortran ~mpi +hl"
+    - "netcdf-c ~mpi ~parallel-netcdf"
+
+  concretizer:
+    unify: true
