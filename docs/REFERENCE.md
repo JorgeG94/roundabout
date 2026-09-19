@@ -268,6 +268,19 @@ expansion coefficient.
 tracers from the dynamics entirely — the adiabatic reduced-gravity setup
 used by the MOM6-reference double gyre.
 
+> **`&ocean_ic_nml rho_0` (default `1035.0` kg/m³) is the single ρ₀ of
+> record.** It is the linear-EOS reference density AND the Boussinesq divisor
+> the pressure gradient uses (`du/dt = −(1/ρ₀)∂p/∂x`), plus the FV-MOM6
+> anomaly baseline — `configure_ocean_pgf` copies `eos%rho0` into both PGF
+> reference densities, so a run cannot end up with the EOS on one ρ₀ and the
+> PGF on another. The same scalar reaches EPBL, kappa-shear, tidal mixing,
+> wave speed, the `η_ib` surface-pressure seam, GM / MEKE / Redi / MLE and the
+> isopycnal slopes. Note `&nonhydrostatic_nml rho_0` is a DIFFERENT, dead
+> knob (nothing reads it). Not yet unified: the surface stress / surface flux
+> / KPP-vmix / vdiff / geothermal slots, and the `RHO_WATER` constant behind
+> the console mass-heat-salt diagnostics, each still carry their own
+> hard-coded 1035.
+
 ### Physics closures
 
 The full per-closure detail — knobs, formulae, MOM6 parity notes,
@@ -513,7 +526,7 @@ size and the PP81 / KPP constants.
 |---|---|---|
 | `nz_layers` | 2 | Number of vertical layers |
 | `use_multilayer` | `.false.` | Enable the coupled vertical layer stack |
-| `rho_0` | 1000.0 | Reference density for the EOS (kg/m³) |
+| `rho_0` | 1000.0 | Reference density (kg/m³). **Dead on the ocean path** — nothing reads `cfg%rho_0`. The live reference density is `&ocean_ic_nml rho_0` (default 1035), which feeds the EOS *and* both PGF reference densities. |
 | `kpp_ri_crit` | 0.3 | Critical bulk Richardson number for the KPP boundary-layer depth |
 | `kpp_cs_nonlocal` | 6.3 | KPP non-local (counter-gradient) transport coefficient |
 | `kpp_c_vt2` | 1.8 | KPP `V_t²` unresolved-turbulence coefficient (0 = off) |
