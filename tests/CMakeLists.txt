@@ -115,6 +115,7 @@ set(RDB_TESTS
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
     "test_ocean_pgf_gfs_scale|test_ocean_pgf_gfs_scale|collect_ocean_pgf_gfs_scale_tests|ocean_pgf_gfs_scale|ocean"
+    "test_ocean_pgf_rho_ref|test_ocean_pgf_rho_ref|collect_ocean_pgf_rho_ref_tests|ocean_pgf_rho_ref|ocean"
     "test_ocean_vertical_advection|test_ocean_vertical_advection|collect_ocean_vertical_advection_tests|ocean_vertical_advection|ocean"
     "test_ocean_hdiff_tracer|test_ocean_hdiff_tracer|collect_ocean_hdiff_tracer_tests|ocean_hdiff_tracer|ocean"
     "test_ocean_vdiff|test_ocean_vdiff|collect_ocean_vdiff_tests|ocean_vdiff|ocean"

@@ -133,7 +133,7 @@ slot without reading the rest of the tree.  A future portability lint
 | Split-RK2 driver | `ocean_dyn_t` | `dynamics/split_rk2/rdb_ocean_dyn.F90` | 4 | tendencies from continuity/coriolis/pressure/vmix/lateral | `ubt_sum / vbt_sum / eta_sum` time-mean accumulators, advances state |
 | Continuity-PPM ✓ (barotropic + windowed tracer advect) | `continuity_t` | `kernels/continuity_ppm/rdb_continuity.F90` | 2 / P2 | `barotropic.u_face_x`, `multilayer.h_layer` | per-face `mass_flux_x_layer`, `mass_flux_y_layer`; accumulator slots `uhtr`/`vhtr` (face transport m³, ½-weight per RK2 stage) + `t_dyn_rel_adv` (elapsed time since last drain); `continuity_tracer_drain` spends them via swept-average CW-PPM with fixed-budget CFL sub-cycling (MOM6 `DT_TRACER_ADVECT`; `dt_tracer_advect_ratio` knob in `&ocean_vmix_nml`). **Positive-definite continuity** (`&ocean_continuity_nml positive_definite`, default off ⇒ bit-identical): a `2·h_lim` PPM edge floor + a per-donor θ outflux limiter scale the folded `mass_flux_*_layer` so every layer stays `h ≥ h_lim` with **zero mass created** (contrast: MOM6's injecting `max(h,Angstrom)` clamp is NOT ported; the `conservative_floor` borrow stays the backstop). `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0; D3 single-source scaling keeps CWC exact; fail-loud vs `&ocean_wetdry_nml enable`; per-call `n_limited_step` + int64 `n_limited_total` drained to the console. See `docs/CLOSURE_MATRIX.md` |
 | PV-conserving Coriolis+adv ✓ (Sadourny enstrophy / energy `sadourny_energy` / Arakawa-Hsu `sadourny_hk`) | `coriolis_adv_t` | `kernels/coriolis_adv/rdb_coriolis_adv.F90` | 3 | per-layer u, v, layer thickness | momentum tendency at faces |
-| FV pressure force | `ocean_pressure_force_t` | `../../pressure_force/rdb_ocean_pressure_force.F90` | 5d | `multilayer.h_layer`, T, S, `eos` | momentum tendency at faces |
+| FV pressure force | `ocean_pressure_force_t` | `../../pressure_force/rdb_ocean_pressure_force.F90` | 5d | `multilayer.h_layer`, T, S, `eos` — including `eos%rho0`, which `configure_ocean_pgf` copies into BOTH slot reference densities (see the **PGF reference densities** contract below) | momentum tendency at faces; `e_face` for the barotropic `compute_pbce` |
 | Surface momentum stress ✓ | `ocean_surface_stress_t` | `../../parameterizations/vertical/rdb_ocean_surface_stress.F90` | 5b | `tau_x`/`tau_y` (wind, or ice-blended via `rdb_ice_ocean_coupler`) | momentum tendency at `k=nz`; `stress_mag` (cell-centred `\|tau\|`, always allocated, refreshed by EVERY writer of the `tau` pair — the `set_wind_stress_*` setters at configure, the data-forcing seam refresh, and the sea-ice blend on device each outer step, all through `ocean_surface_stress_refresh_mag` — PR-12 dedup, read by both KPP and EPBL instead of each re-deriving it inline, so a `tau` write that skips the refresh freezes both schemes' `u_*`) |
 | Surface heat/salt flux ✓ (PR-12 component-set reshape) | `ocean_surface_flux_t` | `../../parameterizations/vertical/rdb_ocean_surface_flux.F90` | 5b | const scalars (`&ocean_thermo_nml q_heat/q_salt`) +, when `&ocean_forcing_nml enable_components`, the component set (`q_sw/q_lw/q_lat/q_sens/heat_added`, mass fluxes `evap/lprec/fprec/vprec/lrunoff/frunoff/seaice_melt`, their `heat_content_*` enthalpy companions, `salt_flux`, `p_surf_atm`) | `Q_heat`/`Q_salt` — **derived views**, always the fields every downstream kernel (KPP, EPBL, `apply_tracers`) reads. Components off (default): `Q_heat`/`Q_salt` = the const scalar fill, byte-identical to pre-PR-12. Components on: `ocean_surface_flux_assemble` (the single gate, `vmix_assemble`'s analogue) rebuilds them every thermo step from const + components (`heat_content_massin`/`massout` also assembler-owned outputs) — a filler writes ITS OWN component and MUST NOT write `Q_heat`/`Q_salt` directly, must set `has_heat`/`has_salt` (+ `has_mass_flux`/`has_q_sw` as it fills mass/`q_sw`) host-side, and must register a time-varying component itself in the restart registry (`Q_heat`/`Q_salt` themselves are never registered — derived-field rule). The sea-ice coupler (`rdb_ice_ocean_coupler`) is the only v1 filler: it writes `salt_flux`/`heat_added` when components are on, the legacy full-overwrite of `Q_salt`/`Q_heat` when off. `p_surf`/`p_surf_atm` ship zeroed with no consumer yet (PR-17 follow-up) |
 | Vertical mixing (KPP) | `ocean_vmix_t` | `../../parameterizations/vertical/rdb_ocean_vmix.F90` | 5b | u, v, T, S, surface forcing | `kv`, `kt`, `ks` on interfaces; non-local `gamma_t/s`. `ks` is DERIVED from `kt` by `vmix_split_kd_heat_salt` (last statement before `vmix_assemble`, PR-20; `ks ≡ kt` until a double-diffusion contributor lands) and consumed by `vdiff_apply_tracers` for salinity + every passive tracer |
@@ -168,6 +168,38 @@ slot without reading the rest of the tree.  A future portability lint
 | Z-level T/S IC ✓ | (free procedures, `rdb_ocean_z_init` module — no new `_t`; config on `cfg%ocean%zinit`) | `io/rdb_ocean_z_init.F90` | A2 | pre-regridded model-grid T/S NetCDF + seeded `h_layer` + `wet_mask` | overwrites `tracers(idx_S/T)%hTr` at seed time (host-side, before enter_data); linear-in-depth interp + constant tails; dry columns → namelist land-fill. NetCDF-gated. |
 | 3D scratch buffer ✓ | `scratch_3d_buffer_t` | `../../framework/rdb_scratch_3d.F90` | 1 (then ongoing) | `(n1, n2, n3)` shape from caller | `(stride, stride, nz)` scratch storage with bound init/destroy/enter_data/exit_data; future `ensure_size` |
 | Safe-math wrappers | (free procedures, `rdb_safe_math` module) | `../../framework/rdb_safe_math.F90` | library, no production consumer (PR-8 removed `RDB_BITWISE_REPRO`, which was the sole would-be caller) | n/a | plain elemental inlines around the intrinsic (`safe_exp/log/sin/cos/sqrt/pow`); the tested `*_polynomial` implementations are raw material for a future repro PR |
+
+### PGF reference densities (`rho0` vs `rho_ref`) — both follow the one configured ρ₀
+
+`ocean_pressure_force_t` carries TWO reference densities, and they are
+different things:
+
+- **`rho0`** — the BOUSSINESQ divisor that turns a pressure gradient into an
+  acceleration, `du/dt = −(1/ρ₀)·∂p/∂x`. Read by every variant (`inv_rho0` in
+  the face passes, `g_over_rho0` in the Montgomery recursion) and by
+  `compute_pbce` in the barotropic coupling.
+- **`rho_ref`** — the ANOMALY baseline subtracted from layer densities when
+  FV_MOM6 builds its `pa` stack (`pa(top) = ρ_ref·g·η`, layer anomaly
+  `(ρ_k − ρ_ref)·g·h`), and the surface `g·ρ_ref/ρ₀` in `compute_pbce`.
+
+They stay SEPARATE MEMBERS — one scales, the other shifts, and interchanging
+them is a known MOM6 bug class — but roundabout ships no separate
+anomaly-reference knob, so `configure_ocean_pgf` sources BOTH from
+`ocean_state%eos%rho0`, i.e. from `&ocean_ic_nml rho_0`: the **single ρ₀ of
+record** this state already shares with the EOS, EPBL, kappa-shear, tidal
+mixing, wave speed, the `eta_ib` surface-pressure seam, GM / MEKE / Redi / MLE
+and the isopycnal slopes. Until that wiring landed the slot kept its 1035
+type default while the EOS followed the namelist, so a run with
+`rho_0 /= 1035` integrated an equation of state and a pressure gradient on two
+different reference densities with no warning. Default `rho_0 = 1035`
+⇒ bit-identical; the gate is `test_ocean_pgf_rho_ref`.
+
+Both are plain HOST scalars: every consumer reads them host-side (into a local
+`inv_rho0`, or by value into a `*_impl`), never through the device-mapped
+`pgf` handle, so the configure-time assignment owes no `!$acc update device`
+under `mem:separate`. **A new reference density added to this slot must be
+wired the same way** — a defaulted-and-never-assigned one is invisible:
+it compiles, runs, conserves, and quietly scales the pressure gradient.
 
 ### The `eta_forcing` seam contract (tides + SAL + surface pressure; consumed by future ice loading)
 

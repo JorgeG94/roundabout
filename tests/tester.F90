@@ -38,6 +38,7 @@ program rdb_tests
    use test_ocean_pgf_reconstruct, only: ocean_pgf_reconstruct_collect => &
                                          collect_ocean_pgf_reconstruct_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
+   use test_ocean_pgf_rho_ref, only: ocean_pgf_rho_ref_collect => collect_ocean_pgf_rho_ref_tests
    use test_ocean_vertical_advection, only: ocean_vertical_advection_collect => &
                                             collect_ocean_vertical_advection_tests
    use test_ocean_hdiff_tracer, only: ocean_hdiff_tracer_collect => &
@@ -193,6 +194,7 @@ program rdb_tests
                 new_testsuite("ocean_pgf_fv_mom6", ocean_pgf_fv_mom6_collect), &
                 new_testsuite("ocean_pgf_reconstruct", ocean_pgf_reconstruct_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &
+                new_testsuite("ocean_pgf_rho_ref", ocean_pgf_rho_ref_collect), &
                 new_testsuite("ocean_vertical_advection", &
                               ocean_vertical_advection_collect), &
                 new_testsuite("ocean_hdiff_tracer", ocean_hdiff_tracer_collect), &

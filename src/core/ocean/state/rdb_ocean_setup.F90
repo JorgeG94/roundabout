@@ -2444,7 +2444,9 @@ contains
    end subroutine configure_ocean_meke
 
    subroutine configure_ocean_pgf(cfg, ocean_state, compute_rank, ierr)
-      !! Pressure-force variant + reduced-gravity (gprime / gfs_scale) knobs,
+      !! Pressure-force variant, the reference densities (`rho0` / `rho_ref`,
+      !! both from the single configured ρ₀ — `&ocean_ic_nml rho_0` via
+      !! `eos%rho0`), the reduced-gravity (gprime / gfs_scale) knobs, the
       !! bathymetry copy into the PGF slot, and the matching barotropic
       !! fast-loop gravity g_bt for the gprime / FV_MOM6-reduced-GFS paths.
       type(config_t), intent(in) :: cfg
@@ -2548,6 +2550,29 @@ contains
                    "fv_lite, fv_mom6, or gprime with roquet_spv.", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
+
+      ! Reference densities.  BOTH PGF reference densities follow the SINGLE
+      ! configured ρ₀ (`&ocean_ic_nml rho_0`, landed on `eos%rho0` by
+      ! `ocean_state_init_from_config` — the same scalar EPBL, kappa-shear,
+      ! tidal mixing, the `eta_ib` surface-pressure seam, MEKE/GM and the
+      ! isopycnal slopes all take).  Without this the PGF slot kept its
+      ! 1035 type default while the EOS followed the namelist, so a run with
+      ! `rho_0 /= 1035` silently integrated an EOS and a pressure gradient on
+      ! two different reference densities.
+      !
+      ! `rho0` (Boussinesq divisor, `du/dt = −(1/ρ₀)∂p/∂x`) and `rho_ref`
+      ! (the baseline subtracted from layer densities when building the
+      ! FV_MOM6 `pa` anomaly stack, and the `g·ρ_ref/ρ₀` surface value in
+      ! `compute_pbce`) stay SEPARATE MEMBERS — the roles differ and
+      ! interchanging them is a known MOM6 bug class — but roundabout has no
+      ! separate anomaly-reference knob, so both take the one configured ρ₀.
+      !
+      ! Plain host scalars: every consumer reads them host-side (into a local
+      ! `inv_rho0`, or by value into a `*_impl`), so no `!$acc update device`
+      ! is owed here — and this runs well before `ocean_state_enter_data` in
+      ! any case.
+      ocean_state%pressure_force%rho0 = ocean_state%eos%rho0
+      ocean_state%pressure_force%rho_ref = ocean_state%eos%rho0
 
       ocean_state%pressure_force%gprime_gfs = cfg%ocean%pgf%gprime_gfs
       ocean_state%pressure_force%gprime_gint = cfg%ocean%pgf%gprime_gint
