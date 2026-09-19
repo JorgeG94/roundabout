@@ -14,7 +14,7 @@ module rdb_vcoord
    !!   - ZSTAR_FULL  — per-column z_ref from local bathymetry (vanishing layers).
    !!   - ZSTAR_SIGMA — smoothstep blend of sigma (shallow) and z*-lite (deep).
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, &
+   use rdb_constants, only: wp, H_VANISHED, &
                             nz_stack_required, nz_stack_is_sufficient, &
                             VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, &
                             VCOORD_SIGMA, VCOORD_ZSIGMA, &
@@ -22,7 +22,7 @@ module rdb_vcoord
                             VCOORD_Z_FIXED, VCOORD_RHO, VCOORD_HYCOM, &
                             REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4, REMAP_PQM
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, &
+   use rdb_constants, only: NZ_STACK_MAX, wp, H_VANISHED, &
                             nz_stack_required, nz_stack_is_sufficient, &
                             VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, &
                             VCOORD_SIGMA, VCOORD_ZSIGMA, &
@@ -49,9 +49,23 @@ module rdb_vcoord
    public :: parse_vcoord_type
    public :: parse_remap_method
    public :: parse_stretching_mode
+   public :: vcoord_h_min_role
+   public :: vcoord_h_min_is_coherent
 
    integer, parameter, public :: STRETCH_UNIFORM = 0
    integer, parameter, public :: STRETCH_LOG = 1
+
+   ! ---- `zstar_h_min` contract roles (see `vcoord_h_min_role`) ----
+   integer, parameter, public :: VCOORD_HMIN_INERT = 0
+      !! Geometric families (ZSTAR_FULL / Z_FIXED): `zstar_h_min` is the
+      !! anti-zero thickness of below-bed FILLER layers, which are meant to
+      !! read as vanished downstream ⇒ must stay <= `H_VANISHED`.
+   integer, parameter, public :: VCOORD_HMIN_KEEPALIVE = 1
+      !! Density families (RHO / HYCOM): collapsed layers carry tracer mass
+      !! and must SURVIVE the remap drain ⇒ that path floors at
+      !! `max(zstar_h_min, 2*H_VANISHED)` on purpose.
+   integer, parameter, public :: VCOORD_HMIN_UNUSED = 2
+      !! Every other family never reads `zstar_h_min`.
 
    type :: vcoord_t
       integer :: coord_type = VCOORD_SIGMA
@@ -84,6 +98,11 @@ module rdb_vcoord
       real(wp) :: zstar_h_min = 1.0e-4_wp
          !! Vanishing-layer floor (m).  Layers that would land below the
          !! local bed get clipped to this thickness rather than going to zero.
+         !! Deliberately BELOW `H_VANISHED` (1.5e-4): these are inert filler
+         !! layers that downstream h-dividing kernels are MEANT to skip, so
+         !! the floor is anti-zero armour, not a positivity floor.  See
+         !! `vcoord_h_min_role` for the other contract the same knob carries
+         !! on the density (RHO/HYCOM) families.
       integer :: zstar_stretching = 1
          !! Surface-concentration stretching: 1=log, 0=uniform
       integer :: zstar_n_surf = 0
@@ -584,6 +603,92 @@ contains
          end if
       end if
    end subroutine vcoord_target_dz_column_zstar_full
+
+   ! ---- `zstar_h_min` contract predicates (D4 thin-layer taxonomy) ----
+
+   pure integer function vcoord_h_min_role(coord_type) result(role)
+      !! Which of the TWO contracts `zstar_h_min` carries for `coord_type`.
+      !!
+      !! The single knob spells two different things, and which one it means
+      !! is decided by the coordinate family, not by the value:
+      !!
+      !!  * `VCOORD_HMIN_INERT` — the GEOMETRIC families (`VCOORD_ZSTAR_FULL`,
+      !!    `VCOORD_Z_FIXED`).  Here `zstar_h_min` is the thickness handed to
+      !!    filler layers that lie BELOW the local bed (or above the column
+      !!    top).  They hold no water; the floor exists ONLY so `target_h` is
+      !!    never exactly zero and the h-dividing kernels cannot 1/0 (see
+      !!    `ocean_vcoord_build_zref_full`).  They are MEANT to be classified
+      !!    vanished downstream, so this floor belongs AT OR BELOW the D4
+      !!    skip/merge marker `H_VANISHED` (the gates are a strict `>`, so
+      !!    equality still reads as vanished) — that is the design, not an
+      !!    oversight.  Lift it above `H_VANISHED` and the below-bed filler
+      !!    silently becomes dynamically LIVE (real EOS density from ghost
+      !!    T/S, a PGF column entry, a remap-drain concentration, a vdiff
+      !!    interface) while the coordinate's own surface-trim branch still
+      !!    treats it as throwaway.
+      !!
+      !!  * `VCOORD_HMIN_KEEPALIVE` — the DENSITY families (`VCOORD_RHO`,
+      !!    `VCOORD_HYCOM`).  Here the collapsed layers are real layers the
+      !!    density inversion squeezed shut ANYWHERE in the column; they carry
+      !!    tracer mass and the MOM6 min-thickness inflation debits it from
+      !!    the thickest survivor.  They must SURVIVE the remap drain, so that
+      !!    path floors at `max(zstar_h_min, 2*H_VANISHED)` on purpose
+      !!    (`ocean_vcoord_compute_target_h_rho_impl`).  `zstar_h_min` itself
+      !!    is additionally the pre-compaction strip threshold there, so a
+      !!    large value is meaningful rather than wrong.
+      !!
+      !!  * `VCOORD_HMIN_UNUSED` — every other family never reads the knob.
+      integer, intent(in) :: coord_type
+         !! `VCOORD_*` code (from `parse_vcoord_type`).
+      select case (coord_type)
+      case (VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED)
+         role = VCOORD_HMIN_INERT
+      case (VCOORD_RHO, VCOORD_HYCOM)
+         role = VCOORD_HMIN_KEEPALIVE
+      case default
+         role = VCOORD_HMIN_UNUSED
+      end select
+   end function vcoord_h_min_role
+
+   pure logical function vcoord_h_min_is_coherent(coord_type, h_min) result(ok)
+      !! Is `zstar_h_min` coherent with the contract `coord_type` gives it?
+      !!
+      !! `.false.` for exactly two configurations, both of which are silently
+      !! wrong rather than loudly broken at runtime:
+      !!
+      !!  1. `h_min <= 0` — any family.  Defeats the knob's one documented
+      !!     purpose (never hand a kernel an exactly-zero `target_h`) with no
+      !!     diagnostic; a negative value puts negative thicknesses into the
+      !!     target grid.  `validate_config` REFUSES this.
+      !!  2. `h_min > H_VANISHED` under an INERT-role family.  The below-bed
+      !!     filler layers stop being vanished and start participating in the
+      !!     physics — see `vcoord_h_min_role`.  Callers that genuinely want a
+      !!     LIVE minimum layer thickness want the D4 floor knob
+      !!     (`&ocean_isopycnal_nml angstrom_h`), not this one.
+      !!     `validate_config` only WARNS on this one today: the repo's own
+      !!     Python worked example sits in the band, so refusing it would
+      !!     stop a configuration that runs.  Promoting it to fail-loud is a
+      !!     deliberate, answer-changing follow-up — this predicate already
+      !!     returns `.false.`, so that promotion is a one-line change at the
+      !!     call site, not a re-derivation of the rule.
+      !!
+      !! `h_min == H_VANISHED` is accepted: every downstream vanish gate is a
+      !! strict `> H_VANISHED`, so a layer sitting exactly on the marker still
+      !! reads as vanished.  It is the boundary, though — the shipped
+      !! namelists sit on it, so any gate that ever relaxes to `>=` changes
+      !! their answers.
+      integer, intent(in) :: coord_type
+         !! `VCOORD_*` code (from `parse_vcoord_type`).
+      real(wp), intent(in) :: h_min
+         !! The configured `&vcoord_nml zstar_h_min` (m).
+      ok = .true.
+      if (h_min <= 0.0_wp) then
+         ok = .false.
+      else if (vcoord_h_min_role(coord_type) == VCOORD_HMIN_INERT .and. &
+               h_min > H_VANISHED) then
+         ok = .false.
+      end if
+   end function vcoord_h_min_is_coherent
 
    ! ---- String-to-enum parsers for namelist config ----
 

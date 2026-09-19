@@ -121,6 +121,20 @@ tests are blind to them.
   (dynamic vanish — skip/merge) or `H_DIV_EPS` (pure 1/0 armour), which have
   documented, distinct roles in `rdb_constants`. Pick the right one. A negative
   interface NaNs the CFL — defend degenerate columns.
+- **Decide which side of `H_VANISHED` your floor lands on, and say so.**
+  The two shipped answers are both correct and they are opposites, so
+  `rdb_vcoord :: vcoord_h_min_role` names them and `vcoord_h_min_is_coherent`
+  (consumed by `validate_config`) checks the choice. A geometric family (ZSTAR_FULL / Z_FIXED) produces filler layers
+  that lie *below the bed*: they hold no water, the floor is only there so
+  `target_h` is never exactly zero, and it must stay **≤ `H_VANISHED`** so
+  every h-dividing kernel skips them. Thinner is better there — each filler
+  interface carries the full topographic slope, so the spurious rest-state PGF
+  transport scales *with* the floor. A density family (RHO / HYCOM) collapses
+  *real* layers that carry tracer mass anywhere in the column: those must
+  survive the remap drain (`h_old > H_VANISHED`, strict), so that path floors
+  at **`max(zstar_h_min, 2·H_VANISHED)`** instead. Never hoist one into the
+  other — and never reach for `H_VANISHED` as a positivity floor (D4 forbids
+  it); the live-minimum-thickness knob is `&ocean_isopycnal_nml angstrom_h`.
 - **`associate` every component used in an offloaded loop.** ifx's
   `do concurrent` → OpenMP-target lowering ICEs on a derived-type allocatable
   component referenced directly inside the loop body; the whole generator is
