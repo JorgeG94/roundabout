@@ -40,8 +40,8 @@
 #   Fatal Error: Cannot read module file 'mpi_f08.mod' opened at (1), because
 #   it was created by a different version of GNU Fortran
 #
-# MEASURED: 192/198 with the six exclusions below, on gfortran 15.1 +
-# OpenMPI 5.0.5 + netcdf-fortran 4.6.2 locally. The conda PROVISIONING is the
+# MEASURED: 198/198, no exclusions, on gfortran 15.1 + OpenMPI 5.0.5 +
+# netcdf-fortran 4.6.2 locally. The conda PROVISIONING is the
 # part CI exercises first; the action validates the MPI half and the script
 # smoke-tests the NetCDF half, so a bad toolchain fails in setup with its own
 # message rather than inside the solver build.
@@ -74,7 +74,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Known-good baseline: 192/192 with the exclusions below.
+          # Known-good baseline: 198/198, no exclusions.
           - compiler: gfortran
             compiler-version: "15"
             mpi: openmpi
@@ -170,41 +170,12 @@ jobs:
 
       # Oversubscribe: the runner has fewer cores than some tests want ranks.
       #
-      # EXCLUSIONS -- all six predate this workflow and are diagnosed:
-      #
-      #   rdb_test_rdb_ocean_api
-      #   rdb_test_ocean_api_p2
-      #   rdb_test_ocean_geometry_inject
-      #     The C/Python API entry points never initialise the comm env, so the
-      #     first call reaches `MPI_Comm_f2c` before `MPI_INIT` and OpenMPI
-      #     aborts. NOT a test-registration problem -- adding them to
-      #     `MPI_LAUNCH_TESTS` does not help, because `mpirun` does not call
-      #     `MPI_Init` on the program's behalf. The API has to init MPI itself,
-      #     or declare itself serial-only. That is a design decision.
-      #
-      #   rdb_python_tests
-      #     MPI builds only; it passes in every serial build. pytest reports
-      #     all 24 assertions passing and the process then exits non-zero, so
-      #     this is most likely the same uninitialised comm env reached at
-      #     teardown rather than on the first call -- same API surface, same
-      #     build. Not confirmed separately.
-      #
-      #   rdb_test_ocean_dyn_mpi  and  rdb_test_ocean_dyn_mpi_4rank
-      #     Stale expectations, not a solver defect. The exchange-count gate
-      #     hand-derives the comm topology of the SPLIT-RK2 step ("per RK2
-      #     stage", "x2 stages"), and the default outer scheme changed to
-      #     `pred_corr`. The deltas are exactly one extra centre exchange and
-      #     one face_x/face_y pair per stage:
-      #       centre_3d 600 -> 800, face_x_3d 0 -> 200, face_y_3d 0 -> 200,
-      #       msgs 6800 -> 7400  (= +6 Isends/step x 100 steps)
-      #     The counts need re-deriving for the predictor-corrector topology.
-      #
-      #     ANCHORED on purpose: unanchored, `rdb_test_ocean_dyn_mpi` also
-      #     swallows the _1rank variant, which PASSES -- excluding it would
-      #     quietly drop live coverage.
-      #
-      # Remove an entry the moment its cause is fixed; this list is the backlog,
-      # and anything NOT in it going red is a real regression.
+      # No exclusions. The six tests that used to fail in every MPI build are
+      # fixed, not skipped: the api/* entry points now bring the comm env up
+      # (they reached MPI_Comm_f2c before MPI_INIT and OpenMPI aborted), and
+      # test_ocean_dyn_mpi's exchange-count gate now derives its expectations
+      # from the CONFIGURED split scheme instead of assuming split-RK2. 198/198
+      # locally on gfortran 15.1 + OpenMPI 5.0.5.
       - name: Test
         working-directory: build
         env:
@@ -212,7 +183,6 @@ jobs:
           PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
         run: >-
           ctest -R rdb --output-on-failure
-          -E "^rdb_test_rdb_ocean_api$|^rdb_test_ocean_api_p2$|^rdb_test_ocean_geometry_inject$|^rdb_python_tests$|^rdb_test_ocean_dyn_mpi$|^rdb_test_ocean_dyn_mpi_4rank$"
 
   # vapaa — the case that is IMPOSSIBLE without it.
   #
@@ -236,8 +206,8 @@ jobs:
   # EXPLORATORY, and for two reasons beyond the usual: pic-mpi is pinned to a
   # BRANCH on this branch (against the tag/SHA discipline everywhere else), and
   # vapaa is a third layer of build machinery whose adoption is not yet
-  # decided. MEASURED locally at 192/198 with conda's OpenMPI -- the same six
-  # pre-existing failures as native bindings.
+  # decided. MEASURED locally at 198/198 with conda's OpenMPI, matching
+  # native bindings exactly -- vapaa costs nothing in correctness.
   vapaa:
     name: gfortran 15 + apt OpenMPI via vapaa (exploratory)
     runs-on: ubuntu-latest
@@ -339,4 +309,3 @@ jobs:
           PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
         run: >-
           ctest -R rdb --output-on-failure
-          -E "^rdb_test_rdb_ocean_api$|^rdb_test_ocean_api_p2$|^rdb_test_ocean_geometry_inject$|^rdb_python_tests$|^rdb_test_ocean_dyn_mpi$|^rdb_test_ocean_dyn_mpi_4rank$"

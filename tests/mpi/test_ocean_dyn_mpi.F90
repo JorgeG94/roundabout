@@ -66,7 +66,8 @@ program test_ocean_dyn_mpi
    use rdb_ocean_hdiff_tracer, only: ocean_hdiff_tracer_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t
    use rdb_ocean_vmix, only: ocean_vmix_t
-   use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step_split, ocean_dyn_enable_bt_wide
+   use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step_split, ocean_dyn_enable_bt_wide, &
+                            SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
                                        ocean_bc_state_destroy, ocean_bc_state_set_edges, &
                                        OBC_PERIODIC, ocean_bc_validate_periodic
@@ -1137,7 +1138,9 @@ contains
       ! exchange topology of the split-RK2 step (the RK2 step comm-topology map).
       ! Any change to the exchange set (added / removed / re-cadenced
       ! exchange) fails here and must update the expectations consciously.
-      call check_exchange_counts(nprocs > 1, periodic_run, bt_halo_val)
+      call check_exchange_counts(nprocs > 1, periodic_run, &
+                                 dyn%split_scheme == SPLIT_SCHEME_PRED_CORR, &
+                                 bt_halo_val)
 
       ! Pull state to host for measurement
       !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
@@ -1204,11 +1207,17 @@ contains
    ! the gate runs on every rank.  Fires on each leg (wall/island/periodic —
    ! the exchange set is leg-invariant).
    ! =======================================================================
-   subroutine check_exchange_counts(decomposed, periodic, bt_halo_in)
+   subroutine check_exchange_counts(decomposed, periodic, is_pc, bt_halo_in)
       logical, intent(in) :: decomposed
          !! .true. when the run has a real multi-rank seam (px > 1)
       logical, intent(in) :: periodic
          !! .true. when the run uses periodic-x (both wrap directions active)
+      logical, intent(in) :: is_pc
+         !! .true. under `split_scheme = "pred_corr"`.  Taken from the dyn
+         !! object rather than assumed, so this gate follows the configured
+         !! scheme instead of silently going stale the next time the default
+         !! moves -- which is exactly how it broke: the derivation below was
+         !! written for split-RK2 and the default became pred_corr.
       integer, intent(in), optional :: bt_halo_in
          !! bt_halo width; when > 0 the march-in counter schedule applies.
          !! Default 0 = v1 per-substep exchange.
@@ -1219,13 +1228,39 @@ contains
       integer(int64) :: expect_ml, expect_c3d, expect_btg, expect_btu
       integer(int64) :: expect_c2d, expect_fx2d, expect_fy2d
       integer(int64) :: expect_msgs
+      integer(int64) :: expect_fx3d, expect_fy3d, pc_per_stage, pc_isends_per_step
       integer :: bh
 
       bh = 0
       if (present(bt_halo_in)) bh = bt_halo_in
 
+      ! pred_corr stage-entry seam fill for the step time-means (rdb_ocean_dyn
+      ! step 0b).  Coriolis-advection and hvisc are evaluated on u_av/v_av/h_av
+      ! rather than on the prognostics, and those means are written INTERIOR
+      ! ONLY by the continuity solve, so their ghost band has to be filled or
+      ! the seam tendency reads stale values.  One exchange each per stage:
+      !
+      !   ocean_halo_face_x(u_av)   -> face_x_3d
+      !   ocean_halo_face_y(v_av)   -> face_y_3d
+      !   ocean_halo_centre(h_av)   -> centre_3d   (on TOP of the 3 below)
+      !
+      ! Gated in the source on an actually-decomposed axis, so single-rank
+      ! runs see none of it -- hence `decomposed` here, matching expect_btu.
+      ! ssp_rk2 never reads these arrays and the `is_pc` gate keeps it
+      ! bit-identical, so this whole term vanishes there.
+      pc_per_stage = 0_int64
+      if (is_pc .and. decomposed) pc_per_stage = 1_int64
+
       expect_ml = int(3*2*N_STEPS, int64)
-      expect_c3d = int(3*2*N_STEPS, int64)
+      expect_c3d = (3_int64 + pc_per_stage)*2_int64*int(N_STEPS, int64)
+      expect_fx3d = pc_per_stage*2_int64*int(N_STEPS, int64)
+      expect_fy3d = pc_per_stage*2_int64*int(N_STEPS, int64)
+
+      ! Isends the step-0b block adds per DIRECTION per step: one primitive
+      ! each (u_av, v_av, h_av) x 2 stages.  A face_y array still posts its
+      ! x-seam columns, so all three count on an x-decomposition.  Multiplied
+      ! by n_x_dirs alongside the base term below.
+      pc_isends_per_step = pc_per_stage*3_int64*2_int64
 
       if (bh > 0) then
          ! Wide-halo march-in schedule (num_cycles = bh/2 = 2 for bh=4,
@@ -1254,7 +1289,8 @@ contains
          !   total: 36 + 20 + 6 + 6 = 68 Isends/step × N_STEPS = 6800
          block
             integer(int64) :: isends_per_step
-            isends_per_step = 36_int64 + 20_int64 + 6_int64 + 6_int64
+            isends_per_step = 36_int64 + 20_int64 + 6_int64 + 6_int64 &
+                              + pc_isends_per_step
             expect_msgs = isends_per_step*int(N_STEPS, int64)
          end block
       else
@@ -1277,7 +1313,8 @@ contains
             integer(int64) :: isends_per_step_per_dir, n_x_dirs
             n_x_dirs = 1_int64
             if (periodic .and. decomposed) n_x_dirs = 2_int64
-            isends_per_step_per_dir = 36_int64 + int(N_INNER, int64)*8_int64
+            isends_per_step_per_dir = 36_int64 + int(N_INNER, int64)*8_int64 &
+                                      + pc_isends_per_step
             expect_msgs = isends_per_step_per_dir*int(N_STEPS, int64)*n_x_dirs
          end block
       end if
@@ -1292,9 +1329,9 @@ contains
       call assert_count("bt_u_mid", c_bt_u_mid, expect_btu)
       call assert_count("centre_2d", c_centre_2d, expect_c2d)
       call assert_count("face_x_2d", c_face_x_2d, expect_fx2d)
-      call assert_count("face_x_3d", c_face_x_3d, 0_int64)
+      call assert_count("face_x_3d", c_face_x_3d, expect_fx3d)
       call assert_count("face_y_2d", c_face_y_2d, expect_fy2d)
-      call assert_count("face_y_3d", c_face_y_3d, 0_int64)
+      call assert_count("face_y_3d", c_face_y_3d, expect_fy3d)
 
       ! MPI message count assertion (rank 0, nprocs==2 only — per-rank count
       ! varies by position for nprocs>2, so we only gate the 2-rank topology
