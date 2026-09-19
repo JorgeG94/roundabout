@@ -27,7 +27,7 @@ endif()
 include("${CMAKE_CURRENT_LIST_DIR}/sample_utils.cmake")
 
 # Use the tagged release
-set(_rev "v0.6.3")
+set(_rev "test/vapaa-pic-fix")
 my_fetch_package("${_lib}" "${_url}" "${_rev}")
 
 unset(_lib)
