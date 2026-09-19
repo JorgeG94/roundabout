@@ -260,6 +260,23 @@ contains
       if (allocated(error)) return
       cfg%ocean%tides%enable = .false.
 
+      ! Surface-pressure loading rides the SAME `eta_forcing` seam as the
+      ! body tide, and the wide-halo BT clone carries no copy of it — so
+      ! `run_stage_split` `error stop`s on `bt_halo > 0` with an
+      ! `eta_forcing` actual.  validate_config only polices that under an
+      ! EXPLICIT `bt_halo > 0`; AUTO must resolve to 0 here or a default
+      ! multi-rank psurf run passes validation and dies at the runtime
+      ! backstop.
+      cfg%ocean%psurf%enable = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "psurf enable not detected as exclusion")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded) == 0, &
+                 "psurf + auto bt_halo on 4 ranks must resolve to 0, not the "// &
+                 "wide-halo march-in")
+      if (allocated(error)) return
+      cfg%ocean%psurf%enable = .false.
+
       ! Porous barriers: `bt_wide` re-fills its own `metrics_w` from the
       ! grid formula and nothing gives it the porous statistics, so the
       ! wide fast loop would silently transport on the UN-narrowed
