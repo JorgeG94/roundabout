@@ -60,7 +60,8 @@ module rdb_ice_ocean_coupler
    !! `heat_added` and prevents a double count.
    use rdb_constants, only: wp
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
-   use rdb_ocean_surface_stress, only: ocean_surface_stress_t
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
+                                       ocean_surface_stress_refresh_mag
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ice_state, only: ocean_sea_ice_t, ice_cell_concentration_impl
    implicit none
@@ -325,6 +326,13 @@ contains
       !! re-gathered via `ice_cell_concentration_impl` (shared with
       !! `rdb_ice_evp`, so this module never depends on the EVP kernel).
       !!
+      !! Because this is a full overwrite of `tau_x`/`tau_y`, it also OWNS
+      !! the DERIVED `stress_mag` (cell-centred `|tau|`) that KPP and EPBL
+      !! take `u_*` from — refreshed on the device immediately after the
+      !! blend, so the boundary-layer schemes see the ice-mediated stress
+      !! rather than the configure-time wind.  Any future writer of the
+      !! `tau` pair inherits the same obligation.
+      !!
       !! **Momentum-budget caveat (F5, D7).**  This blend gives the ocean
       !! `(1-a)*tau_a + a*fxoc` per face.  With `&ocean_ice_nml
       !! a_face_stress=.false.` (default, legacy) the ice absorbs the FULL
@@ -363,6 +371,22 @@ contains
       call ice_tau_mirror_impl(ice%tau_ocn_x, ice%tau_ocn_y, stress%tau_x, stress%tau_y, &
                                ice%nx_total, ice%ny_total)
       ice%tau_ocn_valid = 1.0_wp
+      ! The blend above OVERWROTE `tau_x`/`tau_y`, so the cell-centred
+      ! `|tau|` the boundary-layer schemes take `u_* = sqrt(|tau|/rho0)`
+      ! from is stale until it is re-derived from the new pair.  KPP
+      ! (`rdb_ocean_vmix`) and EPBL (`rdb_ocean_epbl`) read
+      ! `stress%stress_mag` and NOTHING else, and no other per-step path
+      ! refreshes it (the wind setters run at configure; the seam refresh
+      ! runs only under `&ocean_dataovr_nml`), so without this call both
+      ! schemes mix on the configure-time WIND under ice — identically
+      ! zero, and therefore `u_* == 0`, in a windless ice-covered run.
+      ! Device-resident and allocation-free: `refresh_mag` is one `do
+      ! concurrent` over the already-mapped `tau_x`/`tau_y`/`stress_mag`,
+      ! so there is no host round trip.  Reached only through this routine,
+      ! which the engine calls only when `&ocean_ice_nml enable` AND
+      ! `dynamics` are both on — an ice-free run never executes it and
+      ! stays bit-identical.  Gate: `test_ocean_ice_stress_mag`.
+      call ocean_surface_stress_refresh_mag(stress)
    end subroutine ice_ocean_stress_flux
 
    pure subroutine ice_ocean_stress_flux_impl(tau_x, tau_y, tau_a_x, tau_a_y, fxoc, fyoc, ci, &
@@ -464,6 +488,16 @@ contains
       if (ice%tau_ocn_valid <= 0.5_wp) return
       stress%tau_x = ice%tau_ocn_x
       stress%tau_y = ice%tau_ocn_y
+      ! Same obligation as the per-step blend: a write to the `tau` pair
+      ! that leaves `stress_mag` behind hands KPP/EPBL the WIND magnitude
+      ! for the first outer step of the resumed run, because
+      ! `configure_ocean_forcing`'s seam refresh already ran (on the
+      ! pristine wind) by the time this overwrite lands.  Host-side here —
+      ! this routine runs before `enter_data`, so the whole-array
+      ! assignments above and this refresh all operate on host memory.
+      ! On the no-checkpoint path the early return above skips it and the
+      ! configure-time `stress_mag` stands, unchanged.
+      call ocean_surface_stress_refresh_mag(stress)
    end subroutine ice_ocean_stress_resume_apply
 
 end module rdb_ice_ocean_coupler

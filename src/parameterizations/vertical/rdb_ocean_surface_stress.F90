@@ -29,6 +29,7 @@ module rdb_ocean_surface_stress
    public :: ocean_surface_stress_compute_tendencies
    public :: ocean_surface_stress_apply_tendencies
    public :: ocean_surface_stress_set_derived
+   public :: ocean_surface_stress_refresh_mag
 
    type :: ocean_surface_stress_t
       logical :: is_init = .false.
@@ -72,11 +73,18 @@ module rdb_ocean_surface_stress
          !! `sqrt(tau_x_cell^2 + tau_y_cell^2)`), shape `(nx_total,
          !! ny_total)`.  **Always allocated** (PR-12 §7.4: a pure τ
          !! property, unlike a shared `ustar` which would need a
-         !! coherent `rho0` — deferred).  Filled once at configure by
-         !! `ocean_surface_stress_set_derived`; KPP (`rdb_ocean_vmix`)
+         !! coherent `rho0` — deferred).  Refreshed in step by every
+         !! writer of the `tau` pair: the `set_wind_stress_*` setters and
+         !! `ocean_surface_stress_set_derived` at configure, the
+         !! data-forcing reader's seam refresh per bracket, and the
+         !! sea-ice stress coupler's on-device blend every outer step
+         !! (all via `ocean_surface_stress_refresh_mag`).  KPP
+         !! (`rdb_ocean_vmix`)
          !! and EPBL (`rdb_ocean_epbl`) both read it instead of
          !! re-deriving `tau_mag` inline (bit-identical dedup — same
-         !! three lines, same FP op order, just computed once).
+         !! three lines, same FP op order, just computed once) — which is
+         !! why a `tau` write that skips the refresh silently freezes
+         !! BOTH schemes' `u_*` at the last refreshed stress.
 
       type(scratch_3d_buffer_t) :: du_stress
          !! Surface stress tendency at east faces, shape
@@ -514,25 +522,50 @@ contains
          !! is now taken from `tau_x`/`tau_y` directly — see
          !! `ocean_surfstress_refresh_stress_mag`.
       type(ocean_surface_stress_t), intent(inout) :: ss
-      call ocean_surfstress_refresh_stress_mag(ss)
+      call ocean_surface_stress_refresh_mag(ss)
    end subroutine ocean_surface_stress_set_derived
 
    subroutine ocean_surfstress_refresh_stress_mag(this)
-      !! Shared machinery behind every `set_wind_stress_*` setter AND
-      !! `ocean_surface_stress_set_derived`: recompute `stress_mag` from
-      !! the CURRENT `tau_x`/`tau_y`, shape taken from the already-
-      !! allocated arrays (no `grid` needed).  Keeping this call inside
-      !! each setter — rather than requiring a separate explicit call —
-      !! is what keeps `stress_mag` correct for every existing caller,
-      !! including unit tests that build `ocean_surface_stress_t`
-      !! directly and never reach `configure_ocean_forcing`.
+      !! Type-bound-facing shim behind every `set_wind_stress_*` setter:
+      !! strips the polymorphic box (same reason as `enter_data`) and
+      !! delegates to `ocean_surface_stress_refresh_mag`.  Keeping this
+      !! call inside each setter — rather than requiring a separate
+      !! explicit call — is what keeps `stress_mag` correct for every
+      !! existing caller, including unit tests that build
+      !! `ocean_surface_stress_t` directly and never reach
+      !! `configure_ocean_forcing`.
       class(ocean_surface_stress_t), intent(inout) :: this
-      integer :: nx, ny
-      nx = size(this%tau_x, 1) - 1
-      ny = size(this%tau_x, 2)
-      call ocean_surfstress_derived_impl(this%tau_x, this%tau_y, this%stress_mag, nx, ny)
-      this%has_stress_mag = .true.
+      select type (this)
+      type is (ocean_surface_stress_t)
+         call ocean_surface_stress_refresh_mag(this)
+      end select
    end subroutine ocean_surfstress_refresh_stress_mag
+
+   pure subroutine ocean_surface_stress_refresh_mag(ss)
+      !! Recompute `stress_mag` from the CURRENT `tau_x`/`tau_y`, shape
+      !! taken from the already-allocated arrays (no `grid` needed — this
+      !! is the grid-free twin of `ocean_surface_stress_set_derived`, for
+      !! callers that hold the slot but not the grid).
+      !!
+      !! **Runs where the data lives.**  `ocean_surfstress_derived_impl` is
+      !! a plain `do concurrent`, so at configure time (before
+      !! `enter_data`) this is a host loop over host arrays, and once the
+      !! slot is device-mapped the SAME call is a device kernel over the
+      !! mapped `tau_x`/`tau_y`/`stress_mag`.  A per-step caller therefore
+      !! pays no host round trip and no allocation — which is what lets the
+      !! sea-ice stress coupler (`ice_ocean_stress_flux`,
+      !! `rdb_ice_ocean_coupler`) refresh `stress_mag` in step with the
+      !! ice-mediated `tau` it writes on the device every outer step.
+      !! Without that refresh KPP (`rdb_ocean_vmix`) and EPBL
+      !! (`rdb_ocean_epbl`) — whose only source of `u_*` is this field —
+      !! keep mixing on the configure-time WIND under sea ice.
+      type(ocean_surface_stress_t), intent(inout) :: ss
+      integer :: nx, ny
+      nx = size(ss%tau_x, 1) - 1
+      ny = size(ss%tau_x, 2)
+      call ocean_surfstress_derived_impl(ss%tau_x, ss%tau_y, ss%stress_mag, nx, ny)
+      ss%has_stress_mag = .true.
+   end subroutine ocean_surface_stress_refresh_mag
 
    pure subroutine ocean_surfstress_derived_impl(tau_x, tau_y, stress_mag, nx, ny)
       !! `stress_mag(i,j) = |tau|` at cell centres — literal copy of the
