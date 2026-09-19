@@ -620,6 +620,15 @@ contains
       ! _epbl / _kappa_shear).  The device-callable gate + the FV_WRIGHT
       ! cross-check run later, in configure_ocean_pgf (post pgf-variant parse).
       ocean_state%eos%variant = parse_eos_variant(cfg%ocean%eos%eos)
+      ! Potential-density reference pressure.  Assigned HERE, in the
+      ! earliest configure_ocean_* call, so the value is already on the
+      ! handle when it is copied into the vmix / EPBL / kappa-shear slots
+      ! further down — and before `enter_data`, so the mapped copies carry
+      ! it.  `eos_t` is a flat POD read by value into the `_impl` calls, so
+      ! this host assignment owes no `!$acc update device` under
+      ! mem:separate (same contract as `rho0`/`rho_ref` on the PGF slot).
+      ! Horizontally uniform by design — see the knob's FORD docstring.
+      ocean_state%eos%p_ref = cfg%ocean%eos%p_ref
       if (compute_rank == 0) then
          call logger%info("EOS variant:      "//trim(cfg%ocean%eos%eos))
       end if

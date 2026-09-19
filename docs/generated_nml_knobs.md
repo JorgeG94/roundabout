@@ -359,6 +359,7 @@ Atmospheric surface-pressure loading / inverse barometer (PR-17).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (split-solver only; requires &ocean_forcing_nml enable_components=.true.) |
+| `in_eos` | `.false.` |  | Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders) |
 | `p_surf_const` | `0.0000000000E+00` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
 
 ### &ocean_epbl_nml
@@ -684,11 +685,12 @@ Pressure-gradient-force kernel selector + knobs.
 
 ### &ocean_eos_nml
 
-Equation-of-state variant selector.
+Equation-of-state variant selector + reference pressure.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `eos` | `"linear"` |  | Equation-of-state variant |
+| `p_ref` | `0.0000000000E+00` | Pa | Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density) |
 
 ### &ocean_bdrag_nml
 

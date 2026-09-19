@@ -814,6 +814,36 @@ module rdb_config
          !! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.
          !! 2015 specific-volume polynomial).  "roquet_spv" is incompatible
          !! with the "fv_wright" PGF (fails loud at configure).
+      real(wp) :: p_ref = 0.0_wp
+         !! Reference pressure (Pa, `>= 0`) at which the model's POTENTIAL
+         !! density `ms%rho_layer` is evaluated.  Default 0 (surface
+         !! density, σ₀) ⇒ bit-identical to every run before this knob
+         !! existed.  Read by the "wright" and "roquet_spv" variants;
+         !! "linear" has no pressure dependence and ignores it.
+         !!
+         !! HORIZONTALLY UNIFORM BY DESIGN — it is a scalar and must stay
+         !! one.  `rho_layer` is differenced ALONG a layer (the Montgomery
+         !! PGF, the FV-lite / FV-MOM6-PCM integrands) and VERTICALLY (the
+         !! vmix N² builders), so a reference pressure varying with (i,j)
+         !! would give two columns of identical water at the same depth
+         !! densities differing by `∂ρ/∂p·Δp` — a spurious along-layer
+         !! gradient and hence a spurious pressure gradient force.  A
+         !! spatially varying surface load goes to the IN-SITU builders via
+         !! `&ocean_psurf_nml in_eos`, never here.
+         !!
+         !! What it buys: the thermobaric state at which the effective
+         !! α/β are evaluated.  Near the freezing point at ice-shelf-cavity
+         !! pressures that matters, so a cavity or abyssal study is better
+         !! referenced to a representative depth (2.0e7 Pa ≈ 2000 dbar, the
+         !! usual σ₂ choice) than to the surface.
+         !!
+         !! Distinct from `&vcoord_nml rho_ref_pressure`, which references
+         !! the RHO / HYCOM target-density COORDINATE and the density-space
+         !! diagnostic remap.  For a density-coordinate run the two should
+         !! normally be set to the SAME value so coordinate and dynamics
+         !! agree on what "density" means; they are kept independent
+         !! because a diagnostic remap to a different reference is a
+         !! legitimate request.
    end type ocean_eos_config_t
    type :: ocean_bdrag_config_t
       character(len=16) :: form = "quadratic"
@@ -1645,6 +1675,36 @@ module rdb_config
       !! it is taken from `ocean_state%eos%rho0` (the single ρ₀ of record).
       logical :: enable = .false.
          !! Master switch (default off => bit-identical).
+      logical :: in_eos = .false.
+         !! Include the surface load in the EOS's **IN-SITU** pressure
+         !! arguments, as the top-of-column pressure `p_top`
+         !! (`multilayer_state_t%p_top`): a hydrostatic pressure that used
+         !! to start at 0 Pa at the free surface starts at `p_top(i,j)`
+         !! instead.  Default `.false.` => `p_top` stays the zero array and
+         !! every EOS evaluation is bit-identical.  This is the E3 seam for
+         !! ice-shelf cavities, where 1e6-2e7 Pa of ice load makes the p=0
+         !! assumption a systematic ~4-5 kg/m^3 density error under a
+         !! nonlinear EOS.
+         !!
+         !! IN-SITU ONLY.  It deliberately does NOT touch `ms%rho_layer`,
+         !! which is a POTENTIAL density at the horizontally uniform
+         !! `&ocean_eos_nml p_ref` — offsetting a potential-density
+         !! reference per column would manufacture an along-layer density
+         !! gradient (see that knob's docstring).  The N² builders inherit
+         !! `rho_layer` and are therefore unaffected and self-consistent.
+         !!
+         !! v1 reaches exactly ONE consumer: the FV_WRIGHT Picard column
+         !! sweep (`&ocean_pgf_nml form="fv_wright"`), the only in-situ EOS
+         !! pressure in the dyn core today.  With any other PGF form and
+         !! none of the closures below enabled the knob is INERT — a
+         !! rank-0 warning says so rather than leaving it silent.  The
+         !! closures that build their OWN surface-relative hydrostatic
+         !! pressure have NOT been ported, so `validate_config` REFUSES
+         !! `in_eos = .true.` together with any of them (EPBL,
+         !! kappa-shear, tidal mixing, Redi, isopycnal slopes, sea ice,
+         !! and the PGF in-layer reconstruction) rather than run a
+         !! silently inconsistent pressure.  Requires `enable = .true.`
+         !! (the load itself comes from `sf%p_surf`).
       real(wp) :: p_surf_const = 0.0_wp
          !! Uniform atmospheric surface pressure (Pa) seeded into
          !! `sf%p_surf_atm` at configure.  A UNIFORM load is provably inert
@@ -4015,11 +4075,110 @@ contains
          ! constant and no file/override path gets nothing — say so rather
          ! than repeat the &ocean_tidal_mixing_nml e_uniform silent-no-op.
          if (cfg%ocean%psurf%p_surf_const /= 0.0_wp) then
-            call logger%warning("&ocean_psurf_nml enable=.true. with a uniform "// &
-                                "p_surf_const and no file/override path: only "// &
-                                "grad(p_surf) is physical, so a spatially "// &
-                                "constant load is inert (gauge invariance). "// &
-                                "File-driven p_surf lands in PR-14/PR-15.")
+            if (cfg%ocean%psurf%in_eos) then
+               ! With in_eos the gauge argument does NOT apply to the EOS:
+               ! it is nonlinear in pressure, so a spatially UNIFORM load
+               ! still changes the IN-SITU densities it reaches.  Say so
+               ! instead of the (then wrong) "provably inert" warning.
+               call logger%info("&ocean_psurf_nml in_eos=.true.: a uniform "// &
+                                "p_surf_const is inert on the barotropic seam "// &
+                                "(only grad(p_surf) is physical there) but NOT "// &
+                                "in the IN-SITU EOS pressure — it compresses "// &
+                                "the water. The potential density ms%rho_layer "// &
+                                "is unaffected either way (uniform p_ref).")
+            else
+               call logger%warning("&ocean_psurf_nml enable=.true. with a uniform "// &
+                                   "p_surf_const and no file/override path: only "// &
+                                   "grad(p_surf) is physical, so a spatially "// &
+                                   "constant load is inert (gauge invariance). "// &
+                                   "File-driven p_surf lands in PR-14/PR-15.")
+            end if
+         end if
+      end if
+      ! ---- Top-of-column pressure in the IN-SITU EOS arguments (E3) ----
+      ! `in_eos` offsets the EOS's IN-SITU pressure arguments by
+      ! `ms%p_top`.  v1 ports exactly one: the FV_WRIGHT Picard column
+      ! sweep.  It does NOT touch `ms%rho_layer`, which is a potential
+      ! density at the horizontally uniform `&ocean_eos_nml p_ref` and must
+      ! stay that way.  Every OTHER in-situ consumer builds its own
+      ! surface-relative hydrostatic pressure starting at 0 Pa at the free
+      ! surface and has NOT been ported; running them against a loaded
+      ! column would mix two incompatible pressure conventions inside one
+      ! time step with no symptom.  Refuse fail-loud rather than be
+      ! silently inconsistent — each line below is a named follow-up, not a
+      ! permanent limit.
+      if (cfg%ocean%psurf%in_eos) then
+         ! Inert-configuration warning, not a refusal: with no in-situ
+         ! consumer selected the knob legitimately does nothing, and the
+         ! house rule (cf. &ocean_tidal_mixing_nml e_uniform) is to SAY so
+         ! rather than let a user believe a cavity load reached the EOS.
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright") then
+            call logger%warning("&ocean_psurf_nml in_eos=.true. is INERT for "// &
+                                "&ocean_pgf_nml form='"// &
+                                trim(adjustl(cfg%ocean%pgf%form))//"': the only "// &
+                                "ported in-situ EOS pressure is the FV_WRIGHT "// &
+                                "Picard column sweep. The other PGF forms read "// &
+                                "the POTENTIAL density ms%rho_layer, which is "// &
+                                "referenced to the uniform &ocean_eos_nml p_ref "// &
+                                "BY DESIGN and is not offset by the load.")
+         end if
+         if (.not. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. requires "// &
+                              "enable=.true. (p_top is filled from the "// &
+                              "assembled sf%p_surf the seam owns)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%epbl%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_epbl_nml enable=.true. — EPBL builds "// &
+                              "its own column pressure from 0 Pa at the surface "// &
+                              "(epbl_column_kernel `pres`/`p_mid`), which also "// &
+                              "weights its PE ledger; not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (cfg%ocean%kshear%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_kappa_shear_nml enable=.true. — "// &
+                              "ks_solve_column builds its own interface pressure "// &
+                              "from 0 Pa at the surface; not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tidal_mixing%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_tidal_mixing_nml enable=.true. — "// &
+                              "tidal_mixing_column_kernel builds its own interface "// &
+                              "pressure from 0 Pa at the surface; not yet ported")
+            has_error = .true.
+         end if
+         if (cfg%ocean%redi%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_redi_nml enable=.true. — "// &
+                              "redi_build_column seeds Pint(1)=0 at the surface; "// &
+                              "not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (cfg%ocean%slopes%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_slopes_nml enable=.true. — "// &
+                              "pressure_above_x sums g*rho0*h down from 0 Pa at "// &
+                              "the surface; not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (cfg%ocean%pgf%reconstruct_for_pressure) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_pgf_nml reconstruct_for_pressure=.true. "// &
+                              "— boole_dpa_intz_layer builds the EOS pressure as "// &
+                              "p = -g*rho0*z from the surface-relative interface "// &
+                              "height; not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with &ocean_ice_nml enable=.true. — the freezing "// &
+                              "point is evaluated at p=0 in the frazil / basal-flux "// &
+                              "kernels, and the liquidus pressure depression is "// &
+                              "exactly what an ice-shelf load changes; not yet ported")
+            has_error = .true.
          end if
       end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
@@ -5940,6 +6099,12 @@ contains
       call g%add(nml_logical("enable", pl, &
                              "Master switch (split-solver only; requires "// &
                              "&ocean_forcing_nml enable_components=.true.)"))
+      pl => cfg%ocean%psurf%in_eos
+      call g%add(nml_logical("in_eos", pl, &
+                             "Also feed the surface load to the equation of "// &
+                             "state as the top-of-column pressure p_top "// &
+                             "(requires enable=.true.; refused with the "// &
+                             "unported pressure builders)"))
       pr => cfg%ocean%psurf%p_surf_const
       call g%add(nml_real("p_surf_const", pr, &
                           "Uniform atmospheric surface pressure (Pa) seeded "// &
@@ -7117,19 +7282,27 @@ contains
    end subroutine register_ocean_pgf
 
    subroutine register_ocean_eos(cfg, schema)
-      !! `&ocean_eos_nml`: equation-of-state variant selector.
+      !! `&ocean_eos_nml`: equation-of-state variant selector + the
+      !! potential-density reference pressure.
       !! `eos` enum mirrors `parse_eos_variant` in rdb_eos.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
       character(len=:), pointer :: ps
+      real(wp), pointer :: pr
 
       g%name = "ocean_eos"
-      g%doc = "Equation-of-state variant selector."
+      g%doc = "Equation-of-state variant selector + reference pressure."
       ps => cfg%ocean%eos%eos
       call g%add(nml_enum("eos", ps, "Equation-of-state variant", &
                           allowed=[character(len=10) :: "linear", "wright", &
                                    "roquet_spv", "teos10"]))
+      pr => cfg%ocean%eos%p_ref
+      call g%add(nml_real("p_ref", pr, &
+                          "Reference pressure for the potential density "// &
+                          "ms%rho_layer (horizontally uniform by design; "// &
+                          "0 => surface density)", &
+                          units="Pa", min=0.0_wp))
       call schema%add_group(g)
    end subroutine register_ocean_eos
 

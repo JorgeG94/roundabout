@@ -176,6 +176,7 @@ contains
       real(wp), parameter :: TOL_PEDGE = 50.0_wp   ! 50 Pa over ~1e7 Pa is < 1e-5 relative
       real(wp), allocatable :: h_layer(:, :, :), hS(:, :, :), hT(:, :, :)
       real(wp), allocatable :: rho_layer_seed(:, :, :)
+      real(wp), allocatable :: p_top(:, :)
       real(wp), allocatable :: p_edge_out(:, :, :), rho_insitu_out(:, :, :)
       real(wp) :: p_above, p_centre_seed, rho_analytic
       real(wp) :: max_rho_err, max_pedge_err, p_edge_expected
@@ -186,18 +187,19 @@ contains
          allocate (hS(NX, NY, NZ), source=S_UNI*H)
          allocate (hT(NX, NY, NZ), source=T_UNI*H)
          allocate (rho_layer_seed(NX, NY, NZ), source=RHO_SEED)
+         allocate (p_top(NX, NY), source=0.0_wp)
          allocate (p_edge_out(NX, NY, NZ + 1))
          allocate (rho_insitu_out(NX, NY, NZ))
 
-         !$acc enter data copyin(h_layer, hS, hT, rho_layer_seed)
+         !$acc enter data copyin(h_layer, hS, hT, rho_layer_seed, p_top)
          !$acc enter data create(p_edge_out, rho_insitu_out)
          call eos_wright_pgf_column_sweep_impl( &
-            h_layer, hS, hT, rho_layer_seed, &
+            h_layer, hS, hT, rho_layer_seed, p_top, &
             p_edge_out, rho_insitu_out, &
             GRAVITY, RHO_0, NX, NY, NZ)
          !$acc update self(p_edge_out, rho_insitu_out)
          !$acc exit data delete(p_edge_out, rho_insitu_out)
-         !$acc exit data delete(h_layer, hS, hT, rho_layer_seed)
+         !$acc exit data delete(h_layer, hS, hT, rho_layer_seed, p_top)
 
          max_rho_err = 0.0_wp
          max_pedge_err = 0.0_wp

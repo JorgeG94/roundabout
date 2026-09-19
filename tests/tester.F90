@@ -29,6 +29,7 @@ program rdb_tests
    use test_ocean_eos, only: ocean_eos_collect => collect_ocean_eos_tests
    use test_ocean_eos_handle, only: ocean_eos_handle_collect => collect_ocean_eos_handle_tests
    use test_ocean_eos_roquet, only: ocean_eos_roquet_collect => collect_ocean_eos_roquet_tests
+   use test_ocean_eos_p_top, only: ocean_eos_p_top_collect => collect_ocean_eos_p_top_tests
    use test_ocean_freezing_point, only: ocean_freezing_point_collect => collect_ocean_freezing_point_tests
    use test_ocean_wright_eos, only: ocean_wright_eos_collect => collect_ocean_wright_eos_tests
    use test_ocean_pgf, only: ocean_pgf_collect => collect_ocean_pgf_tests
@@ -185,6 +186,7 @@ program rdb_tests
                 new_testsuite("ocean_eos", ocean_eos_collect), &
                 new_testsuite("ocean_eos_handle", ocean_eos_handle_collect), &
                 new_testsuite("ocean_eos_roquet", ocean_eos_roquet_collect), &
+                new_testsuite("ocean_eos_p_top", ocean_eos_p_top_collect), &
                 new_testsuite("ocean_freezing_point", ocean_freezing_point_collect), &
                 new_testsuite("ocean_wright_eos", ocean_wright_eos_collect), &
                 new_testsuite("ocean_pgf", ocean_pgf_collect), &

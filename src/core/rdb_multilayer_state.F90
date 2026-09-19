@@ -104,6 +104,32 @@ module rdb_multilayer_state
       ! (nx, ny, nz_ml), matches h_layer.
       real(wp), allocatable :: rho_layer(:, :, :)
 
+      ! ---- Top-of-column pressure for the IN-SITU EOS builders ----
+      ! (nx, ny) Pa, cell-centred INCLUDING ghosts, `>= 0`.  The pressure
+      ! standing on the free surface that an IN-SITU pressure argument is
+      ! measured DOWN from: a hydrostatic builder that used to start its
+      ! column at 0 Pa starts it at `p_top(i,j)` instead.  Zero on every
+      ! shipped configuration — filled only when `&ocean_psurf_nml
+      ! in_eos = .true.`, from the assembled total
+      ! `ocean_surface_flux_t%p_surf` (atmospheric load today, ice-shelf
+      ! / sea-ice mass load later), refreshed once per outer step.
+      ! ALWAYS allocated and zero-filled so every kernel has ONE code
+      ! path: no optional dummy, no host-gated call handing a state array
+      ! to an external subroutine, and `p_top(i,j) + p` is bit-exact `p`
+      ! under IEEE-754 when the knob is off.
+      !
+      ! Three things it is NOT:
+      !   * NOT the POTENTIAL-density reference.  `rho_layer` is evaluated
+      !     at the scalar `eos%p_ref` and must stay that way — it is
+      !     differenced along layers, so a per-column reference pressure
+      !     would fabricate an along-layer density gradient.
+      !   * NOT the barotropic `eta_forcing` seam — that is a separate,
+      !     gradient-only, metres-valued field on `ocean_p_surf_t`, and it
+      !     already carries the depth-uniform load gradient.
+      !   * NOT the PGF top boundary condition (`pa(nz+1)`, still
+      !     `rho_ref*g*eta`; `p_edge(nz+1)`, still 0).
+      real(wp), allocatable :: p_top(:, :)
+
       ! ---- Vertical (cross-layer) velocity at layer interfaces ----
       ! Diagnostic in z*; reads as residual w under ALE.  Shape
       ! (nx, ny, nz_ml+1) with k=1 the bed (0) and k=nz_ml+1 the surface.
@@ -300,6 +326,12 @@ contains
       ! Cell-centred density (filled by the EOS each step)
       allocate (this%rho_layer(nx, ny, nz_ml), source=0.0_wp)
 
+      ! Top-of-column in-situ EOS pressure.  Unconditionally allocated +
+      ! zeroed (nx*ny*8 B against the nx*ny*nz prognostics): the OFF path
+      ! is then an unconditional `+ 0.0` inside the kernel rather than a
+      ! branch or an optional dummy.
+      allocate (this%p_top(nx, ny), source=0.0_wp)
+
       ! Cross-layer vertical velocity at interfaces (k=1 bed .. k=nz+1 surface)
       allocate (this%w_interface(nx, ny, nz_ml + 1), source=0.0_wp)
 
@@ -369,6 +401,7 @@ contains
       if (allocated(this%mass_flux_y_layer)) deallocate (this%mass_flux_y_layer)
       if (allocated(this%flux_h_layer)) deallocate (this%flux_h_layer)
       if (allocated(this%rho_layer)) deallocate (this%rho_layer)
+      if (allocated(this%p_top)) deallocate (this%p_top)
       if (allocated(this%w_interface)) deallocate (this%w_interface)
       if (allocated(this%mass_budget_continuity)) deallocate (this%mass_budget_continuity)
       if (allocated(this%heat_budget_surface)) deallocate (this%heat_budget_surface)
@@ -408,6 +441,7 @@ contains
                + arr_bytes(this%h_av_layer) &
                + arr_bytes(this%mass_flux_x_layer) + arr_bytes(this%mass_flux_y_layer) &
                + arr_bytes(this%flux_h_layer) + arr_bytes(this%rho_layer) &
+               + arr_bytes(this%p_top) &
                + arr_bytes(this%w_interface) + arr_bytes(this%wet_mask) &
                + arr_bytes(this%mass_budget_continuity) &
                + arr_bytes(this%heat_budget_surface) + arr_bytes(this%salt_budget_surface) &
@@ -519,6 +553,7 @@ contains
       !$acc&                  this%w_interface)
       !$acc enter data create(this%mass_flux_x_layer, this%mass_flux_y_layer, &
       !$acc&                  this%flux_h_layer)
+      !$acc enter data copyin(this%p_top)
       !$acc enter data copyin(this%rho_layer, this%mass_budget_continuity, &
       !$acc&                  this%heat_budget_surface, this%salt_budget_surface, &
       !$acc&                  this%heat_budget_geothermal, &
@@ -573,6 +608,7 @@ contains
       !$acc&                  this%hu_face_x_layer, this%hv_face_y_layer, &
       !$acc&                  this%w_interface)
       !$acc exit data copyout(this%rho_layer)
+      !$acc exit data delete(this%p_top)
       !$acc exit data delete(this%h_layer0, &
       !$acc&                 this%u_av_layer, this%v_av_layer, this%h_av_layer, &
       !$acc&                 this%u_face_x_layer0, this%v_face_y_layer0, &

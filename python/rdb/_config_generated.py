@@ -1788,6 +1788,14 @@ class OceanPsurf(Group):
         default=False,
     )
 
+    in_eos = Bool(
+        'in_eos',
+        doc='Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders)',
+        units='',
+        required=False,
+        default=False,
+    )
+
     p_surf_const = Real(
         'p_surf_const',
         doc='Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert)',
@@ -3550,7 +3558,7 @@ class OceanPgf(Group):
 
 
 class OceanEos(Group):
-    """`&ocean_eos_nml` -- Equation-of-state variant selector."""
+    """`&ocean_eos_nml` -- Equation-of-state variant selector + reference pressure."""
 
     _nml_name = 'ocean_eos'
 
@@ -3561,6 +3569,16 @@ class OceanEos(Group):
         required=False,
         default='linear',
         allowed=('linear', 'wright', 'roquet_spv', 'teos10'),
+    )
+
+    p_ref = Real(
+        'p_ref',
+        doc='Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density)',
+        units='Pa',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
     )
 
 
@@ -5604,4 +5622,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 613
+N_KNOBS = 615
