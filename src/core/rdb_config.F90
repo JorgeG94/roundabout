@@ -1648,7 +1648,11 @@ module rdb_config
          !! (gauge invariance — only grad(p_surf) is physical), so a
          !! non-zero value with no file/override path emits a rank-0
          !! warning.  v1 fill path (the analogue of `&ocean_thermo_nml
-         !! q_heat`); file-driven p_surf is deferred to PR-14/PR-15.
+         !! q_heat`).  The NetCDF forcing reader itself ships
+         !! (`&ocean_dataovr_nml`); `p_surf` is simply not one of its six
+         !! tags (tau_x, tau_y, heat, salt, evap, lprec) yet, so a
+         !! file-driven load needs a `register_tag` entry, not new reader
+         !! machinery.
    end type ocean_psurf_config_t
    type :: ocean_continuity_config_t
       real(wp) :: h_min = 1.0e-6_wp
@@ -7009,9 +7013,14 @@ contains
       g%name = "ocean_pgf"
       g%doc = "Pressure-gradient-force kernel selector + knobs."
       ps => cfg%ocean%pgf%form
+      ! "montgomery" is a long-spelling alias for "mont": `parse_opgf_variant`
+      ! accepts it, so the schema must too or the alias is unreachable through
+      ! the namelist (the enum gate rejects before the parser is ever called).
+      ! Both canonicalise to OPGF_VARIANT_MONT; the only literal comparison on
+      ! this key anywhere is against "gprime", so the extra spelling is inert.
       call g%add(nml_enum("form", ps, "PGF kernel variant", &
-                          allowed=[character(len=9) :: "mont", "fv_lite", "fv_wright", &
-                                   "gprime", "fv_mom6"]))
+                          allowed=[character(len=10) :: "mont", "montgomery", "fv_lite", &
+                                   "fv_wright", "gprime", "fv_mom6"]))
       pr => cfg%ocean%pgf%gprime_gfs
       call g%add(nml_real("gprime_gfs", pr, "Free-surface gravity for the gprime PGF", &
                           units="m/s^2"))

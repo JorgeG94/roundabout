@@ -66,10 +66,13 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 - **Time-varying NetCDF surface forcing** (`&ocean_dataovr_nml`, default off) — wind stress, heat, salt, evaporation and liquid precipitation bound to pre-regridded model-grid files through the shared PR-14 reader. See the full entry in the ocean-physics list below for the tag table, the `enable_components` destination rule, and the v1 limits (shared time mode across tags, single-rank).
 - Surface heat + salt flux, shortwave penetration, surface buoyancy restoring.
 - Equilibrium body-force tide + scalar SAL + boundary-tide nodal correction.
-- **Atmospheric surface-pressure loading / inverse barometer** (`&ocean_psurf_nml enable`, default off ⇒ byte-identical). `η_ib = −p_surf/(ρ₀·g_bt)` is folded into the barotropic `eta_forcing` seam, so the momentum feels `−(1/ρ₀)∇p_surf` — an atmospheric high depresses SSH ~1 cm/hPa. Composes additively with the equilibrium tide + scalar SAL on the same seam; ρ₀ from `eos%rho0`. **v1 fill is a uniform scalar** (`p_surf_const`, seeded into `sf%p_surf_atm`) which is provably inert (only ∇p_surf is physical) — a genuine load needs the file-driven reader (deferred). Requires `&ocean_forcing_nml enable_components=.true.` (reads `sf%p_surf`), the split solver (`n_inner ≥ 1`), and is mutually exclusive with `&ocean_bt_nml bt_halo > 0`.
+- **Atmospheric surface-pressure loading / inverse barometer** (`&ocean_psurf_nml enable`, default off ⇒ byte-identical). `η_ib = −p_surf/(ρ₀·g_bt)` is folded into the barotropic `eta_forcing` seam, so the momentum feels `−(1/ρ₀)∇p_surf` — an atmospheric high depresses SSH ~1 cm/hPa. Composes additively with the equilibrium tide + scalar SAL on the same seam; ρ₀ from `eos%rho0`. **v1 fill is a uniform scalar** (`p_surf_const`, seeded into `sf%p_surf_atm`) which is provably inert (only ∇p_surf is physical) — a genuine load needs `p_surf` wired up as an `&ocean_dataovr_nml` tag (the reader ships; `p_surf` is not yet one of its tags). Requires `&ocean_forcing_nml enable_components=.true.` (reads `sf%p_surf`), the split solver (`n_inner ≥ 1`), and is mutually exclusive with `&ocean_bt_nml bt_halo > 0`.
 
 ### Not yet shipped
-- **File-driven `p_surf`** (reanalysis MSLP) — needs the NetCDF forcing reader (deferred).
+- **File-driven `p_surf`** (reanalysis MSLP) — the NetCDF forcing reader itself
+  ships (`&ocean_dataovr_nml`, above); `p_surf` is simply not one of its six
+  tags (`tau_x`, `tau_y`, `heat`, `salt`, `evap`, `lprec`). Adding it is a
+  `register_tag` entry plus a destination slot, not new reader machinery.
 - **Sea-ice mass loading into `p_surf`** — deferred to the ice-loading PR (the `eta_ib` seam and the `sf%p_surf` overwrite convention are in place for it).
 - **`p_surf` in the EOS pressure argument** / ice-shelf-cavity surface-pressure curvature corrections / `MAX_P_SURF` load cap — out of scope.
 
@@ -547,9 +550,18 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 
 ### Shipped — coordinates + BCs + I/O
 
-- **All six VCOORD_* families** dispatch through the same ALE remap:
-  `EULERIAN_Z`, `SIGMA`, `ZSTAR`, `ZSIGMA`, `ZSTAR_SIGMA`,
-  `ZSTAR_FULL`.
+- **All ten VCOORD_* families** dispatch through the same ALE remap:
+  `LAGRANGIAN`, `EULERIAN_Z`, `SIGMA`, `ZSIGMA`, `ZSTAR`, `ZSTAR_FULL`,
+  `ZSTAR_SIGMA`, `Z_FIXED`, `RHO`, `HYCOM` (enum of record:
+  `src/core/rdb_constants.F90`). Eight are `select case` branches of
+  `ocean_vcoord_compute_target_h`; `RHO` and `HYCOM` need per-layer T/S plus
+  the EOS and so enter through the sibling `compute_target_h_rho`, dispatched
+  from the same remap driver (`src/ALE/rdb_ocean_remap.F90`). `LAGRANGIAN`
+  early-returns — the target IS the live `h_layer`, so the remap is a no-op.
+  On the ocean path `ZSTAR` shares the `SIGMA` branch: in this barotropic
+  `(H, η)` form the two target formulas are the same expression.
+  `RHO` is validation-grade alone (weakly-stratified columns collapse);
+  `HYCOM` is the production hybrid.
 - **OBC dispatch wired end-to-end** (2026-06-10, `&ocean_bc_nml` →
   per-edge tags → driver → kernels). Shipped types: WALL (default),
   OPEN (Flather + per-layer zero-gradient baroclinic anomaly), TIDAL
