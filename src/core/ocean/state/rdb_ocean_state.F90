@@ -532,7 +532,18 @@ contains
       ! in rdb_ocean_data_input's module docstring).
       call this%data_input%init(cfg%ocean%data)
 #endif
+      ! Linear-EOS reference state, all five members off `&ocean_ic_nml`.
+      ! This runs before `ocean_state_enter_data` AND before the
+      ! `configure_ocean_*` pass that copies the whole flat-POD handle
+      ! onto the closure slots that carry their own copy
+      ! (`vmix%eos`, `epbl%eos`, `kshear%eos`, `tidal_mixing%eos` —
+      ! `rdb_ocean_setup.F90`), so every rider and every device kernel
+      ! that takes `eos_t` by value sees the configured values.  Defaults
+      ! equal the `eos_t` component defaults ⇒ bit-identical.
       this%eos%alpha_T = cfg%ocean%ic%alpha_T
+      this%eos%beta_S = cfg%ocean%ic%beta_S
+      this%eos%T_ref = cfg%ocean%ic%T_ref
+      this%eos%S_ref = cfg%ocean%ic%S_ref
       this%eos%rho0 = cfg%ocean%ic%rho_0
       ! EPBL master switch is read here (before the configure_ocean_*
       ! pass) because diag registration — which gates the MLD_EPBL /
