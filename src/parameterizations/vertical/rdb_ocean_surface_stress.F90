@@ -36,7 +36,14 @@ module rdb_ocean_surface_stress
          !! True between `init` and `destroy`.
       real(wp) :: rho0 = 1035.0_wp
          !! Boussinesq reference density (kg/m^3) used in the
-         !! `tau / (rho_0 * h)` acceleration.
+         !! `tau / (rho_0 * h)` acceleration (top-layer and DIRECT_STRESS
+         !! distributed forms alike).
+         !!
+         !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
+         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! -> `eos%rho0`).  The literal here is only the pre-configure
+         !! type default.  Host scalar: passed by value into the
+         !! `surfstress_*_impl` kernels, so no `!$acc update device`.
       real(wp) :: h_min = 1.0e-3_wp
          !! Floor on the surface-layer thickness in the `1/h_top`
          !! division — keeps the kernel finite when the top layer

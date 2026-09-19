@@ -30,6 +30,7 @@ program bench_ocean
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, configure_ocean_drag, &
                               configure_ocean_vmix, configure_ocean_lateral, &
+                              configure_ocean_reference_density, &
                               configure_ocean_pgf, configure_ocean_bt, &
                               configure_ocean_bt_split
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type
@@ -97,6 +98,11 @@ program bench_ocean
    call configure_ocean_vmix(cfg, os, 0)
    call configure_ocean_lateral(cfg, os, grid, 0)
    call configure_ocean_pgf(cfg, os, 0)
+   ! Single configured rho_0 out to the surface-flux / wind-stress / vmix
+   ! slots, exactly as engine_setup does it (the local `sf` above is the
+   ! benchmark's own zero-flux handle, so it takes the same value too).
+   call configure_ocean_reference_density(os)
+   sf%rho0 = os%eos%rho0
    call configure_ocean_bt(cfg, os, grid, 0)
    call configure_ocean_bt_split(cfg, os, grid, 0)   ! may auto-set cfg%ocean%bt%n_inner
    call configure_ocean_land_mask(cfg, os, grid, 0)  ! static land masking (CHUNK A)

@@ -185,7 +185,21 @@ module rdb_ocean_vmix
          !! paper uses 5; some implementations use 4 or 10.
       real(wp) :: rho0 = 1035.0_wp
          !! Boussinesq reference density (kg/m^3).  Used in the
-         !! N² = -g/ρ_0 * dρ/dz expression.
+         !! N² = -g/ρ_0 * dρ/dz expression, in the friction velocity
+         !! u_* = √(|τ|/ρ_0), and in the kinematic surface fluxes
+         !! q_T = Q_heat/(ρ_0·cp) / q_S = Q_salt/ρ_0 that set the KPP
+         !! surface buoyancy flux B_0.
+         !!
+         !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
+         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! -> `eos%rho0`).  The literal here is only the pre-configure
+         !! type default.  UNLIKE the other reference densities this one
+         !! IS read on-device (`this%rho0` inside the `do concurrent`
+         !! bodies of `vmix_compute_pp81` / `vmix_kpp_overlay_impl` /
+         !! `vmix_convective_impl`), so under `mem:separate` it is only
+         !! correct because the configure pass runs strictly BEFORE
+         !! `ocean_state_enter_data`'s `copyin` — same as the `pp81_*`
+         !! scalars beside it.  A later write needs `!$acc update device`.
       real(wp) :: shear2_floor = 1.0e-10_wp
          !! Lower bound on |∂u/∂z|² to avoid Ri = N²/0 blow-up in
          !! quiescent water columns.

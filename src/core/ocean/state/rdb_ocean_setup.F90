@@ -62,6 +62,7 @@ module rdb_ocean_setup
                              parse_epbl_combine, parse_epbl_lt_scheme
    use rdb_ocean_vmix, only: parse_kpp_sw_method, vmix_resolve_kd_min, &
                              bkgnd_henyey_conflicts_profile
+   use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_fold, only: fold_north_corner
    use rdb_ocean_tides, only: tides_configure_astronomy, tides_build_struct
    use rdb_ocean_p_surf, only: p_surf_configure
@@ -94,6 +95,7 @@ module rdb_ocean_setup
    public :: configure_ocean_vmix
    public :: configure_ocean_tracers
    public :: configure_ocean_lateral
+   public :: configure_ocean_reference_density
    public :: configure_ocean_pgf
    public :: configure_ocean_bt
    public :: configure_ocean_bt_split
@@ -2442,6 +2444,56 @@ contains
       call ocean_state%meke%set_f_centre(grid, f_centre)
       deallocate (f_centre)
    end subroutine configure_ocean_meke
+
+   subroutine configure_ocean_reference_density(ocean_state, geo)
+      !! Fan the ONE configured Boussinesq reference density out to every
+      !! remaining slot that carries its own `rho0` copy.
+      !!
+      !! `&ocean_ic_nml rho_0` lands on `eos%rho0` in
+      !! `ocean_state_init_from_config`; that is the ρ₀ of record.  EPBL,
+      !! kappa-shear, tidal mixing, wave speed, the `eta_ib` surface-pressure
+      !! seam, GM / MEKE / Redi / MLE, the isopycnal slopes and (since the
+      !! preceding commit) the PGF all copy it in their own
+      !! `configure_ocean_*`.  The four slots wired here were the remainder:
+      !! they kept a hard 1035 type default that nothing ever assigned, so a
+      !! namelist with `rho_0 /= 1035` ran the EOS on one reference density
+      !! and the surface forcing, wind stress and KPP buoyancy on another —
+      !! no warning, no fail-loud, just a 1035/ρ₀ scaling on every surface
+      !! heat/salt flux, every wind-stress acceleration, and N²/u*/B_0.
+      !!
+      !!   * `surface_flux%rho0`  — the `dt/(ρ₀·cp)` heat and `dt/ρ₀` salt
+      !!     divisors for EVERY surface tracer source, including what the
+      !!     sea-ice coupler delivers through `Q_heat`/`Q_salt`.
+      !!   * `surface_stress%rho0` — the `τ/(ρ₀·h_top)` acceleration (both
+      !!     the top-layer and the DIRECT_STRESS distributed form).
+      !!   * `vmix%rho0` — KPP: N² = −g/ρ₀·∂ρ/∂z, u* = √(|τ|/ρ₀), the
+      !!     kinematic surface fluxes q_T = Q_heat/(ρ₀·cp), q_S = Q_salt/ρ₀
+      !!     feeding B_0, and the PP81 / convective-adjustment N².
+      !!   * `geothermal%rho0` — the `dt·Q_geo/(ρ₀·cp)` bed heat source.
+      !!     The geothermal slot lives on the engine, not on `ocean_state`,
+      !!     so it is passed in (optional: a caller with no geothermal slot
+      !!     simply omits it).
+      !!
+      !! Device contract (`mem:separate`): `surface_flux`, `surface_stress`
+      !! and `geothermal` read their `rho0` HOST-side (folded into the
+      !! `inv_scale` / `src_T` scalar or passed by value into a `*_impl`), so
+      !! those owe nothing.  `vmix%rho0` IS read on-device — `this%rho0`
+      !! appears inside the `do concurrent` bodies of `vmix_compute_pp81`,
+      !! `vmix_kpp_overlay_impl` and `vmix_convective_impl` — but this
+      !! routine runs in the configure phase, strictly BEFORE
+      !! `ocean_state_enter_data`'s `copyin`, exactly like the neighbouring
+      !! `pp81_*` / `shear2_floor` scalars it sits with.  No
+      !! `!$acc update device` is owed.  **A configure step that ever moves
+      !! after `enter_data` must add one.**
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(ocean_geothermal_t), intent(inout), optional :: geo
+         !! Engine-held geothermal slot (the split driver's `geo` argument).
+
+      ocean_state%surface_flux%rho0 = ocean_state%eos%rho0
+      ocean_state%surface_stress%rho0 = ocean_state%eos%rho0
+      ocean_state%vmix%rho0 = ocean_state%eos%rho0
+      if (present(geo)) geo%rho0 = ocean_state%eos%rho0
+   end subroutine configure_ocean_reference_density
 
    subroutine configure_ocean_pgf(cfg, ocean_state, compute_rank, ierr)
       !! Pressure-force variant, the reference densities (`rho0` / `rho_ref`,
