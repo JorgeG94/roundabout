@@ -467,6 +467,22 @@ constraint.
 | Wright (1997) nonlinear | available | `&ocean_eos_nml eos="wright"` |
 | Roquet et al. (2015) SpV (TEOS-10-class) | available | `&ocean_eos_nml eos="roquet_spv"` (not with `fv_wright` PGF) |
 
+Linear-EOS reference state — `ρ = ρ_0 + β_S·(S−S_ref) − α_T·(T−T_ref)`:
+
+| Parameter | Knob | Default | Units | Test |
+|---|---|---|---|---|
+| `α_T` | `&ocean_ic_nml alpha_T` | `1.7e-4` | kg/m³ per °C | `test_ocean_linear_eos_knobs` |
+| `β_S` | `&ocean_ic_nml beta_S` | `7.6e-4` | kg/m³ per PSU | `test_ocean_linear_eos_knobs` |
+| `T_ref` | `&ocean_ic_nml T_ref` | `10.0` | °C | `test_ocean_linear_eos_knobs` |
+| `S_ref` | `&ocean_ic_nml S_ref` | `35.0` | PSU | `test_ocean_linear_eos_knobs` |
+| `ρ_0` | `&ocean_ic_nml rho_0` | `1035.0` | kg/m³ | `test_ocean_linear_eos_knobs` |
+
+`α_T`/`β_S` are **DIMENSIONAL** (kg/m³ per unit), not the fractional
+1/°C, 1/PSU coefficients protocols usually quote — multiply those by
+`ρ_0` first (`alpha_T = ρ_0·α`). See `docs/REFERENCE.md` §Equation of
+state. The coastal-legacy `&tracer_nml alpha_T/beta_S/T_ref/S_ref`
+spellings are RETIRED and fail loud at configure.
+
 ## Boundary tracer fluxes (ocean path)
 
 | Flux | ocean | Knob | Test |

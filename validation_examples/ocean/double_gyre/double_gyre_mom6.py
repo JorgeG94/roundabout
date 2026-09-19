@@ -17,11 +17,11 @@ Known caveats vs MOM6 (see ``README.md``):
 
   - MOM6 uses gprime / adiabatic reduced gravity, NK=2, with
     ENABLE_THERMODYNAMICS = False. Roundabout's multilayer kernel always
-    runs T/S advection, so we instead set alpha_T = beta_S = 0 below --
-    the linear EOS returns rho_0 regardless of T/S so any
-    tracer-advection drift cannot reach the dynamics. SSH amplitudes
-    will not bit-match MOM6, but the mass + energy budget is decoupled
-    from thermodynamics in the same spirit.
+    runs T/S advection, so we instead disable thermodynamics below and
+    use the gprime / reduced-gravity PGF, which never calls the EOS --
+    so any tracer-advection drift cannot reach the dynamics. SSH
+    amplitudes will not bit-match MOM6, but the mass + energy budget is
+    decoupled from thermodynamics in the same spirit.
   - MOM6 BOUND_CORIOLIS = True (Sadourny + HK correction). Roundabout ships
     the Arakawa-Hsu / HK kernel -- engaged below via
     ocean_coriolis_form = "sadourny_energy" (matches MOM6's
@@ -110,13 +110,10 @@ def build_model():
         momentum_advection=Sadourny(form="energy"),  # -> sadourny_energy
         # No buoyancy= object here, DELIBERATELY: the .nml never touches
         # &ocean_eos_nml (default "linear" already matches) or
-        # &ocean_ic_nml alpha_T/rho_0 (stays at the Fortran's own
-        # defaults) -- and, per the .nml's own comment, ocean_ic.alpha_T
-        # is unused anyway once enable_thermodynamics=.false. below
-        # skips the EOS call entirely. The "set alpha_T = beta_S = 0"
-        # belt-and-braces the .nml describes is the COASTAL-LEGACY
-        # &tracer_nml pair (dead_on_ocean_path in the schema), not this
-        # one -- see the tracer.alpha_T/beta_S escape-hatch lines below.
+        # &ocean_ic_nml alpha_T/beta_S/T_ref/S_ref/rho_0 (all stay at
+        # the Fortran's own defaults) -- and ocean_ic.alpha_T is unused
+        # anyway once enable_thermodynamics=.false. below skips the EOS
+        # call entirely.
         # An earlier draft of this script called
         # LinearEquationOfState(thermal_expansion=0.0, ...) here, which
         # wrote a NON-default &ocean_ic_nml alpha_T=0.0 the .nml never
@@ -186,15 +183,15 @@ def build_model():
     # setting them explicitly would be a behaviourally-inert no-op; see
     # the port report for the full accounting.
 
-    # Belt-and-braces tracer drift guard (see .nml comment): both knobs
-    # are dead_on_ocean_path per the generated schema's own docstring
-    # (tracer.alpha_T/beta_S feed a coastal-legacy path read nowhere on
-    # the ocean path, per the P4 dead-knob sweep) -- reproduced verbatim
-    # anyway for configuration fidelity, not because it does anything.
-    # DELIBERATELY left on the escape hatch: giving a dead knob a nice
-    # curated route would misrepresent it as meaningful.
-    cfg.tracer.alpha_T = 0.0
-    cfg.tracer.beta_S = 0.0
+    # NOTE: an earlier revision reproduced the .nml's belt-and-braces
+    # `cfg.tracer.alpha_T = cfg.tracer.beta_S = 0.0` here. Those two
+    # keys are now RETIRED -- setting them is a fail-loud configure
+    # error naming `&ocean_ic_nml alpha_T`/`beta_S` -- and the .nml has
+    # dropped them too, so the pair is gone from both sides. Nothing
+    # changes: they only ever reached tracer_t%eos_coeff, which no ocean
+    # kernel reads. What actually decouples the carried tracers from the
+    # dynamics is Thermodynamics(enabled=False) plus ReducedGravity
+    # (gprime), which never calls the EOS.
 
     # &output_nml output_to_file: cosmetic-only dead knob, see
     # acc_channel.py's matching note (Diagnostics(enabled=True) sets it

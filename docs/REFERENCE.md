@@ -282,22 +282,46 @@ expansion coefficient.
 > regression gate is `tests/test_ocean_buoyancy_flux.F90`, which also
 > pins KPP's `B_0` and EPBL's `b0` to the same number.
 
-> **On the ocean path the coefficients do NOT come from `&tracer_nml`.**
-> `&tracer_nml beta_S` (0.78) and `alpha_T` (0.17) are marked
-> `dead_on_ocean_path` in the schema — they are stored onto `tracer_t` and
-> never read by the ocean EOS, so setting them is silent. The live knob is
-> **`&ocean_ic_nml alpha_T`** (default `1.7e-4` kg/m³/°C). `β_S`
-> (`7.6e-4` kg/m³/PSU), `S_ref` and `T_ref` take the `rdb_eos` defaults and
-> are not namelist-settable on this path. Both EOS defaults are
-> deliberately small — ~1000× below the realistic dimensional values,
-> i.e. numerically the FRACTIONAL coefficients sitting in a dimensional
-> slot — so a 10 °C contrast moves density by 1.7×10⁻³ kg/m³ instead of
-> ~1.7. They suppress baroclinic feedback from PPM round-off in the
-> adiabatic tests and are **not** a physical configuration:
-> density-driven cases must set `alpha_T` explicitly (the shipped ones do
-> — `0.17`, `0.2`, ISOMIP+ `3.8356948e-2`). Setting `α_T = β_S = 0` decouples the
-tracers from the dynamics entirely — the adiabatic reduced-gravity setup
-used by the MOM6-reference double gyre.
+
+The whole reference state — all five of `α_T`, `β_S`, `T_ref`, `S_ref`,
+`ρ_0` — is set from **`&ocean_ic_nml`**:
+
+| Knob | Default | Units |
+|---|---|---|
+| `alpha_T` | `1.7e-4` | kg/m³ per °C |
+| `beta_S` | `7.6e-4` | kg/m³ per PSU |
+| `T_ref` | `10.0` | °C |
+| `S_ref` | `35.0` | PSU |
+| `rho_0` | `1035.0` | kg/m³ |
+
+> **UNITS TRAP — `α_T`/`β_S` are DIMENSIONAL, not fractional.** The form
+> above is the density-ANOMALY one, so the coefficients carry kg/m³ per
+> unit T/S. Most protocols quote the FRACTIONAL coefficients of the
+> equivalent `ρ = ρ_0·(1 − α·(T−T_ref) + β·(S−S_ref))`, with `α` in
+> 1/°C and `β` in 1/PSU. **Convert by multiplying by `ρ_0`:**
+> `alpha_T = ρ_0·α`, `beta_S = ρ_0·β`. For example ISOMIP+ (Asay-Davis
+> et al. 2016: `α = 3.733e-5` 1/°C, `β = 7.843e-4` 1/PSU,
+> `ρ_0 = 1027.51`) becomes
+> `alpha_T = 3.8356948e-2`, `beta_S = 8.0587609e-1`. Feeding the
+> fractional numbers straight in under-states the density response
+> ~1000× — a plausible but far too weakly stratified run. Locked by
+> `tests/test_ocean_linear_eos_knobs.F90`.
+
+> **The `&tracer_nml` spellings are RETIRED.** `&tracer_nml alpha_T`,
+> `beta_S`, `T_ref` and `S_ref` only ever reached
+> `tracer_t%eos_coeff`/`eos_ref`, which no ocean kernel reads — setting
+> them was silent. Moving any of them off its historical default is now
+> a **fail-loud `validate_config` error** naming the `&ocean_ic_nml`
+> replacement. Delete the key; it never did anything.
+
+The shipped defaults are deliberately small (they suppress baroclinic
+feedback from PPM round-off in tests that don't care about realistic
+density gradients); density-driven cases must set `alpha_T`/`beta_S`
+explicitly. Setting `α_T = β_S = 0` decouples the tracers from the
+dynamics entirely — though the adiabatic reduced-gravity setup used by
+the MOM6-reference double gyre gets there instead via
+`&ocean_thermo_nml enable_thermodynamics = .false.` plus the gprime PGF,
+which never calls the EOS at all.
 
 > **`&ocean_ic_nml rho_0` (default `1035.0` kg/m³) is the single ρ₀ of
 > record.** It is the linear-EOS reference density AND the Boussinesq divisor
@@ -586,15 +610,15 @@ all fields have sensible defaults.
 | Parameter | Default | Description |
 |---|---|---|
 | `initial_salinity` | 35.0 | Initial salinity (PSU, uniform IC) |
-| `S_ref` | 0.0 | Reference salinity in the linear EOS (PSU) |
-| `beta_S` | 0.78 | Haline contraction (kg/m³ per PSU). **Dead on the ocean path** — see the EOS note above. |
+| `S_ref` | 0.0 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml S_ref`. |
+| `beta_S` | 0.78 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml beta_S`. |
 | `S_min` | 0.0 | Lower clamp (PSU) |
 | `S_max` | 40.0 | Upper clamp (PSU) |
 | `kappa_S_bg` | 1.0e-5 | Background vertical S diffusivity (m²/s) |
-| `S_init_surface`, `S_init_bottom` | 0.0 | Surface / bed salinity for the stratified IC |
+| `S_init_surface`, `S_init_bottom` | 0.0 | Surface / bed salinity for the stratified IC. **Dead on the ocean path** — parsed and validated, but no stratified-salinity seed consumes it. |
 | `initial_temperature` | 15.0 | Initial potential temperature (°C, uniform IC) |
-| `T_ref` | 15.0 | Reference temperature in the linear EOS (°C) |
-| `alpha_T` | 0.17 | Thermal expansion (kg/m³ per °C); 0 = passive. **Dead on the ocean path** — use `&ocean_ic_nml alpha_T`. |
+| `T_ref` | 15.0 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml T_ref`. |
+| `alpha_T` | 0.17 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml alpha_T`. |
 | `T_min` | -2.0 | Lower clamp (°C); seawater freezing |
 | `T_max` | 40.0 | Upper clamp (°C) |
 | `kappa_T_bg` | 1.0e-5 | Background vertical T diffusivity (m²/s) |

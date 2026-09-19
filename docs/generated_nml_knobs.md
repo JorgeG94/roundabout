@@ -852,7 +852,10 @@ Initial-condition overlay + EOS reference state.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `ic_config` | `""` |  | IC overlay tag |
-| `alpha_T` | `0.1700000000E-03` | kg/m^3/degC | Linear-EOS thermal-expansion coefficient |
+| `alpha_T` | `0.1700000000E-03` | kg/m^3/degC | Linear-EOS thermal-expansion coefficient (DIMENSIONAL: multiply a fractional 1/degC coefficient by rho_0) |
+| `beta_S` | `0.7600000000E-03` | kg/m^3/PSU | Linear-EOS haline contraction coefficient (DIMENSIONAL: multiply a fractional 1/PSU coefficient by rho_0) |
+| `T_ref` | `0.1000000000E+02` | degC | Linear-EOS reference temperature |
+| `S_ref` | `0.3500000000E+02` | PSU | Linear-EOS reference salinity |
 | `rho_0` | `0.1035000000E+04` | kg/m^3 | Reference density for the linear EOS / Boussinesq PGF |
 | `layer_rho_init` | `-0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01, -0.1000000000E+01` | kg/m^3 | Per-layer initial density (k=1 bed -> k=nz surface; -1 = EOS init) |
 | `rho_lightest` | `-0.1000000000E+01` | kg/m^3 | Linear density-range IC: surface (lightest) layer density; -1 = off |

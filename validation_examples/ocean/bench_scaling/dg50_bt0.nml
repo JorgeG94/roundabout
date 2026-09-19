@@ -24,9 +24,10 @@
 ! Known caveats vs MOM6 (see README.md):
 !   - MOM6 uses gprime / adiabatic reduced gravity, NK=2, with
 !     ENABLE_THERMODYNAMICS = False.  Roundabout's multilayer kernel
-!     always runs T/S advection, so we instead set alpha_T = beta_S
-!     = 0 below — the linear EOS returns rho_0 regardless of T/S
-!     so any tracer-advection drift cannot reach the dynamics.
+!     always runs T/S advection, so we instead disable thermodynamics
+!     below and use the gprime / reduced-gravity PGF, which never
+!     calls the EOS — so any tracer-advection drift cannot reach the
+!     dynamics.
 !     SSH amplitudes will not bit-match MOM6, but the mass + energy
 !     budget is decoupled from thermodynamics in the same spirit.
 !   - MOM6 BOUND_CORIOLIS = True (Sadourny + HK correction).  Roundabout
@@ -72,13 +73,16 @@
 &tracer_nml
    initial_temperature = 15.0
    initial_salinity    = 35.0
-   ! Belt-and-braces: even with ENABLE_THERMODYNAMICS = False below,
-   ! tracers still get carried along by the continuity-tracer step
-   ! (that kernel updates h and hTr together for CWC).  Setting
-   ! alpha_T = beta_S = 0 guarantees any residual tracer drift cannot
-   ! reach the dynamics via the EOS.
-   alpha_T             = 0.0
-   beta_S              = 0.0
+   ! NOTE: this config used to carry a belt-and-braces
+   ! `&tracer_nml alpha_T = beta_S = 0` here.  Those two keys were
+   ! coastal-legacy and dead on the ocean path (they only ever reached
+   ! tracer_t%eos_coeff), so they never guaranteed anything; they are
+   ! now RETIRED and fail loud.  What actually decouples the carried
+   ! tracers from the dynamics is `&ocean_thermo_nml
+   ! enable_thermodynamics = .false.` below plus the gprime /
+   ! reduced-gravity PGF, which never calls the EOS at all.  The live
+   ! EOS coefficients, if this config ever needs them, are
+   ! `&ocean_ic_nml alpha_T` / `beta_S`.
 /
 
 &ocean_ic_nml
@@ -112,8 +116,8 @@
    ! and vertical advection, tracer vdiff, KPP non-local, and surface
    ! tracer flux.  Matches MOM6's ADIABATIC=True for this config.
    ! Tracers are still carried by the continuity-tracer step (h and
-   ! hTr update together), but with alpha_T=beta_S=0 above they have
-   ! no dynamical effect.
+   ! hTr update together), but the gprime PGF never calls the EOS, so
+   ! they have no dynamical effect.
    enable_thermodynamics = .false.
 /
 
