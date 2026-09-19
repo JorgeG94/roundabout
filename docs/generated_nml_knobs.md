@@ -128,8 +128,8 @@ Salinity + temperature IC/EOS/bounds, sediment transport.
 | `S_min` | `0.0000000000E+00` | PSU | Lower physical bound for salinity |
 | `S_max` | `0.4000000000E+02` | PSU | Upper physical bound for salinity |
 | `kappa_S_bg` | `0.1000000000E-04` | m^2/s | Background vertical salinity diffusivity |
-| `S_init_surface` | `0.0000000000E+00` | PSU | Initial surface salinity (stratified IC) |
-| `S_init_bottom` | `0.0000000000E+00` | PSU | Initial bed salinity (stratified IC) |
+| `S_init_surface` | `0.0000000000E+00` | PSU | Initial surface salinity at k=nz (linear-in-layer stratified IC; needs S_init_bottom non-zero too) |
+| `S_init_bottom` | `0.0000000000E+00` | PSU | Initial bed salinity at k=1 (linear-in-layer stratified IC; needs S_init_surface non-zero too) |
 | `initial_temperature` | `0.1500000000E+02` | degC | Initial temperature (uniform IC) |
 | `T_ref` | `0.1500000000E+02` | degC | EOS reference temperature |
 | `alpha_T` | `0.1700000000E+00` | kg/m^3/degC | Thermal expansion coefficient |
