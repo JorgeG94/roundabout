@@ -29,6 +29,7 @@
 !! here and not in the generic `rdb_handle`.
 !!
 !! Never exposed: `comm_env_finalize` (irreversible, calls `MPI_Finalize`).
+!! `comm_env_init` IS called, on every create -- see `build_pending_handle`.
 !!
 !! Failure contract (P0.1 review F9): `rdb_ocean_create_from_string`
 !! calls `handle_destroy` on EVERY non-`OCEAN_STATUS_OK` branch below,
@@ -55,6 +56,7 @@ module rdb_ocean_api
                                engine_step_ice, engine_step_finalize, engine_exit_data, &
                                engine_teardown
    use rdb_ocean_dyn, only: ocean_dyn_flush_tracer_window
+   use rdb_comm_env, only: comm_env_init
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                                OCEAN_STATUS_ERR_SETUP, OCEAN_STATUS_ERR_BAD_HANDLE, &
                                OCEAN_STATUS_ERR_ALREADY_EXISTS, &
@@ -235,6 +237,27 @@ contains
       integer(c_int), intent(out) :: status
 
       integer :: ierr, hstat
+
+      ! Bring the comm env up before ANYTHING touches it.  The API is
+      ! single-rank by design (compute_rank=0, compute_size=1), but
+      ! "single-rank" is not "no MPI": in an RDB_ENABLE_MPI=ON build the
+      ! setup path reaches `comm_world()`, and reaching it before MPI is
+      ! initialised is not a soft failure --
+      !
+      !   *** The MPI_Comm_f2c() function was called before MPI_INIT was
+      !   *** invoked.  This is disallowed by the MPI standard.
+      !
+      ! -- the process aborts.  Both create entry points funnel through
+      ! here, so this is the one place that needs it, and `comm_env_init`
+      ! is idempotent, so paying it per create costs nothing.
+      !
+      ! NOT a fix for being embedded in a host that has ALREADY called
+      ! MPI_Init (mpi4py, a C driver of its own).  `pic_mpi_init` calls
+      ! `MPI_Init_thread` unconditionally and pic-mpi exposes no
+      ! `MPI_Initialized` wrapper to guard on, so that case would still
+      ! double-initialise.  Closing it needs an upstream wrapper: the
+      ! `no-mpi-in-rdb` rule means this file cannot ask MPI directly.
+      call comm_env_init()
 
       c_handle = handle_create()
       hstat = handle_check(c_handle, h)
