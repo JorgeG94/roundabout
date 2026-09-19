@@ -414,9 +414,13 @@ contains
       !! PGF.  `> H_VANISHED` (the D4 vanished-layer role) returns rho_0 for
       !! any layer in `(0, H_VANISHED]`.  Bit-identical for any config whose
       !! layers all exceed H_VANISHED.  CAVEAT: ZSTAR_FULL floors vanishing
-      !! bed layers to `zstar_h_min` (default 1.5e-4 == H_VANISHED exactly),
-      !! so such a bed layer now takes the rho_0 fallback instead of the
-      !! computed density — a dynamically negligible change on a 0.15 mm
+      !! bed layers to `zstar_h_min` (type default 1.0e-4; the shipped
+      !! namelists set 1.5e-4 == H_VANISHED exactly, and `validate_config`
+      !! warns on anything above it for that family — see
+      !! `rdb_vcoord :: vcoord_h_min_role`), so such a bed layer takes the
+      !! rho_0 fallback instead of the computed density.  That is the
+      !! INTENT, not a casualty: those layers are below the bed and hold no
+      !! water.  A dynamically negligible change on a 0.15 mm
       !! layer (PGF contribution ~1e-4 of a normal layer); the shipped
       !! anchors (ocean_analytical 8/8, dyn_split, baroclinic_longrun,
       !! double-gyre helpers) pass unchanged on both toolchains.

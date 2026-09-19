@@ -25,6 +25,10 @@ module test_ocean_fail_loud_dispatch
    use rdb_ocean_lateral_mix, only: leith_biharm_is_inert, &
                                     LMIX_LEITH, LMIX_LEITH_BIHARM
    use rdb_ocean_tidal_mixing, only: tidal_mixing_is_inert
+   use rdb_vcoord, only: vcoord_h_min_role, vcoord_h_min_is_coherent, &
+                         VCOORD_HMIN_INERT, VCOORD_HMIN_KEEPALIVE, VCOORD_HMIN_UNUSED
+   use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, &
+                            VCOORD_RHO, VCOORD_HYCOM, VCOORD_SIGMA, VCOORD_ZSTAR
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -43,7 +47,9 @@ contains
                   new_unittest("obc_parse_invalid", test_obc_parse_invalid), &
                   new_unittest("gprime_nz_predicate", test_gprime_nz_predicate), &
                   new_unittest("leith_biharm_inert_predicate", test_leith_biharm_inert_predicate), &
-                  new_unittest("tidal_mixing_inert_predicate", test_tidal_mixing_inert_predicate) &
+                  new_unittest("tidal_mixing_inert_predicate", test_tidal_mixing_inert_predicate), &
+                  new_unittest("vcoord_h_min_role_split", test_vcoord_h_min_role_split), &
+                  new_unittest("vcoord_h_min_coherence", test_vcoord_h_min_coherence) &
                   ]
    end subroutine collect_ocean_fail_loud_dispatch_tests
 
@@ -203,5 +209,80 @@ contains
       call check(error,.not. tidal_mixing_is_inert(.false., 0.0_wp, .false.), &
                  "disabled is not 'inert'")
    end subroutine test_tidal_mixing_inert_predicate
+
+   subroutine test_vcoord_h_min_role_split(error)
+      !! `zstar_h_min` spells TWO opposite contracts and the coordinate
+      !! family — not the value — picks which.  Pinning the split is the
+      !! point: the geometric families floor BELOW-BED filler that must stay
+      !! vanished, the density families floor REAL collapsed layers that must
+      !! stay alive (and therefore get `max(zstar_h_min, 2*H_VANISHED)`
+      !! instead).  A future family added to the wrong bucket silently
+      !! reclassifies "thin".
+      type(error_type), allocatable, intent(out) :: error
+      call check(error, vcoord_h_min_role(VCOORD_ZSTAR_FULL) == VCOORD_HMIN_INERT, &
+                 "ZSTAR_FULL floors below-bed filler -> INERT role")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_role(VCOORD_Z_FIXED) == VCOORD_HMIN_INERT, &
+                 "Z_FIXED floors above-column filler -> INERT role")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_role(VCOORD_RHO) == VCOORD_HMIN_KEEPALIVE, &
+                 "RHO inflates tracer-carrying layers -> KEEPALIVE role")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_role(VCOORD_HYCOM) == VCOORD_HMIN_KEEPALIVE, &
+                 "HYCOM runs the RHO inversion -> KEEPALIVE role")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_role(VCOORD_SIGMA) == VCOORD_HMIN_UNUSED, &
+                 "sigma never reads zstar_h_min")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_role(VCOORD_ZSTAR) == VCOORD_HMIN_UNUSED, &
+                 "zstar-lite never reads zstar_h_min")
+   end subroutine test_vcoord_h_min_role_split
+
+   subroutine test_vcoord_h_min_coherence(error)
+      !! The guard `validate_config` consumes.  The predicate states the RULE;
+      !! the call site picks the severity (non-positive aborts, above-marker
+      !! warns today because the Python worked example sits in that band), so
+      !! promoting that to fail-loud never re-derives the rule — it edits one
+      !! line.  Two rejections here, and — the part an over-eager guard
+      !! breaks — every shipped value still accepted:
+      !! the 1.0e-4 type default AND the 1.5e-4 five shipped namelists set,
+      !! which sits exactly ON `H_VANISHED` and is legal because every
+      !! downstream vanish gate is a strict `>`.
+      type(error_type), allocatable, intent(out) :: error
+      call check(error, vcoord_h_min_is_coherent(VCOORD_ZSTAR_FULL, 1.0e-4_wp), &
+                 "type default 1.0e-4 accepted under ZSTAR_FULL")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_is_coherent(VCOORD_ZSTAR_FULL, H_VANISHED), &
+                 "shipped 1.5e-4 == H_VANISHED accepted (gates are strict '>')")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_is_coherent(VCOORD_Z_FIXED, H_VANISHED), &
+                 "shipped 1.5e-4 accepted under Z_FIXED too")
+      if (allocated(error)) return
+      call check(error,.not. vcoord_h_min_is_coherent(VCOORD_ZSTAR_FULL, 1.0e-3_wp), &
+                 "above H_VANISHED under ZSTAR_FULL -> filler goes live, rejected")
+      if (allocated(error)) return
+      call check(error,.not. vcoord_h_min_is_coherent(VCOORD_Z_FIXED, 2.0_wp*H_VANISHED), &
+                 "2*H_VANISHED is the RHO keep-alive floor, NOT legal for Z_FIXED")
+      if (allocated(error)) return
+      ! The density families read the same knob under the opposite contract:
+      ! a large value there is a meaningful pre-compaction strip threshold,
+      ! and the regrid lifts its own floor to max(h_min, 2*H_VANISHED).
+      call check(error, vcoord_h_min_is_coherent(VCOORD_RHO, 1.0e-3_wp), &
+                 "RHO keep-alive role permits a floor above H_VANISHED")
+      if (allocated(error)) return
+      call check(error, vcoord_h_min_is_coherent(VCOORD_HYCOM, 1.0e-2_wp), &
+                 "HYCOM keep-alive role permits a floor above H_VANISHED")
+      if (allocated(error)) return
+      ! Non-positive defeats the knob's one purpose (never an exactly-zero
+      ! target_h) on EVERY family, including the ones that ignore it.
+      call check(error,.not. vcoord_h_min_is_coherent(VCOORD_ZSTAR_FULL, 0.0_wp), &
+                 "zero floor rejected — target_h would be exactly 0")
+      if (allocated(error)) return
+      call check(error,.not. vcoord_h_min_is_coherent(VCOORD_RHO, -1.0e-4_wp), &
+                 "negative floor rejected on the density families too")
+      if (allocated(error)) return
+      call check(error,.not. vcoord_h_min_is_coherent(VCOORD_SIGMA, 0.0_wp), &
+                 "non-positive rejected even where the knob is unused")
+   end subroutine test_vcoord_h_min_coherence
 
 end module test_ocean_fail_loud_dispatch

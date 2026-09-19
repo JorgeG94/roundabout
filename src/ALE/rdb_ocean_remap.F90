@@ -23,9 +23,16 @@ module rdb_ocean_remap
    implicit none
    private
 
-   ! Vanishing-layer guard for the `c = hTr / h` step. Mirrors the coastal
-   ! multilayer VANISHING_LAYER_TOL (1.5e-4 m).
-   real(wp), parameter :: H_FLOOR = 1.5e-4_wp
+   ! Vanishing-layer guard for the `c = hTr / h` step — the D4 skip/merge
+   ! marker, NOT a positivity floor: below it the layer's concentration is
+   ! taken as 0 rather than recovered from a near-zero divisor.  Aliased to
+   ! `H_VANISHED` (same value) so there is ONE definition of "vanished" in
+   ! the tree; it used to be a bare `1.5e-4_wp` literal here, which is a
+   ! third definition waiting to drift from the constant of record.  Every
+   ! test of it is a STRICT `>`: a layer sitting exactly ON the marker reads
+   ! as vanished, which is what the geometric vcoord families rely on (see
+   ! `rdb_vcoord :: vcoord_h_min_role`).
+   real(wp), parameter :: H_FLOOR = H_VANISHED
 
    public :: ocean_apply_ale_remap_centres
    public :: ocean_apply_ale_remap_faces
