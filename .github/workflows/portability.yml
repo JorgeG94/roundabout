@@ -213,8 +213,22 @@ jobs:
           #     (Still present in 0.66; the workarounds are NOT obsolete.)
           #   + RDB_LFORTRAN_PASSING=ON  -> the whole solver compiles.
           #   + tests                    -> Internal Compiler Error,
-          #     "visit_StructConstructor() not implemented", on the generated
-          #     test drivers (test-drive's `new_unittest(...)` constructors).
+          #     "visit_StructConstructor() not implemented", while compiling
+          #     the generated test drivers.
+          #
+          #     NOT test-drive, which is what this comment used to say.
+          #     Bisected on 0.66: a 3-line program whose only statement is
+          #     `use pic_mpi_lib` ICEs, while one using test-drive's
+          #     `new_testsuite`/`new_unittest` constructors compiles fine.
+          #     The trigger is a derived-type component whose DEFAULT
+          #     INITIALISER is a derived-type named constant --
+          #     pic-mpi's `type(MPI_Comm) :: m_comm = MPI_COMM_NULL`
+          #     (pic_mpi_serial.F90:106/120/167). Note SERIAL backend: this
+          #     reproduces with RDB_ENABLE_MPI=OFF, so it is pic-mpi's own
+          #     types, not mpi_f08's. Reproducer:
+          #     roundabout-wiki-drafts/lfortran/mre_struct_constructor_ice.f90
+          #     The upstream fix is merged; re-check on 0.67 and turn
+          #     `testing: ON` if the drivers build.
           #
           # So `RDB_ENABLE_TESTING=OFF`: the leg answers "does the solver still
           # compile under LFortran", which it can, instead of sitting red on an

@@ -362,7 +362,23 @@ set(MPI_LAUNCH_TESTS test_driver_ocean test_ocean_halo_single_rank
                      test_ocean_console_stats_efp)
 
 # ---------------------------------------------------------------------------
-# LFortran 0.64 (alpha) known failures.  Two categories, handled differently:
+# LFortran known failures.  Recorded against 0.64; RE-MEASURED against 0.66.0 on
+# 2026-09-19, and most of it is now stale -- but the lists are LEFT INTACT
+# because none of it can be confirmed end to end yet: the generated test drivers
+# still hit the `visit_StructConstructor()` ICE on 0.66, so no LFortran test
+# actually RUNS. What was measured, directly:
+#
+# test_config    compiles clean on 0.66 (`lfortran -c tests/test_config.F90`) --
+# the "x is nullptr" codegen ICE is GONE. test_profiler  compiles clean on 0.66
+# -- VOLATILE is accepted now. the SIGSEGV    `allocate(dst, source=src)` of a
+# type with a character- pointer component runs correctly on 0.66 (reduced MRE),
+# so test_nml_schema / test_config_schema may well pass.
+#
+# DELETE BOTH LISTS once the ICE is fixed (upstream PR merged, expected 0.67)
+# and the suite can be run to confirm. Deleting them on the evidence above alone
+# would be excluding-by-guess in the opposite direction.
+#
+# Two categories, handled differently:
 #
 # (A) UNBUILDABLE — do not COMPILE under lfortran, so they must be excluded from
 # the build (otherwise `cmake --build` itself fails; they can't be "tests that
