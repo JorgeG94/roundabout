@@ -29,6 +29,26 @@ module rdb_config
       !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
 #endif
 
+   ! ------------------------------------------------------------------
+   ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.
+   !
+   ! These four keys fed `tracer_t%eos_coeff` / `tracer_t%eos_ref` via
+   ! `register_default_tracers` — a path the A-grid coastal solvers read
+   ! and the C-grid ocean path never did.  They are now RETIRED rather
+   ! than merely annotated dead: `validate_config` fails loud whenever a
+   ! namelist moves one off its historical default, naming the live
+   ! `&ocean_ic_nml` replacement.  The defaults are named here so the
+   ! type declaration and the guard can never drift apart.
+   ! ------------------------------------------------------------------
+   real(wp), parameter :: LEGACY_TRACER_S_REF = 0.0_wp
+      !! Historical `&tracer_nml S_ref` default (PSU).
+   real(wp), parameter :: LEGACY_TRACER_BETA_S = 0.78_wp
+      !! Historical `&tracer_nml beta_S` default (kg/m^3 per PSU).
+   real(wp), parameter :: LEGACY_TRACER_T_REF = 15.0_wp
+      !! Historical `&tracer_nml T_ref` default (degC).
+   real(wp), parameter :: LEGACY_TRACER_ALPHA_T = 0.17_wp
+      !! Historical `&tracer_nml alpha_T` default (kg/m^3 per degC).
+
    public :: config_t
    public :: ocean_config_t, ocean_grid_config_t, &
              ocean_coriolis_config_t, ocean_thermo_config_t, &
@@ -1912,10 +1932,43 @@ module rdb_config
          !! f-plane; "baroclinic_jet" runs the two-layer reduced-gravity
          !! baroclinic-instability jet (SIM_DETAILS.md §5).
       real(wp) :: alpha_T = 1.7e-4_wp
-         !! Linear-EOS thermal-expansion coefficient (kg/m³ per °C).
+         !! Linear-EOS thermal-expansion coefficient, **DIMENSIONAL**
+         !! (kg/m³ per °C) — see `beta_S` for the conversion from the
+         !! fractional 1/°C coefficient most protocols quote.
+      real(wp) :: beta_S = 7.6e-4_wp
+         !! Linear-EOS haline contraction coefficient, **DIMENSIONAL**
+         !! (kg/m³ per PSU).
+         !!
+         !! UNITS TRAP.  Roundabout's linear EOS is written as the
+         !! DENSITY-ANOMALY form
+         !!
+         !!   rho = rho_0 + beta_S·(S − S_ref) − alpha_T·(T − T_ref)
+         !!
+         !! so `alpha_T`/`beta_S` carry kg/m³ per unit T/S.  Most
+         !! protocols (ISOMIP+, Asay-Davis et al. 2016 among them) quote
+         !! the FRACTIONAL coefficients of the equivalent form
+         !!
+         !!   rho = rho_0·(1 − alpha·(T − T_ref) + beta·(S − S_ref))
+         !!
+         !! with alpha in 1/°C and beta in 1/PSU.  Convert by
+         !! multiplying through by `rho_0`:
+         !!
+         !!   alpha_T = rho_0 · alpha      beta_S = rho_0 · beta
+         !!
+         !! e.g. ISOMIP+ (alpha = 3.733e-5 1/°C, beta = 7.843e-4 1/PSU,
+         !! rho_0 = 1027.51) becomes `alpha_T = 3.8356948e-2`,
+         !! `beta_S = 8.0587609e-1`.  Feeding the fractional numbers
+         !! straight in under-states the density response ~1000×, which
+         !! looks like a plausible but far too weakly stratified run.
+      real(wp) :: T_ref = 10.0_wp
+         !! Linear-EOS reference temperature (°C) — the T at which the
+         !! thermal anomaly term vanishes.
+      real(wp) :: S_ref = 35.0_wp
+         !! Linear-EOS reference salinity (PSU) — the S at which the
+         !! haline anomaly term vanishes.
       real(wp) :: rho_0 = 1035.0_wp
          !! Reference density (kg/m³) for the linear EOS and Boussinesq
-         !! PGF.
+         !! PGF — the density at `(T_ref, S_ref)`.
       real(wp) :: layer_rho_init(MAX_OCEAN_LAYER_RHO_INIT) = -1.0_wp
          !! Per-layer initial density (kg/m³), `k=1` bed → `k=nz`
          !! surface, mirroring MOM6's `COORD_CONFIG="gprime"` IC.  Any
@@ -2585,10 +2638,13 @@ module rdb_config
          !! together with `S_init_bottom`.
       real(wp) :: S_init_bottom = 0.0_wp
          !! Initial salinity at the bed (k=1, PSU).
-      real(wp) :: S_ref = 0.0_wp
-         !! Reference salinity in EOS (PSU); density anomaly = beta_S*(S - S_ref)
-      real(wp) :: beta_S = 0.78_wp
-         !! Haline contraction coefficient (kg/m^3 per PSU)
+      real(wp) :: S_ref = LEGACY_TRACER_S_REF
+         !! RETIRED coastal-legacy EOS reference salinity (PSU).  The live
+         !! ocean-path spelling is `&ocean_ic_nml S_ref`; moving this one
+         !! off its default is a fail-loud configure error.
+      real(wp) :: beta_S = LEGACY_TRACER_BETA_S
+         !! RETIRED coastal-legacy haline contraction coefficient
+         !! (kg/m^3 per PSU).  Live spelling: `&ocean_ic_nml beta_S`.
       real(wp) :: S_min = 0.0_wp
          !! Lower physical bound for salinity (PSU)
       real(wp) :: S_max = 40.0_wp
@@ -2608,11 +2664,13 @@ module rdb_config
          !! together with `T_init_bottom`.
       real(wp) :: T_init_bottom = 0.0_wp
          !! Initial temperature at the bed (k=1, degC).
-      real(wp) :: T_ref = 15.0_wp
-         !! Reference temperature in EOS (degC); density anomaly = -alpha_T*(T - T_ref)
-      real(wp) :: alpha_T = 0.17_wp
-         !! Thermal expansion coefficient (kg/m^3 per degC); ~0.17 near 15 degC.
-         !! Set to 0 to decouple temperature from dynamics (pure passive tracer).
+      real(wp) :: T_ref = LEGACY_TRACER_T_REF
+         !! RETIRED coastal-legacy EOS reference temperature (degC).  The
+         !! live ocean-path spelling is `&ocean_ic_nml T_ref`; moving this
+         !! one off its default is a fail-loud configure error.
+      real(wp) :: alpha_T = LEGACY_TRACER_ALPHA_T
+         !! RETIRED coastal-legacy thermal expansion coefficient
+         !! (kg/m^3 per degC).  Live spelling: `&ocean_ic_nml alpha_T`.
       real(wp) :: T_min = -2.0_wp
          !! Lower physical bound for temperature (degC); seawater freezing
       real(wp) :: T_max = 40.0_wp
@@ -3375,6 +3433,41 @@ contains
                            "' is an ocean-path knob (sim_type = 'ocean'); the coastal "// &
                            "regimes seed their layers on a separate path and would "// &
                            "silently ignore it")
+         has_error = .true.
+      end if
+
+      ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.  These
+      ! four keys reach `tracer_t%eos_coeff`/`eos_ref` and nothing else;
+      ! the C-grid ocean path's linear EOS reads `&ocean_ic_nml` alone.
+      ! A knob that validates and silently does nothing is the bug, so
+      ! moving any of them off its historical default is fatal and names
+      ! the live replacement rather than being quietly ignored.
+      if (cfg%alpha_T /= LEGACY_TRACER_ALPHA_T) then
+         call logger%error("&tracer_nml alpha_T is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml alpha_T "// &
+                           "(kg/m^3 per degC) instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%beta_S /= LEGACY_TRACER_BETA_S) then
+         call logger%error("&tracer_nml beta_S is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml beta_S "// &
+                           "(kg/m^3 per PSU) instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%T_ref /= LEGACY_TRACER_T_REF) then
+         call logger%error("&tracer_nml T_ref is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml T_ref (degC) "// &
+                           "instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%S_ref /= LEGACY_TRACER_S_REF) then
+         call logger%error("&tracer_nml S_ref is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml S_ref (PSU) "// &
+                           "instead, or delete the key.")
          has_error = .true.
       end if
 
@@ -6433,17 +6526,18 @@ contains
       call g%add(nml_real("initial_salinity", pr, "Initial salinity (uniform IC)", units="PSU"))
       pr => cfg%S_ref
       call g%add(nml_real("S_ref", pr, "EOS reference salinity", units="PSU", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_ref via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path -- the EOS reference the ocean path actually uses is "// &
-                          "&ocean_eos_nml / &ocean_ic_nml's own S_ref (D2.5's alpha_T trap, "// &
-                          "generalised; found by the P4 dead-knob sweep, 2026-09-10)."))
+                          "path. The live ocean-path spelling is &ocean_ic_nml S_ref; setting "// &
+                          "THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%beta_S
       call g%add(nml_real("beta_S", pr, "Haline contraction coefficient", units="kg/m^3/PSU", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_coeff via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_coeff via "// &
                           "register_default_tracers but eos_coeff is read nowhere on the "// &
-                          "ocean path (D2.5's alpha_T trap, generalised; found by the P4 "// &
-                          "dead-knob sweep, 2026-09-10)."))
+                          "ocean path. The live ocean-path spelling is &ocean_ic_nml beta_S; "// &
+                          "setting THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%S_min
       call g%add(nml_real("S_min", pr, "Lower physical bound for salinity", units="PSU", &
                           dead_on_ocean_path="stored onto tracer_t%tr_min via "// &
@@ -6476,17 +6570,19 @@ contains
       call g%add(nml_real("initial_temperature", pr, "Initial temperature (uniform IC)", units="degC"))
       pr => cfg%T_ref
       call g%add(nml_real("T_ref", pr, "EOS reference temperature", units="degC", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_ref via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path (D2.5's alpha_T trap, generalised; found by the P4 dead-knob "// &
-                          "sweep, 2026-09-10)."))
+                          "path. The live ocean-path spelling is &ocean_ic_nml T_ref; setting "// &
+                          "THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%alpha_T
       call g%add(nml_real("alpha_T", pr, "Thermal expansion coefficient", units="kg/m^3/degC", &
-                          dead_on_ocean_path="the coastal-legacy alpha_T (D2.5): stored onto "// &
-                          "tracer_t%eos_coeff via register_default_tracers but eos_coeff is "// &
-                          "read nowhere on the ocean path. The ocean path's own alpha_T is "// &
-                          "&ocean_ic_nml alpha_T (rdb_ocean_state.F90:525) -- setting THIS "// &
-                          "one is silent."))
+                          dead_on_ocean_path="RETIRED -- the coastal-legacy alpha_T (D2.5): "// &
+                          "stored onto tracer_t%eos_coeff via register_default_tracers but "// &
+                          "eos_coeff is read nowhere on the ocean path. The live ocean-path "// &
+                          "spelling is &ocean_ic_nml alpha_T; setting THIS one to anything "// &
+                          "other than its default is a fail-loud configure error "// &
+                          "(validate_config)."))
       pr => cfg%T_min
       call g%add(nml_real("T_min", pr, "Lower physical bound for temperature", units="degC", &
                           dead_on_ocean_path="stored onto tracer_t%tr_min via "// &
@@ -7730,8 +7826,21 @@ contains
                           allowed=[character(len=22) :: "", "eady", &
                                    "geostrophic_adjustment", "baroclinic_jet"]))
       pr => cfg%ocean%ic%alpha_T
-      call g%add(nml_real("alpha_T", pr, "Linear-EOS thermal-expansion coefficient", &
+      call g%add(nml_real("alpha_T", pr, &
+                          "Linear-EOS thermal-expansion coefficient (DIMENSIONAL: "// &
+                          "multiply a fractional 1/degC coefficient by rho_0)", &
                           units="kg/m^3/degC"))
+      pr => cfg%ocean%ic%beta_S
+      call g%add(nml_real("beta_S", pr, &
+                          "Linear-EOS haline contraction coefficient (DIMENSIONAL: "// &
+                          "multiply a fractional 1/PSU coefficient by rho_0)", &
+                          units="kg/m^3/PSU", min=0.0_wp))
+      pr => cfg%ocean%ic%T_ref
+      call g%add(nml_real("T_ref", pr, "Linear-EOS reference temperature", &
+                          units="degC", min=-273.15_wp))
+      pr => cfg%ocean%ic%S_ref
+      call g%add(nml_real("S_ref", pr, "Linear-EOS reference salinity", &
+                          units="PSU", min=0.0_wp))
       pr => cfg%ocean%ic%rho_0
       call g%add(nml_real("rho_0", pr, "Reference density for the linear EOS / Boussinesq PGF", &
                           units="kg/m^3"))

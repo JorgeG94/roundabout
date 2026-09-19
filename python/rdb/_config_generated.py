@@ -556,7 +556,7 @@ class Tracer(Group):
         units='PSU',
         required=False,
         default=0.0,
-        dead_on_ocean_path="stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path -- the EOS reference the ocean path actually uses is &ocean_eos_nml / &ocean_ic_nml's own S_ref (D2.5's alpha_T trap, generalised; found by the P4 dead-knob sweep, 2026-09-10).",
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml S_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     beta_S = Real(
@@ -565,7 +565,7 @@ class Tracer(Group):
         units='kg/m^3/PSU',
         required=False,
         default=0.78,
-        dead_on_ocean_path="stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path (D2.5's alpha_T trap, generalised; found by the P4 dead-knob sweep, 2026-09-10).",
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml beta_S; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     S_min = Real(
@@ -597,20 +597,22 @@ class Tracer(Group):
 
     S_init_surface = Real(
         'S_init_surface',
-        doc='Initial surface salinity (stratified IC)',
+        doc='Initial surface salinity at k=nz (linear-in-layer stratified IC; needs S_init_bottom non-zero too)',
         units='PSU',
         required=False,
         default=0.0,
-        dead_on_ocean_path='accepted and validated but read nowhere in src/ -- unlike its temperature sibling (T_init_surface, which IS wired into rdb_ocean_state.F90), there is no stratified-salinity IC path that consumes this (found by the P4 dead-knob sweep, 2026-09-10).',
+        has_min=True,
+        vmin=0.0,
     )
 
     S_init_bottom = Real(
         'S_init_bottom',
-        doc='Initial bed salinity (stratified IC)',
+        doc='Initial bed salinity at k=1 (linear-in-layer stratified IC; needs S_init_surface non-zero too)',
         units='PSU',
         required=False,
         default=0.0,
-        dead_on_ocean_path='accepted and validated but read nowhere in src/ -- unlike its temperature sibling (T_init_bottom, which IS wired into rdb_ocean_state.F90), there is no stratified-salinity IC path that consumes this (found by the P4 dead-knob sweep, 2026-09-10).',
+        has_min=True,
+        vmin=0.0,
     )
 
     initial_temperature = Real(
@@ -627,7 +629,7 @@ class Tracer(Group):
         units='degC',
         required=False,
         default=15.0,
-        dead_on_ocean_path="stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path (D2.5's alpha_T trap, generalised; found by the P4 dead-knob sweep, 2026-09-10).",
+        dead_on_ocean_path='RETIRED -- stored onto tracer_t%eos_ref via register_default_tracers but eos_ref is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml T_ref; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     alpha_T = Real(
@@ -636,7 +638,7 @@ class Tracer(Group):
         units='kg/m^3/degC',
         required=False,
         default=0.17,
-        dead_on_ocean_path="the coastal-legacy alpha_T (D2.5): stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The ocean path's own alpha_T is &ocean_ic_nml alpha_T (rdb_ocean_state.F90:525) -- setting THIS one is silent.",
+        dead_on_ocean_path='RETIRED -- the coastal-legacy alpha_T (D2.5): stored onto tracer_t%eos_coeff via register_default_tracers but eos_coeff is read nowhere on the ocean path. The live ocean-path spelling is &ocean_ic_nml alpha_T; setting THIS one to anything other than its default is a fail-loud configure error (validate_config).',
     )
 
     T_min = Real(
@@ -4440,10 +4442,40 @@ class OceanIc(Group):
 
     alpha_T = Real(
         'alpha_T',
-        doc='Linear-EOS thermal-expansion coefficient',
+        doc='Linear-EOS thermal-expansion coefficient (DIMENSIONAL: multiply a fractional 1/degC coefficient by rho_0)',
         units='kg/m^3/degC',
         required=False,
         default=0.00017,
+    )
+
+    beta_S = Real(
+        'beta_S',
+        doc='Linear-EOS haline contraction coefficient (DIMENSIONAL: multiply a fractional 1/PSU coefficient by rho_0)',
+        units='kg/m^3/PSU',
+        required=False,
+        default=0.00076,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    T_ref = Real(
+        'T_ref',
+        doc='Linear-EOS reference temperature',
+        units='degC',
+        required=False,
+        default=10.0,
+        has_min=True,
+        vmin=-273.15,
+    )
+
+    S_ref = Real(
+        'S_ref',
+        doc='Linear-EOS reference salinity',
+        units='PSU',
+        required=False,
+        default=35.0,
+        has_min=True,
+        vmin=0.0,
     )
 
     rho_0 = Real(
@@ -5622,4 +5654,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 615
+N_KNOBS = 618

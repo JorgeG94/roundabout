@@ -213,7 +213,11 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   slope — and NEITHER is exact there; that residual is the open
   sigma-coordinate PGF error, not a property of one form.
 - **EOS**: Wright (1997) nonlinear rational fit (production); linear
-  EOS available.
+  EOS available, with its full reference state namelist-settable —
+  `&ocean_ic_nml alpha_T / beta_S / T_ref / S_ref / rho_0`.  `alpha_T`
+  and `beta_S` are DIMENSIONAL (kg/m³ per unit T/S), so a protocol's
+  fractional 1/°C, 1/PSU coefficients must be multiplied by `rho_0`
+  first — see `docs/REFERENCE.md` §Equation of state.
 - **Coriolis**: Sadourny PV-flux (`sadourny`); Sadourny +
   Hollingsworth-Källén guard (`sadourny_hk`, enums live, kernel
   refinement deferred).
