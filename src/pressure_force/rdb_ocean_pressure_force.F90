@@ -818,6 +818,7 @@ contains
                   ms%tracers(ms%idx_salinity)%hTr, &
                   ms%tracers(ms%idx_temperature)%hTr, &
                   ms%rho_layer, &
+                  ms%p_top, &
                   pgf%p_edge%data, &
                   pgf%rho_insitu%data, &
                   GRAVITY, pgf%rho0, &

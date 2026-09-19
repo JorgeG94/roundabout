@@ -2382,7 +2382,9 @@ contains
          !! Absent / disabled ⇒ bit-identical.
 
       integer :: it, stage
-      logical :: tide_on, psurf_on
+      integer :: i, j, nx_ptop, ny_ptop
+         !! Loop indices + extents for the E3 `ms%p_top` refresh below.
+      logical :: tide_on, psurf_on, psurf_eos_on
       real(wp) :: t_now
          !! Model time (s) for `ocean_ideal_age_young_val`; `t` fallback (PR-7).
       integer :: nan_i, nan_j, nan_k
@@ -2456,6 +2458,37 @@ contains
             call p_surf_update_seam(psurf, sf%p_surf, dyn%bt_work%g_bt)
          end if
          call ocean_halo_centre(psurf%eta_seam, device_resident=.true.)
+      end if
+
+      ! E3: the SAME assembled `sf%p_surf` also becomes the top-of-column
+      ! pressure the EOS's IN-SITU builders measure down from (`ms%p_top`,
+      ! Pa) when `&ocean_psurf_nml in_eos` is set — the ice-shelf-cavity
+      ! seam, where 1e6-2e7 Pa of overburden makes the historical
+      ! "in-situ pressure starts at 0 at the free surface" a systematic
+      ! ~4-5 kg/m^3 density error under a nonlinear EOS.  It does NOT
+      ! touch the POTENTIAL density `ms%rho_layer`, which stays at the
+      ! horizontally uniform `eos%p_ref` by design.  Refreshed here, once
+      ! per outer step, before the PGF of the step and held static across
+      ! the stages.
+      !
+      ! Written INLINE as a `do concurrent` rather than as a call: a
+      ! host-gated call handing a state array to an EXTERNAL subroutine
+      ! makes nvfortran treat that array as escaping and pessimises EVERY
+      ! `do concurrent` in this routine, whether or not the branch is
+      ! taken (CLAUDE.md, measured at +4.8 % on `ocean_continuity`).
+      ! The copy spans the WHOLE array, ghosts included, so `p_top`
+      ! inherits exactly the halo validity `p_surf` has and needs no
+      ! exchange of its own.
+      psurf_eos_on = .false.
+      if (psurf_on) then
+         if (psurf%in_eos) psurf_eos_on = .true.
+      end if
+      if (psurf_eos_on) then
+         nx_ptop = size(ms%p_top, 1)
+         ny_ptop = size(ms%p_top, 2)
+         do concurrent(j=1:ny_ptop, i=1:nx_ptop)
+            ms%p_top(i, j) = sf%p_surf(i, j)
+         end do
       end if
 
       call probe_dS(grid, ms, "outer step entry", 0, dyn%outer_step_count + 1)

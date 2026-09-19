@@ -49,6 +49,17 @@ module rdb_ocean_p_surf
          !! True between `init` and `destroy` (tracks GPU attachment too).
       logical :: enable = .false.
          !! Master switch (default off => bit-identical).
+      logical :: in_eos = .false.
+         !! Also hand the assembled `p_surf` to the equation of state's
+         !! IN-SITU pressure arguments as the top-of-column pressure
+         !! (`&ocean_psurf_nml in_eos`).  Read by the outer-step driver,
+         !! which refreshes `multilayer_state_t%p_top` from `sf%p_surf`
+         !! when BOTH this and `enable` are set; `p_top` is otherwise the
+         !! zero array it is allocated as, and every EOS evaluation is
+         !! bit-identical.  It does NOT touch the potential density
+         !! `ms%rho_layer` (uniform `eos%p_ref` by design).  This slot does
+         !! NOT own `p_top` — the multilayer state does, because that is
+         !! what the in-situ consumers already carry.
       real(wp) :: rho0 = 1035.0_wp
          !! Boussinesq reference density (kg/m^3).  Assigned from
          !! `ocean_state%eos%rho0` at configure — the single ρ₀ of record.

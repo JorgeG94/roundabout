@@ -153,7 +153,7 @@ slot without reading the rest of the tree.  A future portability lint
 | Tides | `ocean_tides_t` | `forcing/rdb_ocean_tides.F90` | 5e | astronomical clock + bathymetry | `eta_eq`, `eta_sal` |
 | Sea ice ✓ (SIS2 port; default off; largest slot in the ocean state — 14 modules, ~6,900 lines) | `ocean_sea_ice_t` | `../ice/state/rdb_ice_state.F90` | (ice ladder PR 0-5) | ocean surface T/S/u/v (`sst_seam`/`ssurf_seam`/`tfw_seam`), wind stress (`tau_a_x/y`), `eos_freezing_point` | 6 category prognostics (`part_size`, `m_ice`, `m_snow`, `enth_ice`, `enth_snow`, `sal_ice`) + Winton column (`rdb_ice_column`) + ITD restore + category transport/`compress_ice` (`transport`) + C-grid EVP (`dynamics`: `u_ice`/`v_ice`/`str_d`/`str_t`/`str_s`/`fxoc`/`fyoc`) + frazil bank (`frazil_heat`); `rdb_ice_ocean_coupler` writes ocean `Q_heat`/`Q_salt`. **A high-quality dynamical core + column model, not yet a sea-ice model** — no ridging/snowfall/flooding/melt-ponds/lateral-melt/IC-path, transmitted shortwave `sw_thru` now coupled to the ocean (PR 31 — `ice_ocean_sw_flux`), momentum not conserved at fractional cover, no freshwater/mass coupling; fail-loud single-rank (`enable` alone, `transport`, `dynamics` each independently guarded, `rdb_config.F90`). Full limits list: `docs/CAPABILITIES_AND_LIMITATIONS.md` "Sea ice"; matrix rows: `docs/CLOSURE_MATRIX.md` "Sea ice" |
 | Tides | `ocean_tides_t` | `forcing/rdb_ocean_tides.F90` | 5e | astronomical clock + bathymetry | `eta_eq`, `eta_sal`, `itd_coeff` |
-| Surface-pressure loading / inverse barometer ✓ (PR-17, Wunsch & Stammer 1997; `&ocean_psurf_nml enable`, default off ⇒ bit-identical) | `ocean_p_surf_t` | `forcing/rdb_ocean_p_surf.F90` | 5e | `sf%p_surf` (PR-12 component set, needs `enable_components`), `eos%rho0`, `dyn%bt_work%g_bt` | `eta_ib = −p_surf/(ρ₀·g_bt)` + combined `eta_seam`, filled by `p_surf_update_seam` once per outer step and passed as the barotropic `eta_forcing` (see the **`eta_forcing` seam contract** below). Split-solver only; excludes `bt_halo > 0`. |
+| Surface-pressure loading / inverse barometer ✓ (PR-17, Wunsch & Stammer 1997; `&ocean_psurf_nml enable`, default off ⇒ bit-identical) | `ocean_p_surf_t` | `forcing/rdb_ocean_p_surf.F90` | 5e | `sf%p_surf` (PR-12 component set, needs `enable_components`), `eos%rho0`, `dyn%bt_work%g_bt` | `eta_ib = −p_surf/(ρ₀·g_bt)` + combined `eta_seam`, filled by `p_surf_update_seam` once per outer step and passed as the barotropic `eta_forcing` (see the **`eta_forcing` seam contract** below). Split-solver only; excludes `bt_halo > 0`. With `&ocean_psurf_nml in_eos` (E3, default off ⇒ bit-identical) the SAME `sf%p_surf` is also copied once per outer step into `multilayer_state_t%p_top` (Pa) so the EOS's IN-SITU pressure is measured down from the load rather than from 0 Pa — NOT the potential density `ms%rho_layer`, which stays at the uniform `eos%p_ref`; see the **`p_top` seam contract** below. |
 | Porous barriers ✓ (Adcroft 2013; default off) | fields on `ocean_metrics_t` (`use_porous`, `porous_eta_interp`, `porous_mask_depth`, `por_bed`, `por_{dmin,dmax,davg}_{u,v}`, `por_face_area_{u,v}`) | kernels in `state/rdb_ocean_porous.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_porous`; per-step refresh `ocean_porous_refresh` in `dynamics/split_rk2/rdb_ocean_dyn.F90` | — | `barotropic.b` (negated once to a topographic HEIGHT), `multilayer.h_layer` | `por_face_area_u/v` (nx+1,ny,nz)/(nx,ny+1,nz) — layer-averaged OPEN-AREA fraction, recomputed once per OUTER step (MOM6 cadence) and MULTIPLIED into `mass_flux_{x,y}_layer` by continuity-PPM (before the BT renormalisation, which also takes the narrowed areas) and into `coriolis_adv.mass_flux_{u,v}` by the TRANSPORT Coriolis forms — PLUS `dy_cu_bt`/`dx_cv_bt` (2D, ALWAYS allocated, byte-equal to `dy_cu`/`dx_cv` when off), the widths the BAROTROPIC substep transports on, scaled by the COLUMN-INTEGRATED open fraction so the barotropic solve is not porous-blind (else the renormalisation to `uhbt` returns the blocked transport). `use_porous=.false.` (default) ⇒ the open-area fields stay at their `(1,1,1)` placeholder, no porous kernel is launched, byte-identical. Fails loud with `&ocean_bt_nml bt_halo > 0` (`bt_wide`'s own `metrics_w` carries no porous stats, so the wide BT loop would silently transport on un-narrowed widths) and with `&ocean_wetdry_nml enable` |
 | Barotropic linear wave drag ✓ (Egbert & Ray 2001; Jayne & St Laurent 2001) | fields on `barotropic_workstate_t` (`dyn.bt_work`) | kernels in `kernels/barotropic/rdb_barotropic_coupling.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_wave_drag` | — | `lwd_drag_u/v` (static, host-filled at configure from `form="uniform"` or `"roughness_proxy"`; `barotropic.b`, `metrics.wet_T` for the proxy) | MULTIPLIES into `bt_work.bt_rem_u/v` each stage (`compute_bt_rem_wave_drag`); `lwd_enable=.false.` (default) ⇒ arrays unallocated, bit-identical |
 | River / discharge | `ocean_river_t` | `forcing/rdb_ocean_river.F90` | 5e | sources NetCDF | `q_mass`, `q_S`, `q_T` distributed fields |
@@ -260,6 +260,74 @@ split-solver only and mutually exclusive with `&ocean_bt_nml bt_halo > 0`: an
 EXPLICIT width fails loud in `validate_config`, and the `bt_halo` AUTO default
 resolves to 0 (psurf is in `bt_halo_auto_exclusion`, alongside the tide that
 shares the seam).
+
+### The `p_top` seam contract (surface load in the IN-SITU EOS pressure, E3)
+
+**There are three distinct pressures on this path. Conflating any two of them is
+a physics bug with no symptom.**
+
+| | field | units | horizontally varying? | what it is |
+|---|---|---|---|---|
+| gradient of the load | `ocean_p_surf_t%eta_seam` → barotropic `eta_forcing` | m | yes — only `∇` is physical | inverse barometer; a uniform load is provably inert (gauge invariance) |
+| magnitude of the load | `multilayer_state_t%p_top` | Pa | **yes** | the top of the column an IN-SITU hydrostatic pressure is measured down from |
+| potential-density reference | `eos%p_ref` (`&ocean_eos_nml p_ref`) | Pa | **NO — scalar by design** | the pressure `ms%rho_layer` is referenced to |
+
+The third row is the trap. `ms%rho_layer` is a **potential** density and its
+consumers difference it **along a layer** (the Montgomery PGF's
+`rho_layer(i) − rho_layer(i−1)`, the FV-lite / FV-MOM6-PCM integrands) and
+**vertically** (the vmix N² builders). Give it a reference pressure that varies
+with `(i,j)` — a sloping ice draft, say — and two columns holding *identical*
+water at the *same* geopotential depth come out with densities differing by
+`∂ρ/∂p · Δp_ref` ≈ `4.5e-7 × 5e6` ≈ **2 kg/m³** across a calving front: a large,
+entirely fabricated along-layer density gradient, and therefore a fabricated
+pressure gradient force — the exact cavity pathology the seam exists to avoid.
+So the load goes into **in-situ** pressures only, never into `p_ref`.
+`test_ocean_eos_p_top`'s `rho_layer_independent_of_p_top` is the standing guard
+(it ramps `p_top` across the domain over uniform water and demands the density
+come out exactly uniform); `p_top_gate_off_leaves_p_top_zero` is its end-to-end
+twin. Because N² is built by differencing `rho_layer`, N² is *unaffected* by
+`in_eos` and stays self-consistent — that is correct, not a gap.
+
+`multilayer_state_t%p_top` is a cell-centred `(nx, ny)` field in **Pa**, `>= 0`,
+valid **including ghosts**, device-resident, refreshed **once per outer step**
+and held **static across the stages**. It is **always allocated and zero-filled**
+(`ms%init`), mapped in `ms%enter_data`, counted in `ms%bytes()` — never
+conditionally — so every kernel has ONE code path: no optional dummy, no
+assumed-shape dummy, and no host-gated call handing a state array to an external
+subroutine. With the knob off `p_top` is the zero array and `p_top(i,j) + p` is
+`p` bit-for-bit under IEEE-754.
+
+Rules for a builder that joins this seam:
+
+- **Only an IN-SITU builder may join.** The test is whether the quantity is a
+  true per-layer hydrostatic pressure for *that* column. `p_centre_seed` in
+  `eos_wright_pgf_column_sweep_impl` is (it joined); `eos%p_ref` is not (it must
+  not).
+- **The load is the top of the column.** Replace the `p = 0` seed with
+  `p = p_top(i,j)` and accumulate downward. The pressure that reaches the EOS
+  must be `>= p_top > 0` and increase toward the bed (`k = 1`) —
+  `p_top_sign_and_monotone` asserts exactly that by *inverting* the EOS (no
+  duplicated coefficient), because MOM6 shipped a NEGATIVE EOS pressure in one
+  path for years.
+- **EOS argument only.** `p_top` does NOT enter the PGF top boundary condition
+  (`pa(nz+1) = rho_ref*g*eta` in FV_MOM6, `p_edge(nz+1) = 0` in
+  FV_WRIGHT/FV_LITE). Under a sloping load the along-layer difference
+  `p_centre(i) − p_centre(i−1)` therefore omits `Δp_top` — which is depth-uniform
+  and *already carried* by the `eta_forcing` seam, so the momentum is not missing
+  it and adding it here too would **double-count**. Changing that split is a
+  separate PR that must move both seams at once.
+- **Fill it from `sf%p_surf`, whole-array.** The refresh is an inline
+  `do concurrent` over the WHOLE array, ghosts included, so `p_top` inherits
+  exactly the halo validity `p_surf` has and owes no exchange of its own.
+- **An unported in-situ builder is refused, never silently mixed.**
+  `validate_config` fails loud on `in_eos = .true.` together with any closure
+  that still builds a surface-relative in-situ pressure from 0 Pa (EPBL,
+  kappa-shear, tidal mixing, Redi, isopycnal slopes, the PGF in-layer
+  reconstruction, sea ice). Porting one means deleting its line there in the same
+  PR. Two pressure conventions inside one time step have no symptom — that
+  refusal is the only thing standing between a half-ported seam and a plausible
+  wrong answer. A configuration with *no* in-situ consumer at all is **accepted
+  with a warning**, not refused: there the knob is honestly inert.
 
 ## How to pick up a slot
 

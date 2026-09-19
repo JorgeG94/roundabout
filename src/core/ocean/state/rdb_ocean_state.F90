@@ -613,6 +613,7 @@ contains
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
       this%tides%enable = cfg%ocean%tides%enable
       this%p_surf%enable = cfg%ocean%psurf%enable
+      this%p_surf%in_eos = cfg%ocean%psurf%in_eos
    end subroutine ocean_state_init_from_config
 
    pure function ocean_state_bytes(this) result(nbytes)
