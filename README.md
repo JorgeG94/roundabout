@@ -61,6 +61,10 @@ Automatically generated from the main branch upon Pull-Request. It uses OpenMP o
 ```bash
 # Install the git hooks -- ONCE, after cloning. `git init`/`git clone` does not
 # do this for you, and without it every commit skips the checks below.
+# `default_install_hook_types` in .pre-commit-config.yaml makes this install
+# BOTH the pre-commit and the commit-msg hook types; on an older pre-commit
+# that ignores that key, add them by hand:
+#   pre-commit install --hook-type pre-commit --hook-type commit-msg
 pre-commit install
 ```
 
@@ -72,6 +76,13 @@ intrinsic makes NVHPC/ifx silently pick approximate math), `dc-transfer`
 `-stdpar`), `decl-order` (ifx #8586), `dc-assumed-shape`, and
 `no-mpi-in-rdb`. CI re-runs them on every pull request, but that is a
 backstop -- the hook is where they are cheap.
+
+One hook runs at `commit-msg` rather than `pre-commit`:
+`commit-msg-no-session-links` rejects a message carrying a Claude session
+handle (a `claude.ai/code/session...` URL or a `Claude-Session:` trailer).
+Those are per-conversation links nobody else can open, and a commit message is
+permanent. `Co-Authored-By:` trailers are unaffected. Self-test:
+`python3 tools/check_commit_msg_no_session_links.py --self-test`.
 
 ## Build
 
