@@ -3477,7 +3477,7 @@ class OceanPgf(Group):
         units='',
         required=False,
         default='mont',
-        allowed=('mont', 'fv_lite', 'fv_wright', 'gprime', 'fv_mom6'),
+        allowed=('mont', 'montgomery', 'fv_lite', 'fv_wright', 'gprime', 'fv_mom6'),
     )
 
     gprime_gfs = Real(

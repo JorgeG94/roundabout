@@ -198,7 +198,7 @@ nonlinear barotropic fast loop (forward-backward Euler substeps for η +
 barotropic u/v + ζ + KE) + BT correction back into the layers.
 `auto_n_inner=.true.`
 derives `n_inner` from the gravity-wave CFL **once at configure time**
-(`configure_ocean_bt_split`, `rdb_ocean_setup.F90:3024`), writing the
+(`configure_ocean_bt_split` in `rdb_ocean_setup.F90`), writing the
 resolved value back into `cfg%ocean%bt%n_inner` — which is why `cfg` is
 `intent(inout)` all the way up to `main`. It is NOT re-derived per step;
 CFL truncation is a counter (`dyn%ntrunc_total`), not a controller.
@@ -250,7 +250,7 @@ the fold exchange (`rdb_ocean_fold` + `rdb_ocean_fold_apply`)
 reverses-i and sign-flips vector normals, projecting the
 duplicated-DOF v/corner seam row antisymmetric.
 
-**Vertical coords** — all six `VCOORD_*` families dispatch through the
+**Vertical coords** — all ten `VCOORD_*` families dispatch through the
 same ALE remap path; see the next subsection.
 
 **Working envelope** (matches `validation_examples/ocean/double_gyre/double_gyre_mom6.nml`).
@@ -282,12 +282,27 @@ windowed tracer-advect drain) — the C-grid MPI halo itself ships.
 ### Vertical Coordinates
 
 Dispatched via `vcoord_type` (namelist) → `parse_vcoord_type` → `VCOORD_*` enum.
+**Ten** families ship; the enum is defined in `src/core/rdb_constants.F90` (the
+authority) and the target-grid build lives in
+`src/core/ocean/vcoord/rdb_ocean_vcoord.F90`. Eight are `select case` branches
+of `ocean_vcoord_compute_target_h`; the two density-space coords need per-layer
+T/S + the EOS and so come in through the sibling
+`compute_target_h_rho` wrapper, dispatched from the same ALE remap driver
+(`src/ALE/rdb_ocean_remap.F90`). The `compute_target_h` `case default` is
+`error stop` — fail-loud, no silent fallback.
 
-- `VCOORD_SIGMA` — terrain-following, no remap.
-- `VCOORD_ZSIGMA` — smoothstep blend sigma→z. Uses conservative remap.
-- `VCOORD_ZSTAR` (z*-lite) — single global `z_ref` stretched per column. SSH-tracking. Conservative remap.
-- `VCOORD_ZSTAR_SIGMA` — sigma in shallow water, z*-lite in deep. Conserves by construction.
-- `VCOORD_ZSTAR_FULL` — per-column `z_ref(0:nz)` from local bathymetry; surface layer anchored at `zstar_h_surf_target` regardless of H. Bed-side layers can vanish (`zstar_h_min`). Operators that divide by `h_layer` gate on `H_VANISHED = 1.5e-4 m`. **Caveat:** intertidal domains still leak 1-2% salt/cycle from wet/dry destruction. Recommend sigma or zstar-lite for those.
+- `VCOORD_LAGRANGIAN` (-1) — pure Lagrangian / isopycnal; `target_h` is the live `h_layer` and the remap is a no-op (early return, no kernel launch). Parsed from `lagrangian` / `isopycnal`.
+- `VCOORD_EULERIAN_Z` (0) — `H · dsig(k)`, η ignored. The ocean path's "leave the IC layers alone" default.
+- `VCOORD_SIGMA` (1) — terrain-following, `(H + η) · dsig(k)`.
+- `VCOORD_ZSIGMA` (2) — smoothstep blend sigma→fixed z-levels. Conservative remap.
+- `VCOORD_ZSTAR` (4) — z*-lite: single global `z_ref` stretched per column, SSH-tracking. **On the ocean path it shares the `VCOORD_SIGMA` branch** (`case (VCOORD_SIGMA, VCOORD_ZSTAR)`) — in this barotropic `(H, η)` form the two target formulas are identical.
+- `VCOORD_ZSTAR_FULL` (5) — per-column `z_ref(0:nz)` from local bathymetry; surface layer anchored at `zstar_h_surf_target` regardless of H. Bed-side layers can vanish (`zstar_h_min`). Operators that divide by `h_layer` gate on `H_VANISHED = 1.5e-4 m`. **Caveat:** intertidal domains still leak 1-2% salt/cycle from wet/dry destruction. Recommend sigma or zstar-lite for those.
+- `VCOORD_ZSTAR_SIGMA` (6) — sigma in shallow water, z*-lite in deep. Conserves by construction.
+- `VCOORD_Z_FIXED` (7) — fixed-z interfaces from `z_fixed_h_ref`, bed-side layers vanishing to `zstar_h_min` in shallow water (MOM6 `COORD_CONFIG="gprime"` layering as a per-step ALE target). Falls back to uniform sigma when the knob is unset. Parsed from `z_fixed` / `z_levels` / `gprime`.
+- `VCOORD_RHO` (8) — isopycnal: interfaces placed on prescribed potential-density surfaces `rho_target(0:nz)` by inverting a PPM reconstruction of the column density. Validation-grade alone (weakly-stratified columns collapse).
+- `VCOORD_HYCOM` (9) — hybrid z*/isopycnal (Bleck 2002, MOM6 `coord_hycom`): the same density inversion plus a bottom-up density monotonize before it and a z* nominal-floor sweep after it. Fixed-resolution near-surface z* band with an isopycnal interior — the production GVC coordinate. Reuses `rho_target` / `rho_ref_pressure`; no new knobs.
+
+(3 is unused — the enum has a gap, not a missing family.)
 
 ### Boundary Conditions
 
