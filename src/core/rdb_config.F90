@@ -3490,6 +3490,18 @@ contains
          has_error = .true.
       end if
 
+      ! Linear-EOS stratified salinity IC: both ends must be set (the
+      ! seed gates on `/= 0` for BOTH, mirroring T_init_surface/bottom),
+      ! so exactly one non-zero is a silently-uniform column — the same
+      ! class of bug the retired knobs above were.
+      if ((cfg%S_init_surface /= 0.0_wp) .neqv. (cfg%S_init_bottom /= 0.0_wp)) then
+         call logger%error("&tracer_nml S_init_surface / S_init_bottom must BOTH be "// &
+                           "non-zero to build the linear S(z) IC (they gate together, "// &
+                           "exactly as T_init_surface/T_init_bottom do); one alone is "// &
+                           "ignored and the column stays uniform at initial_salinity.")
+         has_error = .true.
+      end if
+
       ! Ocean diag manager
       if (trim(cfg%sim_type) == "ocean") then
          if (trim(cfg%ocean%diag%vgrid) /= "layer" .and. &
@@ -6588,17 +6600,13 @@ contains
                           "ocean path -- the ocean path's background salt diffusivity is "// &
                           "&ocean_vmix_nml ks_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
       pr => cfg%S_init_surface
-      call g%add(nml_real("S_init_surface", pr, "Initial surface salinity (stratified IC)", units="PSU", &
-                          dead_on_ocean_path="accepted and validated but read nowhere in src/ "// &
-                          "-- unlike its temperature sibling (T_init_surface, which IS wired "// &
-                          "into rdb_ocean_state.F90), there is no stratified-salinity IC path "// &
-                          "that consumes this (found by the P4 dead-knob sweep, 2026-09-10)."))
+      call g%add(nml_real("S_init_surface", pr, &
+                          "Initial surface salinity at k=nz (linear-in-layer stratified IC; "// &
+                          "needs S_init_bottom non-zero too)", units="PSU", min=0.0_wp))
       pr => cfg%S_init_bottom
-      call g%add(nml_real("S_init_bottom", pr, "Initial bed salinity (stratified IC)", units="PSU", &
-                          dead_on_ocean_path="accepted and validated but read nowhere in src/ "// &
-                          "-- unlike its temperature sibling (T_init_bottom, which IS wired "// &
-                          "into rdb_ocean_state.F90), there is no stratified-salinity IC path "// &
-                          "that consumes this (found by the P4 dead-knob sweep, 2026-09-10)."))
+      call g%add(nml_real("S_init_bottom", pr, &
+                          "Initial bed salinity at k=1 (linear-in-layer stratified IC; "// &
+                          "needs S_init_surface non-zero too)", units="PSU", min=0.0_wp))
       pr => cfg%initial_temperature
       call g%add(nml_real("initial_temperature", pr, "Initial temperature (uniform IC)", units="degC"))
       pr => cfg%T_ref
