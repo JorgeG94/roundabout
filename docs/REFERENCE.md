@@ -275,11 +275,25 @@ used by the MOM6-reference double gyre.
 > reference densities, so a run cannot end up with the EOS on one ρ₀ and the
 > PGF on another. The same scalar reaches EPBL, kappa-shear, tidal mixing,
 > wave speed, the `η_ib` surface-pressure seam, GM / MEKE / Redi / MLE and the
-> isopycnal slopes. Note `&nonhydrostatic_nml rho_0` is a DIFFERENT, dead
-> knob (nothing reads it). Not yet unified: the surface stress / surface flux
-> / KPP-vmix / vdiff / geothermal slots, and the `RHO_WATER` constant behind
-> the console mass-heat-salt diagnostics, each still carry their own
-> hard-coded 1035.
+> isopycnal slopes, and — via `configure_ocean_reference_density`, the
+> fan-out step that closes this list — the **surface heat/salt flux**
+> (`dt/(ρ₀·cp)` and `dt/ρ₀` on every surface tracer source, sea-ice coupling
+> included), the **surface wind stress** (`τ/(ρ₀·h_top)`, plain and
+> DIRECT_STRESS), **KPP-vmix** (N², `u* = √(|τ|/ρ₀)`, the kinematic fluxes
+> behind `B_0`, the PP81 and convective-adjustment N²) and the **geothermal**
+> bed source (`dt·Q_geo/(ρ₀·cp)`). The implicit vertical-friction solve takes
+> it as an argument from the wind-stress slot; omitting it with the implicit
+> stress fold active now fails loud instead of falling back to a literal.
+> Default `rho_0 = 1035` ⇒ every one of those is bit-identical to the old
+> hard-coded value; a run that sets `rho_0 /= 1035` is answer-changing by
+> `1035/ρ₀` on each of them, which is the bug being fixed, not a regression.
+>
+> Note `&nonhydrostatic_nml rho_0` is a DIFFERENT, dead knob (nothing reads
+> it). Still NOT unified, deliberately: the `RHO_WATER` constant behind the
+> console mass/heat/salt diagnostics and the OBC `mass_out` accounting,
+> `&ocean_ice_nml rho_ocean` (the EVP ice-ocean drag reference), and the
+> `ICE_RHO_*` constants. Those are separate physical constants with their own
+> call sites, not copies of ρ₀.
 
 ### Physics closures
 

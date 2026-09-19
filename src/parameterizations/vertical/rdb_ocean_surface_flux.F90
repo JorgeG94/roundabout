@@ -94,7 +94,17 @@ module rdb_ocean_surface_flux
          !! `set_surface_flux_const` when `q_salt_val /= 0`).
          !! Same contract as `has_heat` for any field-fill path.
       real(wp) :: rho0 = 1035.0_wp
-         !! Boussinesq reference density (kg/m^3).
+         !! Boussinesq reference density (kg/m^3) — the `dt/(rho0*cp)` heat
+         !! and `dt/rho0` salt divisors applied to EVERY surface tracer
+         !! source, including whatever the sea-ice coupler writes into
+         !! `Q_heat`/`Q_salt`.
+         !!
+         !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
+         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! -> `eos%rho0`).  The literal here is only the pre-configure
+         !! type default; do not read it as the value a run uses.  Host
+         !! scalar: the divisor is folded into the `inv_scale` argument on
+         !! the host, so the assignment owes no `!$acc update device`.
       real(wp) :: cp = SEAWATER_CP
          !! Specific heat capacity (J/kg/K).
       real(wp) :: h_min = 1.0e-3_wp

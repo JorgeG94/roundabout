@@ -181,6 +181,7 @@ set(RDB_TESTS
     "test_ocean_sponge|test_ocean_sponge|collect_ocean_sponge_tests|ocean_sponge|ocean"
     "test_ocean_surface_flux|test_ocean_surface_flux|collect_ocean_surface_flux_tests|ocean_surface_flux|ocean"
     "test_ocean_surface_forcing_type|test_ocean_surface_forcing_type|collect_ocean_surface_forcing_type_tests|ocean_surface_forcing_type|ocean"
+    "test_ocean_forcing_rho_ref|test_ocean_forcing_rho_ref|collect_ocean_forcing_rho_ref_tests|ocean_forcing_rho_ref|ocean"
     "test_ocean_frazil|test_ocean_frazil|collect_ocean_frazil_tests|ocean_frazil|ocean"
     "test_ocean_ice_enthalpy|test_ocean_ice_enthalpy|collect_ocean_ice_enthalpy_tests|ocean_ice_enthalpy|ocean"
     "test_ocean_ice_column|test_ocean_ice_column|collect_ocean_ice_column_tests|ocean_ice_column|ocean"
