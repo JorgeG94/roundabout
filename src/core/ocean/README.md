@@ -192,7 +192,10 @@ dispatch), else `ocean_tides_t%eta_forcing`. A new surface load adds its own
 input component to `ocean_surface_flux_t` and extends the single overwrite that
 builds `sf%p_surf` (full overwrite from the pristine `p_surf_atm` base, never
 `+=`); `eta_ib` is always built from the assembled total `sf%p_surf`. The seam is
-split-solver only and mutually exclusive with `&ocean_bt_nml bt_halo > 0`.
+split-solver only and mutually exclusive with `&ocean_bt_nml bt_halo > 0`: an
+EXPLICIT width fails loud in `validate_config`, and the `bt_halo` AUTO default
+resolves to 0 (psurf is in `bt_halo_auto_exclusion`, alongside the tide that
+shares the seam).
 
 ## How to pick up a slot
 
