@@ -736,7 +736,15 @@ that is missing is most of the ice mass budget. Limits first:
   the ocean's own background shortwave is not lead-fraction weighted by
   ice cover (the configure-time `q_heat`/`q_sw` scalars stay ice-blind),
   and the ocean shortwave is single-broadband (no `VIS_DIF`-style
-  spectral band assignment). Momentum is **not conserved at
+  spectral band assignment). Momentum reaches the ocean as the
+  concentration-weighted blend of the wind snapshot and the EVP
+  ice-ocean drag (`ice_ocean_stress_flux`), and that blend also
+  refreshes the derived cell-centred `|tau|`
+  (`ocean_surface_stress_refresh_mag`), so the boundary-layer schemes'
+  friction velocity `u_* = sqrt(|tau|/rho0)` follows the ice-mediated
+  stress instead of the configure-time wind — under full ice cover in a
+  windless run the pre-fix `u_*` was identically zero
+  (`test_ocean_ice_stress_mag`). Momentum is still **not conserved at
   fractional ice cover**: the ice feels the full wind-stress snapshot
   rather than a concentration-weighted bulk drag law (documented
   divergence D7, `rdb_ice_evp.F90`). There is **no freshwater/mass
