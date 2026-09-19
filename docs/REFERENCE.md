@@ -589,14 +589,14 @@ all fields have sensible defaults.
 | `S_min` | 0.0 | Lower clamp (PSU) |
 | `S_max` | 40.0 | Upper clamp (PSU) |
 | `kappa_S_bg` | 1.0e-5 | Background vertical S diffusivity (m²/s) |
-| `S_init_surface`, `S_init_bottom` | 0.0 | Surface / bed salinity for the stratified IC. **Dead on the ocean path** — parsed and validated, but no stratified-salinity seed consumes it. |
+| `S_init_surface`, `S_init_bottom` | 0.0 | Surface (k=nz) / bed (k=1) salinity for the linear-in-layer stratified IC. Both must be non-zero (one alone fails loud); both zero ⇒ uniform `initial_salinity`. Stable polarity is the INVERSE of temperature's — salty water belongs at the bed, so `S_init_bottom > S_init_surface`. |
 | `initial_temperature` | 15.0 | Initial potential temperature (°C, uniform IC) |
 | `T_ref` | 15.0 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml T_ref`. |
 | `alpha_T` | 0.17 | **RETIRED** — setting it fails loud; use `&ocean_ic_nml alpha_T`. |
 | `T_min` | -2.0 | Lower clamp (°C); seawater freezing |
 | `T_max` | 40.0 | Upper clamp (°C) |
 | `kappa_T_bg` | 1.0e-5 | Background vertical T diffusivity (m²/s) |
-| `T_init_surface`, `T_init_bottom` | 0.0 | Surface / bed temperature for the stratified IC |
+| `T_init_surface`, `T_init_bottom` | 0.0 | Surface (k=nz) / bed (k=1) temperature for the linear-in-layer stratified IC; both zero ⇒ uniform `initial_temperature` |
 | `tracer_recon` | `"ppm"` | Legacy face-reconstruction selector; `weno*` is rejected fail-loud on `sim_type='ocean'`. Use `&ocean_vmix_nml tracer_recon`. |
 
 The density kernel itself is selected by `&ocean_eos_nml`.

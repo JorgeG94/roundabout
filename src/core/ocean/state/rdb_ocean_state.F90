@@ -1209,10 +1209,46 @@ contains
       ! Tracers carry per-layer h*Tr.  Multiply the (now spatially-
       ! varying) h_layer by the configured uniform scalar.
       if (idx_S > 0) then
-         call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(idx_S)%hTr, &
-            state%multilayer%h_layer, &
-            cfg%initial_salinity, nz_ml)
+         block
+            real(wp) :: s_layer(nz_ml)
+            real(wp) :: dS_dlayer
+            logical :: stratify_s
+            ! Linear S(z) when both surface + bottom are specified —
+            ! EXACT mirror of the temperature branch below, including
+            ! the gate (`both /= 0`), the vertical convention (k=1 is
+            ! the bed = S_init_bottom, k=nz_ml the surface =
+            ! S_init_surface), the single-layer fall-through, and the
+            ! seed helper (so ghosts and land columns are filled the
+            ! same way: hTr = S(k)·h_layer everywhere, land included,
+            ! since h_layer is already 0/floored there).  The profile is
+            ! linear in LAYER INDEX, which under the sigma-style
+            ! `h_layer = b/nz_ml` seed is linear in layer-centre depth
+            ! on every column — so a sloping bed gets the same endpoint
+            ! values with a depth-proportional gradient.
+            ! Note the stable polarity is the INVERSE of temperature:
+            ! dense/salty water belongs at the bed, so a stable haline
+            ! column has `S_init_bottom > S_init_surface`.
+            ! Both-zero (the default) ⇒ uniform `initial_salinity`,
+            ! byte-identical to the pre-knob path.
+            stratify_s = (cfg%S_init_surface /= 0.0_wp) .and. &
+                         (cfg%S_init_bottom /= 0.0_wp) .and. &
+                         (nz_ml > 1)
+            if (stratify_s) then
+               dS_dlayer = (cfg%S_init_surface - cfg%S_init_bottom)/ &
+                           real(nz_ml - 1, wp)
+               do k = 1, nz_ml
+                  s_layer(k) = cfg%S_init_bottom + dS_dlayer*real(k - 1, wp)
+               end do
+               call seed_tracer_stratified_impl( &
+                  state%multilayer%tracers(idx_S)%hTr, &
+                  state%multilayer%h_layer, s_layer, nz_ml)
+            else
+               call seed_tracer_uniform_impl( &
+                  state%multilayer%tracers(idx_S)%hTr, &
+                  state%multilayer%h_layer, &
+                  cfg%initial_salinity, nz_ml)
+            end if
+         end block
       end if
       if (idx_T > 0) then
          block

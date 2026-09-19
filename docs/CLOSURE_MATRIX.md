@@ -414,6 +414,14 @@ Linear-EOS reference state — `ρ = ρ_0 + β_S·(S−S_ref) − α_T·(T−T_r
 state. The coastal-legacy `&tracer_nml alpha_T/beta_S/T_ref/S_ref`
 spellings are RETIRED and fail loud at configure.
 
+## Initial conditions (analytical seeds)
+
+| IC | ocean | Knob | Test |
+|---|---|---|---|
+| Uniform T / S | `default` | `&tracer_nml initial_temperature / initial_salinity` | `test_ocean_salinity_ic` |
+| Linear-in-layer T(z) (bed `k=1` → surface `k=nz`) | available | `&tracer_nml T_init_bottom` + `T_init_surface` (both non-zero) | `test_ocean_eady_ic` |
+| Linear-in-layer S(z) (bed `k=1` → surface `k=nz`) | available | `&tracer_nml S_init_bottom` + `S_init_surface` (both non-zero; one alone fails loud) | `test_ocean_salinity_ic` |
+
 ## Boundary tracer fluxes (ocean path)
 
 | Flux | ocean | Knob | Test |
