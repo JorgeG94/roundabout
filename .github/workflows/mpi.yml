@@ -213,3 +213,130 @@ jobs:
         run: >-
           ctest -R rdb --output-on-failure
           -E "^rdb_test_rdb_ocean_api$|^rdb_test_ocean_api_p2$|^rdb_test_ocean_geometry_inject$|^rdb_python_tests$|^rdb_test_ocean_dyn_mpi$|^rdb_test_ocean_dyn_mpi_4rank$"
+
+  # vapaa — the case that is IMPOSSIBLE without it.
+  #
+  # Every other leg pairs a compiler with an MPI built by that same compiler,
+  # because `mpi_f08.mod` is compiler-specific. This leg deliberately does the
+  # opposite: gfortran 15 against **apt's** libopenmpi-dev, whose Fortran
+  # modules are built by the distro gfortran (13 on Ubuntu 24.04) and are
+  # unreadable here. The `gnu-mpi` job above exists precisely because that
+  # pairing cannot work.
+  #
+  # vapaa removes the constraint: it supplies `mpi_f08` compiled by OUR
+  # compiler on top of any C MPI, so only `libmpi.so` is consumed and the
+  # distro's Fortran bindings are never touched. With RDB_USE_VAPAA=ON,
+  # dependencies.cmake asks for `COMPONENTS C` alone -- FindMPI never even
+  # looks for Fortran.
+  #
+  # The step below proves the incompatibility is real before building on top
+  # of it, so a green run cannot be mistaken for "apt's MPI was fine all
+  # along".
+  #
+  # EXPLORATORY, and for two reasons beyond the usual: pic-mpi is pinned to a
+  # BRANCH on this branch (against the tag/SHA discipline everywhere else), and
+  # vapaa is a third layer of build machinery whose adoption is not yet
+  # decided. MEASURED locally at 192/198 with conda's OpenMPI -- the same six
+  # pre-existing failures as native bindings.
+  vapaa:
+    name: gfortran 15 + apt OpenMPI via vapaa (exploratory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Fortran compiler
+        uses: fortran-lang/setup-fortran@v1.9.0
+        with:
+          compiler: gcc
+          version: 15
+
+      - name: Install apt OpenMPI and netcdf-c
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libopenmpi-dev libnetcdf-dev
+
+      # The premise, asserted rather than assumed. This step FAILS the job if
+      # apt's mpi_f08 turns out to be readable after all -- because then this
+      # leg is no longer testing what it claims to, and the `gnu-mpi` job's
+      # whole rationale would need revisiting too.
+      - name: Show that apt's mpi_f08 is unusable by this gfortran
+        run: |
+          set -euo pipefail
+          # -print -quit, not `| head -1`: under `set -o pipefail` a find
+          # killed by SIGPIPE fails the whole step.
+          MODDIR=$(dirname "$(find /usr -name mpi_f08.mod -print -quit 2>/dev/null)")
+          if [ "$MODDIR" = "." ]; then
+            echo "::error::no mpi_f08.mod found -- apt's libopenmpi-dev did not"
+            echo "::error::ship Fortran bindings, so this leg cannot make its point."
+            exit 1
+          fi
+          echo "--- apt mpi_f08.mod provenance ---"
+          printf '%s: ' "$MODDIR/mpi_f08.mod"
+          zcat "$MODDIR/mpi_f08.mod" 2>/dev/null | head -c 46 || true
+          echo
+          echo "--- gfortran $(gfortran -dumpversion) trying to read it ---"
+          cat > premise.f90 <<'EOF'
+          program premise
+             use mpi_f08
+             implicit none
+          end program
+          EOF
+          # Note: NOT via mpif90. Apt's wrapper calls the gfortran it was
+          # configured with (13), which reads its own modules perfectly well.
+          # The question is whether OUR gfortran can, so call it directly.
+          if gfortran -c premise.f90 -I"$MODDIR" 2> premise.log; then
+            echo "::error::apt's mpi_f08 IS readable by gfortran $(gfortran -dumpversion)."
+            echo "::error::This leg's premise no longer holds -- it exists to show"
+            echo "::error::vapaa rescuing an MPI that is otherwise unusable, and the"
+            echo "::error::gnu-mpi job's rationale would need revisiting too."
+            exit 1
+          fi
+          echo "Confirmed unusable, as expected:"
+          grep -m1 -iE "cannot read module file|Fatal Error" premise.log || cat premise.log
+
+      - name: Build netcdf-fortran
+        run: |
+          tools/build_netcdf_fortran.sh --fc gfortran --netcdf-c /usr --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: |
+          cmake -B build -S . \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_Fortran_COMPILER=gfortran \
+                -DCMAKE_PREFIX_PATH="$RDB_NETCDFF;/usr" \
+                -DRDB_ENABLE_MPI=ON \
+                -DRDB_USE_VAPAA=ON \
+                -DRDB_ENABLE_NETCDF=ON \
+                -DRDB_ENABLE_GPU=OFF \
+                -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      # A green suite alone would not prove vapaa did anything -- a silent
+      # fallback to the distro's own Fortran bindings would look identical.
+      # Only libmpi (the C library) may appear.
+      - name: Verify vapaa is what supplies mpi_f08
+        run: |
+          echo "--- MPI libraries linked into rdb ---"
+          ldd build/rdb | grep -i mpi || true
+          if ldd build/rdb | grep -qiE "usempif08|usempi|mpi_mpifh"; then
+            echo "::error::rdb links the MPI's OWN Fortran bindings, so this is"
+            echo "::error::not exercising vapaa at all."
+            exit 1
+          fi
+          test -f build/_deps/vapaa-build/lib/libvapaa.a || {
+            echo "::error::libvapaa.a was never built."; exit 1; }
+          echo "OK: only the C MPI is linked; mpi_f08 comes from libvapaa.a"
+
+      - name: Test
+        working-directory: build
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+          PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+        run: >-
+          ctest -R rdb --output-on-failure
+          -E "^rdb_test_rdb_ocean_api$|^rdb_test_ocean_api_p2$|^rdb_test_ocean_geometry_inject$|^rdb_python_tests$|^rdb_test_ocean_dyn_mpi$|^rdb_test_ocean_dyn_mpi_4rank$"
