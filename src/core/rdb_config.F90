@@ -1290,6 +1290,45 @@ module rdb_config
       real(wp) :: kpp_c_vt2 = 1.8_wp
          !! KPP unresolved-turbulence coefficient for the V_t^2 term in
          !! the bulk-Ri denominator (LMD94 eq 23).  0 disables V_t^2.
+
+      ! ---- Source of the thermal-expansion / haline-contraction pair ----
+      character(len=8) :: buoyancy_coeffs = "constant"
+         !! Where the vmix closures take their α (thermal expansion) and
+         !! β (haline contraction) from — `"constant"` (DEFAULT) or
+         !! `"eos"`.  Parsed by `parse_buoyancy_coeffs`
+         !! (`rdb_ocean_vmix.F90`); keep the `allowed=` list and that
+         !! routine's `case` arms in lockstep.
+         !!
+         !!   * `"constant"` — the scalar `&ocean_ic_nml alpha_T` /
+         !!     `beta_S` off the EOS handle, whatever the active EOS is.
+         !!     Historical behaviour ⇒ **bit-identical** for every shipped
+         !!     namelist.  For `eos = "linear"` these ARE the true
+         !!     coefficients, so the setting is physically exact there.
+         !!   * `"eos"` — `eos_buoyancy_coeffs` evaluated per column /
+         !!     per interface from the ACTIVE equation of state
+         !!     (`α = −∂ρ/∂T`, `β = +∂ρ/∂S`, both analytic).  Under
+         !!     `eos = "linear"` it returns those same handle members
+         !!     bit-for-bit, so the two settings are byte-identical
+         !!     there — the knob only bites under a NONLINEAR EOS
+         !!     (`wright` / `roquet`).
+         !!
+         !! Routes THREE consumers: the KPP `B_0` surface buoyancy flux
+         !! in both passes of `vmix_kpp_overlay_impl` (and hence the
+         !! non-local γ gate, which switches on `B_0 < 0`), and the
+         !! double-diffusion density ratio `R_ρ = α·ΔT / β·ΔS` in
+         !! `vmix_split_ddiff_*_impl`.  Every OTHER α/β-like quantity on
+         !! the ocean path already tracks the active EOS: EPBL,
+         !! kappa-shear, tidal mixing, the isopycnal slopes and Redi go
+         !! through `eos_specvol_derivs`, while PP81's N², the convective
+         !! trigger, the wave speed and MLE difference `ms%rho_layer`
+         !! itself.
+         !!
+         !! Why it matters: seawater's thermal expansion collapses toward
+         !! zero near the freezing point and roughly doubles by 1000 dbar,
+         !! so under an ice shelf a constant α mis-sizes the melt-driven
+         !! buoyancy flux that sets the boundary layer.  `validate_config`
+         !! WARNS (does not refuse) on cavity melt × nonlinear EOS ×
+         !! `"constant"`.
    end type ocean_vmix_config_t
    type :: ocean_vdiff_config_t
       !! Backward-Euler vertical-friction solver knobs (`&ocean_vdiff_nml`).
@@ -4803,15 +4842,22 @@ contains
          ! consumer selected the knob legitimately does nothing, and the
          ! house rule (cf. &ocean_tidal_mixing_nml e_uniform) is to SAY so
          ! rather than let a user believe a cavity load reached the EOS.
+         ! E4 adds a THIRD ported consumer: `buoyancy_coeffs="eos"` seeds
+         ! the KPP B_0 coefficients at `p_top` and the double-diffusion
+         ! interface stack from it, so the knob is no longer inert when
+         ! that is selected.
          if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright" .and. &
-             .not. cfg%ocean%epbl%enable) then
+             .not. cfg%ocean%epbl%enable .and. &
+             trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) /= "eos") then
             call logger%warning("&ocean_psurf_nml in_eos=.true. is INERT for "// &
                                 "&ocean_pgf_nml form='"// &
                                 trim(adjustl(cfg%ocean%pgf%form))//"' with no "// &
                                 "other ported in-situ consumer: the ported ones "// &
-                                "are the FV_WRIGHT Picard column sweep and the "// &
-                                "EPBL column stack (&ocean_epbl_nml). The other "// &
-                                "PGF forms read the POTENTIAL density "// &
+                                "are the FV_WRIGHT Picard column sweep, the "// &
+                                "EPBL column stack (&ocean_epbl_nml) and the "// &
+                                "EOS-derived buoyancy coefficients "// &
+                                "(&ocean_vmix_nml buoyancy_coeffs='eos'). The "// &
+                                "other PGF forms read the POTENTIAL density "// &
                                 "ms%rho_layer, which is referenced to the "// &
                                 "uniform &ocean_eos_nml p_ref BY DESIGN and is "// &
                                 "not offset by the load.")
@@ -5414,6 +5460,33 @@ contains
                               "liquidus set; two interface thermodynamics in one "// &
                               "column is not a configuration.")
             has_error = .true.
+         end if
+         ! (E4) Constant α/β under a NONLINEAR EOS in a cavity — a WARNING,
+         ! deliberately, not a refusal.  ISOMIP+ prescribes the LINEAR EOS
+         ! (Asay-Davis et al. 2016 Table 4), and there the constants ARE
+         ! that EOS's exact coefficients, so every shipped cavity namelist
+         ! is unaffected and must keep running untouched.  Under Wright or
+         ! Roquet the pair is a constant stand-in for a coefficient that
+         ! collapses toward zero at the freezing point and roughly doubles
+         ! by 1000 dbar — exactly the corner a cavity sits in.
+         if (trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) == "constant" .and. &
+             trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+            call logger%warning("&ocean_cavity_melt_nml enable=.true. with a "// &
+                                "NONLINEAR EOS (&ocean_eos_nml eos='"// &
+                                trim(adjustl(cfg%ocean%eos%eos))//"') but "// &
+                                "&ocean_vmix_nml buoyancy_coeffs='constant'.  The "// &
+                                "KPP surface buoyancy flux B_0 and the "// &
+                                "double-diffusion density ratio will size the "// &
+                                "melt-driven buoyancy with the SCALAR "// &
+                                "&ocean_ic_nml alpha_T/beta_S, not with the "// &
+                                "derivatives of the density this run actually "// &
+                                "integrates.  Near the freezing point thermal "// &
+                                "expansion is several times smaller than at 10 degC "// &
+                                "and grows strongly with pressure, so the boundary "// &
+                                "layer under the shelf can be mis-sized (and in the "// &
+                                "cold-fresh corner mis-signed).  Set "// &
+                                "buoyancy_coeffs='eos' unless you are reproducing a "// &
+                                "constant-coefficient reference.")
          end if
       end if
       ! ---- Ice-shelf TOP drag (&ocean_tdrag_nml, Phase 4a) ----
@@ -9197,6 +9270,14 @@ contains
       call g%add(nml_real("kpp_c_vt2", pr, &
                           "KPP unresolved-turbulence V_t^2 coefficient (0 disables V_t^2)", &
                           min=0.0_wp))
+      ! E4: source of the alpha/beta pair the KPP B_0 and the
+      ! double-diffusion density ratio use.  The `allowed=` list must stay
+      ! in lockstep with `parse_buoyancy_coeffs` (rdb_ocean_vmix.F90).
+      ps => cfg%ocean%vmix%buoyancy_coeffs
+      call g%add(nml_enum("buoyancy_coeffs", ps, &
+                          "Source of alpha/beta for KPP B_0 + double diffusion: "// &
+                          "constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives)", &
+                          allowed=[character(len=8) :: "constant", "eos"]))
       call schema%add_group(g)
    end subroutine register_ocean_vmix
 

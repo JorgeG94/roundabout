@@ -335,6 +335,79 @@ The whole reference state — all five of `α_T`, `β_S`, `T_ref`, `S_ref`,
 > ~1000× — a plausible but far too weakly stratified run. Locked by
 > `tests/test_ocean_linear_eos_knobs.F90`.
 
+#### The α/β a boundary-layer closure uses (`&ocean_vmix_nml buoyancy_coeffs`)
+
+The five knobs above are the LINEAR EOS's reference state. Under
+`eos="wright"` or `"roquet_spv"` the density is not that expression, and
+`alpha_T`/`beta_S` are not that EOS's coefficients — they are whatever
+the namelist happens to say. Seawater's real thermal expansion is
+strongly state-dependent: it collapses toward zero at the freezing point
+and grows with pressure (thermobaricity). Measured from the shipped
+Wright (1997) branch at `S = 34.5`:
+
+| state | `α = −∂ρ/∂T` (kg/m³ per °C) |
+|---|---|
+| −1.9 °C, surface | `2.619e-2` |
+| −1.9 °C, 500 dbar | `4.262e-2` |
+| −1.9 °C, 1000 dbar | `5.871e-2` |
+| 10 °C (`S = 35`), surface | `1.711e-1` |
+
+So a 10 °C-calibrated constant over-states the melt-driven buoyancy flux
+under an ice shelf by a factor of several, and the error is not even
+depth-uniform.
+
+`eos_buoyancy_coeffs(eos, T, S, p, alpha_T, beta_S)` returns the ACTIVE
+EOS's pair — `α = −∂ρ/∂T`, `β = +∂ρ/∂S`, in the same DIMENSIONAL
+convention as the knobs above — differentiated in closed form per variant
+(`eos_density_derivs` is its signed twin, `∂ρ/∂T`, `∂ρ/∂S`). Both are
+`pure elemental` and `!$acc routine seq`, so they work on a host array
+sweep and inside a `do concurrent` kernel alike.
+
+| `&ocean_vmix_nml buoyancy_coeffs` | Meaning |
+|---|---|
+| `"constant"` (**default**) | The scalar `&ocean_ic_nml alpha_T`/`beta_S`, whatever the active EOS. Exact under `eos="linear"`; historical behaviour ⇒ bit-identical. |
+| `"eos"` | `eos_buoyancy_coeffs` from the active EOS, evaluated per column for the KPP `B_0` and per interface for the double-diffusion density ratio. |
+
+Under `eos="linear"` the two settings are **byte-identical** — that
+branch returns the handle members themselves rather than round-tripping
+through `−ρ²·dSV/dX` — so the knob only bites under a nonlinear EOS.
+
+Which pressure each consumer evaluates at:
+
+- **KPP `B_0`** — the top of the column: `ms%p_top` under
+  `&ocean_psurf_nml in_eos` (the ice/atmospheric load), else `eos%p_ref`
+  (the pressure `ms%rho_layer` is already referenced to, so α stays
+  consistent with the density field the rest of the closure differences).
+  A surface flux has no depth of its own.
+- **Double diffusion** — the true in-situ hydrostatic pressure at each
+  interface, seeded from `ms%p_top` and accumulated `g·ρ₀·h` downward,
+  the same stack EPBL builds. `p_ref` deliberately does not enter: an
+  interior interface has a real depth, and adding a potential-density
+  reference on top would double-count it.
+
+These are the only two consumers the knob touches, because they were the
+only two using the constants. EPBL, kappa-shear, tidal mixing, the
+isopycnal slopes and Redi already went through `eos_specvol_derivs`;
+PP81's N², the convective trigger, the wave speed and MLE difference
+`ms%rho_layer` itself. The ice-shelf melt law's
+`ocean_cavity_const_t%alpha_T`/`beta_S` are a separate, deliberately
+independent pair — the ISOMIP+ calibration constants, and **fractional**
+(1/°C, 1/PSU), not dimensional.
+
+`validate_config` **warns** — it does not refuse — on cavity melt ×
+nonlinear EOS × `"constant"`: ISOMIP+ prescribes the linear EOS, so the
+shipped cavity cases are unaffected. Locked by
+`tests/test_ocean_eos_buoyancy.F90`.
+
+> **Known gap, not introduced by this knob.** KPP builds
+> `B_0 = g·(α·q_T − β·q_S)` with a DIMENSIONAL α, i.e. without the
+> `1/ρ₀` that converts a density sensitivity into a buoyancy one. EPBL's
+> twin of the same quantity has it (`b0 = g·ρ₀·(dSV/dT·q_T + …)`, and
+> `dSV/dT = α/ρ₀²`), so the two schemes disagree by a factor ρ₀ for the
+> same physical flux. `buoyancy_coeffs` changes only WHERE α comes from,
+> in the same units; correcting the normalisation moves every KPP answer
+> and is a separate change.
+
 > **The `&tracer_nml` spellings are RETIRED.** `&tracer_nml alpha_T`,
 > `beta_S`, `T_ref` and `S_ref` only ever reached
 > `tracer_t%eos_coeff`/`eos_ref`, which no ocean kernel reads — setting

@@ -113,6 +113,7 @@ set(RDB_TESTS
     "test_ocean_eos_handle|test_ocean_eos_handle|collect_ocean_eos_handle_tests|ocean_eos_handle|ocean"
     "test_ocean_eos_roquet|test_ocean_eos_roquet|collect_ocean_eos_roquet_tests|ocean_eos_roquet|ocean"
     "test_ocean_eos_p_top|test_ocean_eos_p_top|collect_ocean_eos_p_top_tests|ocean_eos_p_top|ocean"
+    "test_ocean_eos_buoyancy|test_ocean_eos_buoyancy|collect_ocean_eos_buoyancy_tests|ocean_eos_buoyancy|ocean"
     "test_ocean_linear_eos_knobs|test_ocean_linear_eos_knobs|collect_ocean_linear_eos_knobs_tests|ocean_linear_eos_knobs|ocean"
     "test_ocean_salinity_ic|test_ocean_salinity_ic|collect_ocean_salinity_ic_tests|ocean_salinity_ic|ocean"
     "test_ocean_freezing_point|test_ocean_freezing_point|collect_ocean_freezing_point_tests|ocean_freezing_point|ocean"

@@ -849,6 +849,7 @@ Vertical-mixing module switches + knobs.
 | `kpp_ri_crit` | `0.3000000000E+00` |  | Critical bulk Richardson number for KPP BL-depth |
 | `kpp_cs_nonlocal` | `0.6300000000E+01` |  | KPP non-local (counter-gradient) transport coefficient C_s |
 | `kpp_c_vt2` | `0.1800000000E+01` |  | KPP unresolved-turbulence V_t^2 coefficient (0 disables V_t^2) |
+| `buoyancy_coeffs` | `"constant"` |  | Source of alpha/beta for KPP B_0 + double diffusion: constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives) |
 
 ### &ocean_vdiff_nml
 
