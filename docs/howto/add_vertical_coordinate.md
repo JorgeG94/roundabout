@@ -101,12 +101,35 @@ where the `select case (coord_type)` lives:
   conservation, remap cadence.
 - `tests/test_vcoord_target.F90`, `tests/test_vcoord_zstar_full.F90` — the
   column-level reference generators.
+- **`tests/test_ocean_vcoord_interface_depths.F90` — the interface-DEPTH gate,
+  and it is now part of the recipe: a new family MUST add its rows here.**
 
 Invariants to assert: (a) `sum_k target_h == H + η` per column; (b) layers stay
 ≥ floor; (c) at solver level, tracer/mass conservation across steps, and a
 lake-at-rest run stays at rest. **A deep-shallow bathymetry + flow test is
 required** to catch over-allocation bugs — flat-bottom / static-stratification
 tests are blind to them.
+
+**(d) The absolute geopotential DEPTH of every target interface.** (a)–(c) are
+all satisfied *identically* by a stack laid in the wrong half of the column, so
+on their own they cannot see a coordinate that puts its fine resolution 500 m
+too deep, nor one whose whole column has collapsed into the bed layer — which
+is exactly how `VCOORD_ZSIGMA` ran for months against a dimensionless
+`z_ref_global` while every sum test stayed green. Assert
+
+    e(K) = −b + Σ_{k ≤ K} target_h(k),   e(0) = −b (the bed),
+
+against a hand-derived analytic table, in three geometries: flat bed at
+`η = 0`; a **sloping** bed (so the vanishing branch runs); and the same columns
+with the **column top displaced** to `z = −z_top` — a rigid lid, i.e. an ice
+shelf. The third is the one that separates the families: a sigma-like family
+must divide the live column proportionally, while a z-like family must vanish
+the layers whose nominal range lies above `−z_top` against the **top** and keep
+the live layers at their open-ocean depths. No family does the latter today
+(the builder is handed a column *thickness* and nothing else, so it cannot know
+where the column starts); the z-like case-3 rows are therefore carried as
+`documents_*` cases that assert the CURRENT placement and are flagged in-line
+as the assertions the rigid-top slice must flip.
 
 ## Gotchas
 
