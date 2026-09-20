@@ -49,6 +49,7 @@ module test_ocean_zinit
    use rdb_config, only: ocean_zinit_config_t
    use rdb_ocean_z_init, only: seed_ts_from_zfile, interp_column_linear_z, &
                                seed_ts_linear_z, build_z_ctr, zinit_dims_ok
+   use rdb_ocean_sponge, only: ocean_sponge_t, ocean_sponge_refresh_target
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, &
                             nc_def_var_3d, rdb_def_var_1d, nc_enddef, &
                             rdb_put_var_1d
@@ -94,7 +95,9 @@ contains
                   new_unittest("zinit_dim_mismatch", test_dim_mismatch), &
                   new_unittest("zinit_draft_offset", test_draft_offset), &
                   new_unittest("zinit_draft_bitident", test_draft_bitident), &
-                  new_unittest("zinit_linear_source", test_linear_source) &
+                  new_unittest("zinit_linear_source", test_linear_source), &
+                  new_unittest("sponge_linear_z_target_matches_the_zinit_seed", &
+                               test_sponge_target_matches_zinit) &
                   ]
    end subroutine collect_ocean_zinit_tests
 
@@ -774,5 +777,112 @@ contains
 
       call ms%destroy()
    end subroutine test_linear_source
+
+   ! =================================================================
+   ! Cross-module convention gate: the sponge's analytic `linear_z`
+   ! target and the `&ocean_zinit_nml source="linear"` IC must be the
+   ! SAME profile.
+   !
+   ! `rdb_ocean_sponge` is compiled unconditionally while
+   ! `rdb_ocean_z_init` is only built with RDB_ENABLE_NETCDF=ON, so the
+   ! sponge cannot `use` `build_z_ctr` / `linear_in_z` and re-derives the
+   ! recurrence in its device kernel.  Two copies of a convention drift
+   ! silently — unless something compares the NUMBERS, which is this
+   ! test.  It lives here (a NetCDF-gated suite) because it is the only
+   ! place both modules are reachable.
+   !
+   ! Geometry is chosen so that every trap is live: uneven layers (so a
+   ! layer-INDEX profile fails), a draft that slopes in x (so a
+   ! draft-blind profile fails) and a non-zero gradient in BOTH tracers.
+   ! =================================================================
+
+   subroutine test_sponge_target_matches_zinit(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      type(ocean_zinit_config_t) :: zcfg
+      type(hgrid_t) :: grid
+      integer, parameter :: NXP = 4, NYP = 3, NZM = 5
+      real(wp), allocatable :: z_draft(:, :)
+      real(wp) :: worst, seeded, targeted
+      integer :: i, j, k
+
+      grid = make_grid(NXP, NYP)
+      ms%nz_ml = NZM
+      call ms%init(grid)
+      ms%wet_mask = 1.0_wp
+      ! Uneven layers, 20/40/60/80/100 m bottom-up (total 300 m).
+      do k = 1, NZM
+         ms%h_layer(:, :, k) = 20.0_wp*real(k, wp)
+      end do
+
+      ! Ice base deepening toward +x, 15 m per cell.
+      allocate (z_draft(grid%nx_total, grid%ny_total))
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            z_draft(i, j) = 15.0_wp*(real(i - NGHOST, wp) - 0.5_wp)
+         end do
+      end do
+
+      ! (a) Seed T/S with the zinit analytic profile under that draft.
+      zcfg%source = "linear"
+      zcfg%lin_t_ref = T_REF
+      zcfg%lin_dt_dz = DTDZ
+      zcfg%lin_s_ref = S_REF
+      zcfg%lin_ds_dz = DSDZ
+      call seed_ts_linear_z(ms, zcfg, z_draft=z_draft)
+
+      ! (b) Build the sponge's analytic target from the SAME coefficients
+      !     and the SAME draft, over the whole array.
+      sp%enable = .true.
+      call sp%init(grid, nz_ml=NZM, n_tracers=size(ms%tracers))
+      sp%target_source = "linear_z"
+      sp%lin_t_ref = T_REF
+      sp%lin_dt_dz = DTDZ
+      sp%lin_s_ref = S_REF
+      sp%lin_ds_dz = DSDZ
+      sp%idx_t = ms%idx_temperature
+      sp%idx_s = ms%idx_salinity
+      sp%idamp_h = 1.0e-4_wp          ! every cell in the band
+      sp%z_top = z_draft
+
+      !$acc enter data copyin(ms, sp)
+      call ms%enter_data()
+      call sp%enter_data()
+      call ocean_sponge_refresh_target(grid, sp, ms)
+      !$acc update self(sp%ref_tracer)
+      call sp%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, sp)
+
+      worst = 0.0_wp
+      do k = 1, NZM
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total
+               seeded = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               targeted = sp%ref_tracer(i, j, k, ms%idx_temperature)
+               worst = max(worst, abs(seeded - targeted))
+               seeded = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               targeted = sp%ref_tracer(i, j, k, ms%idx_salinity)
+               worst = max(worst, abs(seeded - targeted))
+            end do
+         end do
+      end do
+
+      call check(error, worst < TOL_EXACT, &
+                 "the sponge linear_z target and the zinit linear IC must be the "// &
+                 "same profile (z_top convention, sign of dv_dz, layer-centre depth)")
+      if (.not. allocated(error)) then
+         ! Guard: the profile really does vary with the draft, so the
+         ! comparison above is not two constants agreeing.
+         call check(error, abs(sp%ref_tracer(NGHOST + 1, NGHOST + 1, NZM, ms%idx_temperature) &
+                               - sp%ref_tracer(NGHOST + NXP, NGHOST + 1, NZM, &
+                                               ms%idx_temperature)) > MISMATCH_FLOOR, &
+                    "the sloping draft must make both profiles vary in x")
+      end if
+
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_sponge_target_matches_zinit
 
 end module test_ocean_zinit

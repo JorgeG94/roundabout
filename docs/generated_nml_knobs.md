@@ -614,6 +614,11 @@ Map-driven sponge: per-cell Idamp + 3-D reference state (PR-23).
 | `enable` | `.false.` |  | Master switch (default off; legacy band kernels run when off) |
 | `damp_source` | `"band"` |  | How idamp_h/u/v are filled |
 | `target_source` | `"ic"` |  | Reference-state source |
+| `ramp` | `"cosine"` |  | Band ramp shape from the sponge wall inward ('linear' is ISOMIP+ Eq. 20) |
+| `lin_t_ref` | `0.0000000000E+00` | degC | target_source='linear_z': T at the z = 0 datum |
+| `lin_dt_dz` | `0.0000000000E+00` | degC/m | target_source='linear_z': dT/dz, z positive UP (stable => > 0) |
+| `lin_s_ref` | `0.3500000000E+02` | PSU | target_source='linear_z': S at the z = 0 datum |
+| `lin_ds_dz` | `0.0000000000E+00` | PSU/m | target_source='linear_z': dS/dz, z positive UP (stable => < 0) |
 | `relax_uv` | `.true.` |  | Relax u/v toward u_ref/v_ref |
 | `relax_tracers` | `.true.` |  | Relax every registered tracer toward its 3-D reference field |
 | `relax_h` | `.false.` |  | Interior-interface thickness damping (NOT IMPLEMENTED in v1 — deferred to PR-23b, requires vcoord_type='lagrangian') |

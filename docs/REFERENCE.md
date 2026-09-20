@@ -177,6 +177,34 @@ per-edge `*_width` / `*_strength` overrides) which relaxes momentum
 toward `u_ref`/`v_ref` and every registered tracer toward `ref_tracer`,
 mirroring S/T into the sponge budget accumulators.
 
+Two reference states ship, selected by `&ocean_sponge_nml target_source`:
+
+| `target_source` | Reference |
+|---|---|
+| `"ic"` (default) | Snapshot of the seeded initial condition, taken once, before any restart read. A "nudge toward a parent climatology" is then reachable through `&ocean_zinit_nml` with no new reader. |
+| `"linear_z"` | ANALYTIC affine geopotential profile — `T(z) = lin_t_ref + lin_dt_dz·z`, `S(z) = lin_s_ref + lin_ds_dz·z`, **z positive UP**, the `&ocean_zinit_nml source="linear"` convention — **re-evaluated on the live layer geometry once per outer step**. Non-S/T tracers and `u_ref`/`v_ref` still come from the IC snapshot. |
+| `"file"` | Recognised, aborts at `validate_config` (needs the static-2-D reader). |
+
+`"linear_z"` is what makes a restoring profile that DIFFERS from the
+initial condition expressible (ISOMIP+ Ocean1: cold start, warm far
+field; Ocean2: the reverse). It is re-evaluated rather than frozen
+because under sigma/ALE the layer centres move — with the free surface,
+with the remap, and under an ice lid — so a target sampled once at t = 0
+lives on the t = 0 layer positions and drifts away from the geopotential
+profile that was asked for. Where the sponge IS the whole forcing, that
+drift changes the experiment. The refresh walks the sponge cells only
+(`Idamp = 0` is the mask, for the refresh as for the relaxation), and
+measures depth from `z_draft` under a cavity.
+
+`&ocean_sponge_nml ramp` selects the band shape from the tagged wall
+(`d = 0`) inward: `"cosine"` (default, `0.5·(1+cos(π·d/band))`, the
+legacy shape, bit-identical) or `"linear"`, `(band − d − 0.5)/band`.
+The linear form is the cell-centre evaluation of ISOMIP+ Eq. (20),
+`γ(x) = γ0·max(0, (x−x_r0)/(x_r1−x_r0))` (Asay-Davis et al. 2016) —
+`γ0` is the existing `sponge_strength` (already 1/s, i.e. 1/τ) and the
+x-range is the existing band width in cells, so no `tau_boundary` or
+x-range knob is needed.
+
 **Deferred**: per-layer Orlanski phase-speed radiation, file-backed
 boundary-data backends (the polymorphic `update(t, bc)` call site is
 wired in the driver; only the constant backend ships), and live nesting.
