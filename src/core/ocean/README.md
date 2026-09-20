@@ -155,7 +155,7 @@ slot without reading the rest of the tree.  A future portability lint
 | Tides | `ocean_tides_t` | `forcing/rdb_ocean_tides.F90` | 5e | astronomical clock + bathymetry | `eta_eq`, `eta_sal`, `itd_coeff` |
 | Surface-pressure loading / inverse barometer ✓ (PR-17, Wunsch & Stammer 1997; `&ocean_psurf_nml enable`, default off ⇒ bit-identical) | `ocean_p_surf_t` | `forcing/rdb_ocean_p_surf.F90` | 5e | `sf%p_surf` (PR-12 component set, needs `enable_components`), `eos%rho0`, `dyn%bt_work%g_bt` | `eta_ib = −p_surf/(ρ₀·g_bt)` + combined `eta_seam`, filled by `p_surf_update_seam` once per outer step and passed as the barotropic `eta_forcing` (see the **`eta_forcing` seam contract** below). Split-solver only; excludes `bt_halo > 0`. With `&ocean_psurf_nml in_eos` (E3, default off ⇒ bit-identical) the SAME `sf%p_surf` is also copied once per outer step into `multilayer_state_t%p_top` (Pa) so the EOS's IN-SITU pressure is measured down from the load rather than from 0 Pa — NOT the potential density `ms%rho_layer`, which stays at the uniform `eos%p_ref`; see the **`p_top` seam contract** below. |
 | Porous barriers ✓ (Adcroft 2013; default off) | fields on `ocean_metrics_t` (`use_porous`, `porous_eta_interp`, `porous_mask_depth`, `por_bed`, `por_{dmin,dmax,davg}_{u,v}`, `por_face_area_{u,v}`) | kernels in `state/rdb_ocean_porous.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_porous`; per-step refresh `ocean_porous_refresh` in `dynamics/split_rk2/rdb_ocean_dyn.F90` | — | `barotropic.b` (negated once to a topographic HEIGHT), `multilayer.h_layer` | `por_face_area_u/v` (nx+1,ny,nz)/(nx,ny+1,nz) — layer-averaged OPEN-AREA fraction, recomputed once per OUTER step (MOM6 cadence) and MULTIPLIED into `mass_flux_{x,y}_layer` by continuity-PPM (before the BT renormalisation, which also takes the narrowed areas) and into `coriolis_adv.mass_flux_{u,v}` by the TRANSPORT Coriolis forms — PLUS `dy_cu_bt`/`dx_cv_bt` (2D, ALWAYS allocated, byte-equal to `dy_cu`/`dx_cv` when off), the widths the BAROTROPIC substep transports on, scaled by the COLUMN-INTEGRATED open fraction so the barotropic solve is not porous-blind (else the renormalisation to `uhbt` returns the blocked transport). `use_porous=.false.` (default) ⇒ the open-area fields stay at their `(1,1,1)` placeholder, no porous kernel is launched, byte-identical. Fails loud with `&ocean_bt_nml bt_halo > 0` (`bt_wide`'s own `metrics_w` carries no porous stats, so the wide BT loop would silently transport on un-narrowed widths) and with `&ocean_wetdry_nml enable` |
-| Ice-shelf cavity statics ✓ (P5.1; default off) | fields on `ocean_metrics_t` (`use_cavity`, `z_draft`, `cover_frac`, `p_ice_ref`) | geometry + helpers in `state/rdb_ocean_cavity.F90`; draft fill + grounding in `state/rdb_ocean_state.F90::seed_cavity_draft` (inside the IC seed, before the wet mask); load + datum assertion in `state/rdb_ocean_setup.F90::configure_ocean_cavity` | — | `&ocean_cavity_dyn_nml`, `barotropic.b`, `pressure_force.rho_ref` | `z_draft` (m, positive down, ghosts included) — consumed by `configure_ocean_bt_split` as the DATUM `bt_H_ref = b − z_draft`, by the layer/`bt_h` seed as the water column, and by `seed_wet_mask_impl` as the grounding decision; `cover_frac` (binary 0/1, reserved for the melt slice); `p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) — built and stored, **no consumer yet**: this slice is datum-only. `use_cavity=.false.` (default) ⇒ all three stay `(1,1)` placeholders and `bt_H_ref = b` byte-identically. See the **cavity datum contract** below |
+| Ice-shelf cavity statics ✓ (P5.1 geometry + datum, P5.2 load; default off) | fields on `ocean_metrics_t` (`use_cavity`, `z_draft`, `cover_frac`, `p_ice_ref`) | geometry + helpers in `state/rdb_ocean_cavity.F90`; draft fill + grounding in `state/rdb_ocean_state.F90::seed_cavity_draft` (inside the IC seed, before the wet mask); load build + `ms%p_top` assembly + datum assertion in `state/rdb_ocean_setup.F90::configure_ocean_cavity`; per-step re-assembly (psurf seam live only) inline in `dynamics/split_rk2/rdb_ocean_dyn.F90::ocean_dyn_step_split` | — | `&ocean_cavity_dyn_nml`, `barotropic.b`, `pressure_force.rho_ref`, `surface_flux.p_surf` | `z_draft` (m, positive down, ghosts included) — consumed by `configure_ocean_bt_split` as the DATUM `bt_H_ref = b − z_draft`, by the layer/`bt_h` seed as the water column, and by `seed_wet_mask_impl` as the grounding decision; `cover_frac` (binary 0/1, reserved for the melt slice); `p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) — the static half of `multilayer.p_top = p_ice_ref + sf%p_surf`, and thence the FV_MOM6 `pa(nz+1)` top BC (`&ocean_pgf_nml p_top_in_bc`, REQUIRED for a non-uniform draft) and the in-situ EOS (`&ocean_psurf_nml in_eos`). It is deliberately NOT a component of `sf%p_surf`: the datum already carries its barotropic effect and `eta_ib` is built from that total. `use_cavity=.false.` (default) ⇒ all three stay `(1,1)` placeholders and `bt_H_ref = b` byte-identically. See the **cavity datum contract** below |
 | Barotropic linear wave drag ✓ (Egbert & Ray 2001; Jayne & St Laurent 2001) | fields on `barotropic_workstate_t` (`dyn.bt_work`) | kernels in `kernels/barotropic/rdb_barotropic_coupling.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_wave_drag` | — | `lwd_drag_u/v` (static, host-filled at configure from `form="uniform"` or `"roughness_proxy"`; `barotropic.b`, `metrics.wet_T` for the proxy) | MULTIPLIES into `bt_work.bt_rem_u/v` each stage (`compute_bt_rem_wave_drag`); `lwd_enable=.false.` (default) ⇒ arrays unallocated, bit-identical |
 | River / discharge | `ocean_river_t` | `forcing/rdb_ocean_river.F90` | 5e | sources NetCDF | `q_mass`, `q_S`, `q_T` distributed fields |
 | Open boundary (parent nest) | `ocean_obc_t` | `boundary/rdb_ocean_obc.F90` | 5c | parent NetCDF | ring buffers + FRS blend into edge bands |
@@ -425,7 +425,7 @@ uniform box it runs one omitted term (channel drag) and one summed term (linear
 bed drag) against the outer scheme's exact analytic decay under **both**
 `pred_corr` and `ssp_rk2`, and both land on it to ~1e-14 relative.
 
-### The cavity datum contract (`&ocean_cavity_dyn_nml`, P5.1)
+### The cavity datum contract (`&ocean_cavity_dyn_nml`, P5.1 + P5.2)
 
 **There are two vertical datums on this path and they must not be
 conflated.**
@@ -455,6 +455,46 @@ assembled total `sf%p_surf` and would re-inject it. Only the load
 This is the concrete case the partition rule in the `eta_forcing` contract
 above was written for.
 
+**The load partition, end to end (P5.2).** `p_ice_ref` has exactly two
+destinations, and the split between them is the whole design:
+
+```
+BAROTROPIC  ->  the datum (D).  And nothing else.
+PRESSURE    ->  ms%p_top = metrics%p_ice_ref + sf%p_surf,
+                read by the FV_MOM6 pa(nz+1) top BC
+                (&ocean_pgf_nml p_top_in_bc) and by the in-situ EOS
+                (&ocean_psurf_nml in_eos).
+SEAM        ->  nothing.  eta_ib = -sf%p_surf/(rho0*g_bt) is built from
+                sf%p_surf, which the cavity never writes, so the seam
+                carries the load ANOMALY only — which, under the
+                Boussinesq-isostatic convention, IS sf%p_surf.
+```
+
+Consequences worth stating because a test pins each one: an
+inverse-barometer run with no cavity is bit-identical (the cavity adds
+nothing to `sf%p_surf`); a cavity with no `p_surf` sends the seam
+*nothing*, so switching the seam on at `p_surf = 0` under a cavity is
+bit-identical to not having it at all
+(`test_ocean_cavity_load`, `test_ocean_cavity_equivalence`).
+
+`ms%p_top` is assembled in two places and they must agree: the configure
+seed in `configure_ocean_cavity` (which is the FINAL value for a cavity
+without the psurf seam — the draft is static, so there is nothing to
+refresh) and the once-per-outer-step inline `do concurrent` in
+`ocean_dyn_step_split`, which fires only when the psurf seam makes
+`sf%p_surf` live. Both build `p_ice_ref + p_surf`, over the WHOLE array
+including ghosts.
+
+**`&ocean_pgf_nml p_top_in_bc` is REQUIRED for a cavity whose draft
+varies** — refused fail-loud at configure (and mirrored in
+`validate_config` on the namelist shape), not auto-enabled: an
+answer-changing knob that a second namelist group switches on behind the
+user's back is the silent coupling this codebase fails loud on. A draft
+that is UNIFORM over the whole array is exempt, and that is a theorem
+rather than a courtesy — a load with no gradient is bit-identically inert
+in the top BC — which is what keeps the flat-lid datum-equivalence gate
+expressible with and without the load.
+
 Rules for anything that joins this seam:
 
 - **The datum is the whole dynamical effect of a STATIC load.** The split
@@ -463,7 +503,22 @@ Rules for anything that joins this seam:
   `−G·∇(η − η_forcing)` is the only barotropic term there is. A static
   surface load therefore reaches the barotropic mode through the datum (or
   the seam) and through nothing else — putting it only in the PGF would be
-  silently inert.
+  silently inert. The converse is the reason `p_top_in_bc` is a refusal
+  and not a blow-up guard: a MISSING load is also annihilated there, so
+  the split path loses conditioning (5.4 decades, measured) rather than
+  stability. What it protects is the raw `pa` stack, the unsplit driver,
+  and `&ocean_bt_nml correction_h_weighted`, where the uniform piece is
+  redistributed as a real per-layer shear.
+- **The isostatic load is `ρ₀·g·z_draft`, and it is not the true weight.**
+  A stratified column's real overburden is `g∫ρ̂`, which differs by
+  `−g∫(ρ̂ − ρ₀)`; the gradient of that difference is a residual
+  `N²·z_draft·∇z_draft` in the raw PGF (`5.8e-6 m/s²` at `N² = 1e-5`,
+  `z_draft = 280 m`, slope `2e-3` — measured, `test_ocean_cavity_load`).
+  It is chosen anyway, because `ρ₀·g·z_draft` is the load that makes the
+  DISCRETE BAROTROPIC state exactly at rest, and it is what ISOMIP+
+  prescribes. The residual is depth-uniform, so the split annihilates it
+  too; `draft_source="in_situ"` (the true isostatic solve) is deferred
+  and fails loud.
 - **`bt_H_ref` is the reference WATER-COLUMN thickness, not the bed.**
   Anything that re-derives it (the API's bathymetry re-injection, a future
   wide-halo BT clone) must re-derive it as `b − z_draft`, or the ice load
@@ -481,6 +536,14 @@ Rules for anything that joins this seam:
   `b − z_draft < h_min_cavity` ⇒ the column is LAND via
   `seed_wet_mask_impl`, so the existing metric-zeroing land mask and the
   finite land-state hold do the rest.
+- **What is left at rest is the sigma-coordinate PGF truncation, and it
+  has a formula.** Flat bed + `VCOORD_SIGMA` + a draft slope `s` gives
+  `PFu(k) − ⟨PFu⟩_h = N²·D³·(3σ_k²−1)/(12·dx·H̄)` with `D = s·dx` —
+  second order in `dx`, CUBIC in the slope, independent of `nz`. Measured
+  end to end: `7.08e-8 m/s` after 12000 s at `s = 1e-3`, `N² = 1e-5`
+  (the derived `a_peak·t` is `1.04e-7`). With `N² = 0` it vanishes and
+  the run sits at `2.6e-13 m/s`. That number is the baseline for the
+  sloping-coordinate PGF corrections, which are a later phase.
 - **Ordering is load-bearing.** `z_draft` is filled inside
   `ocean_state_seed_from_cfg`, immediately after the bathymetry and BEFORE
   the layer split and the wet-mask seed read `b − z_draft`; it is then

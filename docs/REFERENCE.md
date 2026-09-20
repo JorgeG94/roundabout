@@ -437,8 +437,8 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 - **Porous barriers** (`&ocean_porous_nml`, Adcroft 2013) — subgrid
   sill/strait blocking that narrows the continuity and barotropic face
   widths.
-- **Static ice-shelf cavity geometry** (`&ocean_cavity_dyn_nml`, default
-  off ⇒ bit-identical) — a prescribed, time-constant ice draft
+- **Static ice-shelf cavity geometry + load** (`&ocean_cavity_dyn_nml`,
+  default off ⇒ bit-identical) — a prescribed, time-constant ice draft
   `z_draft(i,j)` (m, positive down) absorbed into the barotropic DATUM,
   `bt_H_ref = b − z_draft`, so `bt_eta` is the deviation from the loaded
   equilibrium (zero at rest under the shelf) and every consumer of the
@@ -446,8 +446,13 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   (2008) §2.1's convention. Analytic `flat` / `linear` drafts with a
   calving front; a column with less than `h_min_cavity` of water under
   the ice is LAND through the ordinary wet-mask seed, never a thin film.
-  Single-rank, `fv_mom6` + sigma/z*-lite only, and the isostatic load
-  itself is not yet applied (datum-only; configure says so).
+  The isostatic load `p_ice_ref = (ρ_ref·g)·z_draft` is assembled into
+  `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` and consumed by the
+  FV-MOM6 `pa(nz+1)` top boundary condition (`&ocean_pgf_nml
+  p_top_in_bc`, REQUIRED for a draft that varies) and the in-situ EOS
+  (`&ocean_psurf_nml in_eos`); it is never added to `sf%p_surf`, so the
+  `eta_forcing` seam carries the load ANOMALY only and the datum carries
+  the rest exactly once.  Single-rank, `fv_mom6` + sigma/z*-lite only.
 - **Interior land masking** (static free-slip walls via metric-zeroing)
   and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma / z*-lite,
   single-rank, positive-definite outflow limiter).
