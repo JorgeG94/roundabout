@@ -4237,6 +4237,45 @@ contains
             has_error = .true.
          end if
 
+         ! `VCOORD_ZSIGMA` is NOT a working coordinate on the ocean path.
+         ! Its deep branch reads `z_ref_global` as a table of absolute
+         ! reference depths in METRES
+         ! (`z_top_k = min(z_ref_global(nz-k), column_total)`,
+         ! `rdb_ocean_vcoord :: ocean_vcoord_compute_target_h_impl`), but the
+         ! ONLY writer of that array anywhere in `src/` is the DIMENSIONLESS
+         ! `z_ref_global(k) = k/nz` init in `ocean_vcoord_init` — nothing on
+         ! the namelist path or the Python path ever replaces it with metres.
+         ! So every z-level interval is `1/nz` metres, every layer collapses,
+         ! and the whole column is dumped into `target_h(:,:,1)` (the BED
+         ! layer) by the deficit line.  `Sum target_h = H + eta` still holds,
+         ! which is exactly why no conservation test ever caught it; the
+         ! placement is measured interface-by-interface in
+         ! `test_ocean_vcoord_interface_depths ::
+         ! documents_zsigma_dimensionless_zref_collapse` (nine 0.1 m layers
+         ! in the top 90 cm of a 1000 m column).
+         !
+         ! Refuse it rather than silently running a broken coordinate.  No
+         ! shipped namelist selects it.  Follow-up: fill `z_ref_global` in
+         ! metres (the family is the natural seat for a sigma-near-the-top /
+         ! z-below HYBRID), then delete this refusal and the `documents_*`
+         ! test with it.  `VCOORD_ZSTAR_SIGMA` consumes the same table
+         ! FRACTIONALLY (rescaled by `z_ref_global(nz)`) so it is unaffected
+         ! by the units — but note that with a uniform table its deep branch
+         ! is numerically indistinguishable from SIGMA.
+         if (parse_vcoord_type(cfg%vcoord_type, default_code=VCOORD_EULERIAN_Z) &
+             == VCOORD_ZSIGMA) then
+            call logger%error("&vcoord_nml vcoord_type = 'zsigma' is refused on the "// &
+                              "ocean path: its deep branch reads `z_ref_global` as "// &
+                              "absolute depths in METRES, but the only writer of that "// &
+                              "table is the dimensionless `k/nz` init, so every "// &
+                              "z-level interval is 1/nz metres and the whole column "// &
+                              "collapses into the bed layer (the column sum is still "// &
+                              "exact, which is why it looked healthy).  Use 'sigma', "// &
+                              "'zstar', 'zstar_sigma' or 'zstar_full'; ZSIGMA returns "// &
+                              "when `z_ref_global` is filled in metres.")
+            has_error = .true.
+         end if
+
          ! `&vcoord_nml zstar_h_min` carries TWO different contracts, picked
          ! by the coordinate family rather than by the value (see
          ! `rdb_vcoord :: vcoord_h_min_role`).  On the GEOMETRIC families
@@ -4251,14 +4290,26 @@ contains
          ! ghost T/S, a PGF column entry, a remap-drain concentration, a vdiff
          ! interface) while the coordinate still treats them as throwaway.
          !
-         ! WARN, do not abort, on that one: the repo's own Python worked
-         ! example (`python/tests/test_worked_example.py`,
-         ! `ZStarFull(h_min=1.0e-3)`) is in exactly this band today, so a hard
-         ! refusal would stop a configuration that runs.  The silence was the
-         ! defect; promoting this to `has_error` is a deliberate,
-         ! answer-changing follow-up once that example is corrected.  A
-         ! non-positive floor IS refused — nothing in the tree sets one and it
-         ! defeats the knob's single documented purpose.
+         ! This was a WARNING until the rigid-top work made it blocking.  The
+         ! reason it is now an ERROR: a coordinate that vanishes layers
+         ! against the TOP of the column (an ice-shelf cavity) puts its
+         ! fillers where the surface fluxes, the pressure gradient, the melt
+         ! sampler and the tracer budgets all read — so a filler that is not
+         ! skipped is not a cosmetic slip, it is a conservation hole.  The
+         ! only configuration in the tree that sat in the band was the repo's
+         ! own Python worked example (`python/tests/test_worked_example.py`,
+         ! `ZStarFull(h_min=1.0e-3)`), corrected in the same change.
+         !
+         ! NOTE the boundary this must NOT move: five shipped namelists set
+         ! `zstar_h_min = 1.5e-4`, H_VANISHED EXACTLY, which is legal —
+         ! `vcoord_h_min_is_coherent` is a strict `>` and every downstream
+         ! vanish test is a strict `> H_VANISHED`, so a layer on the marker
+         ! reads as vanished.  Relaxing either to `>=` would refuse the
+         ! canonical double-gyre reference; `test_ocean_vcoord_hygiene ::
+         ! h_min_on_the_marker_is_accepted` guards that.
+         !
+         ! A non-positive floor was already refused and still is — it defeats
+         ! the knob's single documented purpose.
          block
             integer :: hmin_vcoord_code
             hmin_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
@@ -4269,22 +4320,22 @@ contains
                                     to_string(cfg%zstar_h_min)//" must be > 0: it exists "// &
                                     "so a vanishing layer's target thickness is never "// &
                                     "exactly zero (kernels that divide by h_layer)")
-                  has_error = .true.
                else
-                  call logger%warning("&vcoord_nml zstar_h_min = "// &
-                                      to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
-                                      to_string(H_VANISHED)//" m under vcoord_type = '"// &
-                                      trim(cfg%vcoord_type)//"': that family uses the knob "// &
-                                      "as an anti-zero floor for BELOW-BED filler layers, "// &
-                                      "which are meant to stay vanished — above "// &
-                                      "H_VANISHED they become dynamically live "// &
-                                      "(EOS/PGF/remap-drain/vdiff) while the coordinate "// &
-                                      "still treats them as throwaway.  For a genuinely "// &
-                                      "live minimum layer thickness use "// &
-                                      "&ocean_isopycnal_nml angstrom_h (the D4 floor "// &
-                                      "knob); the rho/hycom regrid has its own "// &
-                                      "keep-alive floor")
+                  call logger%error("&vcoord_nml zstar_h_min = "// &
+                                    to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
+                                    to_string(H_VANISHED)//" m under vcoord_type = '"// &
+                                    trim(cfg%vcoord_type)//"': that family uses the knob "// &
+                                    "as an anti-zero floor for filler layers that are "// &
+                                    "MEANT to stay vanished — above H_VANISHED they "// &
+                                    "become dynamically live (EOS/PGF/remap-drain/vdiff) "// &
+                                    "while the coordinate still treats them as "// &
+                                    "throwaway.  Use a value <= "// &
+                                    to_string(H_VANISHED)//"; for a genuinely live "// &
+                                    "minimum layer thickness use &ocean_isopycnal_nml "// &
+                                    "angstrom_h (the D4 floor knob); the rho/hycom "// &
+                                    "regrid has its own keep-alive floor")
                end if
+               has_error = .true.
             end if
             ! NOTE the boundary, deliberately NOT warned about at runtime:
             ! the five shipped namelists set `zstar_h_min = 1.5e-4`, which is
