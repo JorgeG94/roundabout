@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.5% of total for modules and submodules.">287 statements</a>
+                 title=" 0.6% of total for modules and submodules.">295 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -168,6 +168,7 @@
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surface_stress_apply_tendencies">ocean_surface_stress_apply_tendencies</a>
             <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surface_stress_compute_tendencies">ocean_surface_stress_compute_tendencies</a>
+            <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surface_stress_refresh_mag">ocean_surface_stress_refresh_mag</a>
             <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surface_stress_set_derived">ocean_surface_stress_set_derived</a>
             <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surfstress_derived_impl">ocean_surfstress_derived_impl</a>
             <a class="list-group-item" href="../module/rdb_ocean_surface_stress.html#proc-ocean_surfstress_destroy">ocean_surfstress_destroy</a>
@@ -208,12 +209,12 @@
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
                   <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
-                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
                   <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
                   <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
                   <li class="list-inline-item"><a href='rdb_scratch_3d.html'>rdb_scratch_3d</a></li>
-                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -1257,7 +1258,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-direct_stress"></span>
+              <span class="anchor" id="variable-direct_stress~2"></span>
               logical,
             </td>
               <td>public</td>
@@ -1318,7 +1319,7 @@ k</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~4"></span>
+              <span class="anchor" id="variable-h_min~19"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1356,7 +1357,7 @@ on it (<code>stress_mag</code> is always allocated and zero-safe).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-hmix_stress"></span>
+              <span class="anchor" id="variable-hmix_stress~2"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1376,7 +1377,7 @@ behaviour even if <code>direct_stress</code> is flipped on.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-is_init~9"></span>
+              <span class="anchor" id="variable-is_init~36"></span>
               logical,
             </td>
               <td>public</td>
@@ -1393,7 +1394,7 @@ behaviour even if <code>direct_stress</code> is flipped on.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho0~9"></span>
+              <span class="anchor" id="variable-rho0~31"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1427,16 +1428,23 @@ behaviour even if <code>direct_stress</code> is flipped on.</p>
 <code>sqrt(tau_x_cell^2 + tau_y_cell^2)</code>), shape <code>(nx_total,
 ny_total)</code>.  <strong>Always allocated</strong> (PR-12 §7.4: a pure τ
 property, unlike a shared <code>ustar</code> which would need a
-coherent <code>rho0</code> — deferred).  Filled once at configure by
-<code>ocean_surface_stress_set_derived</code>; KPP (<code>rdb_ocean_vmix</code>)
+coherent <code>rho0</code> — deferred).  Refreshed in step by every
+writer of the <code>tau</code> pair: the <code>set_wind_stress_*</code> setters and
+<code>ocean_surface_stress_set_derived</code> at configure, the
+data-forcing reader&rsquo;s seam refresh per bracket, and the
+sea-ice stress coupler&rsquo;s on-device blend every outer step
+(all via <code>ocean_surface_stress_refresh_mag</code>).  KPP
+(<code>rdb_ocean_vmix</code>)
 and EPBL (<code>rdb_ocean_epbl</code>) both read it instead of
 re-deriving <code>tau_mag</code> inline (bit-identical dedup — same
-three lines, same FP op order, just computed once).</p>
+three lines, same FP op order, just computed once) — which is
+why a <code>tau</code> write that skips the refresh silently freezes
+BOTH schemes&rsquo; <code>u_*</code> at the last refreshed stress.</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_x~3"></span>
+              <span class="anchor" id="variable-tau_x~4"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1456,7 +1464,7 @@ input.  Default zero.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_y~3"></span>
+              <span class="anchor" id="variable-tau_y~4"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1483,27 +1491,27 @@ input.  Default zero.</p>
           <tbody>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-bytes~10'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surface_stress_bytes.html'>ocean_surface_stress_bytes</a></td>
+  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-bytes~45'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surface_stress_bytes.html'>ocean_surface_stress_bytes</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-destroy~11'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_destroy.html'>ocean_surfstress_destroy</a></td>
+  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-destroy~39'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_destroy.html'>ocean_surfstress_destroy</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-enter_data~9'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_enter_data.html'>ocean_surfstress_enter_data</a></td>
+  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-enter_data~32'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_enter_data.html'>ocean_surfstress_enter_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-exit_data~9'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_exit_data.html'>ocean_surfstress_exit_data</a></td>
+  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-exit_data~32'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_exit_data.html'>ocean_surfstress_exit_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-init~9'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_init.html'>ocean_surfstress_init</a></td>
+  <strong><a href='../type/ocean_surface_stress_t.html#boundprocedure-init~40'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_surfstress_init.html'>ocean_surfstress_init</a></td>
                   <td></td>
               </tr>
               <tr>
@@ -1553,7 +1561,7 @@ term here when a new allocatable joins the type.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~105"></span>
+              <span class="anchor" id="variable-this~429"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1610,7 +1618,7 @@ Not <code>pure</code> because of the async/wait directives.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~104"></span>
+              <span class="anchor" id="variable-this~428"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1625,7 +1633,7 @@ Not <code>pure</code> because of the async/wait directives.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~47"></span>
+              <span class="anchor" id="variable-ms~131"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1640,7 +1648,7 @@ Not <code>pure</code> because of the async/wait directives.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~26"></span>
+              <span class="anchor" id="variable-dt~130"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1655,7 +1663,7 @@ Not <code>pure</code> because of the async/wait directives.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-no_wait~4"></span>
+              <span class="anchor" id="variable-no_wait~9"></span>
               logical,
             </td>
 <td>intent(in),</td>
@@ -1698,7 +1706,7 @@ hoist the derived-type derefs (<code>this%tau_x</code>, <code>this%du_stress%dat
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~69"></span>
+              <span class="anchor" id="variable-grid~241"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1713,7 +1721,7 @@ hoist the derived-type derefs (<code>this%tau_x</code>, <code>this%du_stress%dat
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~103"></span>
+              <span class="anchor" id="variable-this~427"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1728,7 +1736,7 @@ hoist the derived-type derefs (<code>this%tau_x</code>, <code>this%du_stress%dat
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~46"></span>
+              <span class="anchor" id="variable-ms~130"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1737,6 +1745,49 @@ hoist the derived-type derefs (<code>this%tau_x</code>, <code>this%du_stress%dat
             </td>
             <td>::</td>
             <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_surface_stress_refresh_mag"></span> <h3>public pure subroutine <a href='../proc/ocean_surface_stress_refresh_mag.html'>ocean_surface_stress_refresh_mag</a>(ss)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Recompute <code>stress_mag</code> from the CURRENT <code>tau_x</code>/<code>tau_y</code>, shape
+taken from the already-allocated arrays (no <code>grid</code> needed — this
+is the grid-free twin of <code>ocean_surface_stress_set_derived</code>, for
+callers that hold the slot but not the grid).</p><a href="../proc/ocean_surface_stress_refresh_mag.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~21"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
             <td>
 
             </td>
@@ -1781,7 +1832,7 @@ never stale relative to <code>tau_x</code>/<code>tau_y</code> regardless of call
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~70"></span>
+              <span class="anchor" id="variable-grid~242"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1798,7 +1849,7 @@ is now taken from <code>tau_x</code>/<code>tau_y</code> directly — see
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ss~9"></span>
+              <span class="anchor" id="variable-ss~20"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1843,7 +1894,7 @@ Explicit-shape dummies, integer dims first (decl-order).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_x~6"></span>
+              <span class="anchor" id="variable-tau_x~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1858,7 +1909,7 @@ Explicit-shape dummies, integer dims first (decl-order).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_y~6"></span>
+              <span class="anchor" id="variable-tau_y~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1888,7 +1939,7 @@ Explicit-shape dummies, integer dims first (decl-order).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~78"></span>
+              <span class="anchor" id="variable-nx~429"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1903,7 +1954,7 @@ Explicit-shape dummies, integer dims first (decl-order).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~78"></span>
+              <span class="anchor" id="variable-ny~429"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1943,7 +1994,7 @@ Explicit-shape dummies, integer dims first (decl-order).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~95"></span>
+              <span class="anchor" id="variable-this~419"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1987,7 +2038,7 @@ the leaf arrays + scratch are attached here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~96"></span>
+              <span class="anchor" id="variable-this~420"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2027,7 +2078,7 @@ the leaf arrays + scratch are attached here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~97"></span>
+              <span class="anchor" id="variable-this~421"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2067,7 +2118,7 @@ the leaf arrays + scratch are attached here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~98"></span>
+              <span class="anchor" id="variable-this~422"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2107,7 +2158,7 @@ the leaf arrays + scratch are attached here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~99"></span>
+              <span class="anchor" id="variable-this~423"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2147,7 +2198,7 @@ the leaf arrays + scratch are attached here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~94"></span>
+              <span class="anchor" id="variable-this~418"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2162,7 +2213,7 @@ the leaf arrays + scratch are attached here.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~66"></span>
+              <span class="anchor" id="variable-grid~238"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2177,7 +2228,7 @@ the leaf arrays + scratch are attached here.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~8"></span>
+              <span class="anchor" id="variable-nz_ml~52"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -2202,14 +2253,14 @@ the leaf arrays + scratch are attached here.</p>
 </h3></div>
     <div class="card-body">
           
-  <p>Shared machinery behind every <code>set_wind_stress_*</code> setter AND
-<code>ocean_surface_stress_set_derived</code>: recompute <code>stress_mag</code> from
-the CURRENT <code>tau_x</code>/<code>tau_y</code>, shape taken from the already-
-allocated arrays (no <code>grid</code> needed).  Keeping this call inside
-each setter — rather than requiring a separate explicit call —
-is what keeps <code>stress_mag</code> correct for every existing caller,
-including unit tests that build <code>ocean_surface_stress_t</code>
-directly and never reach <code>configure_ocean_forcing</code>.</p>
+  <p>Type-bound-facing shim behind every <code>set_wind_stress_*</code> setter:
+strips the polymorphic box (same reason as <code>enter_data</code>) and
+delegates to <code>ocean_surface_stress_refresh_mag</code>.  Keeping this
+call inside each setter — rather than requiring a separate
+explicit call — is what keeps <code>stress_mag</code> correct for every
+existing caller, including unit tests that build
+<code>ocean_surface_stress_t</code> directly and never reach
+<code>configure_ocean_forcing</code>.</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -2224,7 +2275,7 @@ directly and never reach <code>configure_ocean_forcing</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~106"></span>
+              <span class="anchor" id="variable-this~430"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2273,7 +2324,7 @@ already mapped).</p><a href="../proc/ocean_surfstress_set_2gyre.html" class="pul
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~101"></span>
+              <span class="anchor" id="variable-this~425"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2288,7 +2339,7 @@ already mapped).</p><a href="../proc/ocean_surfstress_set_2gyre.html" class="pul
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~67"></span>
+              <span class="anchor" id="variable-grid~239"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2333,7 +2384,7 @@ already mapped).</p><a href="../proc/ocean_surfstress_set_2gyre.html" class="pul
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_global~2"></span>
+              <span class="anchor" id="variable-ny_global~5"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -2380,7 +2431,7 @@ production and unit test alike — gets a consistent
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~100"></span>
+              <span class="anchor" id="variable-this~424"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2455,7 +2506,7 @@ production and unit test alike — gets a consistent
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~102"></span>
+              <span class="anchor" id="variable-this~426"></span>
               class(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2470,7 +2521,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~68"></span>
+              <span class="anchor" id="variable-grid~240"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2515,7 +2566,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_global~3"></span>
+              <span class="anchor" id="variable-ny_global~6"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -2555,7 +2606,7 @@ production and unit test alike — gets a consistent
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-u_face~3"></span>
+              <span class="anchor" id="variable-u_face~24"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2570,7 +2621,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-v_face~3"></span>
+              <span class="anchor" id="variable-v_face~23"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2615,7 +2666,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~27"></span>
+              <span class="anchor" id="variable-dt~131"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2630,7 +2681,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~76"></span>
+              <span class="anchor" id="variable-nx~427"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2645,7 +2696,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~76"></span>
+              <span class="anchor" id="variable-ny~427"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2660,7 +2711,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~71"></span>
+              <span class="anchor" id="variable-nz~368"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2675,7 +2726,7 @@ production and unit test alike — gets a consistent
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-lwait~5"></span>
+              <span class="anchor" id="variable-lwait~10"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -2717,7 +2768,7 @@ bounds.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~17"></span>
+              <span class="anchor" id="variable-h_layer~100"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2732,7 +2783,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-wet_mask~9"></span>
+              <span class="anchor" id="variable-wet_mask~30"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2747,7 +2798,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_x~5"></span>
+              <span class="anchor" id="variable-tau_x~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2762,7 +2813,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_y~5"></span>
+              <span class="anchor" id="variable-tau_y~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2807,7 +2858,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho0~11"></span>
+              <span class="anchor" id="variable-rho0~33"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2822,7 +2873,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~6"></span>
+              <span class="anchor" id="variable-h_min~21"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2837,7 +2888,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~75"></span>
+              <span class="anchor" id="variable-nx~426"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2852,7 +2903,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~75"></span>
+              <span class="anchor" id="variable-ny~426"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2867,7 +2918,7 @@ bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~69"></span>
+              <span class="anchor" id="variable-nz~366"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2912,7 +2963,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~16"></span>
+              <span class="anchor" id="variable-h_layer~99"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2927,7 +2978,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-wet_mask~8"></span>
+              <span class="anchor" id="variable-wet_mask~29"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2942,7 +2993,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_x~4"></span>
+              <span class="anchor" id="variable-tau_x~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2957,7 +3008,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tau_y~4"></span>
+              <span class="anchor" id="variable-tau_y~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3002,7 +3053,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho0~10"></span>
+              <span class="anchor" id="variable-rho0~32"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3017,7 +3068,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~5"></span>
+              <span class="anchor" id="variable-h_min~20"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3032,7 +3083,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-hmix_stress~2"></span>
+              <span class="anchor" id="variable-hmix_stress~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3047,7 +3098,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~74"></span>
+              <span class="anchor" id="variable-nx~425"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3062,7 +3113,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~74"></span>
+              <span class="anchor" id="variable-ny~425"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3077,7 +3128,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~68"></span>
+              <span class="anchor" id="variable-nz~365"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3120,7 +3171,7 @@ surface.  The acceleration per layer is:</p><a href="../proc/surfstress_distribu
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 02:00 +0000             </p>
+ on 2026-09-20 02:35 +0000             </p>
           </div>
         </div>
         <br>
