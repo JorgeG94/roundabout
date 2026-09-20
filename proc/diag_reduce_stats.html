@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.0% of total for procedures.">14 statements</a>
+                 title=" 0.0% of total for procedures.">20 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,9 +134,10 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-i~431">i</a>
-            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-j~363">j</a>
-            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-k~263">k</a>
+            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-i~484">i</a>
+            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-j~426">j</a>
+            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-k~317">k</a>
+            <a class="list-group-item" href="../proc/diag_reduce_stats.html#variable-nv~9">nv</a>
         </div>
       </div>
     </div>
@@ -172,17 +173,35 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine diag_reduce_stats(buf, n1, n2, n3, vmin, vmax, vsum)  
+    <h2>public pure subroutine diag_reduce_stats(buf, n1, n2, n3, vmin, vmax, vsum, n_valid)  
 </h2>
     
 
-    <p>Whole-array min / max / sum of a diagnostic buffer in ONE pass.</p>
+    <p>Whole-array min / max / sum of a diagnostic buffer in ONE pass,
+over the FINITE cells only.</p>
 <p>Replaces three separate host passes (<code>minval</code>/<code>maxval</code>/<code>sum</code>) with
 a single <code>do concurrent ... reduce</code>, so on a GPU build this runs
-where the buffer already lives and only three scalars come back.
+where the buffer already lives and only a few scalars come back.
 Explicit-shape dummies (never assumed-shape) so NVHPC does not walk
 a descriptor per launch; index order is <code>(k, j, i)</code> with the
 contiguous index last.</p>
+<p><strong>Missing data.</strong>  A diagnostic buffer legitimately carries IEEE
+NaN as the &ldquo;no water here&rdquo; sentinel — <code>fill_tracer_impl</code> writes it
+into every land column and every dynamically vanished layer (see
+its docstring, and <code>test_fill_vanished_nan</code>).  Those cells are not
+data and must not enter the statistics, so every cell is
+<code>ieee_is_finite</code>-guarded and <code>n_valid</code> counts the cells that did
+contribute — the caller divides the sum by THAT, not by the array
+size.  Relying on &ldquo;comparisons with NaN are false&rdquo; to make
+<code>min</code>/<code>max</code> skip them is not enough and not portable: it leaves
+<code>sum</code> poisoned (the whole field&rsquo;s mean becomes NaN next to a
+perfectly finite min/max) and nvfortran&rsquo;s relaxed-FP default is
+free to lower an unguarded <code>min</code>/<code>max</code> to a NaN-blind select.</p>
+<p>For an all-finite buffer the guard is always taken, so the
+reduction order — and therefore the result — is bit-identical to
+the unguarded form.  <code>n_valid == 0</code> (nothing finite anywhere)
+leaves the <code>+huge</code> / <code>-huge</code> / <code>0</code> seeds untouched; the caller
+substitutes the missing-value sentinel.</p>
 <p>The caller MUST only invoke this when the buffer is device-resident
 on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
 
@@ -200,7 +219,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-buf~63"></span>
+              <span class="anchor" id="variable-buf~36"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -215,7 +234,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n1~24"></span>
+              <span class="anchor" id="variable-n1~21"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -230,7 +249,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n2~26"></span>
+              <span class="anchor" id="variable-n2~25"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -245,7 +264,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n3~18"></span>
+              <span class="anchor" id="variable-n3~14"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -260,7 +279,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-vmin~5"></span>
+              <span class="anchor" id="variable-vmin~6"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -275,7 +294,7 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-vmax~6"></span>
+              <span class="anchor" id="variable-vmax~7"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -301,6 +320,22 @@ on a GPU build — see <code>ocean_diag_t%on_device</code>.</p>
             <td><strong>vsum</strong></td>
             <td>
                 
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_valid~3"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_valid</strong></td>
+            <td>
+                <p>Number of finite cells folded in. Optional so the pre-existing
+three-scalar call sites keep working unchanged.</p>
             </td>
         </tr>
     </tbody>
@@ -435,88 +470,103 @@ large graphs.</div>
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: proc~~diag_reduce_stats~~CalledByGraph Pages: 1 -->
-<svg id="procdiag_reduce_statsCalledByGraph" width="641pt" height="64pt"
- viewBox="0.00 0.00 641.00 64.45" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="proc~~diag_reduce_stats~~CalledByGraph" class="graph" transform="scale(0.87 0.87) rotate(0) translate(4 70)">
+<svg id="procdiag_reduce_statsCalledByGraph" width="641pt" height="55pt"
+ viewBox="0.00 0.00 641.00 54.77" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~diag_reduce_stats~~CalledByGraph" class="graph" transform="scale(0.74 0.74) rotate(0) translate(4 70)">
 <title>proc~~diag_reduce_stats~~CalledByGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 732,-70 732,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 862,-70 862,4 -4,4"/>
 <!-- proc~diag_reduce_stats -->
 <g id="proc~~diag_reduce_stats~~CalledByGraph_node1" class="node">
 <title>proc~diag_reduce_stats</title>
-<polygon fill="none" stroke="black" points="728,-45 620,-45 620,-21 728,-21 728,-45"/>
-<text text-anchor="middle" x="674" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">diag_reduce_stats</text>
+<polygon fill="none" stroke="black" points="858,-45 750,-45 750,-21 858,-21 858,-45"/>
+<text text-anchor="middle" x="804" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">diag_reduce_stats</text>
+</g>
+<!-- proc~diag_field_stats -->
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node2" class="node">
+<title>proc~diag_field_stats</title>
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node2"><a xlink:href="../proc/diag_field_stats.html" xlink:title="diag_field_stats">
+<polygon fill="#d9534f" stroke="#d9534f" points="714,-45 620,-45 620,-21 714,-21 714,-45"/>
+<text text-anchor="middle" x="667" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_field_stats</text>
+</a>
+</g>
+</g>
+<!-- proc~diag_field_stats&#45;&gt;proc~diag_reduce_stats -->
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge1" class="edge">
+<title>proc~diag_field_stats&#45;&gt;proc~diag_reduce_stats</title>
+<path fill="none" stroke="#ff0000" d="M714.08,-33C722.32,-33 731.03,-33 739.65,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="739.69,-36.5 749.69,-33 739.69,-29.5 739.69,-36.5"/>
 </g>
 <!-- proc~ocean_diag_step -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_node2" class="node">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node3" class="node">
 <title>proc~ocean_diag_step</title>
-<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node2"><a xlink:href="../proc/ocean_diag_step.html" xlink:title="ocean_diag_t%ocean_diag_step">
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node3"><a xlink:href="../proc/ocean_diag_step.html" xlink:title="ocean_diag_t%ocean_diag_step">
 <polygon fill="#d9534f" stroke="#d9534f" points="584,-45 402,-45 402,-21 584,-21 584,-45"/>
 <text text-anchor="middle" x="493" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_t%ocean_diag_step</text>
 </a>
 </g>
 </g>
-<!-- proc~ocean_diag_step&#45;&gt;proc~diag_reduce_stats -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_edge1" class="edge">
-<title>proc~ocean_diag_step&#45;&gt;proc~diag_reduce_stats</title>
-<path fill="none" stroke="#ff0000" d="M584.02,-33C592.59,-33 601.16,-33 609.4,-33"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="609.65,-36.5 619.65,-33 609.65,-29.5 609.65,-36.5"/>
+<!-- proc~ocean_diag_step&#45;&gt;proc~diag_field_stats -->
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~diag_field_stats</title>
+<path fill="none" stroke="#ff0000" d="M584.03,-33C592.72,-33 601.35,-33 609.57,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="609.74,-36.5 619.74,-33 609.74,-29.5 609.74,-36.5"/>
 </g>
 <!-- proc~engine_step_finalize -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_node3" class="node">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node4" class="node">
 <title>proc~engine_step_finalize</title>
-<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node3"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node4"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
 <polygon fill="#d9534f" stroke="#d9534f" points="366,-45 245,-45 245,-21 366,-21 366,-45"/>
 <text text-anchor="middle" x="305.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
 </a>
 </g>
 </g>
 <!-- proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_edge2" class="edge">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge3" class="edge">
 <title>proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step</title>
 <path fill="none" stroke="#ff0000" d="M366.21,-33C374.36,-33 382.9,-33 391.52,-33"/>
 <polygon fill="#ff0000" stroke="#ff0000" points="391.67,-36.5 401.67,-33 391.67,-29.5 391.67,-36.5"/>
 </g>
 <!-- proc~driver_run_ocean -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_node4" class="node">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node5" class="node">
 <title>proc~driver_run_ocean</title>
-<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
 <polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
 <text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_edge3" class="edge">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge4" class="edge">
 <title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
 <path fill="none" stroke="#ff0000" d="M209,-46.6C217.35,-45.41 226.1,-44.16 234.78,-42.93"/>
 <polygon fill="#ff0000" stroke="#ff0000" points="235.5,-46.36 244.91,-41.48 234.51,-39.43 235.5,-46.36"/>
 </g>
 <!-- proc~rdb_ocean_step -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_node5" class="node">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node6" class="node">
 <title>proc~rdb_ocean_step</title>
-<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
 <polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
 <text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
 </a>
 </g>
 </g>
 <!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_edge4" class="edge">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge5" class="edge">
 <title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
 <path fill="none" stroke="#ff0000" d="M204.89,-18.82C214.48,-20.18 224.74,-21.64 234.89,-23.09"/>
 <polygon fill="#ff0000" stroke="#ff0000" points="234.58,-26.58 244.98,-24.53 235.57,-19.65 234.58,-26.58"/>
 </g>
 <!-- proc~driver_run -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_node6" class="node">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_node7" class="node">
 <title>proc~driver_run</title>
-<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<g id="a_proc~~diag_reduce_stats~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
 <polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
 <text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
-<g id="proc~~diag_reduce_stats~~CalledByGraph_edge5" class="edge">
+<g id="proc~~diag_reduce_stats~~CalledByGraph_edge6" class="edge">
 <title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
 <path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
 <polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
@@ -625,7 +675,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~431"></span>
+              <span class="anchor" id="variable-i~484"></span>
               integer,
             </td>
               <td>private</td>
@@ -642,7 +692,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~363"></span>
+              <span class="anchor" id="variable-j~426"></span>
               integer,
             </td>
               <td>private</td>
@@ -659,7 +709,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~263"></span>
+              <span class="anchor" id="variable-k~317"></span>
               integer,
             </td>
               <td>private</td>
@@ -668,6 +718,23 @@ large graphs.</div>
             </td>
             <td>::</td>
             <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nv~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nv</strong></td>
                 <td></td>
                 <td></td>
             <td>
@@ -690,32 +757,60 @@ large graphs.</div>
     
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
-    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">diag_reduce_stats</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">,</span><span class="w"> </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vsum</span><span class="p">)</span>
-<span class="w">      </span><span class="c">!! Whole-array min / max / sum of a diagnostic buffer in ONE pass.</span>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">diag_reduce_stats</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">,</span><span class="w"> </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vsum</span><span class="p">,</span><span class="w"> </span><span class="n">n_valid</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Whole-array min / max / sum of a diagnostic buffer in ONE pass,</span>
+<span class="w">      </span><span class="c">!! over the FINITE cells only.</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! Replaces three separate host passes (`minval`/`maxval`/`sum`) with</span>
 <span class="w">      </span><span class="c">!! a single `do concurrent ... reduce`, so on a GPU build this runs</span>
-<span class="w">      </span><span class="c">!! where the buffer already lives and only three scalars come back.</span>
+<span class="w">      </span><span class="c">!! where the buffer already lives and only a few scalars come back.</span>
 <span class="w">      </span><span class="c">!! Explicit-shape dummies (never assumed-shape) so NVHPC does not walk</span>
 <span class="w">      </span><span class="c">!! a descriptor per launch; index order is `(k, j, i)` with the</span>
 <span class="w">      </span><span class="c">!! contiguous index last.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Missing data.**  A diagnostic buffer legitimately carries IEEE</span>
+<span class="w">      </span><span class="c">!! NaN as the "no water here" sentinel — `fill_tracer_impl` writes it</span>
+<span class="w">      </span><span class="c">!! into every land column and every dynamically vanished layer (see</span>
+<span class="w">      </span><span class="c">!! its docstring, and `test_fill_vanished_nan`).  Those cells are not</span>
+<span class="w">      </span><span class="c">!! data and must not enter the statistics, so every cell is</span>
+<span class="w">      </span><span class="c">!! `ieee_is_finite`-guarded and `n_valid` counts the cells that did</span>
+<span class="w">      </span><span class="c">!! contribute — the caller divides the sum by THAT, not by the array</span>
+<span class="w">      </span><span class="c">!! size.  Relying on "comparisons with NaN are false" to make</span>
+<span class="w">      </span><span class="c">!! `min`/`max` skip them is not enough and not portable: it leaves</span>
+<span class="w">      </span><span class="c">!! `sum` poisoned (the whole field's mean becomes NaN next to a</span>
+<span class="w">      </span><span class="c">!! perfectly finite min/max) and nvfortran's relaxed-FP default is</span>
+<span class="w">      </span><span class="c">!! free to lower an unguarded `min`/`max` to a NaN-blind select.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! For an all-finite buffer the guard is always taken, so the</span>
+<span class="w">      </span><span class="c">!! reduction order — and therefore the result — is bit-identical to</span>
+<span class="w">      </span><span class="c">!! the unguarded form.  `n_valid == 0` (nothing finite anywhere)</span>
+<span class="w">      </span><span class="c">!! leaves the `+huge` / `-huge` / `0` seeds untouched; the caller</span>
+<span class="w">      </span><span class="c">!! substitutes the missing-value sentinel.</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! The caller MUST only invoke this when the buffer is device-resident</span>
 <span class="w">      </span><span class="c">!! on a GPU build — see `ocean_diag_t%on_device`.</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vsum</span>
-<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_valid</span>
+<span class="w">         </span><span class="c">!! Number of finite cells folded in. Optional so the pre-existing</span>
+<span class="w">         </span><span class="c">!! three-scalar call sites keep working unchanged.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span>
 <span class="w">      </span><span class="n">vmin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
 <span class="w">      </span><span class="n">vmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
 <span class="w">      </span><span class="n">vsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="n">nv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
 <span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n3</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n1</span><span class="p">)</span><span class="w"> </span><span class="n">reduce</span><span class="p">(</span><span class="nb">min</span><span class="p">:</span><span class="n">vmin</span><span class="p">)</span><span class="w"> </span><span class="n">reduce</span><span class="p">(</span><span class="nb">max</span><span class="p">:</span><span class="n">vmax</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">         </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">vsum</span><span class="p">)</span>
-<span class="w">         </span><span class="n">vmin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
-<span class="w">         </span><span class="n">vmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
-<span class="w">         </span><span class="n">vsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vsum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
-<span class="w">      </span><span class="k">end do</span>
-<span class="k">   end subroutine </span><span class="n">diag_reduce_stats</span>
+<span class="w">         </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">vsum</span><span class="p">)</span><span class="w"> </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">vmin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">vmin</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">vmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">vsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vsum</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">nv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nv</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">n_valid</span><span class="p">))</span><span class="w"> </span><span class="n">n_valid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nv</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">diag_reduce_stats</span>
 </pre></div>
 
     </section>
@@ -739,7 +834,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 01:11 +0000             </p>
+ on 2026-09-20 01:33 +0000             </p>
           </div>
         </div>
         <br>
