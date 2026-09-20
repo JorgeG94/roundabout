@@ -20,7 +20,7 @@ Physics/namelist reference: [`REFERENCE.md`](REFERENCE.md). Acronyms:
 [`codebase/CONCEPTS.md`](codebase/CONCEPTS.md). When this file and the code
 disagree, **the code is authority and this file is a bug** — fix it.
 
-Last reconciled with the code: **2026-09-14** (outer time-split section added — `&ocean_bt_nml split_scheme` had no row at all, and the fast-loop Coriolis-reference seam it selects had none either; earlier: 2026-08-23 (coastal-regime carve-out — the coastal-S / coastal-U columns, the coastal-only closure rows and the `&physics_nml` / `&nonhydrostatic_nml` coastal knob tables were removed with the coastal path; earlier: 2026-08-04 vertical-mixing section; background-mixing row added — Bryan-Lewis had shipped with no matrix row, Henyey lands in the same PR that fixes the gap; row rewritten when Henyey was brought to MOM6 parity: Bryan-Lewis XOR Henyey instead of Henyey-requires-Bryan-Lewis, `bkgnd_kd_min` floor added)).
+Last reconciled with the code: **2026-09-20** (ice-shelf cavity basal-melt section added — kernel only, not yet coupled, so every ocean cell in it reads `—`; earlier: 2026-09-14 (outer time-split section added — `&ocean_bt_nml split_scheme` had no row at all, and the fast-loop Coriolis-reference seam it selects had none either; earlier: 2026-08-23 (coastal-regime carve-out — the coastal-S / coastal-U columns, the coastal-only closure rows and the `&physics_nml` / `&nonhydrostatic_nml` coastal knob tables were removed with the coastal path; earlier: 2026-08-04 vertical-mixing section; background-mixing row added — Bryan-Lewis had shipped with no matrix row, Henyey lands in the same PR that fixes the gap; row rewritten when Henyey was brought to MOM6 parity: Bryan-Lewis XOR Henyey instead of Henyey-requires-Bryan-Lewis, `bkgnd_kd_min` floor added)).)
 
 ---
 
@@ -574,6 +574,43 @@ redistribution beyond `compress_ice`, real (non-virtual) freshwater mass for
 the snowfall ocean share (PR-16). The `—`-in-the-ocean-column rows above are
 documented absences, not omissions — an undocumented gap and a documented one
 look identical from outside, which is why each has a row.
+
+---
+
+## Ice-shelf cavity basal melt — **KERNEL ONLY, not yet coupled**
+
+`src/parameterizations/vertical/rdb_ocean_cavity_melt.F90`. The interface
+thermodynamics are landed, tested and device-callable; **nothing in the ocean
+step calls them yet** — there is no `&ocean_cavity_nml`, no state slot and no
+engine call site, which is why every ocean cell below reads `—`. The knob
+column will be filled by the coupling PR. Selection inside the kernel is by
+ENUM (`CAVITY_LAW_*`, `CAVITY_ICE_*`), with `parse_cavity_exchange_law` /
+`parse_cavity_ice_mode` already fail-loud (unknown string ⇒ `*_INVALID`, never
+a silent default) so the namelist seam is a one-line hookup.
+
+| Capability | ocean | Numerics | Primary test |
+|---|---|---|---|
+| Three-equation interface solve (liquidus + heat + salt) | `—` (kernel only) | closed-form quadratic in `S_b` with the LARGER root (derived, no paper states it) and the cancellation-safe `q = −½(B + sign(B)√Δ)` form, because `Γ_S = Γ_T/35` puts production runs in the `\|B\| ≫ √(4AC)` corner; melt/freeze branch decided from `T*` BEFORE the solve, so it cannot disagree with its own answer; liquidus read off the `eos_t` handle (`&ocean_eos_nml tfreeze_set`), never duplicated | `test_ocean_cavity_melt` |
+| Two-equation variant (`S_b = S_w`) | `—` (kernel only) | the `γ_S → ∞` limit; IDENTICAL to the shipped sea-ice `rdb_ice_basal_flux` relax-to-`T_f` law at `γ_T·dt = h` (asserted, not asserted-to-be-similar) | `test_ocean_cavity_melt` |
+| Exchange law `const_gamma` (`γ = Γ·u*`, Jenkins et al. 2010 / ISOMIP+) | `—` (kernel only) | explicit in the melt rate; `Γ_T = 2.2e−2`, `Γ_S = Γ_T/35` are the ISOMIP+ STARTING GUESS, tuned per model (0.011–0.2 across the twelve ISOMIP+ submissions) — a knob, not a constant | `test_ocean_cavity_melt` |
+| Exchange law `hj99` (Holland & Jenkins 1999 eqs. 14–18) | `—` (kernel only) | turbulent + molecular sublayer with the McPhee `η*` stability parameter ⇒ IMPLICIT in the melt rate; outer bisection on `ln(L⁺)` (not Newton: the map kinks where the buoyancy flux changes sign); fail-loud at `f = 0` (the law has `\|f\|` in a logarithm and divides by it) | `test_ocean_cavity_melt` |
+| Exchange law `yung25` (Yung et al. 2025 StratFeedback, eqs. 7–8) | `—` (kernel only) | two power laws in `L⁺` capped at the Vreugdenhil & Taylor (2019) maxima ⇒ implicit, same bisection; its neutral limit is its OWN cap (0.012 / 3.9e−4), NOT the configured `Γ_T` | `test_ocean_cavity_melt` |
+| Exchange laws `jenkins91` / `rosevear22` / `vt19` / `mk18` / `burchard22` / `jenkins21` | `—` **RESERVED** | enum values are nailed down and the dispatcher returns `CAVITY_MELT_NOT_IMPLEMENTED` — never a silent fallback to the default law. Each is implemented in the Python prototype `ice_shelf_melt/melt.py`, with its published ambiguities recorded there | `test_ocean_cavity_melt` (`reserved_laws_refuse`) |
+| Ice conduction: insulating / H&J99 advective-diffusive | `—` (kernel only) | insulating is the ISOMIP+ prescription (`κ_i = 0`); adv-diff collapses to `L_eff = L_f + c_i(T_b − T_ice)` via H&J99 eq. (31), zeroed on freezing as that paper prescribes, so the closed form survives and neither `H_I` nor `κ_I` is needed. The purely diffusive option is RESERVED (it moves the zero-melt point, so it changes the branch logic too) | `test_ocean_cavity_melt` |
+| Friction velocity `u*` (tidal floor) | `—` (kernel only) | `u* = max(√(C_d(u²+v²+u_tide²)), u*_min)` — ISOMIP+ eq. (27) + the Yung et al. (2025) floor; the tidal term belongs to the MELT `u*` only, never to the momentum drag | `test_ocean_cavity_melt` |
+
+Notes: every solver returns a `CAVITY_MELT_*` status instead of `error stop` —
+a `pure` `!$acc routine seq` procedure can neither log nor abort, and one bad
+column must not take the run down. On any non-OK status the outputs are the
+documented SAFE STATE (`m_mass` EXACTLY zero, `S_b = S_w`,
+`T_b = T_f(S_w, p_b)`) so a failed column contributes nothing to a budget
+rather than a plausible wrong number. Every clamp is `ieee_is_finite`-guarded
+BEFORE the min/max, per the repo's NaN-laundering hazard.  The data-parallel
+seam is `cavity_melt_columns` (a `do concurrent` over columns, inside the
+module): on the GPU build nvlink cannot resolve a `!$acc routine seq` symbol
+out of `librdb_core.so` into a `do concurrent` compiled in another translation
+unit, so the coupling PR must extend that routine rather than write its own
+column loop in the engine.
 
 ---
 

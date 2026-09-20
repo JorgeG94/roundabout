@@ -35,6 +35,8 @@ program rdb_tests
    use test_ocean_salinity_ic, only: ocean_salinity_ic_collect => &
                                      collect_ocean_salinity_ic_tests
    use test_ocean_freezing_point, only: ocean_freezing_point_collect => collect_ocean_freezing_point_tests
+   use test_ocean_cavity_melt, only: ocean_cavity_melt_collect => &
+                                     collect_ocean_cavity_melt_tests
    use test_ocean_wright_eos, only: ocean_wright_eos_collect => collect_ocean_wright_eos_tests
    use test_ocean_pgf, only: ocean_pgf_collect => collect_ocean_pgf_tests
    use test_ocean_pgf_fv, only: ocean_pgf_fv_collect => collect_ocean_pgf_fv_tests
@@ -201,6 +203,7 @@ program rdb_tests
                 new_testsuite("ocean_linear_eos_knobs", ocean_linear_eos_knobs_collect), &
                 new_testsuite("ocean_salinity_ic", ocean_salinity_ic_collect), &
                 new_testsuite("ocean_freezing_point", ocean_freezing_point_collect), &
+                new_testsuite("ocean_cavity_melt", ocean_cavity_melt_collect), &
                 new_testsuite("ocean_wright_eos", ocean_wright_eos_collect), &
                 new_testsuite("ocean_pgf", ocean_pgf_collect), &
                 new_testsuite("ocean_dt_tracer_advect", ocean_dt_tracer_advect_collect), &
