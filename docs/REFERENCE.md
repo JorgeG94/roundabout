@@ -257,6 +257,31 @@ form is
 with `β_S` the haline contraction coefficient and `α_T` the thermal
 expansion coefficient.
 
+> **`α_T` and `β_S` are DIMENSIONAL — read this before writing any
+> buoyancy expression.** This is the density-ANOMALY form, so
+> `α_T = −∂ρ/∂T` in **kg m⁻³ per °C** and `β_S = +∂ρ/∂S` in **kg m⁻³ per
+> PSU** (realistic seawater: `α_T ≈ 0.17–0.25`, `β_S ≈ 0.78`). They are
+> **not** the fractional `(1/ρ)·∂ρ/∂T` coefficients (`≈ 2×10⁻⁴ K⁻¹`) that
+> the KPP / mixed-layer literature also calls `α`. Every buoyancy,
+> buoyancy flux, N², reduced gravity or thermal-wind expression built from
+> them therefore carries an explicit `1/ρ₀`:
+>
+> | quantity | correct form |
+> |---|---|
+> | buoyancy | `b = −g·ρ′/ρ₀` |
+> | Brunt–Väisälä | `N² = −(g/ρ₀)·∂ρ/∂z` |
+> | reduced gravity | `g′ = (g/ρ₀)·Δρ` |
+> | surface buoyancy flux | `B_0 = (g/ρ₀)·(α_T·F_T − β_S·F_S)` |
+> | thermal wind | `∂U/∂z = −(g/(ρ₀·f))·∂ρ/∂y` |
+>
+> with the kinematic surface fluxes `F_T = Q_heat/(ρ₀·c_p)` [K m/s] and
+> `F_S = Q_salt/ρ₀` [PSU m/s]. Dropping the `1/ρ₀` scales the result by
+> ρ₀ ≈ 1035 — it is invisible only when `α_T` is *itself* given the
+> fractional magnitude, which is exactly what the `1.7e-4` default below
+> does. KPP's `B_0` shipped without the `1/ρ₀` until it was fixed; the
+> regression gate is `tests/test_ocean_buoyancy_flux.F90`, which also
+> pins KPP's `B_0` and EPBL's `b0` to the same number.
+
 > **On the ocean path the coefficients do NOT come from `&tracer_nml`.**
 > `&tracer_nml beta_S` (0.78) and `alpha_T` (0.17) are marked
 > `dead_on_ocean_path` in the schema — they are stored onto `tracer_t` and
@@ -264,7 +289,13 @@ expansion coefficient.
 > **`&ocean_ic_nml alpha_T`** (default `1.7e-4` kg/m³/°C). `β_S`
 > (`7.6e-4` kg/m³/PSU), `S_ref` and `T_ref` take the `rdb_eos` defaults and
 > are not namelist-settable on this path. Both EOS defaults are
-> deliberately small; density-driven cases must set `alpha_T` explicitly. Setting `α_T = β_S = 0` decouples the
+> deliberately small — ~1000× below the realistic dimensional values,
+> i.e. numerically the FRACTIONAL coefficients sitting in a dimensional
+> slot — so a 10 °C contrast moves density by 1.7×10⁻³ kg/m³ instead of
+> ~1.7. They suppress baroclinic feedback from PPM round-off in the
+> adiabatic tests and are **not** a physical configuration:
+> density-driven cases must set `alpha_T` explicitly (the shipped ones do
+> — `0.17`, `0.2`, ISOMIP+ `3.8356948e-2`). Setting `α_T = β_S = 0` decouples the
 tracers from the dynamics entirely — the adiabatic reduced-gravity setup
 used by the MOM6-reference double gyre.
 

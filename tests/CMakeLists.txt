@@ -204,6 +204,7 @@ set(RDB_TESTS
     "test_ocean_geothermal|test_ocean_geothermal|collect_ocean_geothermal_tests|ocean_geothermal|ocean"
     "test_ocean_kpp_convective|test_ocean_kpp_convective|collect_ocean_kpp_convective_tests|ocean_kpp_convective|ocean"
     "test_ocean_kpp_nonlocal|test_ocean_kpp_nonlocal|collect_ocean_kpp_nonlocal_tests|ocean_kpp_nonlocal|ocean"
+    "test_ocean_buoyancy_flux|test_ocean_buoyancy_flux|collect_ocean_buoyancy_flux_tests|ocean_buoyancy_flux|ocean"
     "test_ocean_validation|test_ocean_validation|collect_ocean_validation_tests|ocean_validation|ocean"
     "test_ocean_vcoord|test_ocean_vcoord|collect_ocean_vcoord_tests|ocean_vcoord|ocean"
     "test_ocean_vcoord_rho|test_ocean_vcoord_rho|collect_ocean_vcoord_rho_tests|ocean_vcoord_rho|ocean"
