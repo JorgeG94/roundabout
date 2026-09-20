@@ -18,12 +18,12 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 60 groups / 658 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 60 groups / 663 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
-    # bump: &ocean_topo_nml x_origin, which places the model's west edge
-    # on the MISMIP+ absolute x axis for topo_config='isomip_plus').
+    # bump: &ocean_sponge_nml ramp + the four lin_* knobs of the analytic
+    # target_source='linear_z' reference state).
     assert N_GROUPS == 60
-    assert N_KNOBS == 658
+    assert N_KNOBS == 663
     assert "ocean_bc" in ALL_GROUPS
 
 

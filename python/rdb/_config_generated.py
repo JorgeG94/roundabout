@@ -3238,7 +3238,48 @@ class OceanSponge(Group):
         units='',
         required=False,
         default='ic',
-        allowed=('ic', 'file'),
+        allowed=('ic', 'linear_z', 'file'),
+    )
+
+    ramp = Enum(
+        'ramp',
+        doc="Band ramp shape from the sponge wall inward ('linear' is ISOMIP+ Eq. 20)",
+        units='',
+        required=False,
+        default='cosine',
+        allowed=('cosine', 'linear'),
+    )
+
+    lin_t_ref = Real(
+        'lin_t_ref',
+        doc="target_source='linear_z': T at the z = 0 datum",
+        units='degC',
+        required=False,
+        default=0.0,
+    )
+
+    lin_dt_dz = Real(
+        'lin_dt_dz',
+        doc="target_source='linear_z': dT/dz, z positive UP (stable => > 0)",
+        units='degC/m',
+        required=False,
+        default=0.0,
+    )
+
+    lin_s_ref = Real(
+        'lin_s_ref',
+        doc="target_source='linear_z': S at the z = 0 datum",
+        units='PSU',
+        required=False,
+        default=35.0,
+    )
+
+    lin_ds_dz = Real(
+        'lin_ds_dz',
+        doc="target_source='linear_z': dS/dz, z positive UP (stable => < 0)",
+        units='PSU/m',
+        required=False,
+        default=0.0,
     )
 
     relax_uv = Bool(
@@ -6048,4 +6089,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 658
+N_KNOBS = 663

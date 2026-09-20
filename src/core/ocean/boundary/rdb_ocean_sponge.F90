@@ -25,15 +25,27 @@ module rdb_ocean_sponge
    !! bookkeeping) relaxes momentum toward a 3-D `u_ref`/`v_ref` (not zero)
    !! and every registered tracer toward a 3-D `ref_tracer(i,j,k,it)`
    !! concentration field (not a scalar). `damp_source="band"` (the only
-   !! implemented source in v1) fills the maps from the same cosine ramp as
-   !! the legacy kernel, at the exact cell/u-face/v-face offsets the legacy
-   !! kernel touches, so `enable=.true., damp_source="band"` is *physically*
-   !! the same band as today (see `sponge_source_is_implemented` /
-   !! `rdb_ocean_setup::configure_ocean_sponge`). `target_source="ic"` (the
-   !! only implemented target in v1) snapshots the reference from the
-   !! seeded initial condition via `ocean_sponge_snapshot_reference` —
-   !! reachable as a "nudge toward a parent climatology" via
-   !! `&ocean_zinit_nml` with no new file reader.
+   !! implemented source) fills the maps from a ramp off every
+   !! `OBC_SPONGE`-tagged edge, at the exact cell/u-face/v-face offsets
+   !! the legacy kernel touches, so `enable=.true., damp_source="band",
+   !! ramp="cosine"` is *physically* the same band as today (see
+   !! `sponge_source_is_implemented` /
+   !! `rdb_ocean_setup::configure_ocean_sponge`). `ramp="linear"` swaps the
+   !! cosine for ISOMIP+ Eq. (20)'s linear rise — see `sponge_band_alpha`.
+   !!
+   !! Two reference states ship:
+   !!
+   !!   * `target_source="ic"` (default) snapshots the reference from the
+   !!     seeded initial condition via `ocean_sponge_snapshot_reference` —
+   !!     reachable as a "nudge toward a parent climatology" via
+   !!     `&ocean_zinit_nml` with no new file reader.
+   !!   * `target_source="linear_z"` builds an ANALYTIC affine
+   !!     geopotential T(z)/S(z) profile, re-evaluated on the LIVE layer
+   !!     geometry once per outer step by `ocean_sponge_refresh_target`.
+   !!     The target is then INDEPENDENT of the initial condition, which
+   !!     is what makes an ISOMIP+ Ocean1/Ocean2 (restore to a different
+   !!     water mass than you start from) expressible at all. Non-S/T
+   !!     tracers and `u_ref`/`v_ref` still come from the IC snapshot.
    !!
    !! Divergences from MOM6's ALE-sponge / sponge approach (deliberate,
    !! documented per CLAUDE.md "cite the paper not other codebases" — this
@@ -47,12 +59,16 @@ module rdb_ocean_sponge
    !!      `Iresttime_col`/`Ref_val%p(k,c)` sparse structure — a
    !!      gather/scatter indirection is worse than `idamp=0` (one multiply,
    !!      race-free `do concurrent`) on GPU.
-   !!   3. The reference is snapshotted ONCE on model layers at seed time,
-   !!      not held on a source z-grid and remapped to the live column every
-   !!      apply (MOM6's `Ref_dz` + `remapping_core_h`). Valid because
-   !!      Roundabout's ALE remap pins layer depths to the coordinate every
-   !!      thermo step; the residual motion is far below the target's own
-   !!      vertical resolution.
+   !!   3. Under `target_source="ic"` the reference is snapshotted ONCE on
+   !!      model layers at seed time, not held on a source z-grid and
+   !!      remapped to the live column every apply (MOM6's `Ref_dz` +
+   !!      `remapping_core_h`). Valid because Roundabout's ALE remap pins
+   !!      layer depths to the coordinate every thermo step; the residual
+   !!      motion is far below the target's own vertical resolution.
+   !!      `target_source="linear_z"` does NOT take that shortcut — it
+   !!      rebuilds the profile on the live geometry every outer step,
+   !!      which is cheaper here than a remap because the source is a
+   !!      closed-form function of depth rather than a table.
    !!   4. Applied at `dt` (every RK2 stage), not MOM6's diabatic/thermo
    !!      cadence.
    !!
@@ -81,6 +97,15 @@ module rdb_ocean_sponge
    public :: ocean_sponge_t
    public :: ocean_sponge_apply_maps
    public :: ocean_sponge_snapshot_reference
+   public :: ocean_sponge_refresh_target
+   public :: sponge_band_alpha
+   public :: SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
+
+   integer, parameter :: SPONGE_RAMP_COSINE = 0
+      !! `&ocean_sponge_nml ramp = "cosine"` (default): the legacy band
+      !! kernel's `0.5*(1 + cos(pi*d/band))`.
+   integer, parameter :: SPONGE_RAMP_LINEAR = 1
+      !! `&ocean_sponge_nml ramp = "linear"`: `(band - d - 0.5)/band`.
 
    type :: ocean_sponge_t
       !! Map-driven sponge state: per-cell `Idamp` [1/s] + a 3-D reference
@@ -114,10 +139,28 @@ module rdb_ocean_sponge
          !! (§3.2 of the plan). `"file"` recognised but aborts at
          !! `validate_config` (PR-23b, needs the PR-14 reader).
       character(len=16) :: target_source = "ic"
-         !! Reference-state source. `"ic"` (only value implemented in v1):
+         !! Reference-state source. `"ic"`:
          !! `ocean_sponge_snapshot_reference` copies the seeded initial
-         !! condition. `"file"` recognised but aborts at `validate_config`
-         !! (PR-23b).
+         !! condition. `"linear_z"`: the analytic affine geopotential
+         !! profile below, re-evaluated on the LIVE layer geometry by
+         !! `ocean_sponge_refresh_target` once per outer step — see that
+         !! routine's docstring for why re-evaluated rather than frozen.
+         !! `"file"` recognised but aborts at `validate_config` (PR-23b).
+      real(wp) :: lin_t_ref = 0.0_wp
+         !! `target_source="linear_z"`: T (degC) at the `z = 0` datum.
+      real(wp) :: lin_dt_dz = 0.0_wp
+         !! `target_source="linear_z"`: dT/dz (degC/m), **z positive UP**.
+      real(wp) :: lin_s_ref = 35.0_wp
+         !! `target_source="linear_z"`: S (PSU) at the `z = 0` datum.
+      real(wp) :: lin_ds_dz = 0.0_wp
+         !! `target_source="linear_z"`: dS/dz (PSU/m), z positive UP.
+      integer :: idx_t = 0
+         !! Tracer-registry index of temperature, latched at configure so
+         !! the per-step refresh needs no registry walk (and no
+         !! array-of-derived-types device indirection). `0` = not
+         !! registered ⇒ the temperature refresh is skipped.
+      integer :: idx_s = 0
+         !! Tracer-registry index of salinity; see `idx_t`.
       integer :: n_tracers = 0
          !! Registered tracer count — sizes `ref_tracer`'s 4th dimension.
       real(wp), allocatable :: idamp_h(:, :)
@@ -142,6 +185,16 @@ module rdb_ocean_sponge
       real(wp), allocatable :: v_ref(:, :, :)
          !! Reference y-velocity, shape `(nx_total, ny_total+1, nz)` —
          !! matches `ms%v_face_y_layer`.
+      real(wp), allocatable :: z_top(:, :)
+         !! Geopotential DEPTH of the top of the water column (m, positive
+         !! down), shape `(nx_total, ny_total)`. `0` in the open ocean (the
+         !! free-surface datum), `metrics%z_draft(i,j)` under an ice shelf.
+         !! Latched ONCE at configure — the draft is static by design — so
+         !! the per-step `linear_z` refresh is self-contained and the
+         !! sponge slot never has to reach into `ocean_metrics_t`. Same
+         !! role `z_top` plays in `rdb_ocean_z_init::build_z_ctr`; without
+         !! it a geopotential target would land `z_draft` metres too
+         !! shallow on every shelf column and tilt with the ice base.
    contains
       procedure, non_overridable :: init => ocean_sponge_init
       procedure, non_overridable :: destroy => ocean_sponge_destroy
@@ -176,6 +229,7 @@ contains
       allocate (this%ref_tracer(nx, ny, nz_ml, max(n_tracers, 1)), source=0.0_wp)
       allocate (this%u_ref(nx + 1, ny, nz_ml), source=0.0_wp)
       allocate (this%v_ref(nx, ny + 1, nz_ml), source=0.0_wp)
+      allocate (this%z_top(nx, ny), source=0.0_wp)
       this%is_init = .true.
    end subroutine ocean_sponge_init
 
@@ -188,6 +242,7 @@ contains
       if (allocated(this%ref_tracer)) deallocate (this%ref_tracer)
       if (allocated(this%u_ref)) deallocate (this%u_ref)
       if (allocated(this%v_ref)) deallocate (this%v_ref)
+      if (allocated(this%z_top)) deallocate (this%z_top)
    end subroutine ocean_sponge_destroy
 
    subroutine ocean_sponge_enter_data(this)
@@ -206,9 +261,9 @@ contains
       type(ocean_sponge_t), intent(inout) :: this
       if (.not. this%is_init) return
       !$acc enter data copyin(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                  this%ref_tracer, this%u_ref, this%v_ref)
+      !$acc&                  this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
       !$acc update device(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&               this%ref_tracer, this%u_ref, this%v_ref)
+      !$acc&               this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_enter_data_impl
 
    subroutine ocean_sponge_exit_data(this)
@@ -223,7 +278,7 @@ contains
       type(ocean_sponge_t), intent(inout) :: this
       if (.not. this%is_init) return
       !$acc exit data delete(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                 this%ref_tracer, this%u_ref, this%v_ref)
+      !$acc&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_exit_data_impl
 
    pure function ocean_sponge_bytes(this) result(nbytes)
@@ -234,7 +289,8 @@ contains
       integer(int64) :: nbytes
       nbytes = arr_bytes(this%idamp_h) + arr_bytes(this%idamp_u) &
                + arr_bytes(this%idamp_v) + arr_bytes(this%ref_tracer) &
-               + arr_bytes(this%u_ref) + arr_bytes(this%v_ref)
+               + arr_bytes(this%u_ref) + arr_bytes(this%v_ref) &
+               + arr_bytes(this%z_top)
    end function ocean_sponge_bytes
 
    subroutine ocean_sponge_snapshot_reference(sp, grid, ms)
@@ -268,7 +324,14 @@ contains
       integer :: i, j, it, nx, ny, nz
 
       if (.not. sp%enable) return
-      if (trim(sp%target_source) /= "ic") return
+      ! Runs for `"linear_z"` too, on purpose: the analytic refresh below
+      ! only owns TEMPERATURE and SALINITY, so every other registered
+      ! tracer — and `u_ref`/`v_ref` — still needs the IC snapshot, or a
+      ! passive tracer in the sponge band would be relaxed toward a
+      ! hard zero it was never asked to go to. The refresh then
+      ! overwrites the T/S planes on the first outer step.
+      if (trim(sp%target_source) /= "ic" .and. &
+          trim(sp%target_source) /= "linear_z") return
       if (.not. sp%is_init) return
 
       nx = grid%nx_total
@@ -335,6 +398,153 @@ contains
          end if
       end do
    end subroutine snapshot_column_concentration
+
+   pure subroutine ocean_sponge_refresh_target(grid, sp, ms)
+      !! Re-evaluate the ANALYTIC `target_source="linear_z"` reference on
+      !! the LIVE layer geometry: for every sponge cell (`idamp_h > 0`)
+      !! and every layer,
+      !!
+      !!     ref_tracer(i,j,k,idx_t) = lin_t_ref - lin_dt_dz*z_ctr(i,j,k)
+      !!     ref_tracer(i,j,k,idx_s) = lin_s_ref - lin_ds_dz*z_ctr(i,j,k)
+      !!
+      !! with `z_ctr` the layer-centre GEOPOTENTIAL DEPTH measured from
+      !! the `z = 0` datum, i.e. `z_top + sum_{k'>k} h(k') + h(k)/2`, and
+      !! `z_top = sp%z_top(i,j)` the depth of the column top (0 in the
+      !! open ocean, the ice draft under a shelf).  `z` in the profile is
+      !! positive UP, hence the minus signs — the `&ocean_zinit_nml
+      !! source="linear"` convention exactly.
+      !!
+      !! ### Why re-evaluated, not frozen at t = 0
+      !!
+      !! Under sigma / ALE the layer centres MOVE: with the free surface,
+      !! with the remap, and (in a cavity) with whatever the column does
+      !! under the lid.  A target sampled once at t = 0 is a target on the
+      !! t = 0 layer positions, and every later step relaxes the live
+      !! column toward a profile that is no longer the geopotential one
+      !! that was asked for.  For ISOMIP+ Ocean1/Ocean2 the far-field
+      !! restoring IS the entire forcing of the experiment, so a target
+      !! that quietly drifts with the coordinate changes the forcing
+      !! rather than perturbing it.  Re-evaluating costs one column pass
+      !! over the sponge cells per outer step — the same loop extent the
+      !! relaxation itself already walks, on a band that is a few percent
+      !! of the domain — so "cheap and exact" beats "free and wrong".
+      !!
+      !! This is the one place divergence #3 in the module docstring (the
+      !! reference is snapshotted once) does NOT apply.
+      !!
+      !! CADENCE: called once per OUTER step from `ocean_engine_step`,
+      !! beside `ocean_porous_refresh`, before the dyn step — so the
+      !! target is built on the layer geometry the whole step relaxes
+      !! against.  Per-stage would be a half-step more current and buy
+      !! nothing the vertical resolution can see.
+      !!
+      !! NO-OP unless `enable .and. is_init .and. target_source ==
+      !! "linear_z"`, so every other configuration is bit-identical.
+      !!
+      !! THE ARITHMETIC IS DUPLICATED FROM `rdb_ocean_z_init`
+      !! (`build_z_ctr` + `linear_in_z`) rather than imported, for two
+      !! reasons that are not style: (1) `rdb_ocean_z_init` is compiled
+      !! ONLY under `RDB_ENABLE_NETCDF=ON` (it carries the z-level file
+      !! reader) while this module is compiled unconditionally, so a
+      !! `use` would break the NetCDF-off build; (2) `build_z_ctr` writes
+      !! a whole `z_ctr(nz)` column, which inside a device kernel is
+      !! per-thread scratch, whereas the recurrence fuses into the
+      !! surface-down sweep here for free.  The convention is pinned
+      !! ACROSS the two modules by
+      !! `test_ocean_zinit::sponge_linear_z_target_matches_the_zinit_seed`,
+      !! which is a stronger guarantee than a shared symbol: it compares
+      !! the numbers.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_sponge_t), intent(inout) :: sp
+      type(multilayer_state_t), intent(in) :: ms
+
+      integer :: nx, ny, nz
+
+      if (.not. sp%is_init .or. .not. sp%enable) return
+      if (trim(sp%target_source) /= "linear_z") return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ms%nz_ml
+
+      if (sp%idx_t > 0) then
+         call refresh_linear_z_impl(sp%ref_tracer, ms%h_layer, sp%z_top, sp%idamp_h, &
+                                    sp%idx_t, sp%n_tracers, sp%lin_t_ref, sp%lin_dt_dz, &
+                                    nx, ny, nz)
+      end if
+      if (sp%idx_s > 0) then
+         call refresh_linear_z_impl(sp%ref_tracer, ms%h_layer, sp%z_top, sp%idamp_h, &
+                                    sp%idx_s, sp%n_tracers, sp%lin_s_ref, sp%lin_ds_dz, &
+                                    nx, ny, nz)
+      end if
+   end subroutine ocean_sponge_refresh_target
+
+   pure subroutine refresh_linear_z_impl(ref_tracer, h_layer, z_top, idamp_h, &
+                                         it, n_tr, v_ref, dv_dz, nx, ny, nz)
+      !! One tracer plane of the `linear_z` target.  Explicit-shape
+      !! dummies, dims declared first (`decl-order` hook).  `ref_tracer`
+      !! is passed WHOLE and indexed by the scalar `it` inside the kernel
+      !! — never sliced by the caller (the descriptor-walk trap the
+      !! `dc-assumed-shape` hook exists to catch), matching
+      !! `relax_map_tracer_impl`.
+      !!
+      !! The `do concurrent` is over CELLS only; `k` runs as an ordinary
+      !! inner DO because the depth recurrence is sequential from the
+      !! surface (`k = nz`) down.  `k` is therefore construct-LOCAL, as
+      !! are the two accumulators — without `local(...)` they would be a
+      !! race.
+      integer, intent(in) :: it, n_tr, nx, ny, nz
+      real(wp), intent(inout) :: ref_tracer(nx, ny, nz, n_tr)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: z_top(nx, ny)
+      real(wp), intent(in) :: idamp_h(nx, ny)
+      real(wp), intent(in) :: v_ref, dv_dz
+      integer :: i, j, k
+      real(wp) :: above, z_ctr
+
+      do concurrent(j=1:ny, i=1:nx) local(k, above, z_ctr)
+         if (idamp_h(i, j) > 0.0_wp) then
+            ! `above` holds the depth of the TOP of layer k; bottom-up
+            ! storage means the sweep runs k = nz (surface) down to 1.
+            above = z_top(i, j)
+            do k = nz, 1, -1
+               z_ctr = above + 0.5_wp*h_layer(i, j, k)
+               above = above + h_layer(i, j, k)
+               ref_tracer(i, j, k, it) = v_ref - dv_dz*z_ctr
+            end do
+         end if
+      end do
+   end subroutine refresh_linear_z_impl
+
+   pure function sponge_band_alpha(d, band, ramp) result(alpha)
+      !! Shape factor of the `damp_source="band"` ramp at cell offset `d`
+      !! (0 = hard against the sponge-tagged wall) for a band of `band`
+      !! cells.  The per-cell rate is `sponge_strength * alpha`.
+      !!
+      !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + cos(pi*d/band))` —
+      !!     the legacy band kernel's own ramp, reproduced bit-for-bit
+      !!     (including its `acos(-1)` spelling of pi) so `ramp="cosine"`
+      !!     stays byte-identical to every shipped namelist.
+      !!   * `SPONGE_RAMP_LINEAR`: `(band - d - 0.5)/band`.  This is the
+      !!     CELL-CENTRE evaluation of ISOMIP+ Eq. (20),
+      !!     `gamma(x) = gamma0*max(0, (x - x_r0)/(x_r1 - x_r0))`
+      !!     (Asay-Davis et al. 2016), when the band exactly spans
+      !!     `[x_r0, x_r1]`: the centre of cell `d` sits at
+      !!     `x = x_r1 - (d + 0.5)*dx`, so
+      !!     `(x - x_r0)/(x_r1 - x_r0) = (band - d - 0.5)/band`.
+      !!     It reaches neither 0 nor 1 exactly — it is a cell average of
+      !!     a ramp that does, which is the right discretisation of a
+      !!     continuous `gamma(x)` and is why the `+0.5` is not a fudge.
+      integer, intent(in) :: d, band, ramp
+      real(wp) :: alpha
+      real(wp), parameter :: PI_LOCAL = acos(-1.0_wp)
+      select case (ramp)
+      case (SPONGE_RAMP_LINEAR)
+         alpha = (real(band - d, wp) - 0.5_wp)/real(band, wp)
+      case default   ! SPONGE_RAMP_COSINE
+         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+      end select
+   end function sponge_band_alpha
 
    subroutine ocean_sponge_apply_maps(grid, sp, ms, dt)
       !! Map-driven sponge dispatch (`&ocean_sponge_nml enable=.true.`).

@@ -50,6 +50,7 @@ module rdb_ocean_setup
                                        OBC_MAX_TIDAL_CONSTITUENTS, &
                                        ocean_bc_face_tag_t, &
                                        obc_tide_nodal_fill, obc_match_constituent
+   use rdb_ocean_sponge, only: sponge_band_alpha, SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_metrics, only: metrics_finalize, metrics_fill_cartesian, &
@@ -4014,7 +4015,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
 
-      integer :: i0, i1, j0, j1, band
+      integer :: i0, i1, j0, j1, band, ramp
       real(wp) :: strength
       integer :: nonzero_h, nonzero_u, nonzero_v
 
@@ -4027,6 +4028,31 @@ contains
          sp%relax_h = s_cfg%relax_h
          sp%damp_source = s_cfg%damp_source
          sp%target_source = s_cfg%target_source
+         sp%lin_t_ref = s_cfg%lin_t_ref
+         sp%lin_dt_dz = s_cfg%lin_dt_dz
+         sp%lin_s_ref = s_cfg%lin_s_ref
+         sp%lin_ds_dz = s_cfg%lin_ds_dz
+         ramp = merge(SPONGE_RAMP_LINEAR, SPONGE_RAMP_COSINE, &
+                      trim(s_cfg%ramp) == "linear")
+
+         ! Latch the two registry indices the analytic `linear_z` refresh
+         ! needs, so the per-step kernel never walks the tracer registry
+         ! (the array-of-derived-types device-indirection rule).
+         sp%idx_t = ocean_state%multilayer%idx_temperature
+         sp%idx_s = ocean_state%multilayer%idx_salinity
+
+         ! Latch the geopotential depth of the column TOP.  The draft is
+         ! static by design, so this is a configure-time copy and the
+         ! sponge slot stays self-contained at run time.  No cavity ⇒
+         ! `z_draft` is the (1,1) placeholder and `z_top` keeps its
+         ! init-time zero (the open-ocean free-surface datum).
+         if (ocean_state%metrics%use_cavity .and. &
+             size(ocean_state%metrics%z_draft, 1) == size(sp%z_top, 1) .and. &
+             size(ocean_state%metrics%z_draft, 2) == size(sp%z_top, 2)) then
+            sp%z_top = ocean_state%metrics%z_draft
+         else
+            sp%z_top = 0.0_wp
+         end if
 
          i0 = grid%nghost + 1
          i1 = grid%nghost + grid%nx_phys
@@ -4042,7 +4068,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_x(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + 1, band=band, &
-                                         strength=strength, side=+1, j0=j0, j1=j1)
+                                         strength=strength, side=+1, j0=j0, j1=j1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- East edge ----
@@ -4053,7 +4080,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_x(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + grid%nx_phys + 1, band=band, &
-                                         strength=strength, side=-1, j0=j0, j1=j1)
+                                         strength=strength, side=-1, j0=j0, j1=j1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- South edge ----
@@ -4064,7 +4092,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_y(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + 1, band=band, &
-                                         strength=strength, side=+1, i0=i0, i1=i1)
+                                         strength=strength, side=+1, i0=i0, i1=i1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- North edge ----
@@ -4075,7 +4104,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_y(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + grid%ny_phys + 1, band=band, &
-                                         strength=strength, side=-1, i0=i0, i1=i1)
+                                         strength=strength, side=-1, i0=i0, i1=i1, &
+                                         ramp=ramp)
                end if
             end if
          end if
@@ -4094,7 +4124,7 @@ contains
    end subroutine configure_ocean_sponge
 
    pure subroutine sponge_add_band_x(idamp_h, idamp_u, idamp_v, wall_face, band, &
-                                     strength, side, j0, j1)
+                                     strength, side, j0, j1, ramp)
       !! Add a cosine-ramp `Idamp` band for a west/east (x-normal) sponge
       !! edge into the three maps, SUMMING onto whatever is already there
       !! (§3.2 corner composition). Offsets reproduce
@@ -4106,17 +4136,20 @@ contains
       !! verbatim so `damp_source="band"` matches today's band exactly.
       real(wp), intent(inout) :: idamp_h(:, :), idamp_u(:, :), idamp_v(:, :)
       integer, intent(in) :: wall_face, band, side, j0, j1
+      integer, intent(in) :: ramp
+         !! `SPONGE_RAMP_COSINE` (default, the legacy shape, bit-identical)
+         !! or `SPONGE_RAMP_LINEAR` (ISOMIP+ Eq. 20 at cell centres).
       real(wp), intent(in) :: strength
 
       integer :: d, j, i_h, i_u
       real(wp) :: rate, alpha
-      real(wp), parameter :: PI_LOCAL = acos(-1.0_wp)
-         !! Matches the legacy kernel's own `PI = acos(-1.0_wp)` local
-         !! parameter bit-for-bit (rather than importing `rdb_constants::PI`,
-         !! a `4*atan(1)` formulation) — test 9.4 pins the band to 1e-14.
 
       do d = 0, band - 1
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         ! `sponge_band_alpha` holds both shapes; its cosine branch keeps
+         ! the legacy kernel's own `acos(-1.0_wp)` spelling of pi
+         ! bit-for-bit (rather than `rdb_constants::PI`, a `4*atan(1)`
+         ! formulation) — test 9.4 pins the band to 1e-14.
+         alpha = sponge_band_alpha(d, band, ramp)
          rate = strength*alpha
          if (side > 0) then
             i_h = wall_face + d
@@ -4142,21 +4175,22 @@ contains
    end subroutine sponge_add_band_x
 
    pure subroutine sponge_add_band_y(idamp_h, idamp_u, idamp_v, wall_face, band, &
-                                     strength, side, i0, i1)
+                                     strength, side, i0, i1, ramp)
       !! Mirror of `sponge_add_band_x` for a south/north (y-normal) sponge
       !! edge: `idamp_h`/`idamp_u` share the row offset; `idamp_v` (the
       !! y-normal face) sits one further row in for the south edge (`side =
       !! +1`) and shares the offset for the north edge (`side = -1`).
       real(wp), intent(inout) :: idamp_h(:, :), idamp_u(:, :), idamp_v(:, :)
       integer, intent(in) :: wall_face, band, side, i0, i1
+      integer, intent(in) :: ramp
+         !! See `sponge_add_band_x`.
       real(wp), intent(in) :: strength
 
       integer :: d, i, j_h, j_v
       real(wp) :: rate, alpha
-      real(wp), parameter :: PI_LOCAL = acos(-1.0_wp)
 
       do d = 0, band - 1
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         alpha = sponge_band_alpha(d, band, ramp)
          rate = strength*alpha
          if (side > 0) then
             j_h = wall_face + d
