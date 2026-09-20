@@ -88,6 +88,7 @@ module rdb_config
    public :: build_rdb_schema
    public :: resolve_bt_halo
    public :: bt_halo_auto_exclusion
+   public :: p_top_has_producer
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
    public :: MAX_OCEAN_LAYER_RHO_INIT
@@ -4948,17 +4949,24 @@ contains
             has_error = .true.
          end if
          ! Inert-configuration warning, not a refusal (the house rule, cf.
-         ! &ocean_psurf_nml in_eos and &ocean_tidal_mixing_nml e_uniform):
-         ! `ms%p_top` has exactly ONE producer today, the &ocean_psurf_nml
-         ! seam.  Without it `p_top` is the zero array it is allocated as,
-         ! so the knob is honestly inert — and it is ZERO, never stale: the
-         ! per-step inline refresh in `ocean_dyn_step_split` covers
-         ! `p_top_in_bc` exactly as it covers `in_eos`.
-         if (.not. cfg%ocean%psurf%enable) then
+         ! &ocean_psurf_nml in_eos and &ocean_tidal_mixing_nml e_uniform).
+         ! `ms%p_top = metrics%p_ice_ref + sf%p_surf` has TWO producers,
+         ! and the warning must name both or it is a lie: the
+         ! &ocean_psurf_nml seam (the atmospheric half, `sf%p_surf`) and
+         ! the &ocean_cavity_dyn_nml ice-shelf load (the static half,
+         ! `p_ice_ref = rho_ref*g*z_draft`, assembled in
+         ! `configure_ocean_cavity`).  Under a cavity `p_top` carries the
+         ! ice load and `p_top_in_bc` is not merely live — it is REQUIRED
+         ! for a varying draft, refused above and again at configure.  The
+         ! warning fires only when NEITHER producer is on, which is the
+         ! one case in which `p_top` really is the zero array it was
+         ! allocated as.
+         if (.not. p_top_has_producer(cfg)) then
             call logger%warning("&ocean_pgf_nml p_top_in_bc=.true. is INERT "// &
-                                "without &ocean_psurf_nml enable=.true.: the "// &
-                                "surface-pressure seam is the only producer of "// &
-                                "ms%p_top today, so p_top is the zero array and "// &
+                                "without a producer for ms%p_top: enable "// &
+                                "&ocean_psurf_nml (the atmospheric surface-pressure "// &
+                                "seam) or &ocean_cavity_dyn_nml (the static "// &
+                                "ice-shelf load), else p_top is the zero array and "// &
                                 "pa(nz+1) is unchanged.")
          end if
       end if
@@ -6651,6 +6659,32 @@ contains
       end if
       excluded = len_trim(reason) > 0
    end subroutine bt_halo_auto_exclusion
+
+   pure function p_top_has_producer(cfg) result(has)
+      !! Is there anything in this configuration that WRITES
+      !! `multilayer_state_t%p_top`?
+      !!
+      !! `p_top = metrics%p_ice_ref + sf%p_surf` has exactly two
+      !! producers, and both halves count:
+      !!
+      !!   * `&ocean_psurf_nml enable` — the atmospheric surface-pressure
+      !!     seam, which fills `sf%p_surf` and refreshes `p_top` once per
+      !!     outer step in `ocean_dyn_step_split`;
+      !!   * `&ocean_cavity_dyn_nml enable` — the STATIC ice-shelf load
+      !!     `p_ice_ref = rho_ref*GRAVITY*z_draft`, assembled into
+      !!     `p_top` by `configure_ocean_cavity`.  Static is not the same
+      !!     as absent: the draft never changes, so the configure-time
+      !!     assembly is the final value and there is nothing to refresh.
+      !!
+      !! Used by the `&ocean_pgf_nml p_top_in_bc` inert-knob warning,
+      !! which must name both — a cavity run is precisely the case where
+      !! `p_top_in_bc` is not merely live but REQUIRED (for a draft that
+      !! varies), so warning that it is inert there was telling the user
+      !! the opposite of the truth.
+      type(config_t), intent(in) :: cfg
+      logical :: has
+      has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
+   end function p_top_has_producer
 
    subroutine warn_unknown_bc(bc_str, param_name)
       !! Warn if a BC string does not match any known type
