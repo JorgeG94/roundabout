@@ -921,7 +921,15 @@ contains
          ! PR-12 dedup: |tau| at cell centres is now a shared field
          ! (ocean_surface_stress_set_derived, same 3-line FP op order as
          ! the inline computation this replaces — bit-identical, §7.5).
-         tau_mag = ss%stress_mag(i, j)
+         ! Phase 4b: under an ice shelf the wind is masked out of `tau`
+         ! and the boundary layer is driven by the ICE-OCEAN stress
+         ! instead, which is NOT in `tau` — `stress_shelf` carries it.
+         ! The two supports are disjoint (cover mask vs `cover_frac`
+         ! weight), so the sum is the total upper-boundary momentum flux.
+         ! Always allocated; the zero array without a cavity, and
+         ! `x + 0.0` is `x` bit-for-bit.  See the `stress_mag` /
+         ! `stress_shelf` contract in `rdb_ocean_surface_stress`.
+         tau_mag = ss%stress_mag(i, j) + ss%stress_shelf(i, j)
          u_star = sqrt(tau_mag/this%rho0)
          h_b_lagged = this%bl_depth(i, j)
          ! B_0 charges only the SW absorbed inside the (lagged) BL depth:
@@ -1001,8 +1009,8 @@ contains
                tau_mag, u_star, &
                wstar3, w_star, w_s, gamma_factor, B_0, destabilizing, &
                q_T_kin, q_S_kin, q_bl)
-         ! PR-12 dedup — see Pass 1's comment above.
-         tau_mag = ss%stress_mag(i, j)
+         ! PR-12 dedup + the ice-shelf stress — see Pass 1's comment.
+         tau_mag = ss%stress_mag(i, j) + ss%stress_shelf(i, j)
          u_star = sqrt(tau_mag/this%rho0)
          h_b = this%bl_depth(i, j)
          ! B_0 charges only the SW absorbed inside the (current) BL depth

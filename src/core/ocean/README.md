@@ -135,8 +135,8 @@ slot without reading the rest of the tree.  A future portability lint
 | Continuity-PPM ✓ (barotropic + windowed tracer advect) | `continuity_t` | `kernels/continuity_ppm/rdb_continuity.F90` | 2 / P2 | `barotropic.u_face_x`, `multilayer.h_layer` | per-face `mass_flux_x_layer`, `mass_flux_y_layer`; accumulator slots `uhtr`/`vhtr` (face transport m³, ½-weight per RK2 stage) + `t_dyn_rel_adv` (elapsed time since last drain); `continuity_tracer_drain` spends them via swept-average CW-PPM with fixed-budget CFL sub-cycling (MOM6 `DT_TRACER_ADVECT`; `dt_tracer_advect_ratio` knob in `&ocean_vmix_nml`). **Positive-definite continuity** (`&ocean_continuity_nml positive_definite`, default off ⇒ bit-identical): a `2·h_lim` PPM edge floor + a per-donor θ outflux limiter scale the folded `mass_flux_*_layer` so every layer stays `h ≥ h_lim` with **zero mass created** (contrast: MOM6's injecting `max(h,Angstrom)` clamp is NOT ported; the `conservative_floor` borrow stays the backstop). `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0; D3 single-source scaling keeps CWC exact; fail-loud vs `&ocean_wetdry_nml enable`; per-call `n_limited_step` + int64 `n_limited_total` drained to the console. See `docs/CLOSURE_MATRIX.md` |
 | PV-conserving Coriolis+adv ✓ (Sadourny enstrophy / energy `sadourny_energy` / Arakawa-Hsu `sadourny_hk`) | `coriolis_adv_t` | `kernels/coriolis_adv/rdb_coriolis_adv.F90` | 3 | per-layer u, v, layer thickness | momentum tendency at faces |
 | FV pressure force | `ocean_pressure_force_t` | `../../pressure_force/rdb_ocean_pressure_force.F90` | 5d | `multilayer.h_layer`, T, S, `eos` — including `eos%rho0`, which `configure_ocean_pgf` copies into BOTH slot reference densities (see the **PGF reference densities** contract below); `multilayer.p_top` when `&ocean_pgf_nml p_top_in_bc` (FV_MOM6 only, default off ⇒ bit-identical — see the **`p_top` seam contract** below) | momentum tendency at faces; `e_face` for the barotropic `compute_pbce` |
-| Surface momentum stress ✓ | `ocean_surface_stress_t` | `../../parameterizations/vertical/rdb_ocean_surface_stress.F90` | 5b | `tau_x`/`tau_y` (wind, or ice-blended via `rdb_ice_ocean_coupler`); `rho0` from `eos%rho0` via `configure_ocean_reference_density` | momentum tendency at `k=nz`; `stress_mag` (cell-centred `\|tau\|`, always allocated, refreshed by EVERY writer of the `tau` pair — the `set_wind_stress_*` setters at configure, the data-forcing seam refresh, and the sea-ice blend on device each outer step, all through `ocean_surface_stress_refresh_mag` — PR-12 dedup, read by both KPP and EPBL instead of each re-deriving it inline, so a `tau` write that skips the refresh freezes both schemes' `u_*`). **Ice-shelf cover:** `ocean_surface_stress_apply_cover(ss, cover_frac)` zeroes the `tau` PAIR on every face touching a covered cell (EITHER-neighbour rule, `1 - max(cover_L, cover_R)`) and refreshes `stress_mag` in the same call -- the mask is applied to the SOURCE, not to each derived view, because `tau` also reaches the implicit vdiff stress fold (`tau_u=ss%tau_x`) and the MLE front sampler raw. Applied once from `configure_ocean_cavity` (after the cover is built, before `enter_data`) and again through `ocean_surface_stress_set_derived`'s optional `cover_frac` at the data-forcing seam; idempotent; cavity off => byte-identical |
-| Ice-shelf TOP drag ✓ (Phase 4a; default off) | `ocean_top_drag_t` | `../../parameterizations/vertical/rdb_ocean_top_drag.F90` | 4a | `multilayer.u_face_x_layer`/`v_face_y_layer`, `h_layer`, `wet_mask`; its own configure-filled FACE cover masks `cover_u`/`cover_v` (the **OR** of the two abutting cells' `metrics.cover_frac`, `max(cover(i-1,j), cover(i,j))`, so the CALVING-FRONT face is dragged) — the SAME face rule `ocean_surface_stress_apply_cover` uses to zero the wind there, enforced face-for-face by `cavity_cover_face_rule_matches_top_drag` rather than left as two copies of one sentence and the cell-centred copy `cover_t`; `rho0` from `eos%rho0` via `configure_ocean_reference_density` (the `stress_top` diagnostic only) | momentum tendency at `k = nz` (`du_drag`/`dv_drag`, layer-only or spread over `htbl` metres), the `k = nz` Rayleigh rate `lambda_top_u/v` for the vdiff fold, and `stress_top` (cell-centred `\|tau_top\|`, N/m², device-resident — WRITTEN here, read by nothing yet; KPP/EPBL still take `u_*` from `stress_mag`). Requires `&ocean_cavity_dyn_nml enable` (fail-loud). The tendency is ALSO added into `bt_work%F_slow_u/v` by `add_top_drag_into_F_slow` — a layer tendency left out of that sum is invisible to the barotropic substep AND mis-corrected by `apply_bt_correction`. `&ocean_cavity_melt_nml cdrag_top` must equal `&ocean_tdrag_nml cd`: ONE ice-base drag coefficient, refused at configure if they differ. `enable=.false.` (default) ⇒ placeholder arrays, no kernel, byte-identical |
+| Surface momentum stress ✓ | `ocean_surface_stress_t` | `../../parameterizations/vertical/rdb_ocean_surface_stress.F90` | 5b | `tau_x`/`tau_y` (wind, or ice-blended via `rdb_ice_ocean_coupler`); `rho0` from `eos%rho0` via `configure_ocean_reference_density` | momentum tendency at `k=nz`; `stress_mag` (cell-centred `\|tau\|`, always allocated, refreshed by EVERY writer of the `tau` pair — the `set_wind_stress_*` setters at configure, the data-forcing seam refresh, and the sea-ice blend on device each outer step, all through `ocean_surface_stress_refresh_mag` — PR-12 dedup, read by both KPP and EPBL instead of each re-deriving it inline, so a `tau` write that skips the refresh freezes both schemes' `u_*`). **Ice-shelf cover:** `ocean_surface_stress_apply_cover(ss, cover_frac)` zeroes the `tau` PAIR on every face touching a covered cell (EITHER-neighbour rule, `1 - max(cover_L, cover_R)`) and refreshes `stress_mag` in the same call -- the mask is applied to the SOURCE, not to each derived view, because `tau` also reaches the implicit vdiff stress fold (`tau_u=ss%tau_x`) and the MLE front sampler raw. Applied once from `configure_ocean_cavity` (after the cover is built, before `enter_data`) and again through `ocean_surface_stress_set_derived`'s optional `cover_frac` at the data-forcing seam; idempotent; cavity off => byte-identical.  **Second stress, Phase 4b:** `stress_shelf` (cell-centred `\|tau_top\|` at an ICE-SHELF base, N/m^2, ALWAYS allocated + mapped + counted, exactly zero without a cavity) is the OTHER half of the upper-boundary momentum flux — see the **`stress_mag` / `stress_shelf` contract** below.
+| Ice-shelf TOP drag ✓ (Phase 4a; default off) | `ocean_top_drag_t` | `../../parameterizations/vertical/rdb_ocean_top_drag.F90` | 4a | `multilayer.u_face_x_layer`/`v_face_y_layer`, `h_layer`, `wet_mask`; its own configure-filled FACE cover masks `cover_u`/`cover_v` (the **OR** of the two abutting cells' `metrics.cover_frac`, `max(cover(i-1,j), cover(i,j))`, so the CALVING-FRONT face is dragged) — the SAME face rule `ocean_surface_stress_apply_cover` uses to zero the wind there, enforced face-for-face by `cavity_cover_face_rule_matches_top_drag` rather than left as two copies of one sentence and the cell-centred copy `cover_t`; `rho0` from `eos%rho0` via `configure_ocean_reference_density` (the `stress_top` diagnostic only) | momentum tendency at `k = nz` (`du_drag`/`dv_drag`, layer-only or spread over `htbl` metres), the `k = nz` Rayleigh rate `lambda_top_u/v` for the vdiff fold, and `stress_top` (cell-centred `\|tau_top\|`, N/m², device-resident — copied INLINE by `run_stage`/`run_stage_split` into `surface_stress%stress_shelf`, whence KPP and EPBL take their under-ice `u_*`; see the **`stress_mag` / `stress_shelf` contract** below). Requires `&ocean_cavity_dyn_nml enable` (fail-loud). The tendency is ALSO added into `bt_work%F_slow_u/v` by `add_top_drag_into_F_slow` — a layer tendency left out of that sum is invisible to the barotropic substep AND mis-corrected by `apply_bt_correction`. `&ocean_cavity_melt_nml cdrag_top` must equal `&ocean_tdrag_nml cd`: ONE ice-base drag coefficient, refused at configure if they differ. `enable=.false.` (default) ⇒ placeholder arrays, no kernel, byte-identical |
 | Surface heat/salt flux ✓ (PR-12 component-set reshape) | `ocean_surface_flux_t` | `../../parameterizations/vertical/rdb_ocean_surface_flux.F90` | 5b | const scalars (`&ocean_thermo_nml q_heat/q_salt`) +, when `&ocean_forcing_nml enable_components`, the component set (`q_sw/q_lw/q_lat/q_sens/heat_added`, mass fluxes `evap/lprec/fprec/vprec/lrunoff/frunoff/seaice_melt`, their `heat_content_*` enthalpy companions, `salt_flux`, `p_surf_atm`); `rho0` from `eos%rho0` via `configure_ocean_reference_density` | `Q_heat`/`Q_salt` — **derived views**, always the fields every downstream kernel (KPP, EPBL, `apply_tracers`) reads. Components off (default): `Q_heat`/`Q_salt` = the const scalar fill, byte-identical to pre-PR-12. Components on: `ocean_surface_flux_assemble` (the single gate, `vmix_assemble`'s analogue) rebuilds them every thermo step from const + components (`heat_content_massin`/`massout` also assembler-owned outputs) — a filler writes ITS OWN component and MUST NOT write `Q_heat`/`Q_salt` directly, must set `has_heat`/`has_salt` (+ `has_mass_flux`/`has_q_sw` as it fills mass/`q_sw`) host-side, and must register a time-varying component itself in the restart registry (`Q_heat`/`Q_salt` themselves are never registered — derived-field rule). **Component ownership is one filler per component** — the table below the slot map spells it out. The sea-ice coupler (`rdb_ice_ocean_coupler`) writes `salt_flux`/`heat_added` when components are on, the legacy full-overwrite of `Q_salt`/`Q_heat` when off; the ice-shelf cavity (`rdb_ocean_cavity_flux`) writes `heat_cavity`/`salt_cavity` and NOTHING else, precisely because the ice coupler full-overwrites the two it does not touch. `p_surf`/`p_surf_atm` ship zeroed with no consumer yet (PR-17 follow-up). **Ice-shelf cover:** `ocean_surface_flux_assemble`'s optional `cover_frac` multiplies every ATMOSPHERIC contribution (`Q_heat_const`/`Q_salt_const`, `q_sw`/`q_lw`/`q_lat`/`q_sens`/`heat_added`, both `heat_content_mass*`, `salt_flux`) by `1 - cover_frac` and leaves `heat_cavity`/`salt_cavity` alone. The mask lives HERE and not at apply time for two reasons: `Q_heat`/`Q_salt` are what KPP and EPBL read to build `B_0`, so masking later would force both boundary-layer schemes with an atmosphere that is not there; and this is the last point at which the atmospheric bands are still separable from the cavity bands. Components OFF => no assembler, so the static scalar fill is masked once at configure by `ocean_surface_flux_apply_cover_const`. `ocean_surface_flux_apply_sw_penetration` and `ocean_surface_restore_apply_tracers` carry their own optional `cover_frac` (neither routes through `Q_heat`/`Q_salt`). Absent => the original kernel, byte-identical |
 | Vertical mixing (KPP) | `ocean_vmix_t` | `../../parameterizations/vertical/rdb_ocean_vmix.F90` | 5b | u, v, T, S, surface forcing; `rho0` from `eos%rho0` via `configure_ocean_reference_density` (the ONE of these copies a kernel reads on-device) | `kv`, `kt`, `ks` on interfaces; non-local `gamma_t/s`. `ks` is DERIVED from `kt` by `vmix_split_kd_heat_salt` (last statement before `vmix_assemble`, PR-20; `ks ≡ kt` until a double-diffusion contributor lands) and consumed by `vdiff_apply_tracers` for salinity + every passive tracer |
 | EPBL (energetics PBL) ✓ | `ocean_epbl_t` | `../../parameterizations/vertical/rdb_ocean_epbl.F90` | 5b+ | T, S, h, wind stress, surface flux, abs(f) | `kd_int` on interfaces (merged into `vmix%kv/kt` each stage), `mld`, TKE-budget diags |
@@ -172,6 +172,80 @@ slot without reading the rest of the tree.  A future portability lint
 | Z-level T/S IC ✓ | (free procedures, `rdb_ocean_z_init` module — no new `_t`; config on `cfg%ocean%zinit`) | `io/rdb_ocean_z_init.F90` | A2 | pre-regridded model-grid T/S NetCDF (`source="file"`) or the analytic affine `lin_*` profile (`source="linear"`), plus seeded `h_layer` + `wet_mask` + (under a cavity) `metrics%z_draft` | overwrites `tracers(idx_S/T)%hTr` at seed time (host-side, before enter_data). Layer-centre depth is GEOPOTENTIAL — measured from `z = 0`, so the column-top offset `z_draft` is added under an ice shelf (`build_z_ctr(h, nz, z_top, z_ctr)`; `z_top = 0` is bit-identical to the pre-cavity arithmetic). File source: linear-in-depth interp + constant tails, interior only, dry columns → namelist land-fill. Linear source: exact, FULL array incl. ghosts + land. NetCDF-gated. |
 | 3D scratch buffer ✓ | `scratch_3d_buffer_t` | `../../framework/rdb_scratch_3d.F90` | 1 (then ongoing) | `(n1, n2, n3)` shape from caller | `(stride, stride, nz)` scratch storage with bound init/destroy/enter_data/exit_data; future `ensure_size` |
 | Safe-math wrappers | (free procedures, `rdb_safe_math` module) | `../../framework/rdb_safe_math.F90` | library, no production consumer (PR-8 removed `RDB_BITWISE_REPRO`, which was the sole would-be caller) | n/a | plain elemental inlines around the intrinsic (`safe_exp/log/sin/cos/sqrt/pow`); the tested `*_polynomial` implementations are raw material for a future repro PR |
+
+### The `stress_mag` / `stress_shelf` contract — two upper-boundary stresses
+
+`ocean_surface_stress_t` carries TWO cell-centred stress magnitudes and they
+are different things.  Both boundary-layer schemes — KPP (`rdb_ocean_vmix`,
+two sites) and EPBL (`rdb_ocean_epbl`, one) — read
+
+```
+u_*^2 = ( stress_mag + stress_shelf ) / rho_0
+```
+
+and NOTHING else supplies their friction velocity.
+
+| | `stress_mag` | `stress_shelf` |
+|---|---|---|
+| what | `\|tau\|`, and only `\|tau\|` | `\|tau_top\|` at an ICE-SHELF base |
+| derived from | the `tau` pair, always | nothing on this slot |
+| refreshed by | EVERY writer of `tau` (`set_wind_stress_*`, the data-forcing seam, the sea-ice blend, `apply_cover`), through `ocean_surfstress_refresh_mag` | the RK2 stage drivers (inline), or `engine_step_finalize` |
+| zero where | `cover_frac = 1` (the cover mask zeroes `tau` on every face touching a covered cell) | `cover_frac = 0`, and everywhere without a cavity |
+| allocation | always, full size | always, full size |
+
+**The sum is not a double count.** The two supports are disjoint under the
+binary v1 cover, and each term already carries its own area weight — `tau` is
+masked by `1 - max(cover_L, cover_R)` and `stress_top` is multiplied by
+`cover_frac` — so the sum is the area-weighted total upper-boundary momentum
+flux and generalises unchanged to a fractional cover.
+
+**Why a SECOND field and not a blend into `stress_mag`.** Three reasons, each
+of which a folded-in design gets wrong:
+
+1. `stress_mag` is rebuilt from `tau` **from scratch** by every `tau` writer.
+   A folded contribution is silently wiped at the next data-forcing bracket or
+   sea-ice blend — the exact failure mode the `stress_mag` refresh contract
+   above exists to prevent, inverted.
+2. The top-drag stress is recomputed EVERY RK2 stage; the `tau` refresh is per
+   OUTER step.  A fold would either accumulate across stages or go stale.
+3. Keeping `stress_mag` a pure function of `tau` is what lets the existing
+   cover gate (`test_ocean_cavity_flux`: "`stress_mag` is EXACTLY zero under
+   cover") and the sea-ice gates (`test_ocean_ice_stress_mag`) still mean what
+   they say.
+
+**Who fills `stress_shelf`, and the one honest lag.**
+
+```
+&ocean_tdrag_nml enable          ->  run_stage / run_stage_split copy
+                                     top_drag%stress_top INLINE, in the SAME
+                                     stage that computed it and strictly
+                                     before vmix_apply_in_stage reads it.
+                                     NO LAG.
+melt on, &ocean_tdrag_nml off    ->  engine_step_finalize fills it from
+                                     rho_0 * cavity_flux%ustar^2 -- the SAME
+                                     C_d (the one-drag-coefficient rule), but
+                                     at THERMO cadence at the END of the
+                                     step, so it reaches the schemes ONE
+                                     OUTER STEP LATE.  Documented, not hidden.
+neither                          ->  the zero array; `x + 0.0` is `x`
+                                     bit-for-bit, so every pre-cavity
+                                     configuration is unchanged.
+```
+
+Both fills are written as INLINE `do concurrent` loops, never as a call
+handing `ss%stress_shelf` to an external subroutine: a host-gated call with a
+state array as an actual makes nvfortran treat the array as escaping and
+pessimises every `do concurrent` in the calling routine (CLAUDE.md, measured
+at +4.8 % for an inert porous pass).  Both are gated on the source slot's
+`enable`, not on `present(...)`: a DISABLED slot carries placeholder-sized
+arrays.
+
+**A new upper-boundary stress joins here, not in `stress_mag`.**  The test is
+the same one the `p_top` seam uses: if the quantity is derived from `tau`, it
+belongs in `stress_mag` and its writer owes the refresh; if it is a separate
+momentum flux across the ocean's top, it belongs in `stress_shelf` (or a third
+always-allocated companion) and its writer owes an inline per-step fill.
+Gates: `test_ocean_bl_under_ice`.
 
 ### PGF reference densities (`rho0` vs `rho_ref`) — both follow the one configured ρ₀
 

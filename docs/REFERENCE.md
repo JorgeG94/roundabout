@@ -488,7 +488,19 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   disagreeing `cdrag_top` is refused at configure. The tendency
   reaches the barotropic mode through `F_slow`, like the bottom
   drag's. The slot publishes `stress_top` (cell-centred `|τ_top|`,
-  N/m²) for a later `ustar_shelf` consumer; nothing reads it yet.
+  N/m²), which the RK2 stage drivers copy inline into
+  `surface_stress%stress_shelf` in the SAME stage — the under-ice
+  friction velocity KPP and EPBL now read, as
+  `u_* = √((stress_mag + stress_shelf)/ρ₀)`. The two terms have
+  disjoint support (the cover mask drives `stress_mag` to exactly
+  zero under ice; `stress_top` is multiplied by `cover_frac`), so
+  the sum is the total upper-boundary momentum flux, not a double
+  count. With `&ocean_cavity_melt_nml` on but this group OFF,
+  `stress_shelf` is filled instead from the melt slot's own `u_*`
+  as `ρ₀·u_*²` (the same `C_d`), at thermo cadence — that fallback
+  lags the boundary-layer schemes by one outer step.  Without a
+  cavity `stress_shelf` is the zero array, so every existing
+  configuration is bit-identical.
 - **Interior land masking** (static free-slip walls via metric-zeroing)
   and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma / z*-lite,
   single-rank, positive-definite outflow limiter).
