@@ -195,7 +195,25 @@ module rdb_ocean_pressure_force
          !! `exit_data` / `bytes` all key off `allocated(...)`, so a gated-off
          !! buffer is neither mapped nor counted.
       real(wp) :: rho0 = 1035.0_wp
-         !! Reference density for Boussinesq pressure-gradient.
+         !! BOUSSINESQ reference density (kg/m³) — the `ρ₀` that divides the
+         !! pressure gradient into an acceleration, `du/dt = −(1/ρ₀)·∂p/∂x`.
+         !! Read by EVERY variant (it is `inv_rho0` in the face passes and
+         !! `g_over_rho0` in the Montgomery recursion), and by
+         !! `compute_pbce` in the barotropic coupling.
+         !!
+         !! ASSIGNED FROM CONFIG by `configure_ocean_pgf`
+         !! (`&ocean_ic_nml rho_0` → `eos%rho0`, the single ρ₀ of record —
+         !! the EOS, the `eta_ib` surface-pressure seam, EPBL, kappa-shear,
+         !! tidal mixing, MEKE/GM and the isopycnal slopes all take the same
+         !! scalar).  The literal here is only the pre-configure default for
+         !! direct `pgf%init(...)` call sites (tests, benchmarks) that never
+         !! run the configure pass; it matches the `&ocean_ic_nml rho_0`
+         !! default so a state built either way agrees.
+         !!
+         !! Host scalar: every read is host-side (into a local `inv_rho0`,
+         !! or passed by value into a `*_impl`), so `configure_ocean_pgf`
+         !! needs no `!$acc update device` — nothing reads it through the
+         !! device-mapped `pgf` handle.
 
       ! ---- gprime / reduced-gravity knobs (OPGF_VARIANT_GPRIME) ----
       real(wp) :: gprime_gfs = 9.81_wp
@@ -208,9 +226,23 @@ module rdb_ocean_pressure_force
 
       ! ---- FV_MOM6 reference state (OPGF_VARIANT_FV_MOM6) ----
       real(wp) :: rho_ref = 1035.0_wp
-         !! Reference density (kg/m³) subtracted from layer densities when
-         !! building `pa`. `rho_ref = rho0 = ρ_surf` makes the surface
-         !! layer's anomaly vanish; only denser bed layers contribute.
+         !! ANOMALY reference density (kg/m³) subtracted from layer densities
+         !! when building the `pa` pressure-anomaly stack (FV_MOM6), and the
+         !! surface-layer `g·ρ_ref/ρ₀` in `compute_pbce`.
+         !! `rho_ref = rho0 = ρ_surf` makes the surface layer's anomaly
+         !! vanish; only denser bed layers contribute.
+         !!
+         !! A DISTINCT ROLE from `rho0` — `rho0` scales the gradient into an
+         !! acceleration, `rho_ref` only shifts the baseline the anomaly is
+         !! measured from — kept as a separate member so the two are never
+         !! silently interchanged (MOM6 carries the same pair, `GV%Rho0` vs
+         !! the `PressureForce_FV` `rho_ref`).  Both are nonetheless SOURCED
+         !! FROM THE SAME CONFIGURED ρ₀ by `configure_ocean_pgf`
+         !! (`&ocean_ic_nml rho_0` → `eos%rho0`): roundabout has no separate
+         !! anomaly-reference knob, and `rho_ref ≠ rho0` would put a constant
+         !! `g·(ρ_ref−ρ₀)/ρ₀` offset in `pa(top)` that the Boussinesq
+         !! divisor no longer cancels.  Same host-scalar note as `rho0` —
+         !! no device update needed.
       real(wp) :: h_neglect = 1.0e-10_wp
          !! Face-thickness floor in the FV_MOM6 denominator
          !! `(h_L + h_R + h_neglect)`. Prevents division by zero when both
