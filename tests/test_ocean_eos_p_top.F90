@@ -46,9 +46,11 @@
 !!     and `ms%rho_layer` is BYTE-identical either way (the end-to-end
 !!     statement that the load never reaches the potential density).
 !!   * `p_top_validate_config` — the envelope: `in_eos` without `enable` and
-!!     `in_eos` with an unported in-situ builder (EPBL) are REFUSED; `in_eos`
-!!     with a PGF form that has no in-situ pressure is ACCEPTED (documented
-!!     inert, warning only), which is the deliberate no-op decision.
+!!     `in_eos` with a STILL-unported in-situ builder (kappa-shear) are
+!!     REFUSED; `in_eos` with EPBL is ACCEPTED (ported in Phase 4b — see
+!!     `test_ocean_bl_under_ice`); `in_eos` with a PGF form that has no
+!!     in-situ pressure is ACCEPTED (documented inert, warning only), which
+!!     is the deliberate no-op decision.
 !!
 !! GPU/mem:separate: every object and its scratch companion is
 !! `enter_data`'d, host-set inputs (`p_top` included) are pushed with
@@ -667,15 +669,28 @@ contains
                     "in_eos without enable must be refused")
          if (allocated(error)) exit checks
 
-         ! in_eos with an UNPORTED in-situ builder (EPBL builds its own
-         ! column pressure from 0 Pa at the surface).
+         ! in_eos with EPBL: PORTED in Phase 4b (`epbl_column_kernel`
+         ! seeds its stack at `ms%p_top`), so it must now be ACCEPTED.
+         ! The refusal that stood here is gone, and this is the assertion
+         ! that keeps it gone.
          call parse_case(cfg, "&ocean_psurf_nml enable = .true., in_eos = .true. /"// &
                          new_line("a")//"&ocean_epbl_nml enable = .true. /")
          ierr = -999
          call validate_config(cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, &
+                    "in_eos with EPBL must be ACCEPTED — its column pressure "// &
+                    "stack is ported to ms%p_top")
+         if (allocated(error)) exit checks
+
+         ! ... and a builder that is STILL unported is still refused, so
+         ! the lift above is scoped to EPBL and did not empty the list.
+         call parse_case(cfg, "&ocean_psurf_nml enable = .true., in_eos = .true. /"// &
+                         new_line("a")//"&ocean_kappa_shear_nml enable = .true. /")
+         ierr = -999
+         call validate_config(cfg, ierr=ierr)
          call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                    "in_eos with EPBL (an unported in-situ pressure builder) "// &
-                    "must be refused")
+                    "in_eos with kappa-shear (still an unported in-situ "// &
+                    "pressure builder) must be refused")
       end block checks
    end subroutine test_validate_config
 

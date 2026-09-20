@@ -4698,15 +4698,18 @@ contains
          ! consumer selected the knob legitimately does nothing, and the
          ! house rule (cf. &ocean_tidal_mixing_nml e_uniform) is to SAY so
          ! rather than let a user believe a cavity load reached the EOS.
-         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright") then
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright" .and. &
+             .not. cfg%ocean%epbl%enable) then
             call logger%warning("&ocean_psurf_nml in_eos=.true. is INERT for "// &
                                 "&ocean_pgf_nml form='"// &
-                                trim(adjustl(cfg%ocean%pgf%form))//"': the only "// &
-                                "ported in-situ EOS pressure is the FV_WRIGHT "// &
-                                "Picard column sweep. The other PGF forms read "// &
-                                "the POTENTIAL density ms%rho_layer, which is "// &
-                                "referenced to the uniform &ocean_eos_nml p_ref "// &
-                                "BY DESIGN and is not offset by the load.")
+                                trim(adjustl(cfg%ocean%pgf%form))//"' with no "// &
+                                "other ported in-situ consumer: the ported ones "// &
+                                "are the FV_WRIGHT Picard column sweep and the "// &
+                                "EPBL column stack (&ocean_epbl_nml). The other "// &
+                                "PGF forms read the POTENTIAL density "// &
+                                "ms%rho_layer, which is referenced to the "// &
+                                "uniform &ocean_eos_nml p_ref BY DESIGN and is "// &
+                                "not offset by the load.")
          end if
          if (.not. cfg%ocean%psurf%enable) then
             call logger%error("&ocean_psurf_nml in_eos=.true. requires "// &
@@ -4714,14 +4717,12 @@ contains
                               "assembled sf%p_surf the seam owns)")
             has_error = .true.
          end if
-         if (cfg%ocean%epbl%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_epbl_nml enable=.true. — EPBL builds "// &
-                              "its own column pressure from 0 Pa at the surface "// &
-                              "(epbl_column_kernel `pres`/`p_mid`), which also "// &
-                              "weights its PE ledger; not yet ported to p_top")
-            has_error = .true.
-         end if
+         ! EPBL was refused here until Phase 4b.  It is PORTED now:
+         ! `epbl_column_kernel` seeds its stack at `ms%p_top(i,j)` when
+         ! `in_eos`, which moves BOTH consumers of that stack (the
+         ! in-situ `eos_specvol_derivs` argument and the PE weight
+         ! `dmass*p_mid*dsv`) together.  Gate:
+         ! `test_ocean_bl_under_ice` (`epbl_p_top_*`).
          if (cfg%ocean%kshear%enable) then
             call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
                               "with &ocean_kappa_shear_nml enable=.true. — "// &

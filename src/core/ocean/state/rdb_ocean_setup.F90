@@ -1508,6 +1508,17 @@ contains
          epbl%eos = ocean_state%eos
          epbl%rho0 = ocean_state%eos%rho0
 
+         ! (E3) Top-of-column pressure in the IN-SITU EOS arguments AND
+         ! in the PE weight.  `&ocean_psurf_nml in_eos` is the single
+         ! gate for the whole `ms%p_top` seam; assigned HERE, at
+         ! configure, so it is latched before `ocean_state_enter_data`
+         ! and the kernel reads it by value (host scalar -- no
+         ! `!$acc update device` owed).  Off (default) ⇒ the stack
+         ! starts at 0 Pa, bit-identically.  NOTE this is NOT redundant
+         ! with `p_top` being zero: a cavity fills `p_top` with the ice
+         ! load whether or not `in_eos` is set.
+         epbl%in_eos = cfg%ocean%psurf%in_eos
+
          ! |f| at cell centres, same scheme the Coriolis slot uses (D7).
          call fill_coriolis_centre(cfg, ocean_state%metrics, grid, epbl%f_centre)
 

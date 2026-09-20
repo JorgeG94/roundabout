@@ -50,6 +50,13 @@
 !!     through the public API: under a full lid with no wind, switching
 !!     `&ocean_tdrag_nml` on raises KPP's `kv` by orders of magnitude,
 !!     because the boundary layer now feels the ice.
+!!   * `epbl_p_top_*` — the EPBL in-situ pressure port
+!!     (`&ocean_psurf_nml in_eos`): the knob off is bit-identical even
+!!     under a loaded column; on, the pressure that reaches the EOS is
+!!     `>= p_top > 0` and increases toward the bed; a UNIFORM `p_top`
+!!     under a LINEAR (pressure-independent) EOS is gauge-neutral to a
+!!     derived bound; and under the nonlinear Wright EOS the same uniform
+!!     load DOES move the answer, through `alpha(p)`/`beta(p)` alone.
 !!
 !! `mem:separate` discipline throughout: every kernel is given
 !! device-present arrays (state objects through their own `enter_data`,
@@ -68,7 +75,7 @@ module test_ocean_bl_under_ice
    use rdb_constants, only: wp, GRAVITY
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: EOS_VARIANT_LINEAR
+   use rdb_eos, only: EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97
    use rdb_ocean_vmix, only: ocean_vmix_t, vmix_compute_pp81, vmix_apply_kpp_overlay
    use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, EPBL_MSTAR_CONSTANT
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
@@ -101,6 +108,10 @@ module test_ocean_bl_under_ice
       !! ISOMIP+ ice-base drag coefficient (Asay-Davis et al. 2016), the
       !! ONE `C_d` shared by `&ocean_tdrag_nml cd` and
       !! `&ocean_cavity_melt_nml cdrag_top`.
+   real(wp), parameter :: PTOP_HK = 40.0_wp
+      !! Layer thickness (m) in the EPBL pressure-port cases.
+   real(wp), parameter :: PTOP_DT = 1800.0_wp
+      !! Thermo step (s) in the EPBL pressure-port cases.
    real(wp), parameter :: U_JET = 0.2_wp
       !! Depth-uniform zonal jet (m/s) seeded into the end-to-end runs —
       !! the stirrer that gives the ice base something to rub against.
@@ -129,7 +140,12 @@ contains
                   new_unittest("epbl_mld_deepens_with_ustar", test_epbl_deepens), &
                   new_unittest("epbl_mld_shoals_with_melt_buoyancy", test_epbl_shoals), &
                   new_unittest("tau_writers_do_not_touch_stress_shelf", test_tau_writers), &
-                  new_unittest("driver_publishes_shelf_stress_end_to_end", test_driver_publish) &
+                  new_unittest("driver_publishes_shelf_stress_end_to_end", test_driver_publish), &
+                  new_unittest("epbl_p_top_off_is_bit_identical", test_epbl_ptop_off), &
+                  new_unittest("epbl_p_top_sign_and_monotone", test_epbl_ptop_monotone), &
+                  new_unittest("epbl_uniform_p_top_linear_eos_is_gauge_neutral", &
+                               test_epbl_ptop_gauge), &
+                  new_unittest("epbl_p_top_moves_the_nonlinear_eos_only", test_epbl_ptop_wright) &
                   ]
    end subroutine collect_ocean_bl_under_ice_tests
 
@@ -1264,5 +1280,247 @@ contains
          nml = nml//"&ocean_tdrag_nml enable = .true., cd = 2.5e-3 /"//new_line("a")
       end if
    end function lid_namelist
+
+   ! ==================================================================
+   ! The EPBL in-situ pressure port (`&ocean_psurf_nml in_eos`)
+   ! ==================================================================
+
+   subroutine epbl_ptop_run(in_eos, wright, p_top_val, epbl, error)
+      !! One EPBL call on a stratified, wind-forced column with a uniform
+      !! top-of-column load `p_top_val` (Pa).  The slot is returned to
+      !! the caller (host arrays already pulled back) so a case can read
+      !! `kd_int`, `mld`, and the PE/steric weights `dpe_t`/`dcolht_t`.
+      !!
+      !! `ms%p_top` is filled unconditionally: it is ALWAYS allocated and
+      !! mapped (the `p_top` seam contract), so there is no placeholder to
+      !! keep out of a kernel, and whether it is READ is the `in_eos`
+      !! gate's business, not the caller's.
+      logical, intent(in) :: in_eos, wright
+      real(wp), intent(in) :: p_top_val
+      type(ocean_epbl_t), intent(inout) :: epbl
+      type(error_type), allocatable, intent(inout) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: TAU = 0.1_wp
+      integer :: k
+      real(wp) :: t_k
+
+      call make_grid(grid, 10, 8)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ss%init(grid)
+      ss%rho0 = RHO0
+      call sf%init(grid)
+      call setup_epbl(epbl, grid)
+      epbl%in_eos = in_eos
+      if (wright) epbl%eos%variant = EOS_VARIANT_WRIGHT_97
+
+      ms%h_layer = PTOP_HK
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      ms%p_top = p_top_val
+      do k = 1, NZ
+         t_k = 2.0_wp - 0.01_wp*real(NZ - k, wp)*PTOP_HK
+         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*PTOP_HK
+         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 34.5_wp*PTOP_HK
+         ms%rho_layer(:, :, k) = RHO0
+      end do
+      call ss%set_wind_stress_const(TAU, 0.0_wp)
+
+      !$acc enter data copyin(ms, epbl, ss, sf)
+      call ms%enter_data()
+      call epbl%enter_data()
+      call ss%enter_data()
+      call sf%enter_data()
+      !$acc update device(ms%p_top, ss%stress_mag, ss%stress_shelf)
+      call epbl_compute(grid, epbl, ms, ss, PTOP_DT, sf=sf)
+      !$acc update self(epbl%mld, epbl%kd_int, epbl%b0)
+      !$acc update self(epbl%dpe_t%data, epbl%dcolht_t%data)
+      call sf%exit_data()
+      call ss%exit_data()
+      call epbl%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, epbl, ss, sf)
+
+      call check(error, all(ieee_is_finite(epbl%kd_int)), &
+                 "EPBL returned a non-finite kd_int")
+      call sf%destroy(); call ss%destroy(); call ms%destroy()
+   end subroutine epbl_ptop_run
+
+   subroutine test_epbl_ptop_off(error)
+      !! THE BIT-IDENTITY GATE, and it is not the trivial one.  A cavity
+      !! fills `ms%p_top` with the ice load whether or not
+      !! `&ocean_psurf_nml in_eos` is set, so "the array is zero" does
+      !! NOT keep an existing cavity + EPBL run unchanged -- only the
+      !! `in_eos` gate does.  So this compares `p_top = 3e6 Pa` with
+      !! `in_eos = .false.` against `p_top = 0`, and demands BYTE
+      !! equality: one code path either reads the seed or it does not,
+      !! which is exactly the case where bit-equality is the right
+      !! assertion.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_epbl_t) :: e_zero, e_loaded
+      checks: block
+         call epbl_ptop_run(.false., .false., 0.0_wp, e_zero, error)
+         if (allocated(error)) exit checks
+         call epbl_ptop_run(.false., .false., 3.0e6_wp, e_loaded, error)
+         if (allocated(error)) exit checks
+
+         call check(error, all(e_zero%kd_int == e_loaded%kd_int), &
+                    "in_eos = .false. is not bit-identical under a loaded "// &
+                    "column -- the gate is leaking p_top into the EPBL stack")
+         if (allocated(error)) exit checks
+         call check(error, all(e_zero%mld == e_loaded%mld), &
+                    "in_eos = .false. moved the EPBL MLD under a loaded column")
+         if (allocated(error)) exit checks
+         call check(error, maxval(e_zero%kd_int) > 0.0_wp, &
+                    "the reference run must actually mix, else the identity is "// &
+                    "vacuous")
+      end block checks
+      call e_loaded%destroy(); call e_zero%destroy()
+   end subroutine test_epbl_ptop_off
+
+   subroutine test_epbl_ptop_monotone(error)
+      !! The `p_top` seam contract's standing requirement for a joining
+      !! builder: the pressure that reaches the EOS must be `>= p_top > 0`
+      !! and must INCREASE toward the bed (`k = 1`).  MOM6 shipped a
+      !! NEGATIVE EOS pressure in one path for years, which is why this is
+      !! asserted by INVERTING the scheme's own output rather than by
+      !! re-deriving the stack.
+      !!
+      !! The inversion is exact and duplicates no coefficient:
+      !!
+      !!     dpe_t    = dmass * p_mid * dSV/dT
+      !!     dcolht_t = dmass *         dSV/dT
+      !!   => p_mid   = dpe_t / dcolht_t.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_epbl_t) :: epbl
+      real(wp), parameter :: P_TOP = 3.0e6_wp
+      real(wp) :: p_mid(NZ)
+      integer :: k, i_p, j_p
+      checks: block
+         call epbl_ptop_run(.true., .false., P_TOP, epbl, error)
+         if (allocated(error)) exit checks
+
+         i_p = size(epbl%mld, 1)/2
+         j_p = size(epbl%mld, 2)/2
+         do k = 1, NZ
+            call check(error, abs(epbl%dcolht_t%data(i_p, j_p, k)) > 0.0_wp, &
+                       "the steric weight is zero -- the inversion below would "// &
+                       "divide by it")
+            if (allocated(error)) exit checks
+            p_mid(k) = epbl%dpe_t%data(i_p, j_p, k)/epbl%dcolht_t%data(i_p, j_p, k)
+         end do
+
+         do k = 1, NZ
+            call check(error, p_mid(k) >= P_TOP, &
+                       "an EOS pressure below the top-of-column load -- the stack "// &
+                       "is not seeded at p_top")
+            if (allocated(error)) exit checks
+         end do
+         do k = NZ - 1, 1, -1
+            call check(error, p_mid(k) > p_mid(k + 1), &
+                       "the EOS pressure must INCREASE toward the bed (k = 1)")
+            if (allocated(error)) exit checks
+         end do
+         ! ... and the top layer's pressure is the load plus exactly half
+         ! its own hydrostatic weight, which pins the seed itself.
+         call check(error, abs(p_mid(NZ) - (P_TOP + 0.5_wp*GRAVITY*RHO0*PTOP_HK)) <= &
+                    TOL_REL*p_mid(NZ), &
+                    "the surface layer's EOS pressure is not p_top + 0.5*g*rho0*h")
+      end block checks
+      call epbl%destroy()
+   end subroutine test_epbl_ptop_monotone
+
+   subroutine test_epbl_ptop_gauge(error)
+      !! THE PE-LEDGER DECISION, tested rather than asserted.
+      !!
+      !! The seed moves BOTH consumers of the column stack: the in-situ
+      !! EOS argument and the PE weight `dpe = dmass*p_mid*dSV`.  That is
+      !! deliberate -- the weight is the hydrostatic load a layer's centre
+      !! of mass has to lift, and under a floating shelf the ice is part
+      !! of that load, so it is the SAME pressure and splitting the two
+      !! would put two conventions in one column.
+      !!
+      !! The risk that decision carries is that a UNIFORM load, which is
+      !! pure gauge (it has no gradient and moves no dynamics), would
+      !! nevertheless change the mixing energetics.  It must not, and
+      !! with a LINEAR EOS -- whose `dSV/dT`, `dSV/dS` are CONSTANTS,
+      !! independent of pressure -- the uniform offset `P` enters only
+      !! through `dpe -> dpe + P*dcolht`, i.e. only through the column
+      !! HEIGHT change of a mixing event.  A linear EOS conserves that
+      !! exactly (mixing at fixed mass conserves `sum mass*T` and
+      !! `sum mass*S`, and the height is a fixed linear functional of
+      !! them), so the offset must cancel to round-off.
+      !!
+      !! Bound: the cancellation is between terms of size `P*dcolht`
+      !! against a `pec_core` of size `p_mid*dcolht`, so the relative
+      !! residual is `O(n_ops * eps * P/p_mid)`.  With `P = 3e6 Pa`,
+      !! `p_mid ~ O(1e6 Pa)` and `O(100)` operations in the sweep that is
+      !! `~ 1e-12` relative -- the bound below is `1e-9`, three decades of
+      !! headroom, and still eleven decades below any physical effect.
+      !!
+      !! MEASURED, gfortran 15.1 Release, 2026-09-20: the difference is
+      !! EXACTLY ZERO -- the cancellation is algebraic, not statistical,
+      !! because `pec_core -> pec_core + P*colht_core` and `colht_core`
+      !! is itself identically zero for constant `dSV/dX`.  The bound is
+      !! kept rather than asserting `== 0` because an FMA-contracting
+      !! build is free to associate the two expression trees differently.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_epbl_t) :: e_zero, e_loaded
+      real(wp) :: scale, worst
+      checks: block
+         call epbl_ptop_run(.true., .false., 0.0_wp, e_zero, error)
+         if (allocated(error)) exit checks
+         call epbl_ptop_run(.true., .false., 3.0e6_wp, e_loaded, error)
+         if (allocated(error)) exit checks
+
+         scale = maxval(abs(e_zero%kd_int))
+         call check(error, scale > 0.0_wp, &
+                    "the reference run must actually mix, else this is vacuous")
+         if (allocated(error)) exit checks
+         worst = maxval(abs(e_loaded%kd_int - e_zero%kd_int))
+         call check(error, worst <= 1.0e-9_wp*scale, &
+                    "a UNIFORM p_top changed the EPBL diffusivity under a LINEAR "// &
+                    "(pressure-independent) EOS by more than round-off -- the PE "// &
+                    "ledger is not gauge-neutral")
+         if (allocated(error)) exit checks
+         worst = maxval(abs(e_loaded%mld - e_zero%mld))
+         call check(error, worst <= 1.0e-9_wp*maxval(abs(e_zero%mld)), &
+                    "a UNIFORM p_top moved the EPBL MLD under a LINEAR EOS")
+      end block checks
+      call e_loaded%destroy(); call e_zero%destroy()
+   end subroutine test_epbl_ptop_gauge
+
+   subroutine test_epbl_ptop_wright(error)
+      !! The other half of the same statement, and what makes the port
+      !! worth having: under the NONLINEAR Wright (1997) EOS the same
+      !! uniform load DOES move the answer, because `dSV/dT` and `dSV/dS`
+      !! are genuine functions of pressure there.  Three megapascals is
+      !! 300 m of ice, and the thermal expansion of seawater changes by
+      !! several percent over it.
+      !!
+      !! Without this the gauge test above could pass for the wrong
+      !! reason -- a seed that never reached the EOS at all.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_epbl_t) :: e_zero, e_loaded
+      real(wp) :: scale, worst
+      checks: block
+         call epbl_ptop_run(.true., .true., 0.0_wp, e_zero, error)
+         if (allocated(error)) exit checks
+         call epbl_ptop_run(.true., .true., 3.0e6_wp, e_loaded, error)
+         if (allocated(error)) exit checks
+
+         scale = maxval(abs(e_zero%kd_int))
+         call check(error, scale > 0.0_wp, "the Wright reference run must mix")
+         if (allocated(error)) exit checks
+         worst = maxval(abs(e_loaded%kd_int - e_zero%kd_int))
+         call check(error, worst > 1.0e-6_wp*scale, &
+                    "a 3 MPa load did NOT move the nonlinear-EOS answer -- the "// &
+                    "seed is not reaching eos_specvol_derivs at all")
+      end block checks
+      call e_loaded%destroy(); call e_zero%destroy()
+   end subroutine test_epbl_ptop_wright
 
 end module test_ocean_bl_under_ice

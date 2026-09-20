@@ -438,13 +438,39 @@ Rules for a builder that joins this seam:
   exactly the halo validity `p_surf` has and owes no exchange of its own.
 - **An unported in-situ builder is refused, never silently mixed.**
   `validate_config` fails loud on `in_eos = .true.` together with any closure
-  that still builds a surface-relative in-situ pressure from 0 Pa (EPBL,
+  that still builds a surface-relative in-situ pressure from 0 Pa: today that is
   kappa-shear, tidal mixing, Redi, isopycnal slopes, the PGF in-layer
-  reconstruction, sea ice). Porting one means deleting its line there in the same
-  PR. Two pressure conventions inside one time step have no symptom — that
+  reconstruction, and sea ice. Porting one means deleting its line there in the
+  same PR. Two pressure conventions inside one time step have no symptom — that
   refusal is the only thing standing between a half-ported seam and a plausible
   wrong answer. A configuration with *no* in-situ consumer at all is **accepted
   with a warning**, not refused: there the knob is honestly inert.
+- **Ported so far: FV-Wright, and EPBL (Phase 4b).** EPBL's column stack
+  (`epbl_column_kernel`'s `pres`/`p_mid`) now seeds at `ms%p_top(i,j)` under
+  `in_eos`, gated by the host scalar `ocean_epbl_t%in_eos` that
+  `configure_ocean_epbl` latches before `enter_data`. **The gate is not
+  redundant with `p_top` being zero:** a cavity fills `p_top` with the ice load
+  whether or not `in_eos` is set, so only the gate keeps an existing
+  cavity + EPBL run bit-identical (`test_ocean_bl_under_ice`'s
+  `epbl_p_top_off_is_bit_identical` compares a 3 MPa load against a zero one and
+  demands byte equality).
+- **A stack with two consumers moves BOTH, or neither.** EPBL's `p_mid` is read
+  twice — as the in-situ argument of `eos_specvol_derivs`, and as the PE weight
+  `dpe_* = dmass·p_mid·dsv_*`. They are the same pressure (the hydrostatic load
+  a layer's centre of mass has to lift, ice included, under a shelf that floats
+  with the water it sits on), so the seed moves both. Splitting them would put
+  two conventions inside one column, which is what this contract exists to
+  prevent. The risk that carries — that a UNIFORM load, pure gauge with no
+  gradient, would change the mixing energetics — is discharged by test, not by
+  assertion: under a LINEAR (pressure-independent) EOS the offset enters only as
+  `pec_core → pec_core + P·colht_core`, and `colht_core` (the column-height
+  change of a mixing event) is identically zero because mixing at fixed mass
+  conserves `Σ mass·T` and `Σ mass·S` and the height is a fixed linear
+  functional of them. Measured difference on gfortran 15.1: **exactly zero**
+  (`epbl_uniform_p_top_linear_eos_is_gauge_neutral`). Under the nonlinear Wright
+  EOS the same load DOES move the answer, through `α(p)`/`β(p)` alone
+  (`epbl_p_top_moves_the_nonlinear_eos_only`) — which is both the point of the
+  port and the proof the seed reaches the EOS at all.
 
 ### The cavity datum contract (`&ocean_cavity_dyn_nml`, P5.1 + P5.2)
 
