@@ -448,10 +448,15 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   (`form="linear"`, rate `r`) momentum sink at `k = nz` on ice-covered
   faces: the mirror of `&ocean_bdrag_nml` about the middle of the
   column. `htbl > 0` distributes the stress over the top boundary
-  layer exactly as `hbbl` does at the bed; `implicit = .true.` makes
-  the kernel backward-Euler (`u/(1 + dt·λ)`), unconditionally stable
-  on the thin top layers a sigma coordinate leaves near a grounding
-  line. A face is under ice if **either** abutting cell is
+  layer exactly as `hbbl` does at the bed. Two implicit forms, and
+  they differ: `implicit = .true.` makes the drag KERNEL
+  backward-Euler (`u/(1 + dt·λ)`), unconditionally stable on the thin
+  top layers a sigma coordinate leaves near a grounding line and
+  compatible with `htbl`; `&ocean_vdiff_nml implicit_top_drag` instead
+  folds `dt·λ_top` into the vertical-friction tridiagonal's `k = nz`
+  DIAGONAL (layer-`nz` only), where it also masks the wind-stress RHS
+  off on covered faces. Mutually exclusive — both damp the top layer.
+  A face is under ice if **either** abutting cell is
   (`cover_u = max(cover(i−1,j), cover(i,j))`), so the calving-front
   face feels the drag — the conservative choice, documented in
   `rdb_ocean_top_drag`. Requires `&ocean_cavity_dyn_nml enable`. With

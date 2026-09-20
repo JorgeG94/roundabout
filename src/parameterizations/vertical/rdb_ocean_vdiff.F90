@@ -86,6 +86,22 @@ module rdb_ocean_vdiff
          !! directly.  Mutually exclusive with `&ocean_bdrag_nml implicit`
          !! (configure fails loud); the explicit drag apply is gated off
          !! when on.  Default `.false.` ⇒ bit-identical.
+      logical :: implicit_top_drag = .false.
+         !! Fold the ICE-SHELF TOP drag into the `k = nz` DIAGONAL
+         !! (`&ocean_vdiff_nml implicit_top_drag`) instead of the explicit
+         !! pre-solve add, and MASK the wind-stress RHS off on the faces
+         !! the ice covers.  The mirror of `implicit_drag` at the other
+         !! end of the column: a drag is a diagonal term and the wind is
+         !! an RHS term, so the two share the surface row without either
+         !! being approximated, and the cover mask is what makes the
+         !! sharing physical (there is no atmosphere under a shelf).
+         !! `λ_top` is the SAME Rayleigh rate (`C_d·|U|/h_nz` quadratic,
+         !! `r` linear, `|U|` frozen at uⁿ) the top-drag slot forms, and
+         !! it arrives already cover- and wet-masked.  Requires
+         !! `&ocean_tdrag_nml enable`; mutually exclusive with
+         !! `&ocean_tdrag_nml implicit` and with `htbl > 0`; all fail loud
+         !! at configure.  The explicit top-drag apply is gated off when
+         !! on.  Default `.false.` ⇒ bit-identical.
       logical :: hvel_mom6 = .false.
          !! MOM6 `HARMONIC_VISC = True` parity for the MOMENTUM face thickness
          !! (`hvel`).  Roundabout's `h_u` is the
@@ -305,7 +321,8 @@ contains
    subroutine vdiff_apply_momentum(grid, this, ms, dt, kv_source, &
                                    tau_u, tau_v, lambda_bot_u, lambda_bot_v, rho0, &
                                    visc_rem_u, visc_rem_v, remnant_only, &
-                                   kv_corner_source, kv_corner_prandtl)
+                                   kv_corner_source, kv_corner_prandtl, &
+                                   lambda_top_u, lambda_top_v, cover_u, cover_v)
       !! Backward-Euler vertical viscosity applied to
       !! `ms%u_face_x_layer` and `ms%v_face_y_layer`.  Per-face
       !! `h_face` averaged from the two abutting cell columns.
@@ -340,6 +357,13 @@ contains
       !!   * `lambda_bot_u` / `lambda_bot_v` — bottom-drag Rayleigh rate
       !!     `λ` (1/s) on the respective faces, added to the bed (`k = 1`)
       !!     diagonal as `dt·λ`.  Only read when `implicit_drag`.
+      !!   * `lambda_top_u` / `lambda_top_v` + `cover_u` / `cover_v` —
+      !!     the ICE-SHELF TOP-drag twin (`implicit_top_drag`): the rate
+      !!     is added to the SURFACE (`k = nz`) diagonal as `dt·λ`, and
+      !!     the wind-stress RHS on that same row is scaled by
+      !!     `(1 − cover)` so an ice-covered face takes the drag and NOT
+      !!     the wind.  All four are read only when `implicit_top_drag`
+      !!     AND all four are supplied.
       !! All optional + device-resident; absent ⇒ the matrix is built
       !! exactly as before (bit-identical).
       !!
@@ -358,6 +382,8 @@ contains
       real(wp), intent(in), optional :: kv_source(:, :, :)
       real(wp), intent(in), optional :: tau_u(:, :), tau_v(:, :)
       real(wp), intent(in), optional :: lambda_bot_u(:, :), lambda_bot_v(:, :)
+      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
+      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
       real(wp), intent(in), optional :: rho0
          !! Boussinesq reference density for the implicit surface-stress
          !! fold, `dt*(tau/rho0)/h_nz`.  READ ONLY when that fold is active
@@ -386,7 +412,7 @@ contains
          !! kappa-shear `prandtl_turb`).  Default 1.
 
       integer :: nx, ny, nx_face, ny_uface, nx_vface, ny_face, nz
-      logical :: do_stress, do_drag, do_remnant, solve_mom, do_corner
+      logical :: do_stress, do_drag, do_remnant, solve_mom, do_corner, do_top
       real(wp) :: rho0_l, corner_prandtl_l
 
       nx = grid%nx_total
@@ -401,6 +427,8 @@ contains
       ! supplied the corresponding face field (driver wires both together).
       do_stress = this%implicit_stress .and. present(tau_u) .and. present(tau_v)
       do_drag = this%implicit_drag .and. present(lambda_bot_u) .and. present(lambda_bot_v)
+      do_top = this%implicit_top_drag .and. present(lambda_top_u) .and. &
+               present(lambda_top_v) .and. present(cover_u) .and. present(cover_v)
       do_remnant = present(visc_rem_u) .and. present(visc_rem_v)
       solve_mom = .true.
       if (present(remnant_only)) solve_mom = .not. remnant_only
@@ -429,6 +457,7 @@ contains
             this%a_diag_u%data, this%b_diag_u%data, &
             this%c_diag_u%data, this%rhs_u%data, &
             do_stress, do_drag, rho0_l, tau_u, lambda_bot_u, &
+            do_top, lambda_top_u, cover_u, &
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
@@ -440,6 +469,7 @@ contains
             this%a_diag_v%data, this%b_diag_v%data, &
             this%c_diag_v%data, this%rhs_v%data, &
             do_stress, do_drag, rho0_l, tau_v, lambda_bot_v, &
+            do_top, lambda_top_v, cover_v, &
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
@@ -452,7 +482,7 @@ contains
          ! K_v=0 config would otherwise silently leave visc_rem stale).
          ! A corner viscosity source likewise keeps the solve alive.
          if (this%K_v_momentum <= 0.0_wp .and. .not. do_stress .and. .not. do_drag &
-             .and. .not. do_remnant .and. .not. do_corner) return
+             .and. .not. do_top .and. .not. do_remnant .and. .not. do_corner) return
          call fill_kv_scalar_buf(this%kv_scalar_buf%data, &
                                  this%K_v_momentum, nx, ny, nz)
          call diffuse_velocity_columns_impl( &
@@ -462,6 +492,7 @@ contains
             this%a_diag_u%data, this%b_diag_u%data, &
             this%c_diag_u%data, this%rhs_u%data, &
             do_stress, do_drag, rho0_l, tau_u, lambda_bot_u, &
+            do_top, lambda_top_u, cover_u, &
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
@@ -473,6 +504,7 @@ contains
             this%a_diag_v%data, this%b_diag_v%data, &
             this%c_diag_v%data, this%rhs_v%data, &
             do_stress, do_drag, rho0_l, tau_v, lambda_bot_v, &
+            do_top, lambda_top_v, cover_v, &
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
@@ -799,6 +831,7 @@ contains
                                                  a_diag, b_diag, c_diag, rhs, &
                                                  do_stress, do_drag, rho0, &
                                                  tau_face, lambda_bot, &
+                                                 do_top, lambda_top, cover_face, &
                                                  solve_momentum, &
                                                  do_remnant, visc_rem_out, &
                                                  hvel_mom6, hbbl_visc, &
@@ -849,6 +882,15 @@ contains
       real(wp), intent(in), optional :: lambda_bot(nu, nv)
          !! Bottom-drag Rayleigh rate λ (1/s) on this face.  Present iff
          !! `do_drag`.
+      logical, intent(in) :: do_top
+         !! Fold the ice-shelf top drag into the `k = nz` diagonal AND
+         !! mask the wind-stress RHS by `(1 − cover_face)`.
+      real(wp), intent(in), optional :: lambda_top(nu, nv)
+         !! Top-drag Rayleigh rate λ (1/s) on this face.  Present iff
+         !! `do_top`.
+      real(wp), intent(in), optional :: cover_face(nu, nv)
+         !! Face ice-cover mask (0 open, 1 under ice), the OR of the two
+         !! abutting cells (`rdb_ocean_top_drag`).  Present iff `do_top`.
       logical, intent(in) :: hvel_mom6
          !! MOM6 HARMONIC_VISC parity for `h_u` + `h_shear` (see the slot-type
          !! docstring).  `.false.` => the historical arithmetic-`h_u` /
@@ -916,7 +958,7 @@ contains
       real(wp) :: zacc, z2, botfn, h_harm, h_arith, h_delta, hl_c, hr_c, i_hbbl
       real(wp) :: nu_face_k, nu_face_kp1, alpha, beta, denom
       real(wp) :: botfn_int, kv_bbl, bbl_thick
-      real(wp) :: inv_rho0
+      real(wp) :: inv_rho0, wind_open
       real(wp), parameter :: EPS_HVEL = 1.0e-30_wp
          !! MOM6 `h_neglect` analogue in the harmonic mean / HBBL inverse.
       real(wp), parameter :: STRESS_H_MIN = 1.0e-3_wp
@@ -939,7 +981,7 @@ contains
                hf_km1, hf_k, hf_kp1, dz_bot, dz_top, &
                nu_face_k, nu_face_kp1, alpha, beta, denom, k, &
                hvel, zint, zacc, z2, botfn, botfn_int, &
-               h_harm, h_arith, h_delta, hl_c, hr_c)
+               h_harm, h_arith, h_delta, hl_c, hr_c, wind_open)
          ! Neighbour cell indices for averaging h.  (i_c2, j_c2) is the
          ! SECOND end corner of this face for the corner-viscosity
          ! add-on (the first is (i, j) on both staggerings): a u-face
@@ -1186,6 +1228,21 @@ contains
             c_diag(i, j, nz) = 0.0_wp
             b_diag(i, j, nz) = 1.0_wp + beta
          end if
+         ! Ice-shelf top-drag stress BC (Roundabout surface = k=nz; the
+         ! MIRROR of the bed row's `dt·λ_bot` fold above).  λ_top is the
+         ! Rayleigh RATE the top-drag slot already formed and already
+         ! cover- and wet-masked, so an OPEN face contributes an exact
+         ! zero here.  A drag is a SINK ⇒ POSITIVE diagonal add ⇒
+         ! |amplification| ≤ 1 for ANY h/dt, which is the whole point on
+         ! the thin top layers a sigma coordinate leaves near a grounding
+         ! line.  At nz = 1 the `if (nz > 1)` block above is skipped and
+         ! this row IS the bed row: one layer then carries the bottom
+         ! drag, the top drag and the wind, which is exactly right.
+         ! Gated INSIDE the single DC (no split loop — NVHPC penalty);
+         ! `lambda_top` is guaranteed present when `do_top`.
+         if (do_top) then
+            b_diag(i, j, nz) = b_diag(i, j, nz) + dt*lambda_top(i, j)
+         end if
          ! Surface wind-stress Neumann BC (Roundabout surface = k=nz; MIRROR of
          ! MOM6 k=1).  The free-surface flux is the prescribed kinematic
          ! stress τ/ρ₀, a RHS source — the DIAGONAL is unchanged.  The row
@@ -1198,9 +1255,23 @@ contains
          ! `min` of the two bounding cells' wet/dry mask (as the explicit
          ! kernel does) so a land face receives no stress.  Gated INSIDE
          ! the single DC.
+         ! ICE COVER: under a shelf there is no atmosphere, so the wind
+         ! RHS is scaled by `(1 − cover_face)` — a covered face takes the
+         ! top DRAG (the diagonal add above) and not the wind.  That makes
+         ! the implicit path correct on its own, without depending on any
+         ! other branch to zero `tau` under cover.  Note the deliberate
+         ! asymmetry with the EXPLICIT top-drag path, which adds a drag
+         ! and masks nothing: there the wind apply belongs to
+         ! `ocean_surface_stress`, a separate kernel this PR does not
+         ! touch, and the shipped cavity configurations refuse a non-zero
+         ! wind outright.  Threading the cover mask through the explicit
+         ! surface-stress kernel is the follow-up that makes the two paths
+         ! agree in a configuration that has both.
          if (do_stress) then
+            wind_open = 1.0_wp
+            if (do_top) wind_open = 1.0_wp - cover_face(i, j)
             rhs(i, j, nz) = rhs(i, j, nz) + &
-                            dt*tau_face(i, j) &
+                            dt*tau_face(i, j)*wind_open &
                             *min(wet_cell(i_left, j_below), wet_cell(i_right, j_above)) &
                             *inv_rho0/max(hf_k, STRESS_H_MIN)
          end if

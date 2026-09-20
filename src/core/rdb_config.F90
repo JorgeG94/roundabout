@@ -1274,6 +1274,18 @@ module rdb_config
          !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and
          !! incompatible with HBBL-distributed drag (`hbbl > 0`); both fail
          !! loud at configure.
+      logical :: implicit_top_drag = .false.
+         !! Fold the ICE-SHELF TOP drag into the vdiff `k = nz` DIAGONAL
+         !! (`&ocean_tdrag_nml`'s mirror of `implicit_drag`) instead of
+         !! the explicit pre-solve add.  The wind stress already owns
+         !! that row's RHS; a drag is a diagonal term, so the two
+         !! compose — but on a face the ice covers, the wind RHS is
+         !! MASKED OFF here (there is no atmosphere under a shelf).
+         !! Requires `&ocean_tdrag_nml enable`; mutually exclusive with
+         !! `&ocean_tdrag_nml implicit` (both would damp the top layer)
+         !! and with `htbl > 0` (the fold is one `k = nz` rate and
+         !! cannot represent a distributed band).  All fail loud at
+         !! configure.  Default `.false.` ⇒ bit-identical.
       logical :: bbl_glue = .false.
          !! MOM6 `bottomdraglaw` coupling parity: raise the momentum-solve
          !! interface viscosity to `kv_bbl` within botfn reach of the bed
@@ -4372,6 +4384,41 @@ contains
                            "HBBL-distributed drag (ocean_bdrag hbbl > 0); use the "// &
                            "split-apply path (ocean_bdrag implicit) for HBBL")
          has_error = .true.
+      end if
+      ! `implicit_top_drag` is the `k = nz` twin of the rule above, plus
+      ! one of its own: the surface row is the row the WIND stress owns
+      ! as a Neumann RHS, so the fold both adds a diagonal term and
+      ! masks that RHS off on the faces the ice covers.  That is only
+      ! meaningful with a top drag configured.
+      if (cfg%ocean%vdiff%implicit_top_drag) then
+         if (.not. cfg%ocean%tdrag%enable) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag=.true. requires "// &
+                              "&ocean_tdrag_nml enable=.true.  The fold consumes the "// &
+                              "top-drag slot's lambda_top_u/v and its face cover "// &
+                              "masks; with the slot disabled those are placeholder "// &
+                              "arrays and the knob would silently do nothing except "// &
+                              "look like a top drag was configured.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tdrag%implicit) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag is mutually "// &
+                              "exclusive with &ocean_tdrag_nml implicit: both damp "// &
+                              "the top layer, so running both is a DOUBLE COUNT, not "// &
+                              "a stronger drag.  Pick one — the vdiff fold if the "// &
+                              "column also has real vertical viscosity to couple "// &
+                              "against, the in-kernel backward-Euler form otherwise.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tdrag%htbl > 0.0_wp) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag does not support "// &
+                              "the HTBL-distributed top drag (&ocean_tdrag_nml htbl "// &
+                              "> 0): the fold is a SINGLE k = nz Rayleigh rate on the "// &
+                              "diagonal and cannot represent a band spread over "// &
+                              "several layers (the mirror of the implicit_drag/HBBL "// &
+                              "restriction).  Use &ocean_tdrag_nml implicit for a "// &
+                              "distributed top drag.")
+            has_error = .true.
+         end if
       end if
       ! `bbl_glue` (MOM6 bottomdraglaw coupling parity, PGF_BUG.md §9)
       ! needs the harmonic-z bookkeeping that only the hvel_mom6 path
@@ -8878,6 +8925,10 @@ contains
       pl => cfg%ocean%vdiff%implicit_drag
       call g%add(nml_logical("implicit_drag", pl, &
                              "Fold bottom drag into the vdiff bed (k=1) diagonal"))
+      pl => cfg%ocean%vdiff%implicit_top_drag
+      call g%add(nml_logical("implicit_top_drag", pl, &
+                             "Fold the ice-shelf top drag into the vdiff surface "// &
+                             "(k=nz) diagonal, masking the wind RHS under cover"))
       pl => cfg%ocean%vdiff%hvel_mom6
       call g%add(nml_logical("hvel_mom6", pl, &
                              "MOM6 HARMONIC_VISC parity: harmonic momentum face "// &

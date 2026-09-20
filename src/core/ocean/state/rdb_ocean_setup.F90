@@ -3336,6 +3336,15 @@ contains
       ocean_state%tdrag%drag_bg_vel = cfg%ocean%tdrag%bg_vel
       ocean_state%tdrag%tbl_thick_min = cfg%ocean%tdrag%tbl_thick_min
       ocean_state%tdrag%implicit = cfg%ocean%tdrag%implicit
+      ! `&ocean_vdiff_nml implicit_top_drag` is the OTHER implicit form:
+      ! the fold into the vdiff `k = nz` diagonal.  Latched on both slots
+      ! — the top-drag kernel needs it to fill `lambda_top_u/v`, and the
+      ! driver reads `td%implicit_fold` to skip the explicit apply.
+      ! `validate_config` has already refused the double-count
+      ! (`implicit_top_drag` × `&ocean_tdrag_nml implicit`) and the
+      ! distributed case (`htbl > 0`).
+      ocean_state%tdrag%implicit_fold = cfg%ocean%vdiff%implicit_top_drag
+      ocean_state%vdiff%implicit_top_drag = cfg%ocean%vdiff%implicit_top_drag
       ! `rho0` is only ever used to scale the `stress_top` diagnostic into
       ! N/m^2; no dynamics reads it.  The one rho0 of record is
       ! `&ocean_ic_nml rho_0` -> `eos%rho0`, already resolved by

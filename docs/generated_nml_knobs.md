@@ -848,6 +848,7 @@ Backward-Euler vertical-friction solver knobs.
 | `implicit_stress` | `.false.` |  | Fold wind stress into the vdiff surface (k=nz) RHS |
 | `accel_visc_rem` | `.false.` |  | MOM6 parity: attenuate the slow explicit accelerations by the per-layer viscous remnant (u = u0 + visc_rem*(u-u0) after the applies); requires ocean_bt_nml correction_visc_rem |
 | `implicit_drag` | `.false.` |  | Fold bottom drag into the vdiff bed (k=1) diagonal |
+| `implicit_top_drag` | `.false.` |  | Fold the ice-shelf top drag into the vdiff surface (k=nz) diagonal, masking the wind RHS under cover |
 | `hvel_mom6` | `.false.` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
 | `hbbl_visc` | `0.1000000000E+02` |  | Bottom-layer scale for the hvel_mom6 botfn blend (MOM6 HBBL) |
 | `bbl_glue` | `.false.` |  | MOM6 bottomdraglaw coupling parity: kv_bbl botfn glue at near-bed interfaces + piston bed drag. Absorbs the spurious grounded-layer PGF as MOM6 does (PGF_BUG.md par.9). Requires hvel_mom6 + implicit_drag + linear bottom drag |
