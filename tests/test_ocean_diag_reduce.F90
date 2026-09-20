@@ -32,7 +32,9 @@
 module test_ocean_diag_reduce
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
-   use rdb_ocean_diag, only: ocean_diag_t, diag_reduce_stats
+   use rdb_ocean_diag, only: ocean_diag_t, diag_reduce_stats, diag_field_stats, &
+                             DIAG_MISSING_VALUE
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -61,8 +63,14 @@ contains
                   new_unittest("reduce_all_negative_data", test_all_negative), &
                   new_unittest("reduce_all_positive_data", test_all_positive), &
                   new_unittest("reduce_mixed_sign_data", test_mixed_sign), &
+                  new_unittest("reduce_skips_nan_missing_cells", test_reduce_skips_nan), &
+                  new_unittest("stats_mean_excludes_nan_missing_cells", test_stats_skips_nan), &
+                  new_unittest("stats_all_finite_matches_intrinsics", test_stats_all_finite), &
+                  new_unittest("stats_all_missing_reports_sentinel", test_stats_all_missing), &
                   new_unittest("device_resident_buffer_is_read_on_device", test_device_resident), &
                   new_unittest("device_resident_all_negative_buffer", test_device_resident_negative), &
+                  new_unittest("device_resident_nan_cells_are_skipped", test_device_resident_nan), &
+                  new_unittest("device_resident_stats_shim_stays_on_device", test_device_resident_stats), &
                   new_unittest("on_device_flag_lifecycle", test_on_device_flag) &
                   ]
    end subroutine collect_ocean_diag_reduce_tests
@@ -497,6 +505,342 @@ contains
          if (allocated(error)) exit checks
       end block checks
    end subroutine test_device_resident_negative
+
+   subroutine test_device_resident_nan(error)
+      !! The missing-data skip must happen where the buffer LIVES.  Same
+      !! discriminator as the two tests above -- the host copy is poisoned on
+      !! a GPU build, so only a reduction that read the mapped device copy
+      !! can return the pattern's statistics -- with NaN sentinels folded in,
+      !! so it also proves the `ieee_is_finite` guard survives device codegen
+      !! (an unguarded device `+` reduction hands back NaN; a relaxed-FP
+      !! `min`/`max` lowered to a NaN-blind select hands back the sentinel).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 12, N2 = 6, N3 = 4
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: ref(N1, N2, N3)
+      real(wp) :: vmin, vmax, vsum
+      real(wp) :: ref_min, ref_max, ref_sum, ref_abs
+      integer :: n_valid, n_finite
+
+      call fill_pattern_missing(buf, every=3)
+      ! `ref` is a plain host array that is never mapped and never poisoned.
+      ref = buf
+      call finite_reference(ref, ref_min, ref_max, ref_sum, ref_abs, n_finite)
+
+      checks: block
+         call check(error, n_finite > 0 .and. n_finite < N1*N2*N3, &
+                    "test setup: the buffer must be partly, not wholly, missing")
+         if (allocated(error)) exit checks
+         call check(error, POISON < ref_min, &
+                    "test setup: POISON must sit below the buffer minimum")
+         if (allocated(error)) exit checks
+
+         !$acc enter data copyin(buf)
+#ifdef RDB_GPU_OFFLOAD
+         call poison_host(buf)
+#endif
+         call diag_reduce_stats(buf, N1, N2, N3, vmin, vmax, vsum, n_valid)
+         !$acc exit data delete(buf)
+
+         call check(error,.not. ieee_is_nan(vsum), &
+                    "the device reduction must not let the NaN sentinel poison the sum")
+         if (allocated(error)) exit checks
+         call check(error, n_valid == n_finite, &
+                    "the device reduction must count the finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmin == ref_min, &
+                    "device vmin must be the mapped device data's finite minimum")
+         if (allocated(error)) exit checks
+         call check(error, vmax == ref_max, &
+                    "device vmax must be the mapped device data's finite maximum")
+         if (allocated(error)) exit checks
+         call check(error, abs(vsum - ref_sum) <= SUM_RTOL*ref_abs, &
+                    "device vsum must be the mapped device data's finite sum")
+         if (allocated(error)) exit checks
+         call check(error, vmin /= POISON, &
+                    "device reduction returned POISON -- it read the HOST buffer")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_device_resident_nan
+
+   subroutine test_device_resident_stats(error)
+      !! `diag_field_stats` is the emit path's entry point and it hands the
+      !! buffer on to the device kernel through ONE extra call hop, from an
+      !! assumed-shape dummy to an explicit-shape one.  That hop is exactly
+      !! where a compiler that cannot prove contiguity would sequence-
+      !! associate via a host copy — whose address misses the device present
+      !! table, so the kernel would reduce stale host memory with no error.
+      !! Same poisoned-host discriminator as above, so a shim that lost
+      !! device residency comes back as POISON rather than passing quietly.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 9, N2 = 5, N3 = 3
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: ref(N1, N2, N3)
+      real(wp) :: vmin, vmax, vmean
+      real(wp) :: ref_min, ref_max, ref_sum, ref_abs
+      integer :: n_valid, n_total, n_finite
+
+      call fill_pattern_missing(buf, every=4)
+      ref = buf
+      call finite_reference(ref, ref_min, ref_max, ref_sum, ref_abs, n_finite)
+
+      checks: block
+         call check(error, n_finite > 0 .and. n_finite < N1*N2*N3, &
+                    "test setup: the buffer must be partly, not wholly, missing")
+         if (allocated(error)) exit checks
+         call check(error, POISON < ref_min, &
+                    "test setup: POISON must sit below the buffer minimum")
+         if (allocated(error)) exit checks
+
+         !$acc enter data copyin(buf)
+#ifdef RDB_GPU_OFFLOAD
+         call poison_host(buf)
+#endif
+         call diag_field_stats(buf, on_device=.true., vmin=vmin, vmax=vmax, &
+                               vmean=vmean, n_valid=n_valid, n_total=n_total)
+         !$acc exit data delete(buf)
+
+         call check(error, vmin /= POISON, &
+                    "the stats shim returned POISON -- it lost device residency")
+         if (allocated(error)) exit checks
+         call check(error, n_total == N1*N2*N3, "n_total must be the whole buffer size")
+         if (allocated(error)) exit checks
+         call check(error, n_valid == n_finite, &
+                    "the stats shim must count the device buffer's finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmin == ref_min, "shim vmin must be the device data's finite minimum")
+         if (allocated(error)) exit checks
+         call check(error, vmax == ref_max, "shim vmax must be the device data's finite maximum")
+         if (allocated(error)) exit checks
+         call check(error, abs(vmean - ref_sum/real(n_finite, wp)) <= SUM_RTOL*ref_abs, &
+                    "shim vmean must average the device data's finite cells")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_device_resident_stats
+
+   ! ---------------------------------------------------------------------
+   ! Missing-data (NaN sentinel) handling
+   !
+   ! A diagnostic buffer legitimately carries IEEE NaN: `fill_tracer_impl`
+   ! writes one into every land column and every dynamically vanished layer,
+   ! because 0 degC / 0 PSU are legal ocean values and must not be confused
+   ! with "no water here" (`test_ocean_diag/fill_temperature_vanished_layer_is_nan`
+   ! pins that sentinel).  The emit path therefore has to reduce over the
+   ! FINITE cells only.
+   !
+   ! The bug these tests lock out: a plain `minval`/`maxval`/`sum` over the
+   ! whole buffer.  Comparisons with NaN are FALSE, so min/max silently
+   ! skipped the sentinel cells while `sum` propagated them -- the console
+   ! line came out as `min= 1.5E+01  max= 1.5E+01  mean= NaN` for runs whose
+   ! state was entirely healthy (island / coastline / vanishing-layer
+   ! configurations), and the regression suite's NaN gate failed them.
+   ! Reproduced identically under gfortran 15.1 and nvfortran 25.5.
+   ! ---------------------------------------------------------------------
+
+   subroutine fill_pattern_missing(buf, every)
+      !! Stamp the mixed-sign pattern, then overwrite every `every`-th cell
+      !! (linear order) with a quiet NaN -- the missing-data sentinel.
+      !! Plain sequential loops, never `do concurrent`: host setup only.
+      ! assumed-shape-ok: host-only setup helper, no `do concurrent` here.
+      real(wp), intent(out) :: buf(:, :, :)
+      integer, intent(in) :: every
+      integer :: i, j, k, n
+      real(wp) :: qnan
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      n = 0
+      do k = 1, size(buf, 3)
+         do j = 1, size(buf, 2)
+            do i = 1, size(buf, 1)
+               n = n + 1
+               if (mod(n, every) == 0) then
+                  buf(i, j, k) = qnan
+               else
+                  buf(i, j, k) = pattern(i, j, k)
+               end if
+            end do
+         end do
+      end do
+   end subroutine fill_pattern_missing
+
+   subroutine finite_reference(buf, ref_min, ref_max, ref_sum, ref_abs, n_finite)
+      !! Host reference over the finite cells of `buf`, built with plain
+      !! sequential loops and an explicit `ieee_is_nan` test -- never the
+      !! intrinsics under test, and never a NaN comparison.
+      ! assumed-shape-ok: host-only assertion helper, no `do concurrent` here.
+      real(wp), intent(in) :: buf(:, :, :)
+      real(wp), intent(out) :: ref_min, ref_max, ref_sum, ref_abs
+      integer, intent(out) :: n_finite
+      integer :: i, j, k
+      ref_min = huge(1.0_wp)
+      ref_max = -huge(1.0_wp)
+      ref_sum = 0.0_wp
+      ref_abs = 0.0_wp
+      n_finite = 0
+      do k = 1, size(buf, 3)
+         do j = 1, size(buf, 2)
+            do i = 1, size(buf, 1)
+               if (ieee_is_nan(buf(i, j, k))) cycle
+               ref_min = min(ref_min, buf(i, j, k))
+               ref_max = max(ref_max, buf(i, j, k))
+               ref_sum = ref_sum + buf(i, j, k)
+               ref_abs = ref_abs + abs(buf(i, j, k))
+               n_finite = n_finite + 1
+            end do
+         end do
+      end do
+   end subroutine finite_reference
+
+   subroutine test_reduce_skips_nan(error)
+      !! The fused reduction must fold only the finite cells and report how
+      !! many it folded.  Pre-fix, `vsum` came back NaN here while `vmin` /
+      !! `vmax` looked perfectly healthy.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 7, N2 = 5, N3 = 3
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: vmin, vmax, vsum
+      real(wp) :: ref_min, ref_max, ref_sum, ref_abs
+      integer :: n_valid, n_finite
+
+      call fill_pattern_missing(buf, every=4)
+      call finite_reference(buf, ref_min, ref_max, ref_sum, ref_abs, n_finite)
+
+      checks: block
+         call check(error, n_finite > 0 .and. n_finite < N1*N2*N3, &
+                    "test setup: the buffer must be partly, not wholly, missing")
+         if (allocated(error)) exit checks
+
+         call diag_reduce_stats(buf, N1, N2, N3, vmin, vmax, vsum, n_valid)
+
+         call check(error,.not. ieee_is_nan(vsum), &
+                    "the NaN missing sentinel must not poison the sum")
+         if (allocated(error)) exit checks
+         call check(error, n_valid == n_finite, "n_valid must count the finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmin == ref_min, "vmin must be the minimum over finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmax == ref_max, "vmax must be the maximum over finite cells")
+         if (allocated(error)) exit checks
+         call check(error, abs(vsum - ref_sum) <= SUM_RTOL*ref_abs, &
+                    "vsum must be the sum over finite cells")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_reduce_skips_nan
+
+   subroutine test_stats_skips_nan(error)
+      !! The emitted `[diag]` statistic: mean over the finite cells, divided
+      !! by the VALID count -- not by the array size, which would silently
+      !! drag the mean toward zero even once the NaN itself was handled.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 9, N2 = 6, N3 = 4
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: vmin, vmax, vmean
+      real(wp) :: ref_min, ref_max, ref_sum, ref_abs, ref_mean, wrong_mean
+      integer :: n_valid, n_total, n_finite
+
+      call fill_pattern_missing(buf, every=5)
+      call finite_reference(buf, ref_min, ref_max, ref_sum, ref_abs, n_finite)
+      ref_mean = ref_sum/real(n_finite, wp)
+      wrong_mean = ref_sum/real(N1*N2*N3, wp)
+
+      checks: block
+         call check(error, n_finite > 0 .and. n_finite < N1*N2*N3, &
+                    "test setup: the buffer must be partly, not wholly, missing")
+         if (allocated(error)) exit checks
+         call check(error, abs(ref_mean - wrong_mean) > SUM_RTOL*ref_abs, &
+                    "test setup: the two divisors must give distinguishable means")
+         if (allocated(error)) exit checks
+
+         call diag_field_stats(buf, on_device=.false., vmin=vmin, vmax=vmax, &
+                               vmean=vmean, n_valid=n_valid, n_total=n_total)
+
+         call check(error,.not. ieee_is_nan(vmean), &
+                    "the emitted mean must not be NaN when the field itself is healthy")
+         if (allocated(error)) exit checks
+         call check(error, n_total == N1*N2*N3, "n_total must be the whole buffer size")
+         if (allocated(error)) exit checks
+         call check(error, n_valid == n_finite, "n_valid must count the finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmin == ref_min, "vmin must be the minimum over finite cells")
+         if (allocated(error)) exit checks
+         call check(error, vmax == ref_max, "vmax must be the maximum over finite cells")
+         if (allocated(error)) exit checks
+         call check(error, abs(vmean - ref_mean) <= SUM_RTOL*ref_abs, &
+                    "the mean must divide the finite sum by the VALID cell count")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_stats_skips_nan
+
+   subroutine test_stats_all_finite(error)
+      !! No missing cell anywhere -- the overwhelmingly common case, and the
+      !! one that must not move: every case in the regression corpus without
+      !! land or a vanishing layer has to keep emitting the console numbers
+      !! it always did.  The statistic must take the UNMASKED intrinsic
+      !! branch and divide by the full size.
+      !!
+      !! Exactness follows this file's stated policy: `min`/`max` are
+      !! order-independent and asserted bit-identical to the intrinsics; the
+      !! mean carries a float `+` and so is compared within SUM_RTOL, scaled
+      !! by the mean of |buf|.  (Asserting the mean bit-identical to a
+      !! separately-compiled `sum(buf)/N` expression fails on nvfortran,
+      !! which reassociates the two sums differently -- a property of the
+      !! reference expression, not of the code under test, which runs the
+      !! same single `sum(buf)` it always ran.)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 11, N2 = 7, N3 = 3
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: vmin, vmax, vmean, ref_mean, tol
+      integer :: n_valid, n_total
+
+      call fill_pattern(buf, use_int=.false., shift=0.0_wp)
+      ref_mean = sum(buf)/real(N1*N2*N3, wp)
+      tol = SUM_RTOL*sum(abs(buf))/real(N1*N2*N3, wp)
+
+      checks: block
+         call diag_field_stats(buf, on_device=.false., vmin=vmin, vmax=vmax, &
+                               vmean=vmean, n_valid=n_valid, n_total=n_total)
+
+         call check(error, n_valid == N1*N2*N3 .and. n_total == N1*N2*N3, &
+                    "an all-finite buffer must report every cell valid")
+         if (allocated(error)) exit checks
+         call check(error, vmin == minval(buf), "vmin must equal minval bit-for-bit")
+         if (allocated(error)) exit checks
+         call check(error, vmax == maxval(buf), "vmax must equal maxval bit-for-bit")
+         if (allocated(error)) exit checks
+         call check(error, abs(vmean - ref_mean) <= tol, &
+                    "the all-finite mean must divide the whole-buffer sum by the whole size")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_stats_all_finite
+
+   subroutine test_stats_all_missing(error)
+      !! A wholly dry / wholly masked field: nothing to average.  Reporting
+      !! the reduction's untouched `+huge` / `-huge` seeds would be nonsense
+      !! and a 0 would read as a legal ocean value, so all three statistics
+      !! come back as the missing-value sentinel.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N1 = 4, N2 = 3, N3 = 2
+      real(wp) :: buf(N1, N2, N3)
+      real(wp) :: vmin, vmax, vmean
+      integer :: n_valid, n_total
+
+      call fill_pattern_missing(buf, every=1)
+
+      checks: block
+         call diag_field_stats(buf, on_device=.false., vmin=vmin, vmax=vmax, &
+                               vmean=vmean, n_valid=n_valid, n_total=n_total)
+
+         call check(error, n_valid == 0, "an all-NaN buffer must report zero valid cells")
+         if (allocated(error)) exit checks
+         call check(error, n_total == N1*N2*N3, "n_total must be the whole buffer size")
+         if (allocated(error)) exit checks
+         call check(error, vmean == DIAG_MISSING_VALUE, &
+                    "an all-missing field's mean must be the missing-value sentinel")
+         if (allocated(error)) exit checks
+         call check(error, vmin == DIAG_MISSING_VALUE .and. vmax == DIAG_MISSING_VALUE, &
+                    "an all-missing field's min/max must be the missing-value sentinel")
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_stats_all_missing
 
    subroutine poison_host(buf)
       !! Overwrite the HOST copy of an already-mapped buffer.  A plain
