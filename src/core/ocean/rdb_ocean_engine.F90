@@ -124,7 +124,7 @@ module rdb_ocean_engine
                               configure_ocean_wetdry, &
                               configure_ocean_sponge
    use rdb_ocean_stability_audit, only: ocean_stability_audit
-   use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference
+   use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference, ocean_sponge_refresh_target
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_diag_fills, only: set_diag_remap_method, parse_diag_remap_scheme, &
                                    set_diag_mask_vanished
@@ -1059,6 +1059,16 @@ contains
       call engine%bc_source%update(t, engine%state%bc)
 
       call ocean_porous_refresh(engine%grid, engine%state%metrics, engine%state%multilayer)
+
+      ! PR-23b: rebuild the ANALYTIC sponge target on the live layer
+      ! geometry, once per outer step, beside the porous refresh and
+      ! before the dyn step -- so the whole step relaxes toward the
+      ! geopotential profile that was asked for rather than toward the
+      ! t = 0 layer positions.  No-op unless `&ocean_sponge_nml
+      ! target_source = "linear_z"`, so every other configuration is
+      ! bit-identical.
+      call ocean_sponge_refresh_target(engine%grid, engine%state%sponge, &
+                                       engine%state%multilayer)
 
       if (engine%n_inner >= 1) then
          call ocean_dyn_step_split(engine%grid, engine%state%metrics, engine%state%dyn, &

@@ -463,11 +463,54 @@ module rdb_config
          !! summed at overlaps. `"file"` recognised but aborts at
          !! `validate_config` in v1 (PR-23b, needs the PR-14 reader).
       character(len=16) :: target_source = "ic"
-         !! Reference-state source. `"ic"` (default, implemented): snapshot
-         !! the seeded initial condition (reachable as a "nudge toward a
-         !! parent climatology" via `&ocean_zinit_nml`, no new reader).
-         !! `"file"` recognised but aborts at `validate_config` in v1
-         !! (PR-23b).
+         !! Reference-state source.
+         !!
+         !! `"ic"` (default, implemented): snapshot the seeded initial
+         !! condition (reachable as a "nudge toward a parent climatology"
+         !! via `&ocean_zinit_nml`, no new reader).
+         !!
+         !! `"linear_z"`: an ANALYTIC affine geopotential profile,
+         !! `T(z) = lin_t_ref + lin_dt_dz*z` and the salinity twin,
+         !! re-evaluated on the LIVE layer geometry once per outer step.
+         !! Independent of the initial condition, which is what makes an
+         !! ISOMIP+ Ocean1 / Ocean2 (restore to a different water mass
+         !! than you start from) expressible. Every tracer that is NOT
+         !! temperature or salinity keeps the `"ic"` snapshot, and so do
+         !! `u_ref`/`v_ref`.
+         !!
+         !! `"file"` recognised but aborts at `validate_config` (PR-23b).
+      character(len=16) :: ramp = "cosine"
+         !! Shape of the `damp_source="band"` ramp from the sponge-tagged
+         !! wall (`d = 0`) inward.
+         !!
+         !! `"cosine"` (default, bit-identical): `0.5*(1 + cos(pi*d/band))`
+         !! — the legacy band kernel's own ramp.
+         !!
+         !! `"linear"`: `(band - d - 0.5)/band`, which is the CELL-CENTRE
+         !! evaluation of a rate that rises linearly from zero at the
+         !! interior edge of the band to full `sponge_strength` at the
+         !! wall. That is ISOMIP+ Eq. (20),
+         !! `gamma(x) = gamma0*max(0, (x - x_r0)/(x_r1 - x_r0))`
+         !! (Asay-Davis et al. 2016), with `gamma0 = sponge_strength` and
+         !! `band = (x_r1 - x_r0)/dx` cells — no separate `tau_boundary`
+         !! or x-range knob is needed, because the existing strength is
+         !! already `1/tau` in 1/s and the existing width already names
+         !! the range.
+      real(wp) :: lin_t_ref = 0.0_wp
+         !! `target_source="linear_z"`: potential temperature (degC) at
+         !! the `z = 0` datum. Same convention as `&ocean_zinit_nml
+         !! lin_t_ref`.
+      real(wp) :: lin_dt_dz = 0.0_wp
+         !! `target_source="linear_z"`: dT/dz (degC/m) with **z positive
+         !! UP**, so a stable column has `lin_dt_dz > 0`. Same convention
+         !! as `&ocean_zinit_nml lin_dt_dz`.
+      real(wp) :: lin_s_ref = 35.0_wp
+         !! `target_source="linear_z"`: salinity (PSU) at the `z = 0`
+         !! datum. Same convention as `&ocean_zinit_nml lin_s_ref`.
+      real(wp) :: lin_ds_dz = 0.0_wp
+         !! `target_source="linear_z"`: dS/dz (PSU/m), z positive UP, so a
+         !! stable column has `lin_ds_dz < 0`. Same convention as
+         !! `&ocean_zinit_nml lin_ds_dz`.
       logical :: relax_uv = .true.
          !! Relax `u`/`v` toward `u_ref`/`v_ref`. Default `.true.` matches
          !! today's legacy path (momentum is the one thing the legacy
@@ -5758,11 +5801,30 @@ contains
                               "': must be 'band' ('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
          end if
-         if (.not. sponge_source_is_implemented(cfg%ocean%sponge%target_source)) then
+         if (.not. sponge_target_is_implemented(cfg%ocean%sponge%target_source)) then
             call logger%error("&ocean_sponge_nml enable=.true. with unimplemented "// &
                               "target_source = '"//trim(cfg%ocean%sponge%target_source)// &
-                              "': must be 'ic' ('file' is PR-23b, needs the PR-14 reader)")
+                              "': must be 'ic' or 'linear_z' "// &
+                              "('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
+         end if
+         if (.not. sponge_ramp_is_valid(cfg%ocean%sponge%ramp)) then
+            call logger%error("&ocean_sponge_nml ramp = '"//trim(cfg%ocean%sponge%ramp)// &
+                              "': must be 'cosine' (default, the legacy band shape) "// &
+                              "or 'linear' (ISOMIP+ Eq. 20)")
+            has_error = .true.
+         end if
+         ! A `linear_z` target with both gradients AND both references left
+         ! at their defaults would relax toward T = 0 degC / S = 35 PSU
+         ! everywhere — almost certainly not what was meant, and silent.
+         if (trim(cfg%ocean%sponge%target_source) == "linear_z" .and. &
+             cfg%ocean%sponge%lin_t_ref == 0.0_wp .and. &
+             cfg%ocean%sponge%lin_dt_dz == 0.0_wp .and. &
+             cfg%ocean%sponge%lin_ds_dz == 0.0_wp) then
+            call logger%warning("&ocean_sponge_nml target_source='linear_z' with "// &
+                                "lin_t_ref = lin_dt_dz = lin_ds_dz = 0: the sponge will "// &
+                                "relax toward a uniform T = 0 degC column. Set the "// &
+                                "lin_* profile knobs.")
          end if
          ! relax_h (interior-interface thickness damping) is NOT implemented
          ! in PR-23 v1 — deferred to PR-23b alongside the file targets (the
@@ -6554,19 +6616,52 @@ contains
       end do
    end function diag_density_levels_ok
    pure logical function sponge_source_is_implemented(tag) result(ok)
-      !! .true. iff `&ocean_sponge_nml damp_source` / `target_source` names
-      !! a source PR-23 v1 actually fills. `"file"` is a recognised name
-      !! (PR-23b, needs the PR-14 reader) but has no kernel yet — a source
-      !! with no filler must abort, not silently build an all-zero map /
-      !! all-zero reference (the `lateral_closure_is_implemented` idiom).
+      !! .true. iff `&ocean_sponge_nml damp_source` names a source that is
+      !! actually filled. `"file"` is a recognised name (PR-23b, needs the
+      !! PR-14 reader) but has no kernel yet — a source with no filler
+      !! must abort, not silently build an all-zero map (the
+      !! `lateral_closure_is_implemented` idiom).
+      !!
+      !! Kept under its original name because it is the DAMP axis; the
+      !! TARGET axis has its own predicate below. They were one function
+      !! until `"linear_z"` arrived, at which point a shared list would
+      !! have accepted `damp_source="linear_z"` — a spelling with no
+      !! meaning on that axis — as valid.
       character(len=*), intent(in) :: tag
       select case (trim(tag))
-      case ("band", "ic")
+      case ("band")
          ok = .true.
       case default
          ok = .false.
       end select
    end function sponge_source_is_implemented
+
+   pure logical function sponge_target_is_implemented(tag) result(ok)
+      !! .true. iff `&ocean_sponge_nml target_source` names a reference
+      !! state that is actually filled: `"ic"` (snapshot of the seeded
+      !! initial condition) or `"linear_z"` (analytic affine geopotential
+      !! profile, re-evaluated on the live layer geometry). `"file"` is
+      !! recognised but has no reader yet (PR-23b).
+      character(len=*), intent(in) :: tag
+      select case (trim(tag))
+      case ("ic", "linear_z")
+         ok = .true.
+      case default
+         ok = .false.
+      end select
+   end function sponge_target_is_implemented
+
+   pure logical function sponge_ramp_is_valid(tag) result(ok)
+      !! .true. iff `&ocean_sponge_nml ramp` names a band shape the
+      !! `damp_source="band"` filler implements.
+      character(len=*), intent(in) :: tag
+      select case (trim(tag))
+      case ("cosine", "linear")
+         ok = .true.
+      case default
+         ok = .false.
+      end select
+   end function sponge_ramp_is_valid
 
    ! ==================================================================
    ! Strict-schema construction (rdb_nml_schema).  Lives here (not in
@@ -8371,7 +8466,26 @@ contains
       ps => cfg%ocean%sponge%target_source
       call g%add(nml_enum("target_source", ps, &
                           "Reference-state source", &
-                          allowed=[character(len=4) :: "ic", "file"]))
+                          allowed=[character(len=8) :: "ic", "linear_z", "file"]))
+      ps => cfg%ocean%sponge%ramp
+      call g%add(nml_enum("ramp", ps, &
+                          "Band ramp shape from the sponge wall inward "// &
+                          "('linear' is ISOMIP+ Eq. 20)", &
+                          allowed=[character(len=6) :: "cosine", "linear"]))
+      pr => cfg%ocean%sponge%lin_t_ref
+      call g%add(nml_real("lin_t_ref", pr, &
+                          "target_source='linear_z': T at the z = 0 datum", units="degC"))
+      pr => cfg%ocean%sponge%lin_dt_dz
+      call g%add(nml_real("lin_dt_dz", pr, &
+                          "target_source='linear_z': dT/dz, z positive UP "// &
+                          "(stable => > 0)", units="degC/m"))
+      pr => cfg%ocean%sponge%lin_s_ref
+      call g%add(nml_real("lin_s_ref", pr, &
+                          "target_source='linear_z': S at the z = 0 datum", units="PSU"))
+      pr => cfg%ocean%sponge%lin_ds_dz
+      call g%add(nml_real("lin_ds_dz", pr, &
+                          "target_source='linear_z': dS/dz, z positive UP "// &
+                          "(stable => < 0)", units="PSU/m"))
       pl => cfg%ocean%sponge%relax_uv
       call g%add(nml_logical("relax_uv", pl, &
                              "Relax u/v toward u_ref/v_ref"))

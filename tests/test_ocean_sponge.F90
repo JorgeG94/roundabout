@@ -41,7 +41,9 @@ module test_ocean_sponge
    use rdb_ocean_boundary_types, only: OBC_SPONGE
    use rdb_ocean_setup, only: configure_ocean_sponge
    use rdb_ocean_sponge, only: ocean_sponge_t, ocean_sponge_apply_maps, &
-                               ocean_sponge_snapshot_reference
+                               ocean_sponge_snapshot_reference, &
+                               ocean_sponge_refresh_target, sponge_band_alpha, &
+                               SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
    use rdb_ocean_console_stats, only: ocean_budget_src, ocean_heat_src_sum
    implicit none
    private
@@ -69,7 +71,21 @@ contains
                   new_unittest("sponge_source_closes_the_heat_budget", &
                                test_budget_closes), &
                   new_unittest("sponge_reference_is_the_ic_not_the_restart", &
-                               test_reference_is_ic_not_restart) &
+                               test_reference_is_ic_not_restart), &
+                  new_unittest("linear_z_target_is_the_analytic_geopotential_profile", &
+                               test_linear_z_profile), &
+                  new_unittest("linear_z_target_tracks_the_live_layer_geometry", &
+                               test_linear_z_tracks_layers), &
+                  new_unittest("linear_z_target_only_touches_sponge_cells", &
+                               test_linear_z_masked), &
+                  new_unittest("linear_z_relaxes_at_the_analytic_rate", &
+                               test_linear_z_relax_rate), &
+                  new_unittest("linear_z_target_may_differ_from_the_ic", &
+                               test_linear_z_target_not_ic), &
+                  new_unittest("target_source_ic_is_bit_identical_under_refresh", &
+                               test_refresh_noop_for_ic), &
+                  new_unittest("band_ramp_linear_is_isomip_eq20_at_cell_centres", &
+                               test_band_ramp_linear) &
                   ]
    end subroutine collect_ocean_sponge_tests
 
@@ -569,5 +585,428 @@ contains
       call sp%destroy()
       call ms%destroy()
    end subroutine test_reference_is_ic_not_restart
+
+   ! ==================================================================
+   ! PR-23b: the ANALYTIC `target_source = "linear_z"` reference
+   ! ==================================================================
+
+   subroutine seed_linear_z_case(grid, ms, sp, nx_phys, ny_phys, lambda, &
+                                 t_ref, dt_dz, s_ref, ds_dz, draft_slope)
+      !! Common fixture: a `nx_phys x ny_phys x NZ` column stack with a
+      !! non-uniform layer thickness (so a target built on layer INDEX
+      !! could never pass) and a draft that slopes in x (so a target that
+      !! forgets `z_top` could never pass either).  The sponge damps the
+      !! whole interior at `lambda` and leaves the ghosts alone.
+      type(hgrid_t), intent(inout) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_sponge_t), intent(inout) :: sp
+      integer, intent(in) :: nx_phys, ny_phys
+      real(wp), intent(in) :: lambda, t_ref, dt_dz, s_ref, ds_dz, draft_slope
+      integer :: i, j, k
+
+      call make_grid(grid, nx_phys, ny_phys, 1000.0_wp, 1000.0_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      ! Deliberately uneven layers: 10, 20, 30, 40 m bottom-up.
+      do k = 1, NZ
+         ms%h_layer(:, :, k) = 10.0_wp*real(k, wp)
+      end do
+
+      sp%enable = .true.
+      call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
+      sp%relax_tracers = .true.
+      sp%relax_uv = .false.
+      sp%target_source = "linear_z"
+      sp%lin_t_ref = t_ref
+      sp%lin_dt_dz = dt_dz
+      sp%lin_s_ref = s_ref
+      sp%lin_ds_dz = ds_dz
+      sp%idx_t = ms%idx_temperature
+      sp%idx_s = ms%idx_salinity
+      sp%idamp_h = 0.0_wp
+      do j = grid%nghost + 1, grid%nghost + ny_phys
+         do i = grid%nghost + 1, grid%nghost + nx_phys
+            sp%idamp_h(i, j) = lambda
+         end do
+      end do
+      ! Ice base deepening toward +x: z_top = slope * x_centre.
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            sp%z_top(i, j) = draft_slope*(real(i - grid%nghost, wp) - 0.5_wp)*grid%dx
+         end do
+      end do
+   end subroutine seed_linear_z_case
+
+   pure function expected_z_ctr(h_col, z_top, k, nz) result(z)
+      !! Layer-centre geopotential DEPTH, rebuilt independently of the
+      !! production recurrence: `z_top` plus every layer ABOVE k plus half
+      !! of k.  Bottom-up storage, so "above k" is k+1 .. nz.
+      integer, intent(in) :: k, nz
+      real(wp), intent(in) :: h_col(nz)
+      real(wp), intent(in) :: z_top
+      real(wp) :: z
+      integer :: m
+      z = z_top + 0.5_wp*h_col(k)
+      do m = k + 1, nz
+         z = z + h_col(m)
+      end do
+   end function expected_z_ctr
+
+   subroutine test_linear_z_profile(error)
+      !! The refreshed target must equal `v_ref - dv_dz*z_ctr` at every
+      !! layer centre, with `z_ctr` measured from the `z = 0` datum
+      !! THROUGH the ice draft.  Uneven layers + a sloping lid mean a
+      !! layer-index profile or a draft-blind profile both fail.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      ! ISOMIP+ WARM (Asay-Davis et al. 2016 Tables 4 + 6), in the
+      ! z-positive-UP convention: T0 = -1.9 degC at z = 0, Tbot = 1.0 degC
+      ! at z = z_b,deep = -720 m, so dT/dz = -(1.0 - (-1.9))/720 < 0 --
+      ! WARM is thermally UNSTABLE (CDW at depth), stabilised by the
+      ! salinity gradient.  Sbot = 34.7 gives dS/dz = -0.9/720.
+      real(wp), parameter :: T_REF = -1.9_wp, DT_DZ = -4.027777778e-3_wp
+      real(wp), parameter :: S_REF = 33.8_wp, DS_DZ = -1.25e-3_wp
+      integer, parameter :: NX_PHYS = 5, NY_PHYS = 3
+      real(wp) :: z, want_t, want_s, worst
+      integer :: i, j, k
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, 1.0e-4_wp, &
+                                 T_REF, DT_DZ, S_REF, DS_DZ, 0.05_wp)
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         worst = 0.0_wp
+         do k = 1, NZ
+            do j = grid%nghost + 1, grid%nghost + NY_PHYS
+               do i = grid%nghost + 1, grid%nghost + NX_PHYS
+                  z = expected_z_ctr(ms%h_layer(i, j, :), sp%z_top(i, j), k, NZ)
+                  want_t = T_REF - DT_DZ*z
+                  want_s = S_REF - DS_DZ*z
+                  worst = max(worst, abs(sp%ref_tracer(i, j, k, ms%idx_temperature) - want_t))
+                  worst = max(worst, abs(sp%ref_tracer(i, j, k, ms%idx_salinity) - want_s))
+               end do
+            end do
+         end do
+         call check(error, worst < 1.0e-12_wp, &
+                    "linear_z target must be v_ref - dv_dz*z_ctr at every layer centre, "// &
+                    "with z_ctr measured through the ice draft")
+         if (allocated(error)) exit checks
+
+         ! A draft-blind target would agree at i = 1 and disagree at
+         ! i = NX_PHYS; assert the x-variation is real so the test cannot
+         ! pass with z_top dropped.
+         call check(error, abs(sp%ref_tracer(grid%nghost + 1, grid%nghost + 1, NZ, &
+                                             ms%idx_temperature) &
+                               - sp%ref_tracer(grid%nghost + NX_PHYS, grid%nghost + 1, NZ, &
+                                               ms%idx_temperature)) > 1.0e-6_wp, &
+                    "the sloping draft must make the target vary in x")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_linear_z_profile
+
+   subroutine test_linear_z_tracks_layers(error)
+      !! The design decision, gated: the target is RE-EVALUATED on the
+      !! live layer geometry, not frozen at t = 0.  Thicken every layer
+      !! by 50 % (what an ALE regrid or a rising free surface does) and
+      !! refresh again; the target must move with the new layer centres.
+      !! A frozen target would be bit-identical and fail this.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      real(wp), parameter :: T_REF = 0.0_wp, DT_DZ = 1.0e-2_wp
+      integer, parameter :: NX_PHYS = 3, NY_PHYS = 3
+      real(wp) :: before, z, want
+      integer :: ip, jp, k
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, 1.0e-4_wp, &
+                                 T_REF, DT_DZ, 35.0_wp, 0.0_wp, 0.0_wp)
+         ip = grid%nghost + 2
+         jp = grid%nghost + 2
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         before = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
+
+         ms%h_layer = 1.5_wp*ms%h_layer
+         !$acc update device(ms%h_layer)
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         k = 1
+         z = expected_z_ctr(ms%h_layer(ip, jp, :), sp%z_top(ip, jp), k, NZ)
+         want = T_REF - DT_DZ*z
+         call check(error, abs(sp%ref_tracer(ip, jp, k, ms%idx_temperature) - want) < 1.0e-12_wp, &
+                    "the refreshed target must follow the LIVE layer centres")
+         if (allocated(error)) exit checks
+         call check(error, abs(sp%ref_tracer(ip, jp, k, ms%idx_temperature) - before) > 1.0e-6_wp, &
+                    "a target frozen at t = 0 would not have moved — the whole point")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_linear_z_tracks_layers
+
+   subroutine test_linear_z_masked(error)
+      !! `Idamp = 0` IS the sponge mask for the refresh too: a cell
+      !! outside the band keeps whatever `ref_tracer` it already had
+      !! (in production, the IC snapshot), bit-for-bit.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      real(wp), parameter :: SENTINEL = -12345.0_wp
+      integer, parameter :: NX_PHYS = 4, NY_PHYS = 4
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, 1.0e-4_wp, &
+                                 0.0_wp, 1.0e-2_wp, 35.0_wp, 0.0_wp, 0.0_wp)
+         ! Carve one interior cell OUT of the band and mark its target.
+         sp%idamp_h(grid%nghost + 2, grid%nghost + 2) = 0.0_wp
+         sp%ref_tracer(grid%nghost + 2, grid%nghost + 2, :, ms%idx_temperature) = SENTINEL
+         sp%ref_tracer(1, 1, :, ms%idx_temperature) = SENTINEL
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         call check(error, all(sp%ref_tracer(grid%nghost + 2, grid%nghost + 2, :, &
+                                             ms%idx_temperature) == SENTINEL), &
+                    "a cell with Idamp = 0 must be left bit-for-bit alone")
+         if (allocated(error)) exit checks
+         call check(error, all(sp%ref_tracer(1, 1, :, ms%idx_temperature) == SENTINEL), &
+                    "ghost cells (Idamp = 0) must be left alone")
+         if (allocated(error)) exit checks
+         call check(error, sp%ref_tracer(grid%nghost + 1, grid%nghost + 1, NZ, &
+                                         ms%idx_temperature) /= SENTINEL, &
+                    "...while a banded cell IS refreshed")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_linear_z_masked
+
+   subroutine test_linear_z_relax_rate(error)
+      !! A column displaced from the analytic target must relax toward it
+      !! at exactly the discrete rate the kernel advertises.  With
+      !! `phi <- phi*decay + tgt*(1-decay)` and `decay = exp(-Idamp*dt)`,
+      !! the DEVIATION obeys `d_n = d_0 * decay**n = d_0 * exp(-n*dt/tau)`
+      !! EXACTLY (not to O(dt)): the per-step map is affine with the same
+      !! fixed point every step, so the errors compose as a pure power.
+      !! Here `tau = 1/Idamp = 8640 s` (0.1 days, the ISOMIP+ value) and
+      !! 20 steps of dt = 864 s is exactly 2 e-foldings.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      real(wp), parameter :: TAU = 8640.0_wp          ! 0.1 days
+      real(wp), parameter :: LAMBDA = 1.0_wp/TAU
+      real(wp), parameter :: DT = 864.0_wp
+      integer, parameter :: NSTEPS = 20               ! n*dt/tau = 2
+      real(wp), parameter :: T_OFFSET = 3.0_wp        ! IC minus target
+      integer, parameter :: NX_PHYS = 3, NY_PHYS = 3
+      real(wp) :: tgt, got, dev, want_dev, worst
+      integer :: i, j, k, step
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, LAMBDA, &
+                                 -1.9_wp, -4.0e-3_wp, 34.2_wp, 0.0_wp, 0.02_wp)
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         ! Seed the state exactly T_OFFSET above the analytic target.
+         do k = 1, NZ
+            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
+               (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)*ms%h_layer(:, :, k)
+         end do
+         !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+
+         do step = 1, NSTEPS
+            call ocean_sponge_apply_maps(grid, sp, ms, DT)
+         end do
+         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         want_dev = T_OFFSET*exp(-real(NSTEPS, wp)*DT/TAU)
+         worst = 0.0_wp
+         do k = 1, NZ
+            do j = grid%nghost + 1, grid%nghost + NY_PHYS
+               do i = grid%nghost + 1, grid%nghost + NX_PHYS
+                  tgt = sp%ref_tracer(i, j, k, ms%idx_temperature)
+                  got = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  dev = got - tgt
+                  worst = max(worst, abs(dev - want_dev))
+               end do
+            end do
+         end do
+         call check(error, worst < 1.0e-12_wp*T_OFFSET, &
+                    "deviation from the analytic target must decay as exp(-t/tau) exactly")
+         if (allocated(error)) exit checks
+         ! Sanity: two e-foldings really did most of the work.
+         call check(error, want_dev < 0.14_wp*T_OFFSET .and. want_dev > 0.13_wp*T_OFFSET, &
+                    "20 steps of dt = tau/10 is exactly 2 e-foldings (exp(-2) = 0.1353)")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_linear_z_relax_rate
+
+   subroutine test_linear_z_target_not_ic(error)
+      !! The Ocean1 / Ocean2 property: the restoring profile is NOT the
+      !! initial condition.  Seed the column uniformly COLD, target a
+      !! WARM linear profile, and check the column moves toward the WARM
+      !! target and AWAY from the IC — which `target_source="ic"` could
+      !! never do, because there the target IS the IC and the state would
+      !! be a fixed point.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      real(wp), parameter :: T_COLD = -1.9_wp        ! ISOMIP+ COLD: uniform
+      real(wp), parameter :: T_WARM_SFC = -1.9_wp    ! ISOMIP+ WARM: T0
+      real(wp), parameter :: T_WARM_DTDZ = -4.027777778e-3_wp  ! -(1.0-(-1.9))/720
+      real(wp), parameter :: LAMBDA = 1.0e-3_wp, DT = 100.0_wp
+      integer, parameter :: NSTEPS = 5
+      integer, parameter :: NX_PHYS = 3, NY_PHYS = 3
+      real(wp) :: t_bed_before, t_bed_after, tgt_bed
+      integer :: ip, jp, step
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, LAMBDA, &
+                                 T_WARM_SFC, T_WARM_DTDZ, 34.7_wp, -1.25e-3_wp, 0.0_wp)
+         ip = grid%nghost + 2
+         jp = grid%nghost + 2
+         ! Uniform COLD initial condition.
+         ms%tracers(ms%idx_temperature)%hTr = T_COLD*ms%h_layer
+         t_bed_before = T_COLD
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         do step = 1, NSTEPS
+            call ocean_sponge_apply_maps(grid, sp, ms, DT)
+         end do
+         !$acc update self(sp%ref_tracer)
+         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         tgt_bed = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
+         t_bed_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1)/ms%h_layer(ip, jp, 1)
+
+         call check(error, tgt_bed > T_COLD + 0.1_wp, &
+                    "the WARM linear target must be warmer than the COLD IC at the bed")
+         if (allocated(error)) exit checks
+         call check(error, t_bed_after > t_bed_before, &
+                    "the bed layer must warm toward the target, away from the IC")
+         if (allocated(error)) exit checks
+         call check(error, t_bed_after < tgt_bed, &
+                    "...without overshooting the target")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_linear_z_target_not_ic
+
+   subroutine test_refresh_noop_for_ic(error)
+      !! Default-off contract: with `target_source = "ic"` (the default)
+      !! the refresh is a bit-for-bit no-op, so every shipped namelist
+      !! and every existing test is unaffected by this feature existing.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_sponge_t) :: sp
+      real(wp), allocatable :: before(:, :, :, :)
+      integer, parameter :: NX_PHYS = 4, NY_PHYS = 4
+
+      checks: block
+         call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, 1.0e-3_wp, &
+                                 0.0_wp, 1.0e-2_wp, 35.0_wp, -1.0e-3_wp, 0.01_wp)
+         sp%target_source = "ic"
+         sp%ref_tracer = 7.25_wp
+         before = sp%ref_tracer
+
+         !$acc enter data copyin(ms, sp)
+         call ms%enter_data()
+         call sp%enter_data()
+         call ocean_sponge_refresh_target(grid, sp, ms)
+         !$acc update self(sp%ref_tracer)
+         call sp%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sp)
+
+         call check(error, all(sp%ref_tracer == before), &
+                    "target_source='ic' must make the refresh a bit-for-bit no-op")
+      end block checks
+      call sp%destroy()
+      call ms%destroy()
+   end subroutine test_refresh_noop_for_ic
+
+   subroutine test_band_ramp_linear(error)
+      !! `ramp = "linear"` is the CELL-CENTRE evaluation of ISOMIP+
+      !! Eq. (20), `gamma(x) = gamma0*(x - x_r0)/(x_r1 - x_r0)`
+      !! (Asay-Davis et al. 2016, their gamma0 = 10/day over
+      !! 790 <= x <= 800 km).  On a 2 km grid that band is 5 cells, and
+      !! the cell centres sit at x = 799, 797, 795, 793, 791 km, i.e.
+      !! gamma/gamma0 = 0.9, 0.7, 0.5, 0.3, 0.1 running inward from the
+      !! wall (d = 0 .. 4) — exactly (band - d - 0.5)/band with band = 5.
+      !! The cosine branch must be untouched.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: PI_T = acos(-1.0_wp)
+      real(wp), parameter :: WANT(5) = [0.9_wp, 0.7_wp, 0.5_wp, 0.3_wp, 0.1_wp]
+      integer, parameter :: BAND = 5
+      real(wp) :: band_mean
+      integer :: d
+
+      checks: block
+         do d = 0, BAND - 1
+            if (abs(sponge_band_alpha(d, BAND, SPONGE_RAMP_LINEAR) - WANT(d + 1)) &
+                > 1.0e-14_wp) then
+               call check(error, .false., "linear ramp must be ISOMIP+ Eq. (20) at cell centres")
+               exit checks
+            end if
+            if (abs(sponge_band_alpha(d, BAND, SPONGE_RAMP_COSINE) &
+                    - 0.5_wp*(1.0_wp + cos(PI_T*real(d, wp)/real(BAND, wp)))) > 1.0e-14_wp) then
+               call check(error, .false., "cosine ramp must stay the legacy shape bit-for-bit")
+               exit checks
+            end if
+         end do
+         ! The linear ramp integrates to exactly half the wall strength,
+         ! which is what "ramps linearly to zero" means for a band mean.
+         band_mean = 0.0_wp
+         do d = 0, BAND - 1
+            band_mean = band_mean + sponge_band_alpha(d, BAND, SPONGE_RAMP_LINEAR)
+         end do
+         band_mean = band_mean/real(BAND, wp)
+         call check(error, abs(band_mean - 0.5_wp) < 1.0e-14_wp, &
+                    "the linear band mean must be 0.5")
+      end block checks
+   end subroutine test_band_ramp_linear
 
 end module test_ocean_sponge
