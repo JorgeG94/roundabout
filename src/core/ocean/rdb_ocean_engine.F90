@@ -736,7 +736,17 @@ contains
       ! before enter_data. See rdb_ocean_stability_audit.F90 for the
       ! motivating failure (a global tripolar aquaplanet NaN, diagnosed
       ! only after the fact — this audit is the fix).
-      call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, ierr=ierr)
+      ! `bt_H_ref` (b - z_draft afloat, 0 where grounded) is the COLUMN the
+      ! vertical coordinate divides, so it — not the bathymetry — is what
+      ! the terrain-following stiffness check must see under an ice shelf.
+      ! It exists only once the barotropic datum has been built.
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, &
+                                    ierr=ierr, &
+                                    column=engine%state%dyn%bt_work%bt_H_ref)
+      else
+         call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, ierr=ierr)
+      end if
       if (setup_failed(ierr)) return
 
       ! Barotropic linear wave drag: host-side r_H map + h->face average.

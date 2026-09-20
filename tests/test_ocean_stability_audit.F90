@@ -14,7 +14,9 @@
 !!      regression numbers from the real failure (nu_h=2e4, dt=900,
 !!      dx=3.3km) and a Cartesian control that must NOT trip.
 module test_ocean_stability_audit
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, &
+                            VCOORD_SIGMA, VCOORD_ZSIGMA, VCOORD_ZSTAR, &
+                            VCOORD_ZSTAR_SIGMA, VCOORD_Z_FIXED, VCOORD_RHO
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -27,7 +29,11 @@ module test_ocean_stability_audit
                                         ocean_diffusive_number, &
                                         ocean_munk_delta_m, &
                                         ocean_munk_required_nu_h, &
-                                        ocean_viscous_cfl_limit
+                                        ocean_viscous_cfl_limit, &
+                                        ocean_sigma_stiffness, &
+                                        ocean_sigma_stiffness_worst, &
+                                        ocean_sigma_stiffness_limit, &
+                                        ocean_vcoord_is_terrain_following
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use testdrive, only: new_unittest, unittest_type, error_type, check
    implicit none
@@ -53,7 +59,15 @@ contains
                   new_unittest("audit_kappa_h_spherical_uses_real_metric", &
                                test_audit_kappa_h_spherical_uses_real_metric), &
                   new_unittest("audit_ah_max_below_nu_h_warns_only", &
-                               test_audit_ah_max_below_nu_h_warns_only) &
+                               test_audit_ah_max_below_nu_h_warns_only), &
+                  new_unittest("sigma_stiffness_formula", test_sigma_stiffness_formula), &
+                  new_unittest("sigma_stiffness_vcoord_gate", test_sigma_stiffness_vcoord_gate), &
+                  new_unittest("sigma_stiffness_worst_finds_isomip_sidewall", &
+                               test_sigma_stiffness_worst_finds_isomip_sidewall), &
+                  new_unittest("sigma_stiffness_land_is_not_a_stiff_face", &
+                               test_sigma_stiffness_land_is_not_a_stiff_face), &
+                  new_unittest("sigma_stiffness_uniform_column_is_zero", &
+                               test_sigma_stiffness_uniform_column_is_zero) &
                   ]
    end subroutine collect_ocean_stability_audit_tests
 
@@ -308,5 +322,193 @@ contains
                     "ah_max < nu_h must warn, not fail configure")
       end block checks
    end subroutine test_audit_ah_max_below_nu_h_warns_only
+
+   ! -----------------------------------------------------------------
+   ! Terrain-following stiffness (rx0) — Check 5
+   !
+   ! Motivating failure: ISOMIP+ Ocean0 on the idealised draft
+   ! (`validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`)
+   ! runs clean for 3 days and then drives the barotropic free surface
+   ! below the bed at the trough sidewall, where the ISOMIP+ bathymetry
+   ! drops ~122 m across ONE 2 km cell and a 23 m water column sits
+   ! beside a 146 m one. Nothing said so at configure time. Every number
+   ! below is measured off that configuration's own `water_column`
+   ! diagnostic.
+   ! -----------------------------------------------------------------
+
+   subroutine test_sigma_stiffness_formula(error)
+      !! `rx0 = |H_a-H_b|/(H_a+H_b)`, pinned on the ISOMIP+ Ocean0
+      !! sidewall pair, plus the two limits and the degenerate guard.
+      type(error_type), allocatable, intent(out) :: error
+
+      ! The worst wet-wet face of ocean0_idealised_draft: 23.09 m beside
+      ! 145.55 m across one 2 km face on the trough sidewall.
+      call check(error, abs(ocean_sigma_stiffness(23.09_wp, 145.55_wp) &
+                            - 0.7261622390891841_wp) < 1.0e-12_wp, &
+                 "ISOMIP+ Ocean0 sidewall regression number: rx0 = 0.726")
+      if (allocated(error)) return
+      call check(error, ocean_sigma_stiffness(23.09_wp, 145.55_wp) &
+                 > 3.0_wp*ocean_sigma_stiffness_limit(), &
+                 "that face is more than 3x the 0.2 bound")
+      if (allocated(error)) return
+      ! Symmetric in its arguments.
+      call check(error, abs(ocean_sigma_stiffness(145.55_wp, 23.09_wp) &
+                            - ocean_sigma_stiffness(23.09_wp, 145.55_wp)) == 0.0_wp, &
+                 "rx0 must be symmetric across the face")
+      if (allocated(error)) return
+      ! Equal columns: no stiffness at all, at any depth.
+      call check(error, ocean_sigma_stiffness(720.0_wp, 720.0_wp) == 0.0_wp, &
+                 "two equal columns must give exactly zero")
+      if (allocated(error)) return
+      ! Degenerate pair => "no constraint expressible", never a NaN and
+      ! never 1 (which would make every coastline the worst face).
+      call check(error, ocean_sigma_stiffness(0.0_wp, 100.0_wp) == 0.0_wp, &
+                 "a non-positive column returns 0, not 1 and not NaN")
+      if (allocated(error)) return
+      call check(error, abs(ocean_sigma_stiffness(20.0_wp, 100.0_wp) &
+                            - 0.6666666666666666_wp) < 1.0e-12_wp, &
+                 "plain algebra: |20-100|/120 = 2/3")
+   end subroutine test_sigma_stiffness_formula
+
+   subroutine test_sigma_stiffness_vcoord_gate(error)
+      !! The check must run for every coordinate whose interfaces follow
+      !! the topography and for no other. `VCOORD_ZSTAR` is IN because on
+      !! the ocean path it shares the `VCOORD_SIGMA` branch of
+      !! `ocean_vcoord_compute_target_h`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: k
+      integer :: following(4), flat(4)
+
+      following = [VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_ZSIGMA, VCOORD_ZSTAR_SIGMA]
+      flat = [VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, VCOORD_Z_FIXED, VCOORD_RHO]
+
+      do k = 1, 4
+         call check(error, ocean_vcoord_is_terrain_following(following(k)), &
+                    "sigma / zstar / zsigma / zstar_sigma are terrain-following")
+         if (allocated(error)) return
+      end do
+      do k = 1, 4
+         call check(error,.not. ocean_vcoord_is_terrain_following(flat(k)), &
+                    "lagrangian / eulerian_z / z_fixed / rho do not follow the topography")
+         if (allocated(error)) return
+      end do
+   end subroutine test_sigma_stiffness_vcoord_gate
+
+   subroutine test_sigma_stiffness_worst_finds_isomip_sidewall(error)
+      !! An ISOMIP+-shaped sidewall in miniature: one row of thin wet
+      !! columns between grounded land and the deep trough. The scan must
+      !! find THAT face, report both thicknesses and the axis, and count
+      !! the faces over bound.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NG = 9
+      real(wp) :: column(NG, NG), wet(NG, NG)
+      real(wp) :: rx0_max, h_thin, h_thick
+      integer :: i, j, i_at, j_at, n_over, n_face
+      logical :: is_x
+
+      ! 5x5 physical interior (nghost = 2 => i,j = 3..7).
+      ! j = 3   : land (grounded ice meets the bed)
+      ! j = 4   : the thin sidewall row, 23.09 m
+      ! j = 5..7: the trough, 145.55 m
+      wet = 0.0_wp
+      column = 0.0_wp
+      do j = 4, 7
+         do i = 3, 7
+            wet(i, j) = 1.0_wp
+            if (j == 4) then
+               column(i, j) = 23.09_wp
+            else
+               column(i, j) = 145.55_wp
+            end if
+         end do
+      end do
+
+      call ocean_sigma_stiffness_worst(NG, NG, 3, 7, 3, 7, column, wet, &
+                                       rx0_max, i_at, j_at, is_x, &
+                                       h_thin, h_thick, n_over, n_face)
+
+      call check(error, abs(rx0_max - 0.7261622390891841_wp) < 1.0e-12_wp, &
+                 "the scan must find the sidewall face, rx0 = 0.726")
+      if (allocated(error)) return
+      call check(error,.not. is_x, &
+                 "the worst face is a y face (the column jumps across j)")
+      if (allocated(error)) return
+      call check(error, j_at == 4, "reported at the THIN side of the face")
+      if (allocated(error)) return
+      call check(error, abs(h_thin - 23.09_wp) < 1.0e-12_wp .and. &
+                 abs(h_thick - 145.55_wp) < 1.0e-12_wp, &
+                 "both column thicknesses must be reported, thin first")
+      if (allocated(error)) return
+      ! Wet-wet faces: 4 rows x 4 x-faces = 16, plus 3 y-face rows x 5 = 15.
+      call check(error, n_face == 31, "every interior wet-wet face is scanned")
+      if (allocated(error)) return
+      ! Over bound: only the five sidewall y faces (j=4 -> j=5).
+      call check(error, n_over == 5, &
+                 "exactly the five sidewall faces are over the 0.2 bound")
+   end subroutine test_sigma_stiffness_worst_finds_isomip_sidewall
+
+   subroutine test_sigma_stiffness_land_is_not_a_stiff_face(error)
+      !! A land T-cell holds `h_layer = H_VANISHED` under the land-state
+      !! contract, so its column is ~0 and a thickness-only test would
+      !! read `rx0 -> 1` at every coastline. A coastline is a WALL (the
+      !! face metrics are zeroed, no pressure gradient is taken), so the
+      !! scan must exclude it by the WET MASK and report the interior.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NG = 9
+      real(wp) :: column(NG, NG), wet(NG, NG)
+      real(wp) :: rx0_max, h_thin, h_thick
+      integer :: i, j, i_at, j_at, n_over, n_face
+      logical :: is_x
+
+      wet = 0.0_wp
+      column = 0.0_wp
+      do j = 3, 7
+         do i = 3, 7
+            wet(i, j) = 1.0_wp
+            column(i, j) = 300.0_wp
+         end do
+      end do
+      ! One interior island, held at the land-state marker (36 * 1.5e-4).
+      wet(5, 5) = 0.0_wp
+      column(5, 5) = 36.0_wp*1.5e-4_wp
+
+      call ocean_sigma_stiffness_worst(NG, NG, 3, 7, 3, 7, column, wet, &
+                                       rx0_max, i_at, j_at, is_x, &
+                                       h_thin, h_thick, n_over, n_face)
+
+      call check(error, rx0_max == 0.0_wp, &
+                 "a land neighbour must not register as a stiff face")
+      if (allocated(error)) return
+      call check(error, n_over == 0, "and must not be counted over bound")
+      if (allocated(error)) return
+      ! 5x5 block minus the island: 40 faces total, 4 of them touch the
+      ! island and are dropped.
+      call check(error, n_face == 36, &
+                 "the island's four faces are excluded, the rest are scanned")
+   end subroutine test_sigma_stiffness_land_is_not_a_stiff_face
+
+   subroutine test_sigma_stiffness_uniform_column_is_zero(error)
+      !! A flat-bed, flat-lid domain is exactly `rx0 = 0` — the control
+      !! that says the check cannot fire on the geometry every
+      !! bit-identity case in the corpus uses.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NG = 9
+      real(wp) :: column(NG, NG), wet(NG, NG)
+      real(wp) :: rx0_max, h_thin, h_thick
+      integer :: i_at, j_at, n_over, n_face
+      logical :: is_x
+
+      wet = 1.0_wp
+      column = 4000.0_wp
+
+      call ocean_sigma_stiffness_worst(NG, NG, 3, 7, 3, 7, column, wet, &
+                                       rx0_max, i_at, j_at, is_x, &
+                                       h_thin, h_thick, n_over, n_face)
+
+      call check(error, rx0_max == 0.0_wp .and. n_over == 0, &
+                 "a flat bed is exactly zero stiffness, bit for bit")
+      if (allocated(error)) return
+      call check(error, n_face == 40, "5x5 interior => 20 x faces + 20 y faces")
+   end subroutine test_sigma_stiffness_uniform_column_is_zero
 
 end module test_ocean_stability_audit

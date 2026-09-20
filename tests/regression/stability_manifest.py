@@ -747,7 +747,7 @@ STABILITY_CASES = [
 
     _case("isomip_plus_ocean0_idealised",
           V + "isomip_plus/ocean0_idealised_draft.nml",
-          "forced", 288, 100, t1_timeout=900, t2_timeout=300,
+          "forced", 1000, 100, t1_timeout=1200, t2_timeout=300,
           # THE GROUNDED-CAVITY CONSERVATION GATE, at case scale.
           #
           # 3778 of 9600 interior columns (39.4 %) GROUND -- the ice draft
@@ -768,11 +768,64 @@ STABILITY_CASES = [
           # A budget that steps is the defect, and only a case with real
           # grounded ice can see it.
           #
-          # Cost: 0.63 s/step on one core, so tier 1 is the protocol's own
-          # 1 simulated day (288 steps at dt = 300) and tier 2 is 100 steps.
-          # Not downscaled -- 240x40x36 is the COM resolution the grounding
-          # line is resolved at, and halving it moves the grounding line
-          # rather than the numerics.
+          # Cost: 0.63 s/step on one core. Tier 1 was the protocol's own 1
+          # simulated day (288 steps at dt = 300) until 2026-09-20, and that
+          # length is exactly why the day-3.2 blow-up below shipped unseen:
+          # the case is CLEAN at every one of those 288 steps. Tier 1 is now
+          # 1000 steps (day 3.47), which is past the failure; the run aborts
+          # at step 910, so it costs ~575 s, not 630. Tier 2 stays 100 steps
+          # -- it is the cheap smoke test and lengthening it buys nothing the
+          # tier-1 row does not already say. Not downscaled -- 240x40x36 is
+          # the COM resolution the grounding line is resolved at, and halving
+          # it moves the grounding line rather than the numerics.
+          known_failure={
+              "tiers": [1],
+              # Scoped to `completed` ALONE, and measured: at 1000 steps the
+              # run aborts at step 910 and EVERY other assertion still
+              # passes -- conserve:{Mass,Salt,Heat} at round-off, energy and
+              # CFL inside their bars over the 3 days before the abort. So
+              # this marker excuses the abort and nothing else, and a budget
+              # or energy regression still turns the row red.
+              "assertions": ["completed"],
+              "reason":
+                  "OPEN, and the sigma pressure-gradient truncation over the "
+                  "RESOLVED ISOMIP+ BED -- the same term as "
+                  "cavity_sloping_lid_rest, 3958x larger. The ISOMIP+ "
+                  "channel-wall term (their Eq. 4, d_c = 500 m, f_c = 4 km) "
+                  "drops the bed 122 m across one 2 km cell, so at the trough "
+                  "sidewall a 23.1 m water column sits beside a 145.5 m one: "
+                  "stiffness rx0 = |dH|/(Ha+Hb) = 0.726, 3.6x the classical "
+                  "Beckmann-Haidvogel (1993) sigma bound of 0.2, with 168 "
+                  "wet-wet faces over it. Cubed, a_peak = N^2 De^3/(6 dx Hbar) "
+                  "= 1.48E-05 m/s^2 against the sloping lid's 3.73E-09, i.e. "
+                  "U = a/|f| = 10.5 cm/s of spurious geostrophic flow on one "
+                  "row of cells. En e-folds on ~1 day, hits &ocean_pgf_nml "
+                  "maxvel at step 907, drives bt_eta to -36.8 m in a <= 23 m "
+                  "column at step 909, and mints a NEGATIVE h_layer "
+                  "(-0.710 m) at step 910; the melt driver's non-finite guard "
+                  "is the detector, not the site. Substituted and INERT: melt "
+                  "(off merely moves it to day 3.6), the freshwater form, "
+                  "both implicit drag folds, the sponge, the calving front, "
+                  "convective adjustment, Gamma_T, n_inner (4x), and the "
+                  "outer split. Uniform density holds En = 8.5E-22 -- machine "
+                  "zero -- for 7 days on the identical geometry; nz = "
+                  "12/18/36/72 all fail within 0.2 day of each other (the "
+                  "truncation is nz-independent, as derived); a FLAT lid over "
+                  "the same bed still fails, so the tilted boundary that "
+                  "matters is the bed, not the ice base. Every palliative only "
+                  "postpones (h_min_cavity 25/30/50 m -> day 7.6/11.2/19.8; "
+                  "nu_h 20/60 -> day 14.2/25.2), and the only two changes that "
+                  "reach 30 days -- nu_h = 600 (100x Table 4) and dt = 75 s -- "
+                  "do it by letting the mode SATURATE at En 1.4E-04 / 9.4E-04, "
+                  "which is a quiet wrong answer rather than a fix. The "
+                  "namelist is therefore NOT tuned to pass this row. "
+                  "conserve:{Mass,Salt,Heat} are deliberately NOT excused: "
+                  "they are what this case is carried for, they are evaluated "
+                  "over the 3 days before the abort, and they still hold at "
+                  "round-off. The fix is Phase 6 (the sloping-coordinate PGF "
+                  "corrections), not a tolerance and not a shorter run.",
+              "ref": "validation_examples/ocean/isomip_plus/README.md",
+          },
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 300.0,
                             "nu_h": 6.0, "nghost": 2,
                             "has_western_boundary": False, "eddying": False},
