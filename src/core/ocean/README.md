@@ -692,8 +692,11 @@ concrete need:
 - **Sea-ice coupling** — the gated `ocean_sea_ice_t` slot now exists
   (`src/core/ice/state/rdb_ice_state.F90`, `&ocean_ice_nml enable`
   default off ⇒ byte-identical) and PR 1 landed the two OCEAN-side
-  prerequisites: `eos_freezing_point(S, p)` (SIS2 linear liquidus,
-  every EOS variant, `rdb_eos`) and the frazil accumulator
+  prerequisites: `eos_freezing_point(S, p)` (linear liquidus
+  `T_f = λ1·S + λ2 + λ3·p`, every EOS variant, `rdb_eos`; the triple
+  rides the `eos_t` handle and is chosen by `&ocean_eos_nml
+  tfreeze_set` — `"seaice"` = SIS2 default ⇒ bit-identical, `"isomip"`
+  = the ISOMIP+ cavity set) and the frazil accumulator
   (`rdb_ice_frazil` — once per outer step on the post-RK2-average
   state the driver clamps the surface layer at T_f and banks the
   supercooling deficit `ρ·Cp·h·(T_f−T)⁺` into the restart-carried

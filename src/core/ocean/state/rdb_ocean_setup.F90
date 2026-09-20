@@ -22,7 +22,9 @@ module rdb_ocean_setup
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_GPRIME, OPGF_VARIANT_FV_MOM6, &
                                        OPGF_VARIANT_FV_WRIGHT, parse_opgf_variant
    use rdb_eos, only: parse_eos_variant, eos_validate, &
-                      EOS_VARIANT_ROQUET_SPV
+                      EOS_VARIANT_ROQUET_SPV, &
+                      parse_tfreeze_set, eos_apply_tfreeze_set, &
+                      TFREEZE_SET_SEAICE
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_EULERIAN_Z, &
                                VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN
    use rdb_vcoord, only: parse_remap_method
@@ -629,8 +631,23 @@ contains
       ! mem:separate (same contract as `rho0`/`rho_ref` on the PGF slot).
       ! Horizontally uniform by design — see the knob's FORD docstring.
       ocean_state%eos%p_ref = cfg%ocean%eos%p_ref
+      ! Freezing-point (liquidus) coefficient set — same site, same
+      ! reasons, and one more: the ICE slot reads the god-state handle
+      ! directly (`engine%state%eos` is what `ice_frazil_accumulate`,
+      ! `ice_frazil_uptake` and `ice_compute_basal_flux` are handed), so
+      ! landing the set here puts it on the ONE handle every liquidus
+      ! consumer sees, before any copy is taken and before `enter_data`.
+      ! An unrecognised string is already fatal in `validate_config`;
+      ! `eos_apply_tfreeze_set` leaves the handle untouched for it.
+      call eos_apply_tfreeze_set(ocean_state%eos, &
+                                 parse_tfreeze_set(cfg%ocean%eos%tfreeze_set))
       if (compute_rank == 0) then
          call logger%info("EOS variant:      "//trim(cfg%ocean%eos%eos))
+         if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) /= TFREEZE_SET_SEAICE) then
+            call logger%info("Liquidus set:     "//trim(cfg%ocean%eos%tfreeze_set)// &
+                             " (ISOMIP+ / Asay-Davis et al. 2016 Table 4; the "// &
+                             "default 'seaice' SIS2 set is ~0.03 degC warmer at S=34.5)")
+         end if
       end if
 
       ocean_state%bdrag%variant = parse_bdrag_variant(cfg%ocean%bdrag%form)
