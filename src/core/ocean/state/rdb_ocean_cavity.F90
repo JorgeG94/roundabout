@@ -82,6 +82,9 @@ module rdb_ocean_cavity
    public :: CAVITY_SOURCE_DRAFT, CAVITY_SOURCE_THICKNESS
    public :: CAVITY_SOURCE_IN_SITU, CAVITY_SOURCE_INVALID
    public :: parse_cavity_draft_config, parse_cavity_draft_source
+   public :: parse_cavity_draft_sign
+   public :: CAVITY_SIGN_DEPTH, CAVITY_SIGN_ELEVATION, CAVITY_SIGN_INVALID
+   public :: cavity_draft_apply_sign
    public :: set_draft_flat, set_draft_linear
    public :: cavity_water_column_impl
    public :: cavity_apply_land_exclusion
@@ -124,6 +127,24 @@ module rdb_ocean_cavity
       !! True isostasy against the in-situ column — deferred.
    integer, parameter :: CAVITY_SOURCE_INVALID = -1
 
+   ! ---- draft_sign enum (`draft_config="file"` only) ----
+   integer, parameter :: CAVITY_SIGN_DEPTH = 0
+      !! The file variable IS the ice-base DEPTH, positive down and `>= 0`
+      !! — Roundabout's own `z_draft` convention, so the values pass
+      !! through unchanged.
+   integer, parameter :: CAVITY_SIGN_ELEVATION = 1
+      !! The file variable is the ice-base ELEVATION `z_d`, positive UP
+      !! and therefore `<= 0` under a floating shelf — the convention the
+      !! ISOMIP+ geometry file uses ("iceDraft ... the elevation of the
+      !! ice-ocean interface (z_d)", Asay-Davis et al. 2016 Sect. 3.3).
+      !! Values are NEGATED on load.
+   integer, parameter :: CAVITY_SIGN_INVALID = -1
+      !! Unrecognised spelling.  There is deliberately NO default that
+      !! guesses from the data: a draft file whose sign is inferred from
+      !! `minval < 0` would silently flip an all-zero (open-ocean)
+      !! or partially-calved field, and the two conventions differ by the
+      !! entire ice load.
+
 contains
 
    pure function parse_cavity_draft_config(name) result(code)
@@ -161,6 +182,53 @@ contains
          code = CAVITY_SOURCE_INVALID
       end select
    end function parse_cavity_draft_source
+
+   pure function parse_cavity_draft_sign(name) result(code)
+      !! `&ocean_cavity_dyn_nml draft_sign` -> `CAVITY_SIGN_*`.
+      !! Returns `CAVITY_SIGN_INVALID` on an unrecognised spelling — the
+      !! caller fails loud.
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(adjustl(name)))
+      case ("depth", "positive_down", "")
+         code = CAVITY_SIGN_DEPTH
+      case ("elevation", "positive_up")
+         code = CAVITY_SIGN_ELEVATION
+      case default
+         code = CAVITY_SIGN_INVALID
+      end select
+   end function parse_cavity_draft_sign
+
+   pure subroutine cavity_draft_apply_sign(z_draft, nx, ny, sign_code)
+      !! Normalise a freshly loaded draft field onto Roundabout's
+      !! convention (DEPTH, positive down, `>= 0`).
+      !!
+      !!   * `CAVITY_SIGN_DEPTH` — identity (bit-for-bit).
+      !!   * `CAVITY_SIGN_ELEVATION` — `z_draft = -z_d`.
+      !!
+      !! Open water in the ISOMIP+ file is `z_d = 0`, which negates to
+      !! `-0.0`.  Left as the literal negation would make a downstream
+      !! `z_draft /= 0` test (`cavity_apply_land_exclusion`) fire on a
+      !! cell with no ice, so the zero is re-normalised explicitly.
+      !! No clipping otherwise: a POSITIVE elevation (ice base above sea
+      !! level, i.e. grounded ice or a file in the wrong convention)
+      !! negates to a negative depth and is caught fail-loud by
+      !! `cavity_draft_is_finite_nonneg` — which is the point of having
+      !! an explicit knob instead of a guess.
+      integer, intent(in) :: nx, ny, sign_code
+      real(wp), intent(inout) :: z_draft(nx, ny)
+      integer :: i, j
+      if (sign_code /= CAVITY_SIGN_ELEVATION) return
+      do j = 1, ny
+         do i = 1, nx
+            if (z_draft(i, j) == 0.0_wp) then
+               z_draft(i, j) = 0.0_wp
+            else
+               z_draft(i, j) = -z_draft(i, j)
+            end if
+         end do
+      end do
+   end subroutine cavity_draft_apply_sign
 
    pure subroutine set_draft_flat(z_draft, grid, draft, x0, x1, y0, y1)
       !! Uniform draft `draft` inside the shelf box `[x0,x1] x [y0,y1]`,

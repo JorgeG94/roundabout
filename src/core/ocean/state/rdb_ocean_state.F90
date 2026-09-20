@@ -59,7 +59,7 @@ module rdb_ocean_state
 #ifndef RDB_NO_NETCDF
    use rdb_ocean_restart_io, only: ocean_restart_write_local, ocean_restart_read_local, &
                                    ocean_restart_metadata_t
-   use rdb_ocean_data_input, only: ocean_data_input_t
+   use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_load_static_2d
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
 #endif
    use rdb_decomp, only: decomp_t
@@ -67,8 +67,11 @@ module rdb_ocean_state
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_cavity, only: parse_cavity_draft_config, parse_cavity_draft_source, &
                                CAVITY_DRAFT_NONE, CAVITY_DRAFT_FLAT, CAVITY_DRAFT_LINEAR, &
+                               CAVITY_DRAFT_FILE, &
                                CAVITY_SOURCE_DRAFT, CAVITY_SOURCE_THICKNESS, &
                                set_draft_flat, set_draft_linear, &
+                               parse_cavity_draft_sign, cavity_draft_apply_sign, &
+                               CAVITY_SIGN_INVALID, &
                                cavity_water_column_impl, cavity_apply_land_exclusion, &
                                cavity_count_grounded, cavity_fill_cover_frac, &
                                cavity_draft_is_finite_nonneg, CAVITY_BOUND_INF
@@ -3485,6 +3488,7 @@ contains
 
       integer :: draft_code, source_code, nx, ny, ng
       integer :: n_over_land, n_grounded, n_interior
+      integer :: sign_code, local_ierr
       real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
       real(wp) :: grounded_frac
 
@@ -3506,11 +3510,10 @@ contains
       ! envelope with a full explanation; this is the same gate one level
       ! down, for direct (test / API) callers that bypass it.
       if (draft_code /= CAVITY_DRAFT_NONE .and. draft_code /= CAVITY_DRAFT_FLAT &
-          .and. draft_code /= CAVITY_DRAFT_LINEAR) then
+          .and. draft_code /= CAVITY_DRAFT_LINEAR .and. draft_code /= CAVITY_DRAFT_FILE) then
          call fail("&ocean_cavity_dyn_nml draft_config='"// &
                    trim(cfg%ocean%cavity_dyn%draft_config)//"' is not available "// &
-                   "(none|flat|linear; 'file' needs the static-2-D reader)", &
-                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+                   "(none|flat|linear|file)", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
       if (source_code /= CAVITY_SOURCE_DRAFT .and. source_code /= CAVITY_SOURCE_THICKNESS) then
@@ -3552,6 +3555,55 @@ contains
       case (CAVITY_DRAFT_LINEAR)
          call set_draft_linear(state%metrics%z_draft, grid, amp, slope_g, &
                                x0_g, x1_g, y0_g, y1_g)
+      case (CAVITY_DRAFT_FILE)
+#ifndef RDB_NO_NETCDF
+         ! Static 2-D NetCDF draft, through the PR-14 reader.  SINGLE
+         ! RANK: the loader itself applies the global offset correctly,
+         ! but the grounding statistics a few lines below are single-rank
+         ! reductions and the whole cavity is fenced that way, so the
+         ! restriction is asserted here rather than left implicit.
+         if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
+            call fail("&ocean_cavity_dyn_nml draft_config='file' is single-rank "// &
+                      "only (the cavity's grounding statistics are single-rank "// &
+                      "reductions).  Run on one rank or use an analytic draft.", &
+                      ierr, OCEAN_STATUS_ERR_IC_SEED)
+            return
+         end if
+         sign_code = parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign)
+         if (sign_code == CAVITY_SIGN_INVALID) then
+            call fail("&ocean_cavity_dyn_nml draft_sign='"// &
+                      trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
+                      "' is not recognised (depth|positive_down|elevation|"// &
+                      "positive_up)", ierr, OCEAN_STATUS_ERR_IC_SEED)
+            return
+         end if
+         ! Interior first (the reader writes the physical window only)...
+         state%metrics%z_draft = 0.0_wp
+         call ocean_data_input_load_static_2d( &
+            trim(cfg%ocean%cavity_dyn%draft_file), &
+            trim(cfg%ocean%cavity_dyn%draft_var), grid, nx, ny, &
+            ng + 1, ng + 1, state%metrics%z_draft, ierr=local_ierr)
+         if (local_ierr /= OCEAN_STATUS_OK) then
+            ierr = local_ierr
+            return
+         end if
+         ! ...sign-normalise onto DEPTH positive down...
+         call cavity_draft_apply_sign(state%metrics%z_draft, nx, ny, sign_code)
+         ! ...then fill the ghost band by constant extrapolation, the
+         ! SAME routine and the same order the file bathymetry uses
+         ! (`load_bathymetry_into_array` -> `fill_bathymetry_ghosts_array`).
+         ! The periodic/fold re-wrap and the halo exchange that
+         ! `metrics%z_draft` gets in `rdb_ocean_engine` run later and are
+         ! shared with the formula path, so a file draft and a formula
+         ! draft see an identical boundary treatment.
+         call bathymetry_fill_ghosts_array(state%metrics%z_draft, grid)
+#else
+         call fail("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                   "RDB_ENABLE_NETCDF=ON at build time (the static-2-D reader "// &
+                   "lives in the NetCDF-gated rdb_ocean_data_input).", &
+                   ierr, OCEAN_STATUS_ERR_IO)
+         return
+#endif
       case default  ! CAVITY_DRAFT_NONE
          state%metrics%z_draft = 0.0_wp
       end select

@@ -2012,6 +2012,37 @@ module rdb_config
          !! Southern edge of the shelf box (m).  Default: no limit.
       real(wp) :: draft_y1 = 1.0e30_wp
          !! Northern edge of the shelf box (m).  Default: no limit.
+      character(len=256) :: draft_file = ""
+         !! `draft_config="file"`: path to the NetCDF carrying the static
+         !! ice draft.  The variable named by `draft_var` must be rank 3
+         !! in FORTRAN storage order `(x, y, t)` — which is how a C or
+         !! Python writer (and `ncdump`) spells `(nTime, ny, nx)` — with a
+         !! time coordinate variable; RECORD 1 is read and the field is
+         !! never re-read.  There is NO horizontal interpolation: the file
+         !! must already be on the model grid (`nx x ny` physical cells),
+         !! exactly as `bathymetry_file` and `&ocean_zinit_nml file`
+         !! require.  Single rank only (fail-loud otherwise).
+      character(len=64) :: draft_var = "iceDraft"
+         !! `draft_config="file"`: name of the 2-D variable to read.  The
+         !! default is the ISOMIP+ geometry file's own spelling
+         !! (Asay-Davis et al. 2016 Sect. 3.3).
+      character(len=16) :: draft_sign = "depth"
+         !! `draft_config="file"`: the SIGN CONVENTION of the file values.
+         !! There is no default that guesses from the data — the two
+         !! conventions differ by the whole ice load, and a field that is
+         !! partly open water (zeros) is indistinguishable by inspection.
+         !!
+         !!   * `"depth"` / `"positive_down"` (default) — the values ARE
+         !!     the ice-base depth, `>= 0`, Roundabout's own convention.
+         !!   * `"elevation"` / `"positive_up"` — the values are the
+         !!     ice-base ELEVATION `z_d`, `<= 0` under a floating shelf.
+         !!     Negated on load.  **This is what the ISOMIP+ geometry file
+         !!     needs**: its `iceDraft` is "the elevation of the
+         !!     ice-ocean interface (z_d)".
+         !!
+         !! A file in the wrong convention produces a negative depth and
+         !! is caught fail-loud by the existing non-negativity check, not
+         !! silently accepted.
       real(wp) :: h_min_cavity = 10.0_wp
          !! GROUNDING cutoff (m): a column whose water thickness
          !! `b - z_draft` is below this is LAND — it goes through the same
@@ -3749,6 +3780,7 @@ contains
                                        CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25, &
                                        CAVITY_ICE_INVALID, CAVITY_ICE_INSULATING, &
                                        CAVITY_ICE_ADV_DIFF
+      use rdb_ocean_cavity, only: parse_cavity_draft_sign, CAVITY_SIGN_INVALID
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
          !! Non-zero on any cross-knob semantic validation failure when
@@ -4923,12 +4955,32 @@ contains
          case ("none", "flat", "linear")
             continue
          case ("file")
-            call logger%error("&ocean_cavity_dyn_nml draft_config='file' is not "// &
-                              "implemented: a file draft needs the MPI-correct "// &
-                              "static-2-D reader (the bathymetry loader validates "// &
-                              "against LOCAL nx/ny and applies no global offset, so "// &
-                              "it is single-rank only).  Use 'flat' or 'linear'.")
-            has_error = .true.
+            ! Ships single-rank, through the PR-14 static-2-D reader
+            ! (`ocean_data_input_load_static_2d`), which DOES apply the
+            ! global offset — but the cavity as a whole is single-rank
+            ! fenced below, and the loader re-asserts it.
+            if (len_trim(cfg%ocean%cavity_dyn%draft_file) == 0) then
+               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                                 "draft_file")
+               has_error = .true.
+            end if
+            if (len_trim(cfg%ocean%cavity_dyn%draft_var) == 0) then
+               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                                 "draft_var (the 2-D variable name; ISOMIP+ ships "// &
+                                 "'iceDraft')")
+               has_error = .true.
+            end if
+            if (parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign) == &
+                CAVITY_SIGN_INVALID) then
+               call logger%error("&ocean_cavity_dyn_nml draft_sign='"// &
+                                 trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
+                                 "' is not recognised (depth|positive_down|"// &
+                                 "elevation|positive_up).  There is no default that "// &
+                                 "guesses from the data: the ISOMIP+ file carries an "// &
+                                 "ELEVATION (z_d <= 0) and a depth file carries "// &
+                                 "z_draft >= 0, and the two differ by the whole load.")
+               has_error = .true.
+            end if
          case default
             call logger%error("&ocean_cavity_dyn_nml draft_config='"// &
                               trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
@@ -7484,8 +7536,8 @@ contains
                              "fv_mom6 PGF, sigma/zstar only)"))
       ps => cfg%ocean%cavity_dyn%draft_config
       call g%add(nml_enum("draft_config", ps, &
-                          "Analytic draft shape ('file' is deferred: the "// &
-                          "static-2-D reader lands in a later slice)", &
+                          "Draft source: analytic shape, or 'file' (static 2-D "// &
+                          "NetCDF on the model grid, single rank)", &
                           allowed=[character(len=15) :: "none", "flat", &
                                    "linear", "file"]))
       ps => cfg%ocean%cavity_dyn%draft_source
@@ -7518,6 +7570,20 @@ contains
       call g%add(nml_real("draft_y1", pr, &
                           "Northern edge of the shelf box (+/-1e30 => no limit)", &
                           units="m"))
+      ps => cfg%ocean%cavity_dyn%draft_file
+      call g%add(nml_string("draft_file", ps, &
+                            "draft_config='file': NetCDF path (variable must be "// &
+                            "(x,y,t) Fortran order, on the model grid; record 1 read)"))
+      ps => cfg%ocean%cavity_dyn%draft_var
+      call g%add(nml_string("draft_var", ps, &
+                            "draft_config='file': 2-D variable name (ISOMIP+ ships "// &
+                            "'iceDraft')"))
+      ps => cfg%ocean%cavity_dyn%draft_sign
+      call g%add(nml_enum("draft_sign", ps, &
+                          "draft_config='file': sign convention of the file values "// &
+                          "(ISOMIP+ iceDraft is an ELEVATION)", &
+                          allowed=[character(len=14) :: "depth", "positive_down", &
+                                   "elevation", "positive_up"]))
       pr => cfg%ocean%cavity_dyn%h_min_cavity
       call g%add(nml_real("h_min_cavity", pr, &
                           "Grounding cutoff: b - z_draft below this is LAND "// &
