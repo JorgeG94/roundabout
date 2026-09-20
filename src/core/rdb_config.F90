@@ -2115,11 +2115,12 @@ module rdb_config
       !! per-concern sub-namelist convention, and it is also the honest
       !! one — a datum-only cavity run is a legitimate configuration.
       !!
-      !! VIRTUAL SALT, NO MASS.  v1 delivers the meltwater as a virtual
-      !! salt flux; the freshwater MASS (and therefore its volume and its
-      !! direct buoyancy) is Phase 3.  That is a FIRST-ORDER limitation
-      !! for cavity circulation, recorded in
-      !! `docs/CAPABILITIES_AND_LIMITATIONS.md`, not a detail.
+      !! VIRTUAL OR REAL MASS — `freshwater` picks (Phase 3).
+      !! `"virtual"` (default, bit-identical) delivers the meltwater as a
+      !! virtual salt flux at fixed column mass; `"mass"` adds the real
+      !! Boussinesq volume to the top layer and lets the dilution happen
+      !! by itself.  See that knob, and
+      !! `docs/CAPABILITIES_AND_LIMITATIONS.md`.
       !!
       !! `enable = .false.` (default) ⇒ no slot arrays, no kernel, no
       !! component written, byte-identical.  Knob table:
@@ -2226,6 +2227,46 @@ module rdb_config
          !! default and it must be held FIXED across any
          !! vertical-coordinate comparison, or the comparison measures
          !! the sampling depth instead.
+      character(len=16) :: freshwater = "virtual"
+         !! How the meltwater reaches the ocean.
+         !!
+         !! `"virtual"` (**default ⇒ bit-identical**) — no mass moves.
+         !! The dilution is emulated at FIXED column mass by the exact
+         !! fixed-mass equivalent salt flux `-m*(S_far - s_ice)`
+         !! (derivation in `rdb_ocean_cavity_flux`'s module docstring).
+         !!
+         !! `"mass"` — the meltwater is a REAL Boussinesq VOLUME source
+         !! on the top layer, `dh = m*dt/rho_0`, and the salinity falls
+         !! by dilution on its own.  The virtual salt flux is then NOT
+         !! also applied to the tracer (that would double-count); it is
+         !! RETAINED in the assembled `Q_salt` solely as the surface
+         !! buoyancy forcing KPP/EPBL read for `B_0`, and removed again
+         !! from salinity (and from the pseudo-salt mirror) by the same
+         !! in-stage kernel that adds the volume.  The top layer's heat
+         !! additionally gains the enthalpy of the added water,
+         !! `m*c_w*T_b`.
+         !!
+         !! `"mass"` is refused (fail loud, naming the follow-up)
+         !! together with dynamic wet/dry and with a windowed
+         !! tracer-advection ratio > 1.
+      character(len=32) :: volume_compensation = "none"
+         !! What to do with the volume `freshwater="mass"` adds to a
+         !! CLOSED domain.  Requires `freshwater="mass"`.
+         !!
+         !! `"none"` (default) — nothing; the domain fills up.  Correct
+         !! for a short run and for a domain with an open boundary that
+         !! can pass the volume out.
+         !!
+         !! `"uniform_open_ocean"` — each thermo step the
+         !! domain-integrated melt volume is removed again, spread
+         !! UNIFORMLY (per unit area) over the wet cells the ice does
+         !! NOT cover, each parcel carrying that cell's own T and S so
+         !! no concentration there is changed.  Tracked as a mass, salt
+         !! and heat SINK in all three console budgets.  This is the
+         !! sea-level compensation ISOMIP+ Sect. 3.1.3 allows for the
+         !! closed Ocean3/4 domains; Ocean0-2 have a restoring sponge
+         !! that does not remove volume, so without it their cavity
+         !! fills at metres per year.
    end type ocean_cavity_melt_config_t
 
    type :: ocean_continuity_config_t
@@ -3819,7 +3860,10 @@ contains
                                        CAVITY_LAW_INVALID, CAVITY_LAW_CONST_GAMMA, &
                                        CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25, &
                                        CAVITY_ICE_INVALID, CAVITY_ICE_INSULATING, &
-                                       CAVITY_ICE_ADV_DIFF
+                                       CAVITY_ICE_ADV_DIFF, &
+                                       parse_cavity_freshwater, parse_cavity_volume_comp, &
+                                       CAVITY_FW_INVALID, CAVITY_FW_VIRTUAL, CAVITY_FW_MASS, &
+                                       CAVITY_VC_INVALID, CAVITY_VC_NONE, CAVITY_VC_UNIFORM_OPEN
       use rdb_ocean_cavity, only: parse_cavity_draft_sign, CAVITY_SIGN_INVALID
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
@@ -5435,6 +5479,71 @@ contains
                               "over; zero would sample nothing).")
             has_error = .true.
          end if
+         ! --- Phase 3: real freshwater MASS, and its sea-level partner ---
+         ! `freshwater="mass"` moves the meltwater as a REAL Boussinesq
+         ! volume on the top layer.  Two envelope holes are refused BY
+         ! NAME rather than half-wired, because each would put the mass
+         ! source and the machinery that owns `h_layer(:,:,nz)` out of
+         ! step with one another:
+         !
+         !   * dynamic wet/dry re-decides every step which columns carry
+         !     water, and its positive-definite outflow limiter is the
+         !     other writer of a top-layer thickness source.  Composing
+         !     the two needs the limiter to SEE the melt volume;
+         !   * a windowed tracer-advection ratio > 1 freezes `hTr` for
+         !     `ratio` steps while `h` keeps moving, so the dilution the
+         !     mass form relies on would be applied to a tracer load that
+         !     is deliberately stale.
+         block
+            integer :: fw_code, vc_code
+            fw_code = parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater)
+            vc_code = parse_cavity_volume_comp(cfg%ocean%cavity_melt%volume_compensation)
+            if (fw_code == CAVITY_FW_INVALID) then
+               call logger%error("&ocean_cavity_melt_nml freshwater = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%freshwater))// &
+                                 "' is not recognised (shipped: virtual, mass).")
+               has_error = .true.
+            end if
+            if (vc_code == CAVITY_VC_INVALID) then
+               call logger%error("&ocean_cavity_melt_nml volume_compensation = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%volume_compensation))// &
+                                 "' is not recognised (shipped: none, "// &
+                                 "uniform_open_ocean).")
+               has_error = .true.
+            end if
+            if (fw_code == CAVITY_FW_MASS) then
+               if (cfg%ocean%wetdry%enable) then
+                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
+                                    "refused with &ocean_wetdry_nml enable=.true.  "// &
+                                    "Wet/dry owns the other top-layer thickness "// &
+                                    "source (its positive-definite outflow limiter) "// &
+                                    "and re-decides per step which columns hold "// &
+                                    "water; composing the two needs the limiter to "// &
+                                    "see the melt volume.  Follow-up: "// &
+                                    "'cavity real freshwater under wet/dry'.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
+                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
+                                    "refused with &ocean_vmix_nml "// &
+                                    "dt_tracer_advect_ratio > 1.  The windowed drain "// &
+                                    "holds hTr fixed for the window while h keeps "// &
+                                    "moving, so the dilution the mass form relies on "// &
+                                    "would act on a deliberately stale tracer load.  "// &
+                                    "Follow-up: 'cavity real freshwater under the "// &
+                                    "windowed tracer-advect drain'.")
+                  has_error = .true.
+               end if
+            end if
+            if (vc_code == CAVITY_VC_UNIFORM_OPEN .and. fw_code /= CAVITY_FW_MASS) then
+               call logger%error("&ocean_cavity_melt_nml volume_compensation="// &
+                                 "'uniform_open_ocean' requires freshwater='mass'.  "// &
+                                 "The virtual form adds no volume, so there is "// &
+                                 "nothing to compensate and the sink would be a "// &
+                                 "pure, unexplained mass loss.")
+               has_error = .true.
+            end if
+         end block
          ! --- the cover mask SHIPS (P2c) ---
          ! Wind stress, surface restoring, shortwave penetration and the
          ! uniform scalar q_heat/q_salt were each refused here while
@@ -7781,6 +7890,18 @@ contains
                           "Thickness below the ice base the far-field T/S/u are "// &
                           "averaged over (METRES, not layers)", units="m", &
                           min=0.0_wp))
+      ps => cfg%ocean%cavity_melt%freshwater
+      call g%add(nml_enum("freshwater", ps, &
+                          "Meltwater delivery: 'virtual' (default, fixed "// &
+                          "column mass) or 'mass' (real Boussinesq volume on "// &
+                          "the top layer)", &
+                          allowed=[character(len=8) :: "virtual", "mass"]))
+      ps => cfg%ocean%cavity_melt%volume_compensation
+      call g%add(nml_enum("volume_compensation", ps, &
+                          "Sea-level compensation for freshwater='mass': "// &
+                          "'none' (default) or 'uniform_open_ocean' (remove the "// &
+                          "melt volume again over uncovered wet cells)", &
+                          allowed=[character(len=20) :: "none", "uniform_open_ocean"]))
 
       call schema%add_group(g)
    end subroutine register_ocean_cavity_melt

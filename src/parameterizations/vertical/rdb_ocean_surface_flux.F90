@@ -322,16 +322,29 @@ module rdb_ocean_surface_flux
          !! and never written by the ice coupler, which full-overwrites
          !! `salt_flux`.
          !!
-         !! **VIRTUAL salt flux.**  Melting adds freshwater MASS the
-         !! Boussinesq column does not yet carry (Phase 3), so the
-         !! dilution is emulated by removing salt:
+         !! **The fixed-mass dilution equivalent.**
          !!
          !!   `salt_cavity = -m_mass*(S_far - s_ice)`
          !!
-         !! which is the exact fixed-mass equivalent of adding mass
-         !! `m_mass` at salinity `s_ice` — see the derivation in
+         !! is the exact fixed-mass equivalent of adding mass `m_mass` at
+         !! salinity `s_ice` — see the derivation in
          !! `rdb_ocean_cavity_flux`'s module docstring.  Melting
          !! (`m_mass > 0`, `S_far > s_ice`) therefore FRESHENS.
+         !!
+         !! Under `&ocean_cavity_melt_nml freshwater="virtual"` (the
+         !! default) that IS the meltwater's whole effect: no mass moves.
+         !!
+         !! Under `freshwater="mass"` the meltwater is a REAL volume
+         !! source on the top layer and this component is NOT the
+         !! salinity tendency any more — but it is STILL assembled into
+         !! `Q_salt` unchanged, because `Q_salt` is also what KPP and
+         !! EPBL read to build `B_0`, and this term is the dominant
+         !! (freshening) part of the surface buoyancy flux there.
+         !! `ocean_cavity_mass_step` takes the increment back out of the
+         !! SALINITY TRACER (and out of the pseudo-salt mirror) in the
+         !! same stage, as the exact negation of what
+         !! `apply_surface_src_2d_impl` stamped.  So: one field, two
+         !! readers, and only the tracer reader is corrected.
 
       real(wp), allocatable :: p_surf_atm(:, :)
          !! **Input component.**  Atmospheric surface-pressure load

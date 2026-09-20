@@ -100,6 +100,7 @@ module rdb_ocean_dyn
                                      ocean_surface_restore_apply_tracers
    use rdb_ocean_geothermal, only: ocean_geothermal_t, &
                                    ocean_geothermal_apply_tracers
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t, ocean_cavity_mass_step
    use rdb_ocean_ideal_age, only: ocean_ideal_age_apply, ocean_ideal_age_reset_surface, &
                                   ocean_ideal_age_young_val
    use rdb_ocean_vertical_advection, only: ocean_vertical_advection_t, &
@@ -828,7 +829,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_barotropic
 
-   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t, td)
+   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t, td, cav)
       !! Multilayer extension of `ocean_dyn_step_barotropic`.  One
       !! SSP-RK2 outer step that orchestrates the full per-layer
       !! dynamical core:
@@ -872,6 +873,18 @@ contains
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -925,12 +938,14 @@ contains
       ! ---- Stage 1: tendencies at u^n, FE step -> u^(1) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 1, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td, &
+                     cav=cav)
 
       ! ---- Stage 2: tendencies at u^(1), FE step -> u^(1) + dt*L(u^(1)) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 2, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td, &
+                     cav=cav)
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
       call rk2_average(ms)
@@ -986,7 +1001,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step
 
-   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, td)
+   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, td, cav)
       !! One FE stage of the multilayer step.  Order of operations:
       !!
       !!   1. EOS: rho_layer <- linear(T, S)
@@ -1024,6 +1039,18 @@ contains
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -1182,6 +1209,17 @@ contains
 
       ! Surface tracer fluxes, geothermal bottom flux, ideal-age, vmix.
       call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      ! Ice-shelf real freshwater MASS (&ocean_cavity_melt_nml
+      ! freshwater='mass').  Immediately after the surface-flux apply,
+      ! because it REPLACES that apply's virtual cavity salt increment
+      ! with the real advective one and adds the meltwater volume + its
+      ! enthalpy in the same stage, at the same weight, from the same
+      ! `melt`.  Absent / disabled / 'virtual' => immediate return.
+      ! Weight 0.5 per SSP-RK2 stage, matching ocean_accumulate_mass_out.
+      if (present(cav)) then
+         call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, 0.5_wp, &
+                                     active=therm_active)
+      end if
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       ! Ideal-age interior aging only (PR-7): thermo-cadence gated, mirrors
@@ -2414,7 +2452,7 @@ contains
    subroutine ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, dt, n_inner, sf, geo, vcoord, bc, sp, t, &
                                    lateral_mix, epbl, kshear, mle, slopes, gm, varmix, wavespeed, &
-                                   redi, meke, vmix_tidal, tides, psurf, td)
+                                   redi, meke, vmix_tidal, tides, psurf, td, cav)
       !! Split-explicit SSP-RK2 outer step on the multilayer state.
       !! Parallel to `ocean_dyn_step` (the unsplit driver
       !! still ships for tests + reference).  Phase 4b-MVP scope:
@@ -2468,6 +2506,18 @@ contains
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -2908,20 +2958,21 @@ contains
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=psurf%eta_seam, td=td)
+                                 eta_forcing=psurf%eta_seam, td=td, cav=cav)
          else if (tide_on) then
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=tides%eta_forcing, td=td)
+                                 eta_forcing=tides%eta_forcing, td=td, cav=cav)
          else
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
-                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, td=td)
+                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, td=td, &
+                                 cav=cav)
          end if
          ! pred_corr between-stage reset (SPEC §2): the predictor's
          ! provisional up/vp/hp are discarded — only u_av/v_av/h_av carry
@@ -3708,7 +3759,7 @@ contains
    subroutine run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                               va, hd, vd, vmix, ms, dt, n_inner, sf, geo, stage, vcoord, bc, sp, t, &
                               lateral_mix, epbl, kshear, mle, gm, redi, varmix, vmix_tidal, meke, &
-                              eta_forcing, td)
+                              eta_forcing, td, cav)
       !! One FE stage of the split-explicit step.  See the
       !! `ocean_dyn_step_split` header for the design.
       type(hgrid_t), intent(in) :: grid
@@ -3728,6 +3779,18 @@ contains
          !! test suite need no churn; the production driver always passes
          !! it.  Absent, or present and disabled, => no kernel launch and
          !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -4549,6 +4612,16 @@ contains
                                                wet_dyn=dyn%bt_work%wd_wet_dyn)
       else
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      end if
+      ! Ice-shelf real freshwater MASS -- see the identical block in
+      ! `run_stage`.  `chain_weight` is the SAME per-stage weight the
+      ! continuity chain's `ocean_accumulate_mass_out` uses (0.5 per
+      ! SSP-RK2 stage; 0 / 1 for the pred_corr predictor / corrector), so
+      ! the tracked mass source and the tracked boundary outflux are
+      ! weighted alike and the console residual closes.
+      if (present(cav)) then
+         call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, chain_weight, &
+                                     active=therm_active)
       end if
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)

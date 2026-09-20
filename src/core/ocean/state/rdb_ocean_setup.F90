@@ -3274,7 +3274,9 @@ contains
       !! isostatic load, which catches a producer that was skipped or
       !! reordered rather than trusting the call order.
       use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
-                                       CAVITY_LAW_HJ99
+                                       CAVITY_LAW_HJ99, parse_cavity_freshwater, &
+                                       parse_cavity_volume_comp, CAVITY_FW_MASS, &
+                                       CAVITY_VC_UNIFORM_OPEN
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
       type(hgrid_t), intent(in) :: grid
@@ -3299,6 +3301,26 @@ contains
       ocean_state%cavity_flux%u_tide = cfg%ocean%cavity_melt%u_tide
       ocean_state%cavity_flux%ustar_min = cfg%ocean%cavity_melt%ustar_min
       ocean_state%cavity_flux%s_ice = cfg%ocean%cavity_melt%s_ice
+      ocean_state%cavity_flux%freshwater = &
+         parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater)
+      ocean_state%cavity_flux%volume_comp = &
+         parse_cavity_volume_comp(cfg%ocean%cavity_melt%volume_compensation)
+
+      ! THE Boussinesq reference density, taken from the surface-flux
+      ! slot rather than re-read from `cfg`, because the real-mass path's
+      ! salt correction has to be the EXACT negation of the increment
+      ! `apply_surface_src_2d_impl` stamped with `dt/sf%rho0`.  One
+      ! source, no second literal, and `configure_ocean_reference_density`
+      ! has already run (it seeds `sf%rho0` from `&ocean_ic_nml rho_0`).
+      ocean_state%cavity_flux%rho0 = ocean_state%surface_flux%rho0
+      if (ocean_state%cavity_flux%rho0 <= 0.0_wp) then
+         call fail("&ocean_cavity_melt_nml: the Boussinesq reference density "// &
+                   "reaching the melt slot is non-positive, so the mass -> volume "// &
+                   "conversion m/rho_0 has no value.  configure_ocean_reference_"// &
+                   "density must run before configure_ocean_cavity_melt.", ierr, &
+                   OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
 
       ! `gamma_s` carries the repo's negative "unset" sentinel; resolve
       ! it to the ISOMIP+ `gamma_t/35` exactly once, here, so the value
@@ -3376,12 +3398,36 @@ contains
                           to_string(maxval(ocean_state%multilayer%p_top))// &
                           " Pa), assembled by configure_ocean_cavity as "// &
                           "p_ice_ref + sf%p_surf")
-         call logger%warning("Ice-shelf basal melt: the meltwater is a VIRTUAL SALT "// &
-                             "FLUX — it carries no mass, so it adds no volume and no "// &
-                             "direct buoyancy.  That is a first-order limitation for "// &
-                             "cavity circulation until the real-freshwater slice "// &
-                             "(Phase 3); Ocean0-style melt numbers from a "// &
-                             "virtual-salt run are not publishable.")
+         if (ocean_state%cavity_flux%freshwater == CAVITY_FW_MASS) then
+            call logger%info("                      freshwater = 'mass': the "// &
+                             "meltwater is a REAL Boussinesq volume on the top "// &
+                             "layer, dh = m*dt/rho_0 with rho_0 = "// &
+                             to_string(ocean_state%cavity_flux%rho0)//" kg/m3.  The "// &
+                             "virtual salt flux stays in Q_salt as the KPP/EPBL B_0 "// &
+                             "buoyancy forcing and is removed again from the tracer "// &
+                             "in the same stage.")
+            if (ocean_state%cavity_flux%volume_comp == CAVITY_VC_UNIFORM_OPEN) then
+               call logger%info("                      volume_compensation = "// &
+                                "'uniform_open_ocean': the domain-integrated melt "// &
+                                "volume is removed again each thermo step over the "// &
+                                "uncovered wet cells, carrying their own T and S, "// &
+                                "and is tracked as a sink in all three budgets.")
+            else
+               call logger%warning("Ice-shelf basal melt: freshwater='mass' with "// &
+                                   "volume_compensation='none' — a CLOSED domain "// &
+                                   "gains the melt volume and its sea level rises "// &
+                                   "(for an ISOMIP+ Ocean0 box that is metres per "// &
+                                   "year).  Correct for a short run or an open "// &
+                                   "boundary; otherwise set "// &
+                                   "volume_compensation='uniform_open_ocean'.")
+            end if
+         else
+            call logger%warning("Ice-shelf basal melt: the meltwater is a VIRTUAL SALT "// &
+                                "FLUX — it carries no mass, so it adds no volume and no "// &
+                                "direct buoyancy.  That is a first-order limitation for "// &
+                                "cavity circulation; set &ocean_cavity_melt_nml "// &
+                                "freshwater='mass' for the real volume source.")
+         end if
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_cavity_melt
