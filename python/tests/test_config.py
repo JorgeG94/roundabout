@@ -18,10 +18,10 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 57 groups / 618 knobs total (56/565 from the live schema +
+    # 57 groups / 619 knobs total (56/566 from the live schema +
     # &ocean_bc_nml's 53 hand-written).
     assert N_GROUPS == 57
-    assert N_KNOBS == 618
+    assert N_KNOBS == 619
     assert "ocean_bc" in ALL_GROUPS
 
 

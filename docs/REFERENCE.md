@@ -324,6 +324,47 @@ which never calls the EOS at all.
 > `ICE_RHO_*` constants. Those are separate physical constants with their own
 > call sites, not copies of ρ₀.
 
+#### Freezing point (liquidus) — `&ocean_eos_nml tfreeze_set`
+
+`eos_freezing_point(eos, S, p)` evaluates the LINEAR liquidus
+
+```
+T_f = λ1 × S + λ2 + λ3 × p          (S in PSU, p in Pa, T_f in °C)
+```
+
+for **every** EOS variant — MOM6 keeps `TFREEZE_FORM = "LINEAR"` as its
+default under any density branch, so this is parity, not a shortcut. The
+three coefficients live on the EOS handle and are chosen as a **named
+set**:
+
+| `tfreeze_set` | λ1 (°C/PSU) | λ2 (°C) | λ3 (°C/Pa) | `T_f(34.5, 0)` | Source |
+|---|---|---|---|---|---|
+| `"seaice"` (**default**) | `-0.054` | `0` | `-7.53e-8` | −1.863 °C | SIS2/MOM6 sea-ice `T_Freeze` |
+| `"isomip"` | `-0.0573` | `0.0832` | `-7.53e-8` | −1.89365 °C | ISOMIP+ — Asay-Davis et al. (2016) *GMD* **9**, 2471–2497, Table 4 p. 2483; consumed in their eq. (25) p. 2485 |
+
+**Why it is selectable.** At S = 34.5 the two sets are **~0.031 °C**
+apart — a few percent of a typical Antarctic thermal driving, and enough
+to flip the **sign** of an ice-shelf basal melt rate over a 0.03 °C band
+of ocean temperature. A sea-ice run wants the SIS2 number its column
+model was ported and tested against; an ISOMIP+ cavity run is required by
+its protocol to use the other. The difference is exactly
+`(λ1ⁱˢᵒ − λ1ˢᵉᵃ)·S + λ2ⁱˢᵒ = −0.0033·S + 0.0832`, independent of `p`
+(both sets share λ3).
+
+Named sets only, on purpose: λ1/λ2/λ3 are a fitted triple, so there is no
+free-form coefficient knob to mix λ1 from one paper with λ2 from another.
+A **nonlinear** liquidus (MOM6 `MILLERO_78`, a TEOS-10
+`t_freezing(SA, p)` polynomial) is a different functional *form* and would
+arrive as its own selector at the documented seam in `eos_freezing_point`,
+not as another member of this list.
+
+An unrecognised value is a **fail-loud `validate_config` error**, not a
+silent fallback — a mistyped liquidus has no run-time symptom. Default
+`"seaice"` ⇒ bit-identical; the shipped consumers (frazil, frazil uptake,
+basal flux) all call at `p = 0`, where the coefficients-on-the-handle
+expression reproduces the previous one bit for bit. Locked by
+`tests/test_ocean_freezing_point.F90`.
+
 ### Physics closures
 
 The full per-closure detail — knobs, formulae, MOM6 parity notes,

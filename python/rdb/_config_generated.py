@@ -3560,7 +3560,7 @@ class OceanPgf(Group):
 
 
 class OceanEos(Group):
-    """`&ocean_eos_nml` -- Equation-of-state variant selector + reference pressure."""
+    """`&ocean_eos_nml` -- Equation-of-state variant selector, liquidus set + reference pressure."""
 
     _nml_name = 'ocean_eos'
 
@@ -3571,6 +3571,15 @@ class OceanEos(Group):
         required=False,
         default='linear',
         allowed=('linear', 'wright', 'roquet_spv', 'teos10'),
+    )
+
+    tfreeze_set = Enum(
+        'tfreeze_set',
+        doc="Named liquidus coefficient set for eos_freezing_point (T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 (-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ (-0.0573, 0.0832, -7.53e-8)",
+        units='',
+        required=False,
+        default='seaice',
+        allowed=('seaice', 'isomip'),
     )
 
     p_ref = Real(
@@ -5654,4 +5663,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 618
+N_KNOBS = 619

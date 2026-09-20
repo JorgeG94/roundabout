@@ -834,6 +834,50 @@ module rdb_config
          !! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.
          !! 2015 specific-volume polynomial).  "roquet_spv" is incompatible
          !! with the "fv_wright" PGF (fails loud at configure).
+      character(len=16) :: tfreeze_set = "seaice"
+         !! Named seawater freezing-point (liquidus) coefficient set for
+         !! `eos_freezing_point`, which evaluates the linear form
+         !!
+         !!   T_f = λ1·S + λ2 + λ3·p
+         !!
+         !! for every EOS variant (MOM6 keeps `TFREEZE_FORM = "LINEAR"`
+         !! as its default under any density branch).
+         !!
+         !!   * `"seaice"` (DEFAULT ⇒ bit-identical) — the SIS2/MOM6
+         !!     sea-ice liquidus, λ = (−0.054 °C/PSU, 0 °C,
+         !!     −7.53e-8 °C/Pa).  `T_f(35 PSU, 0 Pa) = −1.89 °C`.  This is
+         !!     the set the shipped sea-ice column model was ported and
+         !!     tested against.
+         !!   * `"isomip"` — the ISOMIP+ protocol liquidus (Asay-Davis et
+         !!     al. 2016, GMD 9, Table 4 p. 2483; consumed in their
+         !!     eq. (25) p. 2485), λ = (−0.0573 °C/PSU, 0.0832 °C,
+         !!     −7.53e-8 °C/Pa).  Required for an ice-shelf-cavity run
+         !!     claiming ISOMIP+ compliance, and the value the ice-shelf
+         !!     literature is unanimous on.
+         !!
+         !! WHY IT MATTERS.  At S = 34.5 the two sets differ by ~0.03 °C
+         !! — a few percent of a typical Antarctic thermal driving, and
+         !! enough to flip the SIGN of a basal melt rate over a 0.03 °C
+         !! band of ocean temperature.  A mistyped value is therefore a
+         !! fail-loud `validate_config` error, never a silent fallback.
+         !!
+         !! NAMED SETS ONLY, on purpose: λ1/λ2/λ3 are a fitted triple and
+         !! there is no free-form coefficient knob, so a configuration
+         !! cannot mix λ1 from one source with λ2 from another.  A
+         !! NONLINEAR liquidus (MOM6 `MILLERO_78`, a TEOS-10 polynomial)
+         !! is a different functional form and would arrive as its own
+         !! `form` selector at the documented seam in
+         !! `eos_freezing_point`, not as another member of this list.
+         !!
+         !! SCOPE: this is the OCEAN-side liquidus only — what
+         !! `eos_freezing_point` returns, i.e. the sea-surface freezing
+         !! temperature the frazil, frazil-uptake and basal-flux kernels
+         !! work against.  The SIS2 ice model's INTERNAL brine-pocket
+         !! liquidus slope (`ICE_DTF_DS`, `rdb_ice_enthalpy`) is baked
+         !! into its closed-form enthalpy<->temperature map and is NOT
+         !! switched here; under `"isomip"` the two therefore disagree by
+         !! ~0.03 °C.  The ISOMIP+ set is for ice-shelf-cavity work, where
+         !! the sea-ice column model is normally off.
       real(wp) :: p_ref = 0.0_wp
          !! Reference pressure (Pa, `>= 0`) at which the model's POTENTIAL
          !! density `ms%rho_layer` is evaluated.  Default 0 (surface
@@ -3250,6 +3294,7 @@ contains
       use rdb_ocean_surface_flux, only: sw_source_is_implemented
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 bkgnd_henyey_conflicts_profile
+      use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
          !! Non-zero on any cross-knob semantic validation failure when
@@ -3480,6 +3525,25 @@ contains
                            "non-zero to build the linear S(z) IC (they gate together, "// &
                            "exactly as T_init_surface/T_init_bottom do); one alone is "// &
                            "ignored and the column stays uniform at initial_salinity.")
+         has_error = .true.
+      end if
+
+      ! Freezing-point (liquidus) coefficient set.  Belt-and-braces on top
+      ! of the `nml_enum allowed=` list, in the style of the
+      ! `conc_config` check above — and NOT optional: `parse_tfreeze_set`
+      ! deliberately has no default fallback, so a string that reaches
+      ! `eos_apply_tfreeze_set` unrecognised would silently leave the
+      ! sea-ice set in place.  At S = 34.5 the two shipped sets differ by
+      ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
+      ! basal melt rate — a mistyped liquidus must stop the run.
+      if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) == TFREEZE_SET_INVALID) then
+         call logger%error("&ocean_eos_nml tfreeze_set = '"// &
+                           trim(cfg%ocean%eos%tfreeze_set)// &
+                           "' is not recognised (allowed: seaice, isomip). "// &
+                           "'seaice' is the SIS2/MOM6 sea-ice liquidus "// &
+                           "(-0.054*S - 7.53e-8*p); 'isomip' is the ISOMIP+ "// &
+                           "ice-shelf-cavity set (-0.0573*S + 0.0832 - 7.53e-8*p, "// &
+                           "Asay-Davis et al. 2016 Table 4).")
          has_error = .true.
       end if
 
@@ -7386,9 +7450,11 @@ contains
    end subroutine register_ocean_pgf
 
    subroutine register_ocean_eos(cfg, schema)
-      !! `&ocean_eos_nml`: equation-of-state variant selector + the
+      !! `&ocean_eos_nml`: equation-of-state variant selector, the
+      !! freezing-point (liquidus) coefficient set, and the
       !! potential-density reference pressure.
-      !! `eos` enum mirrors `parse_eos_variant` in rdb_eos.
+      !! `eos` enum mirrors `parse_eos_variant` in rdb_eos;
+      !! `tfreeze_set` mirrors `parse_tfreeze_set` in the same module.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -7396,11 +7462,18 @@ contains
       real(wp), pointer :: pr
 
       g%name = "ocean_eos"
-      g%doc = "Equation-of-state variant selector + reference pressure."
+      g%doc = "Equation-of-state variant selector, liquidus set + reference pressure."
       ps => cfg%ocean%eos%eos
       call g%add(nml_enum("eos", ps, "Equation-of-state variant", &
                           allowed=[character(len=10) :: "linear", "wright", &
                                    "roquet_spv", "teos10"]))
+      ps => cfg%ocean%eos%tfreeze_set
+      call g%add(nml_enum("tfreeze_set", ps, &
+                          "Named liquidus coefficient set for eos_freezing_point "// &
+                          "(T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 "// &
+                          "(-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ "// &
+                          "(-0.0573, 0.0832, -7.53e-8)", &
+                          allowed=[character(len=6) :: "seaice", "isomip"]))
       pr => cfg%ocean%eos%p_ref
       call g%add(nml_real("p_ref", pr, &
                           "Reference pressure for the potential density "// &

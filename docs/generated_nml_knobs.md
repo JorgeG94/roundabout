@@ -685,11 +685,12 @@ Pressure-gradient-force kernel selector + knobs.
 
 ### &ocean_eos_nml
 
-Equation-of-state variant selector + reference pressure.
+Equation-of-state variant selector, liquidus set + reference pressure.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `eos` | `"linear"` |  | Equation-of-state variant |
+| `tfreeze_set` | `"seaice"` |  | Named liquidus coefficient set for eos_freezing_point (T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 (-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ (-0.0573, 0.0832, -7.53e-8) |
 | `p_ref` | `0.0000000000E+00` | Pa | Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density) |
 
 ### &ocean_bdrag_nml
