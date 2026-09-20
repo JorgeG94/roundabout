@@ -12,6 +12,19 @@ module rdb_remap_column
    !! inside `do concurrent` (one GPU thread per column, sequential O(nz)
    !! vertical sweep). Conservation: sum(q_new*dz_new) = sum(q_old*dz_old)
    !! to machine precision when sum(dz_old) = sum(dz_new).
+   !!
+   !! **Boundary-cell closure.** Every reconstruction above PCM needs a
+   !! stencil the outermost cells do not have. By default (and matching
+   !! MOM6 `BOUNDARY_EXTRAPOLATION = False`) `k=1` and `k=nz` collapse to
+   !! PCM, so the remap is FIRST-ORDER in the two cells adjacent to the
+   !! boundary no matter which method is selected — PLM, PPM, PPM_H4 and
+   !! PQM all share that closure and all remap a linear-in-z profile with
+   !! the same O(h) error there. The optional `bnd_extrap` argument
+   !! selects `boundary_half_jump` instead: the linear-exact one-sided
+   !! edge pair, which makes the whole column exact for a profile linear
+   !! in z. It is the remap-side twin of
+   !! `rdb_ocean_pgf_reconstruct :: boundary_edges_linear`. Default
+   !! `.false.` everywhere ⇒ bit-identical.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PCM, REMAP_PLM, REMAP_PPM, &
                             REMAP_PPM_H4, REMAP_PQM
@@ -51,7 +64,44 @@ module rdb_remap_column
 
 contains
 
-   pure subroutine remap_column(method, nz, dz_old, dz_new, q_old, q_new)
+   pure subroutine boundary_half_jump(h_self, h_nbr, dq_up, d)
+      !$acc routine seq
+      !! Linear-exact half-jump across a BOUNDARY cell (k=1 or k=nz),
+      !! where a centred stencil has no second neighbour.
+      !!
+      !! `dq_up` is the cell-mean increment toward the SURFACE across the
+      !! two cell centres (`q(2)-q(1)` at the bed, `q(nz)-q(nz-1)` at the
+      !! surface).  The centres are `(h_self + h_nbr)/2` apart, so the
+      !! per-metre slope is `dq_up/((h_self+h_nbr)/2)` and the half-jump
+      !! across this cell is
+      !!
+      !!     d = dq_up * h_self / (h_self + h_nbr)
+      !!
+      !! giving edges `q ± d` that reproduce a profile linear in z EXACTLY,
+      !! for any thickness pair.  The default closure — a PCM flatten —
+      !! does not: it leaves a first-order reconstruction error in the two
+      !! cells adjacent to the boundary.  Same device (and same clamp) as
+      !! `rdb_ocean_pgf_reconstruct :: boundary_edges_linear`, which fixed
+      !! the mirror-image defect in the FV pressure-gradient quadrature.
+      !!
+      !! Clamp `|d| <= |dq_up|`: since `h_self/(h_self+h_nbr) < 1` it never
+      !! bites on a real thickness pair — it is armour against a degenerate
+      !! `h_nbr <= 0`.
+      real(wp), intent(in) :: h_self
+         !! Thickness of the boundary cell itself.
+      real(wp), intent(in) :: h_nbr
+         !! Thickness of its single interior neighbour.
+      real(wp), intent(in) :: dq_up
+         !! Cell-mean increment toward the surface (neighbour -> self at
+         !! the surface cell, self -> neighbour at the bed cell).
+      real(wp), intent(out) :: d
+         !! Half-jump across the boundary cell; edges are `q ± d`.
+
+      d = dq_up*h_self/max(h_self + h_nbr, H_NEGLECT)
+      d = sign(min(abs(d), abs(dq_up)), d)
+   end subroutine boundary_half_jump
+
+   pure subroutine remap_column(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
       !$acc routine seq
       !! Dispatch to the requested remapping method.
       integer, intent(in) :: method
@@ -61,20 +111,30 @@ contains
       real(wp), intent(in) :: dz_new(nz)
       real(wp), intent(in) :: q_old(nz)
       real(wp), intent(out) :: q_new(nz)
+      logical, intent(in), optional :: bnd_extrap
+         !! Boundary extrapolation (MOM6 `BOUNDARY_EXTRAPOLATION`).
+         !! Absent or `.false.` (the default) ⇒ the boundary cells `k=1`
+         !! and `k=nz` reconstruct as PCM, which is first-order there.
+         !! `.true.` ⇒ `boundary_half_jump`, the linear-exact one-sided
+         !! closure.  Ignored by PCM (no reconstruction to close).
+
+      logical :: be
+      be = .false.
+      if (present(bnd_extrap)) be = bnd_extrap
 
       select case (method)
       case (REMAP_PCM)
          call remap_column_pcm(nz, dz_old, dz_new, q_old, q_new)
       case (REMAP_PLM)
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
       case (REMAP_PPM)
-         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be)
       case (REMAP_PPM_H4)
-         call remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, be)
       case (REMAP_PQM)
-         call remap_column_pqm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, be)
       case default
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
       end select
    end subroutine remap_column
 
@@ -133,11 +193,14 @@ contains
       end do
    end subroutine remap_column_pcm
 
-   pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new)
+   pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
       !$acc routine seq
       !! Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
       !! Per old layer k: q_hat(xi) = q(k) + slope(k)*(2*xi - 1), xi in [0,1],
       !! slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
+      !! `bnd_extrap` (absent/.false. = default) closes the boundary cells
+      !! with `boundary_half_jump` instead of the PCM flatten — see
+      !! `remap_column`.
       integer, intent(in) :: nz
       real(wp), intent(in) :: dz_old(nz)
          !! Old layer thicknesses
@@ -147,6 +210,8 @@ contains
          !! Old cell-average scalar values
       real(wp), intent(out) :: q_new(nz)
          !! New cell-average scalar values (conservative)
+      logical, intent(in), optional :: bnd_extrap
+         !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
 
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       real(wp) :: slope(NZ_STACK_MAX)
@@ -181,6 +246,15 @@ contains
          end if
       end do
       slope(nz) = 0.0_wp
+      ! Boundary cells: PCM flatten by default; the linear-exact one-sided
+      ! half-jump when boundary extrapolation is requested.
+      if (present(bnd_extrap)) then
+         if (bnd_extrap) then
+            call boundary_half_jump(dz_old(1), dz_old(2), q_old(2) - q_old(1), slope(1))
+            call boundary_half_jump(dz_old(nz), dz_old(nz - 1), &
+                                    q_old(nz) - q_old(nz - 1), slope(nz))
+         end if
+      end if
 
       ! Sweep: for each new layer, integrate PLM from old layers
       ko_start = 1
@@ -222,13 +296,15 @@ contains
       end do
    end subroutine remap_column_plm
 
-   pure subroutine remap_column_ppm(nz, dz_old, dz_new, q_old, q_new)
+   pure subroutine remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
       !$acc routine seq
       !! Piecewise-parabolic (Colella & Woodward 1984) remap.
       !! Per old layer k, xi in [0,1]:
       !!   q_hat(xi) = q_L + xi*(q_R - q_L + q6*(1 - xi)), q6 = 6*q_bar - 3*(q_L+q_R)
       !! Edge values: 4th-order interp + CW monotonicity limiting; boundary
-      !! layers fall back to PLM-quality edges.
+      !! layers fall back to PLM-quality edges, or — under `bnd_extrap` —
+      !! to the linear-exact one-sided pair (`boundary_half_jump`), which
+      !! zeroes `q6` there so the boundary cell carries a straight line.
       integer, intent(in) :: nz
       real(wp), intent(in) :: dz_old(nz)
          !! Old layer thicknesses
@@ -238,13 +314,20 @@ contains
          !! Old cell-average scalar values
       real(wp), intent(out) :: q_new(nz)
          !! New cell-average scalar values (conservative)
+      logical, intent(in), optional :: bnd_extrap
+         !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
 
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       real(wp) :: q_L(NZ_STACK_MAX), q_R(NZ_STACK_MAX), q6(NZ_STACK_MAX)
       real(wp) :: z_lo, z_hi, overlap, integral
       real(wp) :: xi_lo, xi_hi
       real(wp) :: edge, dq, dq_l, dq_r, q_min, q_max
+      real(wp) :: d_bnd
+      logical :: be
       integer :: k, ko, ko_start
+
+      be = .false.
+      if (present(bnd_extrap)) be = bnd_extrap
 
       ! Trivial cases
       if (nz == 1) then
@@ -253,7 +336,7 @@ contains
       end if
       if (nz == 2) then
          ! With only 2 layers, PPM reduces to PLM
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
          return
       end if
 
@@ -347,6 +430,27 @@ contains
          q6(k) = 6.0_wp*q_old(k) - 3.0_wp*(q_L(k) + q_R(k))
       end do
 
+      ! ---- Step 2b: boundary-cell closure (opt-in) ----
+      ! The CW limiter above bounds every edge by the cell means it can
+      ! see, and at k=1 / k=nz that is a ONE-SIDED bound, so the default
+      ! closure collapses those two cells to PCM.  With extrapolation on,
+      ! the symmetric one-sided pair replaces it and
+      ! q6 = 6q - 3(q_L + q_R) = 0, so the boundary cell carries the exact
+      ! straight line whenever q(z) is linear.  Deliberately written AFTER
+      ! the limiter: the one-sided clip is precisely what has to be
+      ! bypassed here.
+      if (be) then
+         call boundary_half_jump(dz_old(1), dz_old(2), q_old(2) - q_old(1), d_bnd)
+         q_L(1) = q_old(1) - d_bnd
+         q_R(1) = q_old(1) + d_bnd
+         q6(1) = 0.0_wp
+         call boundary_half_jump(dz_old(nz), dz_old(nz - 1), &
+                                 q_old(nz) - q_old(nz - 1), d_bnd)
+         q_L(nz) = q_old(nz) - d_bnd
+         q_R(nz) = q_old(nz) + d_bnd
+         q6(nz) = 0.0_wp
+      end if
+
       ! ---- Step 3: Integrate parabolic reconstruction over new layers ----
       ko_start = 1
       do k = 1, nz
@@ -386,7 +490,7 @@ contains
       end do
    end subroutine remap_column_ppm
 
-   pure subroutine remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new)
+   pure subroutine remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
       !$acc routine seq
       !! PPM with non-uniform 4th-order (H4) edge values (White & Adcroft 2008).
       !! As `remap_column_ppm` but the interior edge estimate is the
@@ -411,13 +515,21 @@ contains
       real(wp) :: q_L(NZ_STACK_MAX), q_R(NZ_STACK_MAX), q6(NZ_STACK_MAX)
       real(wp) :: z_lo, z_hi, overlap, integral
       real(wp) :: xi_lo, xi_hi
+      logical, intent(in), optional :: bnd_extrap
+         !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+
       real(wp) :: dq, dq_l, dq_r, q_min, q_max
+      real(wp) :: d_bnd
+      logical :: be
       real(wp) :: h0, h1, h2, h3, hf, h_sum
       real(wp) :: h01, h12, h23, h012, h123, h0123
       real(wp) :: f1, f2, f3, et1, et2, et3
       real(wp) :: m11, m12, m13, m21, m22, m23, m31, m32, m33, det
       real(wp) :: z1, z2, z3, ca, cb, cc, edge_val
       integer :: k, ko, ko_start
+
+      be = .false.
+      if (present(bnd_extrap)) be = bnd_extrap
 
       ! Trivial cases (identical to PPM)
       if (nz == 1) then
@@ -426,7 +538,7 @@ contains
       end if
       if (nz == 2) then
          ! With only 2 layers, PPM reduces to PLM
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
          return
       end if
 
@@ -600,6 +712,19 @@ contains
          q6(k) = 6.0_wp*q_old(k) - 3.0_wp*(q_L(k) + q_R(k))
       end do
 
+      ! ---- Step 2b: boundary-cell closure (opt-in; see remap_column_ppm) ----
+      if (be) then
+         call boundary_half_jump(dz_old(1), dz_old(2), q_old(2) - q_old(1), d_bnd)
+         q_L(1) = q_old(1) - d_bnd
+         q_R(1) = q_old(1) + d_bnd
+         q6(1) = 0.0_wp
+         call boundary_half_jump(dz_old(nz), dz_old(nz - 1), &
+                                 q_old(nz) - q_old(nz - 1), d_bnd)
+         q_L(nz) = q_old(nz) - d_bnd
+         q_R(nz) = q_old(nz) + d_bnd
+         q6(nz) = 0.0_wp
+      end if
+
       ! ---- Step 3: Integrate parabolic reconstruction over new layers (verbatim) ----
       ko_start = 1
       do k = 1, nz
@@ -751,7 +876,7 @@ contains
       csys(4) = ((wt(1, 4)*du1) + (wt(2, 4)*du2)) + (wt(3, 4)*du3)
    end subroutine pqm_end_value_h4
 
-   pure subroutine remap_column_pqm(nz, dz_old, dz_new, q_old, q_new)
+   pure subroutine remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
       !$acc routine seq
       !! Piecewise-quartic (PQM_IH4IH3) conservative remap (White & Adcroft 2008).
       !! Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
@@ -772,6 +897,11 @@ contains
       real(wp), intent(out) :: q_new(nz)
          !! New cell-average scalar values (conservative)
 
+      logical, intent(in), optional :: bnd_extrap
+         !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+
+      logical :: be
+      real(wp) :: d_bnd
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       ! Edge values / slopes, two per cell: index 1 = left, 2 = right.
       real(wp) :: ev_l(NZ_STACK_MAX), ev_r(NZ_STACK_MAX)
@@ -794,13 +924,16 @@ contains
       real(wp) :: rho, sqrt_rho, x1, x2, grad1, grad2
       integer :: k, ko, ko_start, np1, inflexion_l, inflexion_r
 
+      be = .false.
+      if (present(bnd_extrap)) be = bnd_extrap
+
       ! Trivial / degenerate cases — fall back to lower-order safe paths.
       if (nz == 1) then
          q_new(1) = q_old(1)
          return
       end if
       if (nz < 5) then
-         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new)
+         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be)
          return
       end if
 
@@ -1094,6 +1227,23 @@ contains
       ev_r(nz) = q_old(nz)
       es_l(nz) = 0.0_wp
       es_r(nz) = 0.0_wp
+      ! Opt-in boundary closure: the symmetric one-sided edge pair plus the
+      ! matching constant edge slope 2d/h.  Substituting those into Step 4
+      ! gives pc = pd = pe = 0 identically, so the boundary cell carries
+      ! the exact straight line (see `remap_column_ppm`).
+      if (be) then
+         call boundary_half_jump(dz_old(1), dz_old(2), q_old(2) - q_old(1), d_bnd)
+         ev_l(1) = q_old(1) - d_bnd
+         ev_r(1) = q_old(1) + d_bnd
+         es_l(1) = 2.0_wp*d_bnd/max(dz_old(1), H_NEGLECT)
+         es_r(1) = es_l(1)
+         call boundary_half_jump(dz_old(nz), dz_old(nz - 1), &
+                                 q_old(nz) - q_old(nz - 1), d_bnd)
+         ev_l(nz) = q_old(nz) - d_bnd
+         ev_r(nz) = q_old(nz) + d_bnd
+         es_l(nz) = 2.0_wp*d_bnd/max(dz_old(nz), H_NEGLECT)
+         es_r(nz) = es_l(nz)
+      end if
 
       ! ---- Step 4: per-cell quartic coefficients (xi in [0,1]) ----
       do k = 1, nz

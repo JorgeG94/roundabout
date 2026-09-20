@@ -300,6 +300,14 @@ class Vcoord(Group):
         default=False,
     )
 
+    remap_boundary_extrap = Bool(
+        'remap_boundary_extrap',
+        doc='ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION)',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class Physics(Group):
     """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
@@ -5622,4 +5630,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 615
+N_KNOBS = 616
