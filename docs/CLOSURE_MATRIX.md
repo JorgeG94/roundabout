@@ -290,9 +290,10 @@ in {`sigma`, `zstar`} (every z-like family anchors at `z = 0`, which under a
 shelf is inside the ice) and `thickness_config /= "uniform_z"`; the SPLIT
 solver (`n_inner ≥ 1`); single rank; `bt_halo = 0` (also in
 `bt_halo_auto_exclusion`, so AUTO resolves to 0 instead of manufacturing a
-width); and mutually exclusive with wet/dry, porous barriers, sea ice,
-`&ocean_tides_nml use_sal` and `&ocean_zinit_nml enable`. Default off ⇒
-byte-identical.
+width); and mutually exclusive with wet/dry, porous barriers, sea ice and
+`&ocean_tides_nml use_sal`. `&ocean_zinit_nml enable` COMPOSES (its refusal
+was lifted with P5.3 — the overlay measures depth from `z = 0`, not from the
+column top). Default off ⇒ byte-identical.
 
 ## Wind-stress application (multilayer)
 

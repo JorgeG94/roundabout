@@ -81,7 +81,7 @@ module rdb_ocean_state
    use rdb_ocean_bathymetry_inject, only: bathymetry_normalise_sign, bathymetry_fill_ghosts_array
 #ifndef RDB_NO_NETCDF
    use rdb_bathymetry, only: load_bathymetry_into_array
-   use rdb_ocean_z_init, only: seed_ts_from_zfile
+   use rdb_ocean_z_init, only: seed_ts_from_zfile, seed_ts_linear_z
 #endif
    implicit none
    private
@@ -1408,16 +1408,20 @@ contains
       ! any analytical T/S.  Default off (`enable = .false.`) preserves
       ! bit-identity.  NetCDF-only: the reader lives in rdb_ocean_z_init,
       ! which only compiles with RDB_ENABLE_NETCDF=ON.
+      !
+      ! Under a cavity the overlay is handed `metrics%z_draft` so every
+      ! layer centre's depth is measured from `z = 0` rather than from the
+      ! ice base; see `seed_zinit_overlay`.
       if (cfg%ocean%zinit%enable) then
 #ifndef RDB_NO_NETCDF
          if (present(ierr)) then
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr=local_ierr)
+            call seed_zinit_overlay(state, grid, cfg, ierr=local_ierr)
             if (local_ierr /= 0) then
                ierr = local_ierr
                return
             end if
          else
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit)
+            call seed_zinit_overlay(state, grid, cfg)
          end if
 #else
          call fail("ocean_state_seed_from_cfg: ocean_zinit requires "// &
@@ -1501,6 +1505,52 @@ contains
       call state%vcoord%build_zref_full(state%barotropic%b)
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine ocean_state_seed_from_cfg
+
+#ifndef RDB_NO_NETCDF
+   subroutine seed_zinit_overlay(state, grid, cfg, ierr)
+      !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
+      !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
+      !! `"linear"` — the analytic affine `lin_*` profile) and whether a
+      !! cavity draft is present.
+      !!
+      !! The draft is the whole reason this is a separate routine.  Both
+      !! seeders measure each layer centre's GEOPOTENTIAL depth from
+      !! `z = 0`; under an ice shelf the column top is `z_draft` metres
+      !! down, so `metrics%z_draft` has to reach them or a `T(z)` profile
+      !! lands systematically too shallow (and, under a SLOPING lid,
+      !! tilts the isopycnals with the ice base — not a state of rest).
+      !! With the cavity off `metrics%z_draft` is the `(1, 1)`
+      !! placeholder, so the argument is simply not passed and the
+      !! arithmetic is bit-identical to the pre-cavity path.
+      !!
+      !! NOT `pure`: the seeders it dispatches to read files and log.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      type(config_t), intent(in) :: cfg
+      integer, intent(out), optional :: ierr
+         !! Threaded straight through to the seeder; an ABSENT `ierr`
+         !! stays absent there, so each keeps its own `error stop` text.
+
+      logical :: cav
+
+      cav = state%metrics%use_cavity
+      if (trim(adjustl(cfg%ocean%zinit%source)) == "linear") then
+         if (cav) then
+            call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr, &
+                                  state%metrics%z_draft)
+         else
+            call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr)
+         end if
+      else
+         if (cav) then
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, &
+                                    state%metrics%z_draft)
+         else
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr)
+         end if
+      end if
+   end subroutine seed_zinit_overlay
+#endif
 
    subroutine ocean_state_build_restart_registry(state, grid, reg)
       !! Walk the ocean god state and register every field that must

@@ -4955,6 +4955,15 @@ class OceanZinit(Group):
         default=False,
     )
 
+    source = Enum(
+        'source',
+        doc='Where the T(z)/S(z) profile comes from: a pre-regridded NetCDF, or the analytic affine lin_* profile (no file)',
+        units='',
+        required=False,
+        default='file',
+        allowed=('file', 'linear'),
+    )
+
     file = Str(
         'file',
         doc='Path to the model-grid T/S NetCDF',
@@ -5005,6 +5014,38 @@ class OceanZinit(Group):
         units='PSU',
         required=False,
         default=35.0,
+    )
+
+    lin_t_ref = Real(
+        'lin_t_ref',
+        doc="source='linear': temperature at the z = 0 datum",
+        units='degC',
+        required=False,
+        default=0.0,
+    )
+
+    lin_dt_dz = Real(
+        'lin_dt_dz',
+        doc="source='linear': dT/dz, z positive UP (stable > 0)",
+        units='degC/m',
+        required=False,
+        default=0.0,
+    )
+
+    lin_s_ref = Real(
+        'lin_s_ref',
+        doc="source='linear': salinity at the z = 0 datum",
+        units='PSU',
+        required=False,
+        default=35.0,
+    )
+
+    lin_ds_dz = Real(
+        'lin_ds_dz',
+        doc="source='linear': dS/dz, z positive UP (stable < 0)",
+        units='PSU/m',
+        required=False,
+        default=0.0,
     )
 
 
@@ -5975,4 +6016,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 652
+N_KNOBS = 657
