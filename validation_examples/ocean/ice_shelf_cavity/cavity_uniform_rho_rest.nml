@@ -1,0 +1,155 @@
+! Resting cavity under a SLOPING ice shelf, UNIFORM DENSITY — the
+! "is it the load, or is it the stratification?" control.
+!
+! WHAT THIS IS.  `cavity_sloping_lid_rest.nml` with ONE knob changed:
+! `&ocean_zinit_nml lin_ds_dz = 0`, so the column has no salinity
+! gradient and (with `lin_dt_dz = 0` already) uniform density.  The
+! sloping lid, the calving front, the load, the datum, the geopotential
+! IC and the zero dissipation are all identical.
+!
+! WHY IT MATTERS.  The FV-MOM6 trapezoid error over the interface gap
+! between two columns is
+!
+!     G(K) = -(De(K)^3/12) * Pi''  =  -(De(K)^3/12) * rho_0 * N^2
+!
+! so at `N^2 = 0` it is not merely small, it is ABSENT — for every gap,
+! however steep the lid.  Whatever this case shows is therefore NOT the
+! sloping-coordinate pressure-gradient truncation; it is the residual of
+! the LOAD bookkeeping (`pa(nz+1) = rho_ref*g*eta_geo + p_ice_ref`, the
+! datum `bt_H_ref = b - z_draft`, the seam) plus rounding.
+!
+! MEASURED (gfortran 15.1 Release, single rank, 30 days, 4320 steps):
+!
+!     split_scheme = "pred_corr" (default)   En = 1.340E-20 m2/s2
+!     split_scheme = "ssp_rk2"   (twin)      En = 2.872E-20 m2/s2
+!
+! i.e. |u|_rms ~ 1.6e-10 m/s — machine zero, and TWELVE decades below the
+! stratified twin's 3.04E-08 at the same day 30.  That is the statement
+! that the stratified case's residual really is the `rho_0*N^2*De^3` term
+! the derivation predicts, and not a mis-cancelled 5 MPa ice load
+! pretending to be one.  Gate: the "must be bit-zero" bar `REST_1UM_S`.
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_uniform_rho_rest.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 6
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 720.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "linear"
+   draft_depth  = 570.0
+   draft_slope  = -6.9e-3
+   draft_x0     = -10000.0
+   draft_x1     = 72000.0      ! the CALVING FRONT; open ocean beyond
+   h_min_cavity = 40.0
+/
+
+&ocean_pgf_nml
+   form        = "fv_mom6"
+   p_top_in_bc = .true.
+   maxvel      = 2.0
+/
+
+&ocean_eos_nml
+   eos = "linear"
+/
+
+&ocean_ic_nml
+   alpha_T = 3.8356948e-2
+   beta_S  = 8.0587609e-1
+   T_ref   = -1.0
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"
+   lin_t_ref = -1.9
+   lin_dt_dz = 0.0
+   lin_s_ref = 33.8
+   lin_ds_dz = 0.0             ! UNIFORM DENSITY: every G(K) is identically 0
+/
+
+&tracer_nml
+   initial_temperature = -1.9
+   initial_salinity    = 33.8
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h = 0.0
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "cavity_uniform_rho_rest"
+   dt_out   = 86400.0
+/
+
+&output_nml
+   output_dir     = "./out_cavity_uniform_rho_rest"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/

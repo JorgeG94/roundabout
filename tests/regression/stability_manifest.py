@@ -9,7 +9,7 @@ Why a second list rather than more keys on the first
 `CASES` answers "did 10 steps of this namelist drift from its golden". This
 list answers a different question -- "does this namelist produce PHYSICS that
 holds up over a run long enough for its physics to exist" -- and it covers all
-62 tracked ocean namelists, not the 35 the golden suite curates. Keeping them
+68 tracked ocean namelists, not the 35 the golden suite curates. Keeping them
 separate means neither gate has to compromise for the other.
 
 Reading an entry
@@ -626,6 +626,125 @@ STABILITY_CASES = [
     _case("kpp_basin", V + "epbl_mld/kpp_basin.nml", "forced", 2160, 300,
           budget_tol=BUDGET_OPEN, tags=["kpp", "mld"]),
 
+    # ============ ice-shelf cavity at rest (the sloping-lid PGF) ===========
+    # Three quiescent cavities that differ by ONE ingredient each, so the set
+    # says WHICH part of the discretisation manufactured any energy. All
+    # three: flat bed, no wind, no surface flux, no melt, no bottom drag, no
+    # vertical mixing and NO lateral viscosity, so nothing damps the answer
+    # into the floor and nothing can hide a pressure-gradient regression.
+    # Full derivation, the substitution table and the Yung et al. (2026)
+    # comparison live in validation_examples/ocean/ice_shelf_cavity/README.md.
+    _case("cavity_flat_lid_rest",
+          V + "ice_shelf_cavity/cavity_flat_lid_rest.nml",
+          "rest", 4320, 1440, en_rest_max=REST_1UM_S,
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
+                            "nu_h": 0.0, "nghost": 2,
+                            "has_western_boundary": True, "eddying": False},
+          note="a FLAT ice lid over a flat bed makes every interface gap "
+               "De(K) = 0, so every FV-MOM6 trapezoid error G(K) is "
+               "structurally ABSENT and the only correct answer is exactly "
+               "zero motion. It is the control for three things at once: the "
+               "load cancellation pa(nz+1) = rho_ref*g*eta_geo + "
+               "rho_ref*g*z_draft (the same product twice, opposite signs), "
+               "the datum bt_H_ref = b - z_draft (which makes bt_eta = 0 at "
+               "rest), and the geopotential zinit overlay. MEASURED "
+               "En = 0.000E+00 at every daily sample out to 30 days, under "
+               "BOTH outer schemes -- hence the bit-zero bar.",
+          tags=["cavity", "ice_shelf", "rest_exact", "vcoord_sigma",
+                "pgf_fv_mom6", "zinit_linear"]),
+    _case("cavity_uniform_rho_rest",
+          V + "ice_shelf_cavity/cavity_uniform_rho_rest.nml",
+          "rest", 4320, 1440, en_rest_max=REST_1UM_S,
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
+                            "nu_h": 0.0, "nghost": 2,
+                            "has_western_boundary": True, "eddying": False},
+          note="the sloping lid and the calving front of the headline case, "
+               "with the stratification removed (lin_ds_dz = 0). G(K) = "
+               "-(De(K)^3/12)*rho_0*N^2, so at N^2 = 0 the truncation is not "
+               "small but ABSENT however steep the lid -- whatever is left is "
+               "the LOAD bookkeeping plus rounding. MEASURED En = 1.340E-20 "
+               "(pred_corr) / 2.872E-20 (ssp_rk2) at day 30: machine zero, "
+               "and twelve decades under the stratified twin at the same day. "
+               "That is what says the stratified case's residual really is "
+               "the rho_0*N^2*De^3 term and not a mis-cancelled 5.26 MPa ice "
+               "load pretending to be one.",
+          tags=["cavity", "ice_shelf", "rest_exact", "uniform_density",
+                "pgf_fv_mom6"]),
+    _case("cavity_sloping_lid_rest",
+          V + "ice_shelf_cavity/cavity_sloping_lid_rest.nml",
+          "rest", 4320, 2880, en_rest_max=REST_1MM_S, t1_timeout=900,
+          # THE BAR. REST_1MM_S is the sloped-rest family's existing bar and
+          # the velocity a resting sub-shelf cavity has no excuse to exceed
+          # (real sub-shelf flows are cm/s, so 1 mm/s of spurious current is
+          # already a serious contaminant). Measured day-30 peak 3.043E-08 =>
+          # 2.47e-04 m/s: 16x under it in energy, 4x in velocity.
+          #
+          # It does NOT clear the tighter REST_100UM_S (0.5e-08) the Phase-5
+          # design proposed -- day 30 is 6x over -- and that is recorded here
+          # rather than legislated away: restoring REST_100UM_S is the
+          # Phase-6 acceptance criterion. Do NOT close the gap by widening
+          # this bar, by shortening the run, or by putting viscosity back
+          # into the namelist.
+          #
+          # The tier-2 twin is the FULL grid at the FULL dt, shortened to 20
+          # days (2880 steps, ~24 s). Not a downscale -- 48x6x15 is already
+          # CI-sized -- but the LENGTH is load-bearing: ssp_rk2 tracks
+          # pred_corr to within 2% for 11 days and only then leaves
+          # (5.27E-08 at day 13, 4.22E-05 at day 20, while pred_corr is still
+          # at 2.07E-09). At the 10 days a naive twin would use, BOTH schemes
+          # read ~1.6E-09 and the twin's energy:rest XFAIL would XPASS
+          # against a case that gates nothing -- the same trap
+          # `resting_stratified_channel` documents.
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
+                            "nu_h": 0.0, "nghost": 2,
+                            "has_western_boundary": True, "eddying": False},
+          known_failure={
+              "assertions": ["energy:rest-settles"],
+              "reason":
+                  "OPEN, scoped, and the POINT of the case: this build "
+                  "carries none of the sloping-surface PGF corrections, so "
+                  "the sigma truncation under a tilted ice base does not "
+                  "merely hold a static spurious current -- it seeds a mode "
+                  "that leaves the day-1..20 plateau (En 1.0-2.1E-09, the "
+                  "derived N^2*D^3/(6*dx*Hbar) scale) on a ~3.2-day "
+                  "e-folding. It is BOUNDED, not runaway: 3.043E-08 at day "
+                  "30, 3.894E-06 at day 60 with the rate visibly decaying, "
+                  "budgets exact to 4e-13 throughout, no CFL truncation and "
+                  "no clamping. So the final sample is the peak at every "
+                  "horizon short of saturation and energy:rest-settles "
+                  "cannot pass. Characterised by substitution: dt 600 -> 300 "
+                  "reproduces the curve (3.069E-08 vs 3.043E-08), so it is "
+                  "NOT an (omega*dt)^n outer-split mode; ISOMIP+'s own "
+                  "nu_h = 6.0 and a dx^4-scaled biharmonic nu_4 = 1e7 each "
+                  "only DELAY it ~10 days; and the flat-lid "
+                  "(En = 0.000E+00) and uniform-density (1.34E-20) siblings "
+                  "are bit-zero, so the sloping-lid PGF error is the whole "
+                  "source. The MAGNITUDE gate energy:rest is deliberately "
+                  "NOT excused -- it is what separates the schemes "
+                  "(3.043E-08 vs ssp_rk2's 1.652E-04) and pred_corr passes "
+                  "it with margin. The fix is Yung et al. (2026)'s three "
+                  "corrections, not a tolerance.",
+              "ref": "validation_examples/ocean/ice_shelf_cavity/README.md",
+          },
+          note="THE Phase-5 physics gate and the Phase-6 baseline: a "
+               "stratified cavity under a linearly sloping ice shelf with a "
+               "calving front, initialised at rest with the isopycnals flat "
+               "in GEOPOTENTIAL z (&ocean_zinit_nml source='linear'; a "
+               "layer-index profile would tilt them with the sigma "
+               "coordinate and give the run real APE to convert). The load "
+               "partition -- datum bt_H_ref = b - z_draft, "
+               "p_top = rho_ref*g*z_draft in the pa(nz+1) BC -- makes the "
+               "barotropic state exactly at rest, so what is measured is the "
+               "FV-MOM6 truncation alone. Yung, Hallberg, Adcroft & Morrison "
+               "(2026), JAMES 18, e2025MS005645 report order 1e-9 m/s for "
+               "their CORRECTED algorithm (abstract; sigma icemount 1e-7 -> "
+               "1e-12, their SS5.1.2) on damped configurations; this build "
+               "implements none of their corrections and reads "
+               "|u|_rms = 5.7e-05 m/s at their 10-day horizon with no "
+               "dissipation at all.",
+          tags=["cavity", "ice_shelf", "sloping_lid", "calving_front",
+                "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "rest"]),
+
     # ===================== geometry / masking ==============================
     _case("island_at_rest", V + "island_at_rest/island_at_rest.nml",
           "rest", 2880, 300, en_rest_max=REST_1UM_S,
@@ -845,6 +964,27 @@ SCHEME_AXIS_KNOWN_FAILURE = {
             "ssp_rk2 stays supported and stays on this axis.",
         "ref": "validation_examples/ocean/eady/"
                "resting_stratified_channel.nml",
+    },
+    "cavity_sloping_lid_rest": {
+        "assertions": ["energy:rest", "energy:rest-settles"],
+        "reason":
+            "The same ssp_rk2 defect as `resting_stratified_channel`, seen "
+            "on an internal-wave field this case GENERATES for itself rather "
+            "than one a noise seed puts there: the sloping-lid sigma "
+            "truncation keeps forcing the cavity, and the SSP two-stage "
+            "average amplifies the resulting waves by "
+            "sqrt(1 + (omega dt)^4 / 4) per step. The two schemes are "
+            "indistinguishable for 11 days (En 1.98E-09 vs 2.0E-09), then "
+            "ssp_rk2 leaves: 5.27E-08 (d13), 4.62E-06 (d15), 4.22E-05 (d20), "
+            "1.652E-04 (d30) -- 330x over the 0.5e-06 bar and 5400x the "
+            "default pred_corr's 3.043E-08 on the identical file. The base "
+            "case keeps GATING energy:rest for exactly that reason and is "
+            "excused only on energy:rest-settles. Do NOT close this by "
+            "raising en_rest_max or by adding viscosity to the namelist "
+            "(nu_h = 6 and nu_4 = 1e7 each delay the growth ~10 days and "
+            "change nothing about its rate). ssp_rk2 stays supported and "
+            "stays on this axis.",
+        "ref": "validation_examples/ocean/ice_shelf_cavity/README.md",
     },
 }
 

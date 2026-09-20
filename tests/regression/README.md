@@ -139,7 +139,7 @@ diagnostics (low physics value). Run
 | `coverage.py` | P2 gcov coverage mode — measures ocean-closure coverage of the corpus + emits the gap list |
 | `run_all.py` | **single entry point** for the golden suite — invokes compare (CPU/GPU) + coverage, aggregates to one pass/fail + CI-ready exit code |
 | `stability.py` | **the two-tier stability suite** (see below) — parses the model's own console time series and asserts on PHYSICS, not on a golden |
-| `stability_manifest.py` | its case list: all 62 tracked ocean namelists, with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
+| `stability_manifest.py` | its case list: all 68 tracked ocean namelists, with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
 | `downscale.py` | the dimensionless-number rules a tier-2 twin must satisfy, plus the standalone checker that validates every twin |
 | `README.md` | this file |
 
