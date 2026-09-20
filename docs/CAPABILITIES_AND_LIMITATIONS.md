@@ -249,6 +249,16 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (shear-driven bulk-Ri sweep + shape function `G(σ) = σ(1-σ)²`) +
   KV_ML_INVZ2 (MOM6 inverse-z² surface band over `HMIX_FIXED`) +
   DT_THERM cadence skip + HARMONIC_VISC face-thickness option.
+  KPP's convective scale takes `w_* = max(0, −B_0·h_b)^(1/3)` from the
+  surface buoyancy flux `B_0 = (g/ρ₀)·(α_T·F_T − β_S·F_S)` — the same
+  quantity EPBL forms from the specific-volume derivatives, gated
+  against it to round-off by `test_ocean_buoyancy_flux` and exposed as
+  the diagnostic `vmix%b0`.  **`α_T` / `β_S` are DIMENSIONAL**
+  (kg m⁻³ per °C / PSU, the density-anomaly form — see the EOS units
+  box in `docs/REFERENCE.md`), which is why the `1/ρ₀` is there; the
+  historical `alpha_T = 1.7e-4` default is numerically the FRACTIONAL
+  coefficient, so it masks a missing `1/ρ₀` and is not a physical
+  configuration for any run that cares about surface buoyancy forcing.
 - **Convective adjustment** (Brunt-Väisälä trigger, CVMix
   `CVMix_convection`-style, `&ocean_conv_nml enable`, default off ⇒
   bit-identical): where the interior `N² < n2_thresh` (dense-over-light),

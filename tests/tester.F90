@@ -106,6 +106,7 @@ program rdb_tests
    use test_ocean_geothermal, only: ocean_geothermal_collect => collect_ocean_geothermal_tests
    use test_ocean_bkgnd_mixing, only: ocean_bkgnd_mixing_collect => collect_ocean_bkgnd_mixing_tests
    use test_ocean_kpp_convective, only: ocean_kpp_convective_collect => collect_ocean_kpp_convective_tests
+   use test_ocean_buoyancy_flux, only: ocean_buoyancy_flux_collect => collect_ocean_buoyancy_flux_tests
    use test_ocean_vcoord, only: ocean_vcoord_collect => collect_ocean_vcoord_tests
    use test_ocean_vcoord_rho, only: ocean_vcoord_rho_collect => collect_ocean_vcoord_rho_tests
    use test_ocean_vcoord_hycom, only: ocean_vcoord_hycom_collect => collect_ocean_vcoord_hycom_tests
@@ -251,6 +252,7 @@ program rdb_tests
                 new_testsuite("ocean_geothermal", ocean_geothermal_collect), &
                 new_testsuite("ocean_bkgnd_mixing", ocean_bkgnd_mixing_collect), &
                 new_testsuite("ocean_kpp_convective", ocean_kpp_convective_collect), &
+                new_testsuite("ocean_buoyancy_flux", ocean_buoyancy_flux_collect), &
                 new_testsuite("ocean_vcoord", ocean_vcoord_collect), &
                 new_testsuite("ocean_vcoord_rho", ocean_vcoord_rho_collect), &
                 new_testsuite("ocean_vcoord_hycom", ocean_vcoord_hycom_collect), &
