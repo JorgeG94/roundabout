@@ -36,9 +36,11 @@ module rdb_ocean_stability_audit
    !! configure-time failure would be a false positive (see
    !! `docs/CLOSURE_MATRIX.md` / `rdb_ocean_horizontal_viscosity.F90`
    !! module header for `bound_kh` / `stress_tensor` semantics).
-   use rdb_constants, only: wp, PI
+   use rdb_constants, only: wp, PI, VCOORD_SIGMA, VCOORD_ZSIGMA, &
+                            VCOORD_ZSTAR, VCOORD_ZSTAR_SIGMA
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
+   use rdb_vcoord, only: parse_vcoord_type
    use rdb_ocean_metrics, only: ocean_metrics_t, parse_grid_config, &
                                 parse_coriolis_scheme, GRID_CONFIG_CARTESIAN, &
                                 CORIOLIS_SCHEME_PLANETARY
@@ -59,6 +61,10 @@ module rdb_ocean_stability_audit
    public :: ocean_viscous_cfl_limit
    public :: ocean_diffusive_number_limit
    public :: ocean_munk_min_cells
+   public :: ocean_sigma_stiffness
+   public :: ocean_sigma_stiffness_worst
+   public :: ocean_sigma_stiffness_limit
+   public :: ocean_vcoord_is_terrain_following
 
    real(wp), parameter :: VISCOUS_CFL_LIMIT = 0.125_wp
       !! Single-axis viscous-diffusion stability bound `nu_h*dt/dx_min^2`.
@@ -81,6 +87,50 @@ module rdb_ocean_stability_audit
       !! existing `rdb_config.F90` check this module absorbs (only the
       !! length scale changes: the real per-cell metric minimum, not
       !! nominal `dx`/`dy`).
+   real(wp), parameter :: SIGMA_STIFFNESS_LIMIT = 0.2_wp
+      !! Terrain-following STIFFNESS (slope) parameter bound
+      !! `rx0 = |H_a - H_b| / (H_a + H_b) <= 0.2` over every face joining
+      !! two wet columns, where `H` is the COLUMN the sigma coordinate
+      !! divides into `nz` layers — under an ice shelf that is the WATER
+      !! column `b - z_draft`, not the bathymetry.
+      !!
+      !! This is the classical σ-coordinate criterion: Beckmann &
+      !! Haidvogel (1993), J. Phys. Oceanogr. 23, 1736-1753, §2c, who
+      !! introduce `r = |Δh|/(2h̄)` (algebraically the same number) and
+      !! smooth their seamount to `r <= 0.2`; the "hydrostatic
+      !! consistency" condition of Haney (1991), J. Phys. Oceanogr. 21,
+      !! 610-619, is the same statement. It bounds the σ pressure-gradient
+      !! truncation, whose amplitude goes as the CUBE of the interface
+      !! offset `Δe` between neighbouring columns
+      !! (`a_peak = N²·Δe³/(6·dx·H̄)`, derived in
+      !! `validation_examples/ocean/ice_shelf_cavity/README.md`), so a
+      !! factor 2 in `rx0` is a factor 8 in spurious acceleration.
+      !!
+      !! WARNING, never an error: a violated `rx0` is not an instability
+      !! on its own — with `N² = 0` the truncation is identically zero at
+      !! any `rx0` — and plenty of useful runs are forced hard enough,
+      !! damped hard enough, or short enough not to care. What it says is
+      !! that the run's spurious PGF force is NOT small, so a quiescent or
+      !! long integration over that geometry will measure the truncation
+      !! rather than the physics.
+      !!
+      !! **It fires on healthy shipped cases, by design.** Measured over
+      !! `validation_examples/ocean/`: 9 of 72 namelists trip it, on four
+      !! distinct geometries. The `double_gyre` `"spoon"` continental
+      !! slope reads `0.348` and `neverworld2`'s shelf reads `0.893`
+      !! (`seamount_obc_baroclinic` sits just over at `0.235`), and all of
+      !! them run for hundreds of days — because they carry
+      !! `nu_h = 10000 m² s⁻¹`, i.e. a constant lateral-viscosity floor
+      !! big enough to arrest a steady spurious force at `a/r` instead of
+      !! integrating it. That is the correct reading of the warning on a
+      !! forced configuration, and it is worth saying once at configure.
+      !! The three `ice_shelf_cavity/` files are QUIET (`rx0 ≈ 0.015`:
+      !! flat bed, and the only tilted boundary is a 13.8 m lid step).
+      !! Motivating failure:
+      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`
+      !! carries `rx0 = 0.73` at the ISOMIP+ trough sidewall (a 23 m water
+      !! column beside a 146 m one across one 2 km face) and goes
+      !! non-finite at day 3.2 with nothing in the log at configure time.
    real(wp), parameter :: MUNK_MIN_CELLS = 2.0_wp
       !! Minimum number of grid cells the Munk sidewall boundary layer
       !! `delta_M = (nu_h/beta)^(1/3)` must span; below this the wall
@@ -109,6 +159,54 @@ contains
       real(wp) :: n
       n = MUNK_MIN_CELLS
    end function ocean_munk_min_cells
+
+   pure function ocean_sigma_stiffness_limit() result(lim)
+      !! Accessor for `SIGMA_STIFFNESS_LIMIT`.
+      real(wp) :: lim
+      lim = SIGMA_STIFFNESS_LIMIT
+   end function ocean_sigma_stiffness_limit
+
+   pure function ocean_sigma_stiffness(h_a, h_b) result(rx0)
+      !! One face's terrain-following stiffness `|h_a-h_b|/(h_a+h_b)`.
+      !!
+      !! Both columns must be POSITIVE for the number to mean anything
+      !! (a land column carries `H_VANISHED`, not a water column, and the
+      !! caller masks it out); a non-positive sum returns `0` — "no
+      !! constraint expressible", the same stance
+      !! `ocean_viscous_cfl_number` takes for a degenerate `dx_min`.
+      !! Range `[0, 1)`: `0` = two equal columns, `-> 1` = one column
+      !! vanishing against its neighbour.
+      real(wp), intent(in) :: h_a
+         !! Column thickness on one side of the face (m).
+      real(wp), intent(in) :: h_b
+         !! Column thickness on the other side (m).
+      real(wp) :: rx0
+      if (h_a > 0.0_wp .and. h_b > 0.0_wp) then
+         rx0 = abs(h_a - h_b)/(h_a + h_b)
+      else
+         rx0 = 0.0_wp
+      end if
+   end function ocean_sigma_stiffness
+
+   pure function ocean_vcoord_is_terrain_following(code) result(tf)
+      !! Does this `VCOORD_*` code put the layer interfaces on surfaces
+      !! that follow the bottom (and, under an ice shelf, the ice base)?
+      !!
+      !! `VCOORD_ZSTAR` is in the set because on the ocean path it SHARES
+      !! the `VCOORD_SIGMA` branch of `ocean_vcoord_compute_target_h`
+      !! (`case (VCOORD_SIGMA, VCOORD_ZSTAR)`) — in the barotropic
+      !! `(H, eta)` form the two target formulas are identical, so it
+      !! carries exactly the same truncation. `VCOORD_ZSIGMA` and
+      !! `VCOORD_ZSTAR_SIGMA` blend TO sigma in shallow water, which is
+      !! where the stiff faces are, so they are in too. The fixed-z,
+      !! Lagrangian and density families are not: their interfaces do not
+      !! tilt with the topography.
+      integer, intent(in) :: code
+         !! A `VCOORD_*` code from `parse_vcoord_type`.
+      logical :: tf
+      tf = (code == VCOORD_SIGMA .or. code == VCOORD_ZSTAR .or. &
+            code == VCOORD_ZSIGMA .or. code == VCOORD_ZSTAR_SIGMA)
+   end function ocean_vcoord_is_terrain_following
 
    pure function ocean_viscous_cfl_number(nu_h, dt, dx_min) result(cfl)
       !! `nu_h*dt/dx_min^2` — the single-axis viscous-diffusion stability
@@ -305,7 +403,116 @@ contains
       end if
    end subroutine ocean_munk_worst_case
 
-   subroutine ocean_stability_audit(cfg, metrics, grid, rank, ierr)
+   pure subroutine ocean_sigma_stiffness_worst(nx, ny, i0, i1, j0, j1, column, wet, &
+                                               rx0_max, i_at, j_at, is_x, &
+                                               h_thin, h_thick, n_over, n_face)
+      !! Worst (largest) `ocean_sigma_stiffness` over every face joining
+      !! two WET columns inside `[i0,i1] x [j0,j1]`, with its location,
+      !! its two column thicknesses, and how many faces are over
+      !! `SIGMA_STIFFNESS_LIMIT`.
+      !!
+      !! Only INTERIOR-to-INTERIOR faces are scanned (the loops stop one
+      !! short of `i1`/`j1`), so the number never depends on what a ghost
+      !! ring happens to hold — which is what makes it the same under any
+      !! decomposition and safe to quote in a configure message.
+      !!
+      !! A land column is excluded by `wet`, not by a thickness test: a
+      !! land T-cell holds `h_layer = H_VANISHED` per the land-state
+      !! contract, so its "column" is `nz*H_VANISHED` and would otherwise
+      !! read as a near-vanishing neighbour at every coastline and make
+      !! `rx0 -> 1` everywhere. A coastline is a WALL, not a stiff face:
+      !! the metrics are zeroed there and no pressure gradient is taken.
+      integer, intent(in) :: nx
+         !! First dimension of `column`/`wet` (ghosts included).
+      integer, intent(in) :: ny
+         !! Second dimension.
+      integer, intent(in) :: i0
+         !! First physical index in x.
+      integer, intent(in) :: i1
+         !! Last physical index in x.
+      integer, intent(in) :: j0
+         !! First physical index in y.
+      integer, intent(in) :: j1
+         !! Last physical index in y.
+      real(wp), intent(in) :: column(nx, ny)
+         !! Column thickness (m) the vertical coordinate divides — the
+         !! WATER column `b - z_draft` under an ice shelf.
+      real(wp), intent(in) :: wet(nx, ny)
+         !! Static wet (1) / land (0) T-cell mask.
+      real(wp), intent(out) :: rx0_max
+         !! Largest stiffness found; `0` if no wet-wet face exists.
+      integer, intent(out) :: i_at
+         !! `i` of the thin side of the worst face.
+      integer, intent(out) :: j_at
+         !! `j` of the thin side of the worst face.
+      logical, intent(out) :: is_x
+         !! `.true.` if the worst face is an x (east) face.
+      real(wp), intent(out) :: h_thin
+         !! Thinner column of the worst face (m).
+      real(wp), intent(out) :: h_thick
+         !! Thicker column of the worst face (m).
+      integer, intent(out) :: n_over
+         !! Wet-wet faces with `rx0 > SIGMA_STIFFNESS_LIMIT`.
+      integer, intent(out) :: n_face
+         !! Wet-wet faces scanned (the denominator for `n_over`).
+      integer :: i, j
+      real(wp) :: rx0, ha, hb
+
+      rx0_max = 0.0_wp
+      i_at = i0
+      j_at = j0
+      is_x = .true.
+      h_thin = 0.0_wp
+      h_thick = 0.0_wp
+      n_over = 0
+      n_face = 0
+
+      do j = j0, j1
+         do i = i0, i1
+            if (wet(i, j) <= 0.5_wp) cycle
+            ha = column(i, j)
+            if (ha <= 0.0_wp) cycle
+            if (i < i1) then
+               if (wet(i + 1, j) > 0.5_wp) then
+                  hb = column(i + 1, j)
+                  if (hb > 0.0_wp) then
+                     rx0 = ocean_sigma_stiffness(ha, hb)
+                     n_face = n_face + 1
+                     if (rx0 > SIGMA_STIFFNESS_LIMIT) n_over = n_over + 1
+                     if (rx0 > rx0_max) then
+                        rx0_max = rx0
+                        i_at = i
+                        j_at = j
+                        is_x = .true.
+                        h_thin = min(ha, hb)
+                        h_thick = max(ha, hb)
+                     end if
+                  end if
+               end if
+            end if
+            if (j < j1) then
+               if (wet(i, j + 1) > 0.5_wp) then
+                  hb = column(i, j + 1)
+                  if (hb > 0.0_wp) then
+                     rx0 = ocean_sigma_stiffness(ha, hb)
+                     n_face = n_face + 1
+                     if (rx0 > SIGMA_STIFFNESS_LIMIT) n_over = n_over + 1
+                     if (rx0 > rx0_max) then
+                        rx0_max = rx0
+                        i_at = i
+                        j_at = j
+                        is_x = .false.
+                        h_thin = min(ha, hb)
+                        h_thick = max(ha, hb)
+                     end if
+                  end if
+               end if
+            end if
+         end do
+      end do
+   end subroutine ocean_sigma_stiffness_worst
+
+   subroutine ocean_stability_audit(cfg, metrics, grid, rank, ierr, column)
       !! Run all configure-time stability checks. Must run AFTER
       !! `configure_ocean_metrics` + `configure_ocean_land_mask` (needs
       !! the real filled `ocean_metrics_t`), before `ocean_state_enter_data`.
@@ -319,6 +526,12 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: rank
       integer, intent(out), optional :: ierr
+      real(wp), intent(in), optional :: column(:, :)
+         !! Reference column thickness (m) at T cells, ghosts included —
+         !! `bt_work%bt_H_ref`, which is `b - z_draft` afloat and `0`
+         !! where grounded. Present ⇒ the terrain-following stiffness
+         !! check (Check 5) runs; absent ⇒ it is skipped, which is what a
+         !! caller with no barotropic datum yet should do.
 
       real(wp) :: dx_min, dt, dt_therm, nu_h, kappa_h, ah_max
       integer :: i_at, j_at
@@ -427,6 +640,58 @@ contains
                                 "per-face viscosity, so the configured nu_h is silently clamped down to "// &
                                 "ah_max and never actually applied. Set ah_max >= nu_h (e.g. ah_max = "// &
                                 to_string(nu_h)//" or higher).")
+         end if
+      end if
+
+      ! ---- Check 5: terrain-following stiffness rx0 (WARNING) ----
+      ! Geometry only — no dt, no nz, no viscosity. A sigma-family
+      ! coordinate divides the COLUMN into nz layers, so a big column
+      ! contrast across one face offsets the two columns' K-th interfaces
+      ! by Delta_e ~ rx0*(H_a+H_b), and the pressure-gradient truncation
+      ! goes as Delta_e^3. See SIGMA_STIFFNESS_LIMIT for the citations and
+      ! for the ISOMIP+ Ocean0 failure that motivated this.
+      if (present(column)) then
+         if (ocean_vcoord_is_terrain_following( &
+             parse_vcoord_type(cfg%vcoord_type, VCOORD_SIGMA))) then
+            block
+               real(wp) :: rx0_max, h_thin, h_thick
+               integer :: i_rx, j_rx, n_over, n_face
+               logical :: rx_is_x
+               call ocean_sigma_stiffness_worst( &
+                  size(column, 1), size(column, 2), &
+                  grid%nghost + 1, grid%nghost + grid%nx_phys, &
+                  grid%nghost + 1, grid%nghost + grid%ny_phys, &
+                  column, metrics%wet_T, rx0_max, i_rx, j_rx, rx_is_x, &
+                  h_thin, h_thick, n_over, n_face)
+               if (rx0_max > SIGMA_STIFFNESS_LIMIT .and. rank == 0) then
+                  call logger%warning("Terrain-following stiffness rx0 = "// &
+                                      to_string(rx0_max)//" exceeds "// &
+                                      to_string(SIGMA_STIFFNESS_LIMIT)//" on the '"// &
+                                      trim(adjustl(cfg%vcoord_type))// &
+                                      "' vertical coordinate: a "//to_string(h_thin)// &
+                                      " m column sits beside a "//to_string(h_thick)// &
+                                      " m one across a single "// &
+                                      merge("x", "y", rx_is_x)//" face near i="// &
+                                      to_string(i_rx)//" j="//to_string(j_rx)//" ("// &
+                                      to_string(n_over)//" of "//to_string(n_face)// &
+                                      " wet-wet faces are over the bound). The sigma "// &
+                                      "pressure-gradient truncation scales as the CUBE of the "// &
+                                      "interface offset between neighbouring columns, so this "// &
+                                      "is a LARGE spurious force, and a quiescent or long run "// &
+                                      "over this geometry will measure it rather than the "// &
+                                      "physics. A FORCED, viscous run is normally fine here — a "// &
+                                      "constant lateral-viscosity floor arrests a steady spurious "// &
+                                      "force rather than integrating it, which is what the shipped "// &
+                                      "nu_h = 10000 double-gyre and neverworld2 cases rely on. A "// &
+                                      "quiescent, weakly-damped or long spin-up run is NOT: smooth "// &
+                                      "the topography to rx0 <= "//to_string(SIGMA_STIFFNESS_LIMIT)// &
+                                      " (under an ice shelf, raising &ocean_cavity_dyn_nml "// &
+                                      "h_min_cavity removes the thinnest columns), or use a "// &
+                                      "coordinate whose interfaces do not follow the topography. "// &
+                                      "Viscosity and a smaller dt DELAY a runaway, they do not "// &
+                                      "remove the error.")
+               end if
+            end block
          end if
       end if
 
