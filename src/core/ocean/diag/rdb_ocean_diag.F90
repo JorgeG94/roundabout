@@ -1161,7 +1161,7 @@ contains
       this%dt_last_eval = t
    end subroutine ocean_diag_step
 
-   subroutine diag_field_stats(buf, on_device, vmin, vmax, vmean, n_valid, n_total)
+   pure subroutine diag_field_stats(buf, on_device, vmin, vmax, vmean, n_valid, n_total)
       !! The `[diag]` console line's min / max / mean for one diagnostic
       !! buffer, **over the finite cells only**.
       !!
