@@ -217,6 +217,7 @@ set(RDB_TESTS
     "test_scratch_3d_device|test_scratch_3d_device|collect_scratch_3d_device_tests|scratch_3d_device|core"
     "test_remap|test_remap|collect_remap_tests|remap|core"
     "test_remap_pqm|test_remap_pqm|collect_remap_pqm_tests|remap_pqm|core"
+    "test_remap_boundary_extrap|test_remap_boundary_extrap|collect_remap_boundary_extrap_tests|remap_boundary_extrap|core"
     "test_ocean_tracer_adv|test_ocean_tracer_adv|collect_ocean_tracer_adv_tests|ocean_tracer_adv|ocean"
     "test_ocean_conservation_salt_heat|test_ocean_conservation_salt_heat|collect_ocean_conservation_salt_heat_tests|ocean_conservation_salt_heat|ocean"
     "test_ocean_min_thickness|test_ocean_min_thickness|collect_ocean_min_thickness_tests|ocean_min_thickness|ocean"
