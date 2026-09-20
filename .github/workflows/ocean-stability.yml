@@ -14,18 +14,19 @@
 # GPU.  Run it locally or on a self-hosted GPU box -- see the README.
 name: ocean stability (tier 2)
 
-# TRIGGERS ARE DELIBERATELY MANUAL-ONLY.
+# This is a real gate: it runs on every pull request (49 cases, ~2.5 min wall
+# on 4 workers locally).  It was manual-only while it was being proven out;
+# that period is over.  `workflow_dispatch` is kept so it can still be run by
+# hand from the Actions tab against any branch.
 #
-# This workflow is complete and verified (49 cases, ~2.5 min wall on 4 workers
-# locally), but automatic triggers are commented out so it consumes NO GitHub
-# Actions minutes until someone decides to switch it on. Run it by hand from
-# the Actions tab ("Run workflow"), or uncomment the push/pull_request blocks
-# below to make it a real gate.
+# NOTE: no `branches:` filter on pull_request -- deliberately, and for the same
+# reason spelled out in pre-commit.yml.  Filtering on [main] means "PRs whose
+# BASE is main", which silently skips every PR targeting a long-lived
+# integration branch or sitting in a stack.  Those are exactly the PRs a
+# stability gate is most useful on.
 on:
+  pull_request:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  # pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
