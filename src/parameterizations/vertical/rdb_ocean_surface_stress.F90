@@ -66,9 +66,10 @@
 !!   * `stress_shelf` — `|tau_top|` at an ICE-SHELF BASE (N/m^2), the
 !!     cell-centred magnitude published by `rdb_ocean_top_drag` as
 !!     `stress_top`, or (top drag off, basal melt on) `rho_0*u_*^2` from
-!!     the melt slot's own `u_*`.  NOT derived from `tau`; refreshed by
-!!     the driver, not by the `tau` refresh; exactly zero without a
-!!     cavity.
+!!     the melt slot's own `u_*` (via
+!!     `ocean_surface_stress_set_shelf_from_ustar`).  NOT derived from
+!!     `tau`; refreshed by the driver, not by the `tau` refresh; exactly
+!!     zero without a cavity.
 !!
 !! `u_*^2 = (stress_mag + stress_shelf) / rho_0` is the ONE definition
 !! both boundary-layer schemes use (`rdb_ocean_vmix` KPP,
@@ -117,6 +118,7 @@ module rdb_ocean_surface_stress
    public :: ocean_surface_stress_set_derived
    public :: ocean_surface_stress_refresh_mag
    public :: ocean_surface_stress_apply_cover
+   public :: ocean_surface_stress_set_shelf_from_ustar
 
    type :: ocean_surface_stress_t
       logical :: is_init = .false.
@@ -618,6 +620,58 @@ contains
          !$acc wait(1)
       end if
    end subroutine surfstress_apply_impl
+
+   pure subroutine ocean_surface_stress_set_shelf_from_ustar(stress_shelf, ustar, &
+                                                             rho0, nx, ny)
+      !! Publish the ice-base stress from a FRICTION VELOCITY:
+      !! `stress_shelf = rho_0 * u_*^2`.
+      !!
+      !! The melt-only route into the `stress_shelf` seam.  When
+      !! `&ocean_tdrag_nml` is on, the RK2 stage drivers fill
+      !! `stress_shelf` inline from `ocean_top_drag_t%stress_top` and
+      !! this is never called; when the top drag is OFF but
+      !! `&ocean_cavity_melt_nml` is on, `engine_step_finalize` calls it
+      !! with the melt slot's own `u_*`, which was solved with the SAME
+      !! `C_d` (the one-drag-coefficient rule refuses a disagreeing
+      !! `cdrag_top` at configure).  So this is a change of variable, not
+      !! a second drag law.
+      !!
+      !! **Cadence, stated because it is a real cost:** the melt `u_*` is
+      !! refreshed at the THERMO cadence at the END of an outer step, so
+      !! this path reaches KPP/EPBL ONE OUTER STEP LATE.  The top-drag
+      !! path has no such lag.
+      !!
+      !! A CALL rather than an inline loop at the call site, deliberately:
+      !! `engine_step_finalize` would have to walk `engine%state%...`
+      !! inside a `do concurrent`, and `ocean_engine_t` is not a mapped
+      !! object, so nvfortran emits a data clause for the whole engine and
+      !! aborts with "partially present on the device".  Host-dereference
+      !! at the call site, flat explicit-shape dummies here.  The
+      !! escaping-actual pessimisation CLAUDE.md warns about does not
+      !! apply: `engine_step_finalize` owns no `do concurrent` of its own.
+      !!
+      !! `u_*` is exactly zero on every uncovered column
+      !! (`cavity_melt_columns_2d`), so the published field keeps
+      !! `stress_shelf`'s "exactly zero off the cover" invariant and the
+      !! disjoint-support argument in the module docstring still holds.
+      integer, intent(in) :: nx, ny
+         !! Extents of BOTH arrays.  The caller gates on the melt slot's
+         !! `enable`, which is exactly when `ustar` is full size, so an
+         !! `(1,1)` placeholder can never reach these dummies.
+      real(wp), intent(in) :: rho0
+         !! Reference density (kg/m^3) -- the single rho0 of record, by
+         !! value from `ocean_surface_stress_t%rho0`.
+      real(wp), intent(inout) :: stress_shelf(nx, ny)
+         !! `ocean_surface_stress_t%stress_shelf` (N/m^2), overwritten.
+      real(wp), intent(in) :: ustar(nx, ny)
+         !! `ocean_cavity_flux_t%ustar` (m/s).
+
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         stress_shelf(i, j) = rho0*ustar(i, j)*ustar(i, j)
+      end do
+   end subroutine ocean_surface_stress_set_shelf_from_ustar
 
    pure function ocean_surface_stress_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the surface stress slot
