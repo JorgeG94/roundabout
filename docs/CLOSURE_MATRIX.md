@@ -287,8 +287,14 @@ datum — each exactly once, and never onto the `eta_forcing` seam.
 
 **Envelope (every row fails loud at configure, naming the knob and the
 reason):** `&ocean_pgf_nml form="fv_mom6"` and `gfs_scale = 1`; `vcoord_type`
-in {`sigma`, `zstar`} (every z-like family anchors at `z = 0`, which under a
-shelf is inside the ice) and `thickness_config /= "uniform_z"`; the SPLIT
+in {`sigma`, `zstar`} — the two families that rescale the live column and so
+follow the ice base for free; the refusal message now carries the OFFENDING
+family's own reason, and they are not all "anchors at `z = 0`": `lagrangian`,
+`zstar_sigma`, `rho` and `hycom` are geometrically datum-safe and are refused
+for want of VALIDATION, while `z_fixed` hangs its stack from the column top,
+`zstar_full` inverts which half of the column is resolved, `eulerian_z` drops
+the free surface and `zsigma` is refused everywhere (see the vertical-coordinate
+table below) — and `thickness_config /= "uniform_z"`; the SPLIT
 solver (`n_inner ≥ 1`); single rank; `bt_halo = 0` (also in
 `bt_halo_auto_exclusion`, so AUTO resolves to 0 instead of manufacturing a
 width); and mutually exclusive with wet/dry, porous barriers, sea ice and
