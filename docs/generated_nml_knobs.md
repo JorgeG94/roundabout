@@ -384,6 +384,24 @@ Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref =
 | `grounded_max_frac` | `0.5000000000E+00` |  | Fail loud if more than this fraction of the interior columns ground |
 | `rho_ice` | `0.9180000000E+03` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |
 
+### &ocean_cavity_melt_nml
+
+Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange law, and the far-field sampling depth.
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Master switch (requires &ocean_cavity_dyn_nml, tfreeze_set='isomip' and the surface-flux component set) |
+| `exchange_law` | `"const_gamma"` |  | Turbulent exchange law; laws other than const_gamma/hj99/yung25 are RESERVED and refused at configure |
+| `gamma_t` | `0.2200000000E-01` |  | Dimensionless heat-transfer coefficient Gamma_T (ISOMIP+ starting guess; tune per coordinate) |
+| `gamma_s` | `-0.1000000000E+01` |  | Dimensionless salt-transfer coefficient Gamma_S (negative = unset = gamma_t/35) |
+| `cdrag_top` | `0.2500000000E-02` |  | Top drag coefficient for the MELT friction velocity (no momentum drag yet - that is Phase 4) |
+| `u_tide` | `0.1000000000E-01` | m/s | RMS tidal velocity in the melt u* only, never the drag |
+| `ustar_min` | `0.1000000000E-03` | m/s | Friction-velocity floor (Yung et al. 2025 eq. 14) |
+| `ice_conduction` | `"insulating"` |  | Ice-side conduction; 'diffusive' is RESERVED and refused (it changes the melt/freeze branch logic) |
+| `t_ice` | `-0.2500000000E+02` | degC | Ice interior temperature; read by ice_conduction='adv_diff' only |
+| `s_ice` | `0.0000000000E+00` | g/kg | Ice salinity; must stay strictly below the far-field salinity |
+| `far_field_depth` | `0.1000000000E+02` | m | Thickness below the ice base the far-field T/S/u are averaged over (METRES, not layers) |
+
 ### &ocean_epbl_nml
 
 RH18 energetics-based planetary boundary layer.

@@ -39,6 +39,7 @@ module rdb_ocean_state
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t
    use rdb_ocean_vertical_advection, only: ocean_vertical_advection_t
    use rdb_ocean_hdiff_tracer, only: ocean_hdiff_tracer_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t
@@ -188,6 +189,12 @@ module rdb_ocean_state
          !! Acts on the k=1 layer only.
       type(ocean_surface_stress_t) :: surface_stress
          !! Surface wind-stress kernel.  Acts on the k=nz layer only.
+      type(ocean_cavity_flux_t) :: cavity_flux
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`, default
+         !! off).  Holds the sampled far field, `u*`, the interface
+         !! state, the melt mass flux and the per-column solver status;
+         !! its driver fills `surface_flux%heat_cavity`/`salt_cavity`.
+         !! Gated: off ⇒ `(1,1)` placeholders, no kernel, bit-identical.
       type(ocean_surface_flux_t) :: surface_flux
          !! Surface heat + salt flux slot.  2D `Q_heat(:,:)` / `Q_salt(:,:)`
          !! (W/m^2 and kg/m^2/s, positive downward / salinifying).  Seeded
@@ -362,6 +369,7 @@ contains
          call this%bdrag%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_stress%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_flux%init(grid)
+         call this%cavity_flux%init(grid)
          call this%vert_advect%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%hdiff_tracer%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%vdiff%init(grid, nz_ml=this%multilayer%nz_ml)
@@ -373,6 +381,7 @@ contains
          call this%bdrag%init(grid)
          call this%surface_stress%init(grid)
          call this%surface_flux%init(grid)
+         call this%cavity_flux%init(grid)
          call this%vert_advect%init(grid)
          call this%hdiff_tracer%init(grid)
          call this%vdiff%init(grid)
@@ -487,6 +496,9 @@ contains
       ! which is the first thing the engine does after this, long before
       ! any `configure_ocean_*` pass.  Off ⇒ three `(1,1)` placeholders.
       this%metrics%use_cavity = cfg%ocean%cavity_dyn%enable
+      ! Ice-shelf basal melt: the melt slot's own gate, latched here for
+      ! the same reason (its `init` sizes eleven 2-D arrays off it).
+      this%cavity_flux%enable = cfg%ocean%cavity_melt%enable
       this%epbl%enable = cfg%ocean%epbl%enable
       this%kshear%enable = cfg%ocean%kshear%enable
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
@@ -674,6 +686,7 @@ contains
                + this%bdrag%bytes() &
                + this%surface_stress%bytes() &
                + this%surface_flux%bytes() &
+               + this%cavity_flux%bytes() &
                + this%vert_advect%bytes() &
                + this%hdiff_tracer%bytes() &
                + this%vdiff%bytes() &
@@ -745,6 +758,7 @@ contains
       call profiler_stop("ed_surface_stress")
       call profiler_start("ed_surface_flux", nvtx_only=.true.)
       call state%surface_flux%enter_data()
+      call state%cavity_flux%enter_data()
       call profiler_stop("ed_surface_flux")
       call profiler_start("ed_vert_advect", nvtx_only=.true.)
       call state%vert_advect%enter_data()
@@ -903,6 +917,7 @@ contains
       call state%vert_advect%exit_data()
       call profiler_stop("xd_vert_advect")
       call profiler_start("xd_surface_flux", nvtx_only=.true.)
+      call state%cavity_flux%exit_data()
       call state%surface_flux%exit_data()
       call profiler_stop("xd_surface_flux")
       call profiler_start("xd_surface_stress", nvtx_only=.true.)
@@ -969,6 +984,7 @@ contains
       call this%vmix_tidal%destroy()
       call this%hvisc%destroy()
       call this%bdrag%destroy()
+      call this%cavity_flux%destroy()
       call this%surface_flux%destroy()
       call this%surface_stress%destroy()
       call this%vert_advect%destroy()
@@ -1746,6 +1762,31 @@ contains
          call reg%register_2d("ice_sw_thru_diag", state%ice%sw_thru_diag, 0, &
                               size(state%ice%sw_thru_diag, 1), &
                               size(state%ice%sw_thru_diag, 2), optional=.true.)
+      end if
+
+      ! --- Ice-shelf cavity basal melt (P2b): the TWO OWNED surface-flux
+      !     components.  These ARE registered, and the exclusion rule
+      !     above says exactly why: `Q_heat`/`Q_salt` are derived views
+      !     and stay out, but "any filler that makes a COMPONENT
+      !     time-varying MUST register it".  The melt rate is a function
+      !     of the live state, so `heat_cavity`/`salt_cavity` are
+      !     time-varying — and they are written at the END of outer step
+      !     N and integrated on step N+1 (the ice coupler's documented
+      !     one-step lag), so without them a warm restart would apply
+      !     zero melt for its first step.  `optional=.true.`: an older
+      !     checkpoint resumes with the zero seed rather than failing.
+      !     The slot's own arrays (`cavity_flux%melt`, `t_b`, ...) are
+      !     NOT registered — they are recomputed from state before first
+      !     use, the same derived-field rule as `mass_flux_*`.
+      if (allocated(state%surface_flux%heat_cavity)) then
+         call reg%register_2d("sf_heat_cavity", state%surface_flux%heat_cavity, 0, &
+                              size(state%surface_flux%heat_cavity, 1), &
+                              size(state%surface_flux%heat_cavity, 2), optional=.true.)
+      end if
+      if (allocated(state%surface_flux%salt_cavity)) then
+         call reg%register_2d("sf_salt_cavity", state%surface_flux%salt_cavity, 0, &
+                              size(state%surface_flux%salt_cavity, 1), &
+                              size(state%surface_flux%salt_cavity, 2), optional=.true.)
       end if
 
       ! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice

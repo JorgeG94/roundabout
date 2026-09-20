@@ -105,6 +105,7 @@ module rdb_ocean_engine
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, &
@@ -117,6 +118,7 @@ module rdb_ocean_engine
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
                               configure_ocean_cavity, &
+                              configure_ocean_cavity_melt, &
                               configure_ocean_wetdry, &
                               configure_ocean_sponge
    use rdb_ocean_stability_audit, only: ocean_stability_audit
@@ -753,6 +755,14 @@ contains
       call configure_ocean_cavity(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
+      ! Ice-shelf basal melt (P2b): copy the thermodynamic knobs onto the
+      ! melt slot, resolve the gamma_s sentinel, build the per-column
+      ! Coriolis array the hj99 law needs, and SEED ms%p_top from the
+      ! isostatic load configure_ocean_cavity just built.  Immediately
+      ! after it (that is where p_ice_ref comes from), BEFORE enter_data.
+      call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
+
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
       ! warm restart (the restart read already replaced the IC).
@@ -1282,6 +1292,19 @@ contains
       integer, intent(out), optional :: ierr
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
+
+      ! Ice-shelf basal melt (P2b): solve the three-equation interface on
+      ! every covered column and fill the OWNED heat_cavity/salt_cavity
+      ! components.  MUST precede the assembler, which folds them into
+      ! Q_heat/Q_salt.  Same thermo cadence, and a no-op (immediate
+      ! return) when &ocean_cavity_melt_nml enable=.false.  Cavity x sea
+      ! ice is refused at configure, so the ordering against
+      ! engine_step_ice's fillers is not a live question.
+      call ocean_cavity_flux_step(engine%grid, engine%state%cavity_flux, &
+                                  engine%state%metrics, engine%state%multilayer, &
+                                  engine%state%eos, engine%state%surface_flux, &
+                                  active=engine%state%dyn%enable_thermodynamics &
+                                  .and. engine%state%dyn%is_thermo_step())
 
       call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
                                        engine%state%multilayer, &
