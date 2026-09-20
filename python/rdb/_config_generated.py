@@ -2045,6 +2045,24 @@ class OceanCavityMelt(Group):
         vmin=0.0,
     )
 
+    freshwater = Enum(
+        'freshwater',
+        doc="Meltwater delivery: 'virtual' (default, fixed column mass) or 'mass' (real Boussinesq volume on the top layer)",
+        units='',
+        required=False,
+        default='virtual',
+        allowed=('virtual', 'mass'),
+    )
+
+    volume_compensation = Enum(
+        'volume_compensation',
+        doc="Sea-level compensation for freshwater='mass': 'none' (default) or 'uniform_open_ocean' (remove the melt volume again over uncovered wet cells)",
+        units='',
+        required=False,
+        default='none',
+        allowed=('none', 'uniform_open_ocean'),
+    )
+
 
 class OceanEpbl(Group):
     """`&ocean_epbl_nml` -- RH18 energetics-based planetary boundary layer."""
@@ -6101,4 +6119,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 667
+N_KNOBS = 669

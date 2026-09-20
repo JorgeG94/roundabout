@@ -43,6 +43,32 @@ module rdb_multilayer_state
       logical :: mass_out_tracked = .false.
          !! Set once the dyn step has accumulated `mass_out`, so the console
          !! only activates the mass budget on a path that feeds it.
+      real(wp) :: mass_src = 0.0_wp
+         !! Cumulative mass (kg) ADDED to the domain since t=0 by a
+         !! tracked volume SOURCE (positive = added), the mass twin of
+         !! `salt_budget_surface` / `heat_budget_surface`.  Accumulated
+         !! with the same per-stage weight as `mass_out`, so the console
+         !! residual `(M - M0) + mass_out - mass_src` stays at round-off
+         !! while the total legitimately grows.
+         !!
+         !! Fed today by the ice-shelf real-freshwater path
+         !! (`&ocean_cavity_melt_nml freshwater="mass"`) and by its
+         !! `volume_compensation` sink (which enters NEGATIVE).  Zero on
+         !! every other path ⇒ the printed budget is unchanged.
+         !!
+         !! Scaled by `RHO_WATER`, not by the configured `rho_0`, because
+         !! that is the density the console's own `total_mass =
+         !! sum(h*areaT)*RHO_WATER` uses: the accumulator has to measure
+         !! the same mass the total does.  The VOLUME it came from was
+         !! converted from a kg/m^2/s flux with `rho_0` (Boussinesq
+         !! volume conservation) — see `ocean_cavity_mass_step`.
+         !!
+         !! Host scalar, not device-mapped, and NOT restart-registered —
+         !! the same policy `mass_out` follows (the registry carries
+         !! device-mapped 2-D/3-D fields; these two cumulative host
+         !! scalars restart at zero together with the console's own
+         !! `mass0` reference latch, so the residual is measured over the
+         !! resumed window rather than across the gap).
 
       integer :: nz_ml = 0
          !! Number of multilayer levels (k=1 bed, k=nz_ml surface).

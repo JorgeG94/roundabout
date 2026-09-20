@@ -368,13 +368,14 @@ contains
       real(wp) :: g_wet_area, g_ci_area, g_hi_area
       real(wp) :: mean_ci, mean_hi
       character(len=256) :: ice_line
-      real(wp) :: g_mass_out
+      real(wp) :: g_mass_out, g_mass_src
       ! PR-32 EFP local/global lists — fixed NVAL=9 layout regardless of
       ! gating (ice-off slots stay zero-valued efp_t) so the collective's
       ! size never depends on a per-rank branch.
-      integer, parameter :: NVAL_EFP = 9
+      integer, parameter :: NVAL_EFP = 10
       integer, parameter :: IX_H = 1, IX_KE = 2, IX_HEAT = 3, IX_SALT = 4, IX_AGE = 5
       integer, parameter :: IX_WET = 6, IX_CI = 7, IX_HI = 8, IX_MOUT = 9
+      integer, parameter :: IX_MSRC = 10
       type(efp_t) :: efp_local(NVAL_EFP), efp_global(NVAL_EFP)
       type(efp_t) :: mass_efp_v, salt_efp_v, heat_efp_v
 
@@ -434,6 +435,7 @@ contains
                                         efp_local(IX_WET), efp_local(IX_CI), efp_local(IX_HI))
          end if
          efp_local(IX_MOUT) = efp_from_real(real(ms%mass_out, real64))
+         efp_local(IX_MSRC) = efp_from_real(real(ms%mass_src, real64))
 
          call halo_allreduce_efp_list(efp_local, efp_global, NVAL_EFP)
 
@@ -451,6 +453,7 @@ contains
             g_hi_area = real(efp_to_real(efp_global(IX_HI)), wp)
          end if
          g_mass_out = real(efp_to_real(efp_global(IX_MOUT)), wp)
+         g_mass_src = real(efp_to_real(efp_global(IX_MSRC)), wp)
 
          tmp = max_cfl
          call halo_allreduce_max(tmp, max_cfl)
@@ -565,8 +568,17 @@ contains
       if (.not. use_efp) then
          tmp = ms%mass_out
          call halo_allreduce_sum(tmp, g_mass_out)
+         tmp = ms%mass_src
+         call halo_allreduce_sum(tmp, g_mass_src)
       end if
       bud%mass_out = g_mass_out
+      ! Tracked mass SOURCE — the mass twin of `salt_src`/`heat_src`.
+      ! Zero on every path but the ice-shelf real-freshwater one
+      ! (`&ocean_cavity_melt_nml freshwater="mass"`) and its
+      ! `volume_compensation` sink, so the printed budget is unchanged
+      ! elsewhere.  Already weighted per RK2 stage at accumulation time,
+      ! exactly like `mass_out`, so no `bud_w` appears here.
+      bud%mass_src = g_mass_src
       bud%mass_active = ms%mass_out_tracked
 
       ! Salt / heat closed budget: local per-cell integrals, allreduced, then

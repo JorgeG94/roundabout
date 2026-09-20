@@ -693,11 +693,55 @@ silent clobber, not a merge.
 | `heat_added` | the sea-ice coupler (`ice_ocean_heat_flux`) | W/m², either sign, positive down | **FULL OVERWRITE.** Do not add a second contributor here |
 | `salt_flux` | the sea-ice coupler (`ice_ocean_brine_flux`) | positive SALINIFIES | **FULL OVERWRITE.** Same rule |
 | `heat_cavity` | the ice-shelf cavity (`ocean_cavity_flux_step`) | W/m², positive down; `= −q_ocean` | Separate from `heat_added` *because* the ice coupler overwrites that one. Melting cools |
-| `salt_cavity` | the ice-shelf cavity (`ocean_cavity_flux_step`) | same as `salt_flux`; `= −m_mass·(S_far − s_ice)` | VIRTUAL — the meltwater carries no mass (Phase 3). Melting freshens |
+| `salt_cavity` | the ice-shelf cavity (`ocean_cavity_flux_step`) | same as `salt_flux`; `= −m_mass·(S_far − s_ice)` | The fixed-mass dilution equivalent. Under `&ocean_cavity_melt_nml freshwater="virtual"` (default) it IS the meltwater's effect on salinity; under `"mass"` it stays assembled UNCHANGED as the `B_0` buoyancy forcing KPP/EPBL read, and `ocean_cavity_mass_step` removes it again from the tracer. Melting freshens either way |
 | mass fluxes + their `heat_content_*` twins | a forcing reader | see the type's docstrings | a mass flux owes its enthalpy companion |
 | `heat_content_massin` / `massout` | **the assembler** | W/m² | never a filler |
 | `p_surf_atm` | a reader / configure seed | Pa | `p_surf` is the assembled total |
 | `Q_heat` / `Q_salt` | **the assembler** | derived | a filler writing these is a bug |
+
+#### Real mass: what IS and what is NOT a column-mass change
+
+The mass-flux components `evap`/`lprec`/`fprec`/`vprec`/`lrunoff`/
+`frunoff`/`seaice_melt` and their `heat_content_*` companions remain
+**enthalpy + salt bookkeeping only — they do NOT change column mass.**
+That has not moved.
+
+What HAS moved is the ice-shelf cavity. With
+`&ocean_cavity_melt_nml freshwater="mass"` the basal meltwater is a REAL
+Boussinesq VOLUME source on the top layer — `dh = m·dt/ρ₀` added to
+`h_layer(:,:,nz)` by `ocean_cavity_mass_step`, in-stage, at thermo
+cadence, immediately after the surface-flux apply — with `d(h·S) =
+dh·s_ice` and `d(h·T) = dh·T_b`, and the salinity falling by dilution on
+its own.  So, precisely:
+
+| path | real column mass? |
+|---|---|
+| ice-shelf basal melt, `freshwater="mass"` | **YES** — the only one |
+| ice-shelf basal melt, `freshwater="virtual"` (default) | no |
+| sea ice (`rdb_ice_ocean_coupler`: `salt_flux`, `heat_added`) | no — virtual, and it stays virtual |
+| the seven atmospheric/river mass-flux components | no — named follow-up, unchanged |
+
+Consequences worth stating in the contract, because they are seams:
+
+* **The barotropic mode.**  Nothing is added to the barotropic forcing.
+  `derive_bt_from_layers` rebuilds `bt_eta = Σ_k h − bt_H_ref` at the top
+  of every stage, so the volume is in `bt_eta` one stage later and the
+  free surface under the cavity datum simply rises.  `bt_H_ref` stays
+  static (it is the ice-base-to-bed datum, not a sea level), and every
+  consumer already reads the water column as `bt_H_ref + bt_eta`.
+* **`ms%p_top` is prescribed and does not respond.**  The ice draft is
+  static, so a rising `η` under a fixed draft does not push the ice up;
+  the added volume must leave through an open boundary or raise the OPEN
+  ocean's surface.  For a CLOSED domain that is a real sea-level rise —
+  ISOMIP+ Ocean0 is ~30 m/yr of melt over ~1e10 m² of shelf into ~4e10 m²
+  of open surface, i.e. metres per year — which is why
+  `volume_compensation="uniform_open_ocean"` exists.
+* **Budgets.**  `multilayer_state_t%mass_src` is the tracked mass SOURCE,
+  accumulated with the same per-stage weight as `mass_out`, so the
+  console residual `(M − M₀) + mass_out − mass_src` stays at round-off
+  while the total legitimately grows.  Salt and heat need no new
+  accumulator: every increment rides the existing
+  `salt_budget_surface`/`heat_budget_surface` contributors.
 
 Obligations on any filler: write your own component (full overwrite,
 never `+=`), push it with `!$acc update device` if you wrote it on the
