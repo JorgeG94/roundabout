@@ -44,6 +44,7 @@ module rdb_ocean_diag
    use rdb_ocean_diag_mask, only: diag_mask_t, diag_mask_destroy
    use pic_logger, only: logger => global_logger
    use, intrinsic :: iso_fortran_env, only: int64, real32
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
@@ -59,7 +60,7 @@ module rdb_ocean_diag
    public :: ocean_diag_t, diag_var_t, diag_fill_proc, diag_remap_proc
    public :: diag_emit_proc, ocean_diag_nc_stream_t
    public :: diag_spec_t, parse_diag_spec
-   public :: diag_reduce_stats
+   public :: diag_reduce_stats, diag_field_stats
       !! Exposed for `test_ocean_diag_reduce`: the emit-path statistics
       !! reduction is the only device kernel in this module, so it is unit
       !! tested directly (numerics + `mem:separate` residency) rather than
@@ -1062,14 +1063,21 @@ contains
       !!     `t - dt_accum / 2`.  The centre lines up with the
       !!     temporal centroid of the time-weighted average so
       !!     downstream tools (CF-aware analysis) plot it correctly.
+      !!
+      !! The emitted `[diag]` line's min / max / mean are taken over the
+      !! FINITE cells only (`diag_field_stats`) — land columns and
+      !! vanished layers carry the NaN missing-data sentinel — and the
+      !! line gains a `missing=<excluded>/<total>` suffix whenever any
+      !! cell was excluded.
       class(ocean_diag_t), intent(inout) :: this
       class(*), intent(in) :: state_handle
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: t
-      integer :: i
-      real(wp) :: vmin, vmax, vmean, vsum, t_emit
+      integer :: i, n_valid, n_total
+      real(wp) :: vmin, vmax, vmean, t_emit
       logical :: fire
       character(len=256) :: line
+      character(len=64) :: missing_tag
 
       if (.not. this%is_init) return
       if (.not. this%enabled) return
@@ -1116,23 +1124,15 @@ contains
             ! fills.
             ! Statistics first, where the data already is.  On a GPU build
             ! the buffer is device-resident, so one fused device reduction
-            ! returns three scalars instead of dragging the whole array
-            ! through three host passes.  Without device residency (unit
-            ! tests that skip `enter_data`) the host path is the only
+            ! returns a handful of scalars instead of dragging the whole
+            ! array through three host passes.  Without device residency
+            ! (unit tests that skip `enter_data`) the host path is the only
             ! correct one -- a device read of an unmapped buffer under
-            ! `-gpu=mem:separate` returns garbage without failing.
-            if (this%on_device) then
-               call diag_reduce_stats(v%output_buffer, &
-                                      size(v%output_buffer, 1), &
-                                      size(v%output_buffer, 2), &
-                                      size(v%output_buffer, 3), &
-                                      vmin, vmax, vsum)
-            else
-               vmin = minval(v%output_buffer)
-               vmax = maxval(v%output_buffer)
-               vsum = sum(v%output_buffer)
-            end if
-            vmean = vsum/real(size(v%output_buffer), wp)
+            ! `-gpu=mem:separate` returns garbage without failing.  Both
+            ! paths skip the NaN missing-data sentinel; see
+            ! `diag_field_stats`.
+            call diag_field_stats(v%output_buffer, this%on_device, &
+                                  vmin, vmax, vmean, n_valid, n_total)
 
             ! The NetCDF write below needs the array itself on the host.
             !$acc update self(v%output_buffer) if_present
@@ -1140,6 +1140,13 @@ contains
             write (line, "(A,F12.2,A,A,A,A,A,ES13.5,A,ES13.5,A,ES13.5)") &
                "[diag] t=", t_emit, " ", trim(v%name), " [", trim(v%units), &
                "]  min=", vmin, "  max=", vmax, "  mean=", vmean
+            ! Only appended when cells were actually excluded, so a run with
+            ! no masked cells emits the byte-identical line it always did.
+            if (n_valid < n_total) then
+               write (missing_tag, "(A,I0,A,I0)") "  missing=", n_total - n_valid, &
+                  "/", n_total
+               line = trim(line)//trim(missing_tag)
+            end if
             call logger%info(trim(line))
             if (associated(this%emit_post_fire)) then
                call this%emit_post_fire(this, i, t_emit)
@@ -1154,31 +1161,123 @@ contains
       this%dt_last_eval = t
    end subroutine ocean_diag_step
 
-   pure subroutine diag_reduce_stats(buf, n1, n2, n3, vmin, vmax, vsum)
-      !! Whole-array min / max / sum of a diagnostic buffer in ONE pass.
+   subroutine diag_field_stats(buf, on_device, vmin, vmax, vmean, n_valid, n_total)
+      !! The `[diag]` console line's min / max / mean for one diagnostic
+      !! buffer, **over the finite cells only**.
+      !!
+      !! A diagnostic buffer legitimately carries IEEE NaN as its "no water
+      !! here" sentinel: `fill_tracer_impl` writes one into every land
+      !! column and every dynamically vanished layer (ZSTAR_FULL bed layers
+      !! pinched out below `zstar_h_min`), because 0 degC / 0 PSU are legal
+      !! ocean values and must not be confused with missing data.  Those
+      !! cells are not data, so none of the three statistics may see them
+      !! and the mean divides by `n_valid`, not by the array size.
+      !!
+      !! What this replaced, and why it was wrong: a plain
+      !! `minval`/`maxval`/`sum` over the whole buffer.  Comparisons with
+      !! NaN are FALSE, so `minval`/`maxval` silently skipped the sentinel
+      !! cells while `sum` propagated them — emitting a self-contradictory
+      !! `min= 1.5E+01  max= 1.5E+01  mean= NaN` for a run whose state was
+      !! entirely healthy, and tripping the regression suite's NaN gate on
+      !! every masked configuration (island / coastline / vanishing-layer
+      !! cases).  Leaning on NaN-false comparisons is not portable either:
+      !! nvfortran's relaxed-FP default may lower an unguarded `min`/`max`
+      !! to a NaN-blind select (see CLAUDE.md's clamp-laundering gotcha).
+      !!
+      !! `n_valid == n_total` (the overwhelmingly common case — no land, no
+      !! vanished layer) takes the unmasked intrinsics, so the emitted
+      !! numbers stay BIT-IDENTICAL to the pre-fix behaviour on every
+      !! all-finite field.  `n_valid == 0` reports `DIAG_MISSING_VALUE` for
+      !! all three rather than the reduction's untouched `+huge`/`-huge`
+      !! seeds or a zero that reads as a legal value.
+      real(wp), intent(in) :: buf(:, :, :)  ! assumed-shape-ok: diag emit — cadence-bounded
+      logical, intent(in) :: on_device
+         !! `.true.` when `buf` is device-resident, so the fused device
+         !! reduction is the correct (and only correct) reader — a host
+         !! read of a mapped buffer under `-gpu=mem:separate` is stale.
+      real(wp), intent(out) :: vmin, vmax, vmean
+      integer, intent(out) :: n_valid, n_total
+      real(wp) :: vsum
+
+      n_total = size(buf)
+      if (on_device) then
+         call diag_reduce_stats(buf, size(buf, 1), size(buf, 2), size(buf, 3), &
+                                vmin, vmax, vsum, n_valid)
+      else
+         n_valid = count(ieee_is_finite(buf))
+         if (n_valid == n_total) then
+            vmin = minval(buf)
+            vmax = maxval(buf)
+            vsum = sum(buf)
+         else
+            vmin = minval(buf, mask=ieee_is_finite(buf))
+            vmax = maxval(buf, mask=ieee_is_finite(buf))
+            vsum = sum(buf, mask=ieee_is_finite(buf))
+         end if
+      end if
+
+      if (n_valid > 0) then
+         vmean = vsum/real(n_valid, wp)
+      else
+         vmin = DIAG_MISSING_VALUE
+         vmax = DIAG_MISSING_VALUE
+         vmean = DIAG_MISSING_VALUE
+      end if
+   end subroutine diag_field_stats
+
+   pure subroutine diag_reduce_stats(buf, n1, n2, n3, vmin, vmax, vsum, n_valid)
+      !! Whole-array min / max / sum of a diagnostic buffer in ONE pass,
+      !! over the FINITE cells only.
       !!
       !! Replaces three separate host passes (`minval`/`maxval`/`sum`) with
       !! a single `do concurrent ... reduce`, so on a GPU build this runs
-      !! where the buffer already lives and only three scalars come back.
+      !! where the buffer already lives and only a few scalars come back.
       !! Explicit-shape dummies (never assumed-shape) so NVHPC does not walk
       !! a descriptor per launch; index order is `(k, j, i)` with the
       !! contiguous index last.
+      !!
+      !! **Missing data.**  A diagnostic buffer legitimately carries IEEE
+      !! NaN as the "no water here" sentinel — `fill_tracer_impl` writes it
+      !! into every land column and every dynamically vanished layer (see
+      !! its docstring, and `test_fill_vanished_nan`).  Those cells are not
+      !! data and must not enter the statistics, so every cell is
+      !! `ieee_is_finite`-guarded and `n_valid` counts the cells that did
+      !! contribute — the caller divides the sum by THAT, not by the array
+      !! size.  Relying on "comparisons with NaN are false" to make
+      !! `min`/`max` skip them is not enough and not portable: it leaves
+      !! `sum` poisoned (the whole field's mean becomes NaN next to a
+      !! perfectly finite min/max) and nvfortran's relaxed-FP default is
+      !! free to lower an unguarded `min`/`max` to a NaN-blind select.
+      !!
+      !! For an all-finite buffer the guard is always taken, so the
+      !! reduction order — and therefore the result — is bit-identical to
+      !! the unguarded form.  `n_valid == 0` (nothing finite anywhere)
+      !! leaves the `+huge` / `-huge` / `0` seeds untouched; the caller
+      !! substitutes the missing-value sentinel.
       !!
       !! The caller MUST only invoke this when the buffer is device-resident
       !! on a GPU build — see `ocean_diag_t%on_device`.
       integer, intent(in) :: n1, n2, n3
       real(wp), intent(in) :: buf(n1, n2, n3)
       real(wp), intent(out) :: vmin, vmax, vsum
-      integer :: i, j, k
+      integer, intent(out), optional :: n_valid
+         !! Number of finite cells folded in. Optional so the pre-existing
+         !! three-scalar call sites keep working unchanged.
+      integer :: i, j, k, nv
       vmin = huge(1.0_wp)
       vmax = -huge(1.0_wp)
       vsum = 0.0_wp
+      nv = 0
       do concurrent(k=1:n3, j=1:n2, i=1:n1) reduce(min:vmin) reduce(max:vmax) &
-         reduce(+:vsum)
-         vmin = min(vmin, buf(i, j, k))
-         vmax = max(vmax, buf(i, j, k))
-         vsum = vsum + buf(i, j, k)
+         reduce(+:vsum) reduce(+:nv)
+         if (ieee_is_finite(buf(i, j, k))) then
+            vmin = min(vmin, buf(i, j, k))
+            vmax = max(vmax, buf(i, j, k))
+            vsum = vsum + buf(i, j, k)
+            nv = nv + 1
+         end if
       end do
+      if (present(n_valid)) n_valid = nv
    end subroutine diag_reduce_stats
 
    subroutine fill_and_remap(v, state_handle, z_out, rho_out, sigma_out, zstar_out)
