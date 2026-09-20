@@ -61,7 +61,8 @@ module test_ocean_pgf_p_top_bc
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, &
                                        ocean_pressure_force_compute, &
                                        OPGF_VARIANT_FV_MOM6
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+                         p_top_has_producer
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
@@ -102,7 +103,8 @@ contains
                   new_unittest("isostatic_rest_sloping_load", test_isostatic_rest), &
                   new_unittest("knob_off_ignores_p_top", test_knob_off), &
                   new_unittest("pa_sign_and_monotone", test_pa_sign), &
-                  new_unittest("validate_config_p_top_in_bc", test_validate_config) &
+                  new_unittest("validate_config_p_top_in_bc", test_validate_config), &
+                  new_unittest("p_top_producer_is_psurf_or_cavity", test_p_top_producer) &
                   ]
    end subroutine collect_ocean_pgf_p_top_bc_tests
 
@@ -620,6 +622,56 @@ contains
                     "the default p_top_in_bc=.false. must validate for any form")
       end block checks
    end subroutine test_validate_config
+
+   subroutine test_p_top_producer(error)
+      !! WHO WRITES `ms%p_top` — the predicate behind the `p_top_in_bc`
+      !! inert-knob warning.
+      !!
+      !! `p_top = metrics%p_ice_ref + sf%p_surf` has TWO producers.  The
+      !! warning used to name only the `&ocean_psurf_nml` seam, so a
+      !! configuration with an ice-shelf cavity — where `p_top` carries
+      !! the full `rho_ref*g*z_draft` ice load, and where `p_top_in_bc`
+      !! is not merely live but REQUIRED for a varying draft — was told
+      !! its load was being ignored.  That is worse than a missing
+      !! warning: it invites the user to turn OFF the knob that is
+      !! carrying the physics.
+      !!
+      !! The predicate is tested rather than the log line because the
+      !! predicate is the thing with a contract; the sentence is its
+      !! rendering.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      checks: block
+         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /')
+         call check(error,.not. p_top_has_producer(cfg), &
+                    "with neither psurf nor a cavity, p_top really is the zero "// &
+                    "array and the knob really is inert")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
+                         new_line("a")//"&ocean_psurf_nml enable = .true. /")
+         call check(error, p_top_has_producer(cfg), &
+                    "the surface-pressure seam is a producer (it fills sf%p_surf)")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
+                         new_line("a")//"&ocean_cavity_dyn_nml enable = .true., "// &
+                         "draft_config = 'flat', draft_depth = 300.0 /")
+         call check(error, p_top_has_producer(cfg), &
+                    "an ice-shelf cavity is a producer too — p_ice_ref = "// &
+                    "rho_ref*g*z_draft is assembled into p_top by "// &
+                    "configure_ocean_cavity, and p_top_in_bc is REQUIRED there")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, '&ocean_pgf_nml form = "fv_mom6", p_top_in_bc = .true. /'// &
+                         new_line("a")//"&ocean_psurf_nml enable = .true. /"// &
+                         new_line("a")//"&ocean_cavity_dyn_nml enable = .true., "// &
+                         "draft_config = 'flat', draft_depth = 300.0 /")
+         call check(error, p_top_has_producer(cfg), &
+                    "both at once is still a producer (p_top is their SUM)")
+      end block checks
+   end subroutine test_p_top_producer
 
    subroutine parse_case(cfg, extra)
       type(config_t), intent(out) :: cfg
