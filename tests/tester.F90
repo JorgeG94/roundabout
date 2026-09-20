@@ -30,6 +30,8 @@ program rdb_tests
    use test_ocean_eos_handle, only: ocean_eos_handle_collect => collect_ocean_eos_handle_tests
    use test_ocean_eos_roquet, only: ocean_eos_roquet_collect => collect_ocean_eos_roquet_tests
    use test_ocean_eos_p_top, only: ocean_eos_p_top_collect => collect_ocean_eos_p_top_tests
+   use test_ocean_eos_buoyancy, only: ocean_eos_buoyancy_collect => &
+                                      collect_ocean_eos_buoyancy_tests
    use test_ocean_linear_eos_knobs, only: ocean_linear_eos_knobs_collect => &
                                           collect_ocean_linear_eos_knobs_tests
    use test_ocean_salinity_ic, only: ocean_salinity_ic_collect => &
@@ -210,6 +212,7 @@ program rdb_tests
                 new_testsuite("ocean_eos_handle", ocean_eos_handle_collect), &
                 new_testsuite("ocean_eos_roquet", ocean_eos_roquet_collect), &
                 new_testsuite("ocean_eos_p_top", ocean_eos_p_top_collect), &
+                new_testsuite("ocean_eos_buoyancy", ocean_eos_buoyancy_collect), &
                 new_testsuite("ocean_linear_eos_knobs", ocean_linear_eos_knobs_collect), &
                 new_testsuite("ocean_salinity_ic", ocean_salinity_ic_collect), &
                 new_testsuite("ocean_freezing_point", ocean_freezing_point_collect), &

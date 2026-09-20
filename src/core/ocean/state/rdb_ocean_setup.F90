@@ -71,7 +71,8 @@ module rdb_ocean_setup
    use rdb_ocean_epbl, only: parse_epbl_mstar_scheme, parse_epbl_vstar_scheme, &
                              parse_epbl_combine, parse_epbl_lt_scheme
    use rdb_ocean_vmix, only: parse_kpp_sw_method, vmix_resolve_kd_min, &
-                             bkgnd_henyey_conflicts_profile
+                             bkgnd_henyey_conflicts_profile, &
+                             parse_buoyancy_coeffs, BUOY_COEFFS_INVALID
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_fold, only: fold_north_corner
    use rdb_ocean_tides, only: tides_configure_astronomy, tides_build_struct
@@ -1237,6 +1238,31 @@ contains
       ! kpp_sw_method).  validate_config already rejected unknown strings.
       ocean_state%vmix%kpp_sw_method = &
          parse_kpp_sw_method(trim(cfg%ocean%thermo%kpp_sw_method))
+      ! (E4) Source of the α/β pair behind the KPP `B_0` and the
+      ! double-diffusion density ratio (`&ocean_vmix_nml
+      ! buoyancy_coeffs`).  `nml_enum allowed=` already rejected an
+      ! unknown spelling at parse time; the INVALID arm here is the
+      ! belt-and-braces guard that keeps the schema list and
+      ! `parse_buoyancy_coeffs` from drifting apart silently (a wrong α is
+      ! a physics change with no symptom, so never a fallback).  Both this
+      ! and the `p_top` gate below are plain host scalars latched BEFORE
+      ! `ocean_state_enter_data`'s `copyin`, which is the same contract
+      ! `rho0` and the `pp81_*` scalars beside them rely on.
+      ocean_state%vmix%buoyancy_coeffs = &
+         parse_buoyancy_coeffs(trim(cfg%ocean%vmix%buoyancy_coeffs))
+      if (ocean_state%vmix%buoyancy_coeffs == BUOY_COEFFS_INVALID) then
+         call fail("ocean_vmix_nml: buoyancy_coeffs='"// &
+                   trim(cfg%ocean%vmix%buoyancy_coeffs)// &
+                   "' is not a known source; use 'constant' or 'eos'", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      ! Mirror of the E3 `&ocean_psurf_nml in_eos` seam gate, taken from
+      ! the SAME knob EPBL's `in_eos` takes so the two boundary-layer
+      ! schemes measure their in-situ pressures from the same origin.
+      ! NOT redundant with `p_top` being zero — a cavity fills `p_top`
+      ! with the ice load whether or not `in_eos` is set.
+      ocean_state%vmix%p_top_in_eos = cfg%ocean%psurf%in_eos
       ! MANDATORY re-derive: kv_bg/kt_bg/ks_bg and the seeded kv/kt/ks/kd_bg
       ! arrays were set from the TYPE-DEFAULT pp81_* at `init` time (before
       ! this configure call runs); without this, `vmix_assemble`'s
