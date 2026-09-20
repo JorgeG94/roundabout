@@ -1280,9 +1280,9 @@ contains
 
    function lid_namelist(tdrag_on, melt_on) result(nml)
       !! A flat, fully covered ice shelf over a flat bed, with KPP and
-      !! the split solver.  `ssp_rk2` because `pred_corr`'s v1 envelope
-      !! is not the subject here and pinning the scheme keeps the two
-      !! runs differing in ONE knob.
+      !! the split solver on its DEFAULT scheme (`pred_corr`) — the scheme
+      !! every cavity configuration runs; nothing here is outside its
+      !! envelope, so it is not pinned.
       logical, intent(in) :: tdrag_on
       logical, intent(in), optional :: melt_on
          !! Turn on `&ocean_cavity_melt_nml` instead of / as well as the
@@ -1300,7 +1300,7 @@ contains
             "&ocean_ic_nml rho_0 = 1035.0 /"//new_line("a")// &
             "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
             "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
-            "&ocean_bt_nml split_scheme = 'ssp_rk2', auto_n_inner = .false., "// &
+            "&ocean_bt_nml auto_n_inner = .false., "// &
             "n_inner = 12 /"//new_line("a")// &
             "&ocean_vmix_nml use_closure = .true., use_kpp = .true. /"//new_line("a")// &
             "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
