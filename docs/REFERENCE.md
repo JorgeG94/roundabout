@@ -450,7 +450,11 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` and consumed by the
   FV-MOM6 `pa(nz+1)` top boundary condition (`&ocean_pgf_nml
   p_top_in_bc`, REQUIRED for a draft that varies) and the in-situ EOS
-  (`&ocean_psurf_nml in_eos`); it is never added to `sf%p_surf`, so the
+  (`&ocean_psurf_nml in_eos` — ported consumers: the FV-Wright Picard
+  column sweep and the EPBL column stack, the latter seeding both its
+  in-situ EOS argument and its PE weight at `p_top`; the remaining
+  in-situ builders are still refused fail-loud); it is never added to
+  `sf%p_surf`, so the
   `eta_forcing` seam carries the load ANOMALY only and the datum carries
   the rest exactly once.  Single-rank, `fv_mom6` + sigma/z*-lite only.
 - **Ice-shelf basal melt** (`&ocean_cavity_melt_nml`, default off ⇒
