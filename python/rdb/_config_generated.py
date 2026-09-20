@@ -3582,6 +3582,14 @@ class OceanPgf(Group):
         vmax=2,
     )
 
+    p_top_in_bc = Bool(
+        'p_top_in_bc',
+        doc='FV_MOM6: add the top-of-column load ms%p_top to the pressure-stack surface boundary condition pa(nz+1) = rho_ref*g*eta + p_top',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class OceanEos(Group):
     """`&ocean_eos_nml` -- Equation-of-state variant selector, liquidus set + reference pressure."""
@@ -5687,4 +5695,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 622
+N_KNOBS = 623
