@@ -1148,8 +1148,7 @@ contains
 
       ! Surface tracer fluxes, geothermal bottom flux, ideal-age, vmix.
       call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       ! Ideal-age interior aging only (PR-7): thermo-cadence gated, mirrors
       ! its tracer-kernel neighbours above.  The surface Dirichlet reset is
@@ -1196,6 +1195,49 @@ contains
                                   vmix_tidal=vmix_tidal, metrics=metrics)
       end if
    end subroutine run_stage
+
+   subroutine apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
+      !! The two cell-centred surface kernels that do NOT route through
+      !! the assembler's `Q_heat` / `Q_salt`, with their ice-shelf-cover
+      !! dispatch.  Shortwave penetration reads a pristine `q_sw`
+      !! component (or moves a lump the masked deposit never added) and
+      !! restoring forms its flux in-kernel from the live SST/SSS, so
+      !! each needs the cover factor of its own; everything else the
+      !! atmosphere contributes is already masked inside
+      !! `ocean_surface_flux_assemble`.
+      !!
+      !! Hoisted into its own routine rather than written inline in
+      !! `run_stage_split`: that routine hosts eight `do concurrent`
+      !! kernels, and handing a state array (`metrics%cover_frac`) to an
+      !! external subroutine from a `do concurrent` host is the
+      !! documented nvfortran escape-analysis pessimisation (CLAUDE.md,
+      !! measured at +4.8 % on `ocean_continuity`).  This wrapper has no
+      !! `do concurrent` of its own, so there is nothing to pessimise.
+      !!
+      !! Cavity off (`metrics%use_cavity = .false.`) ⇒ the original two
+      !! calls, byte-identical.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_surface_flux_t), intent(in), optional :: sf
+         !! Forwarded; absent ⇒ both kernels no-op (their own contract).
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: therm_dt
+      logical, intent(in) :: therm_active
+
+      if (metrics%use_cavity) then
+         call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, &
+                                                      active=therm_active, &
+                                                      cover_frac=metrics%cover_frac)
+         call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, &
+                                                  active=therm_active, &
+                                                  cover_frac=metrics%cover_frac)
+      else
+         call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, &
+                                                      active=therm_active)
+         call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, &
+                                                  active=therm_active)
+      end if
+   end subroutine apply_sw_and_restore
 
    subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, &
                                   lambda_top_u, lambda_top_v, cover_u, cover_v, &
@@ -4368,8 +4410,7 @@ contains
       else
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
       end if
-      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       call probe_dS(grid, ms, "after surface flux", stage_id, step_id)
       ! Ideal-age tracer: interior aging only (1 s/s), thermo-cadence

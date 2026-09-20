@@ -1281,6 +1281,11 @@ module rdb_config
          !! that row's RHS; a drag is a diagonal term, so the two
          !! compose — but on a face the ice covers, the wind RHS is
          !! MASKED OFF here (there is no atmosphere under a shelf).
+         !! That masking is now BELT AND BRACES and kept deliberately:
+         !! the cover mask zeroes the `tau` pair at its source, so the
+         !! factor multiplies zero, and it stays so the fold is correct
+         !! STANDALONE if a later forcing path ever writes `tau` after
+         !! the configure-time mask.
          !! Requires `&ocean_tdrag_nml enable`; mutually exclusive with
          !! `&ocean_tdrag_nml implicit` (both would damp the top layer)
          !! and with `htbl > 0` (the fold is one `k = nz` rate and
@@ -4908,6 +4913,34 @@ contains
                               "requires rho_ice > 0")
             has_error = .true.
          end if
+         ! --- the one atmospheric-forcing path the cover mask does NOT
+         !     reach (P2c) ---
+         ! Every static forcing field is masked: the wind pair and the
+         ! scalar q_heat/q_salt once at configure, the component bands
+         ! every thermo step in the assembler.  The FILE-DRIVEN override
+         ! is the exception: `ocean_data_forcing_apply` rewrites `tau_x`/
+         ! `tau_y` (and, with `heat_to_component=.false.`, `Q_heat`
+         ! itself) from the next time bracket with no access to
+         ! `metrics%cover_frac` — it is handed `ss`, `sf`, `grid` and
+         ! `bc`, and nothing else.  Re-masking per bracket means
+         ! threading the metrics slot through the reader, which is a
+         ! separate change.  Refused rather than half-wired: a cavity run
+         ! whose wind is silently restored to its unmasked file value on
+         ! the first bracket read looks entirely plausible and is wrong.
+         if (cfg%ocean%dataovr%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_dataovr_nml enable=.true.  The "// &
+                              "ice-cover mask on the atmospheric forcing is applied "// &
+                              "to the wind pair at configure and to the surface-flux "// &
+                              "components in the assembler; the data-override reader "// &
+                              "rewrites tau_x/tau_y (and Q_heat, unless "// &
+                              "heat_to_component=.true.) per time bracket without "// &
+                              "the cover, which would restore the unmasked "// &
+                              "atmosphere under the shelf.  Follow-up: thread "// &
+                              "cover_frac through ocean_data_forcing_apply and the "// &
+                              "ocean_seam_refresh_surface_stress seam.")
+            has_error = .true.
+         end if
          ! --- pressure-gradient envelope ---
          if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
@@ -5222,52 +5255,31 @@ contains
                               "over; zero would sample nothing).")
             has_error = .true.
          end if
-         ! --- v1 gap, refused rather than half-wired: no cover mask ---
-         ! `&ocean_psurf_nml enable` is NOT refused here.  The cavity is
-         ! the `ms%p_top` producer (P5.2: `p_ice_ref + sf%p_surf`, at
-         ! configure and again per outer step when the seam makes
-         ! `sf%p_surf` live), so the seam can no longer overwrite the ice
-         ! load with the atmospheric one alone — the melt liquidus reads
-         ! the assembled total, which is what it should read.
-         if (cfg%wind_stress_x /= 0.0_wp .or. cfg%wind_stress_y /= 0.0_wp .or. &
-             trim(adjustl(cfg%ocean%topo%wind_config)) /= "constant") then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
-                              "exclusive with a non-zero surface wind stress "// &
-                              "(wind_stress_x/y, &ocean_topo_nml wind_config) in "// &
-                              "this slice: there is no per-cell ice-COVER MASK on "// &
-                              "the atmospheric forcing yet, so the wind would blow "// &
-                              "through solid ice.  Follow-up: thread cover_frac "// &
-                              "through surface-stress/flux/sw-pen/restore as an "// &
-                              "optional argument, the way wet_dyn is threaded.")
-            has_error = .true.
-         end if
-         if (cfg%ocean%restore%enable_restore_temp .or. &
-             cfg%ocean%restore%enable_restore_salt) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_restore_nml surface restoring "// &
-                              "in this slice (same missing cover mask: restoring the "// &
-                              "top layer toward an ATMOSPHERIC target under an ice "// &
-                              "shelf would overwhelm the melt signal).  Same "// &
-                              "follow-up.")
-            has_error = .true.
-         end if
-         if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_thermo_nml sw_pen_frac > 0 in "// &
-                              "this slice (same missing cover mask: no sunlight "// &
-                              "reaches the ocean through several hundred metres of "// &
-                              "ice).  Same follow-up.")
-            has_error = .true.
-         end if
-         if (cfg%ocean%thermo%q_heat /= 0.0_wp .or. cfg%ocean%thermo%q_salt /= 0.0_wp) then
-            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
-                              "exclusive with a non-zero &ocean_thermo_nml "// &
-                              "q_heat/q_salt in this slice: those are UNIFORM scalar "// &
-                              "surface fluxes the assembler adds everywhere, "// &
-                              "including under the shelf, and the cover mask that "// &
-                              "would exclude them is the same follow-up.")
-            has_error = .true.
-         end if
+         ! --- the cover mask SHIPS (P2c) ---
+         ! Wind stress, surface restoring, shortwave penetration and the
+         ! uniform scalar q_heat/q_salt were each refused here while
+         ! there was no per-cell ice-COVER MASK on the atmospheric
+         ! forcing.  There is one now:
+         !
+         !   * the wind-stress PAIR is masked face-wise at configure
+         !     (`ocean_surface_stress_apply_cover`, called from
+         !     `configure_ocean_cavity`), which also silences the
+         !     implicit vdiff stress fold and the MLE front sampler —
+         !     both read `ss%tau_x` raw — and refreshes `stress_mag`, so
+         !     KPP/EPBL `u*` is zero-wind under cover;
+         !   * `q_heat`/`q_salt`, the radiative/turbulent bands, the
+         !     mass-flux enthalpies and `salt_flux` are masked in
+         !     `ocean_surface_flux_assemble` (cover-aware twin), which is
+         !     the one place they are still separable from the cavity's
+         !     own `heat_cavity`/`salt_cavity` — and which makes the
+         !     `Q_heat`/`Q_salt` KPP/EPBL read for `B_0` the MASKED
+         !     values;
+         !   * shortwave penetration and surface restoring carry the
+         !     factor themselves (they do not route through `Q_*`).
+         !
+         ! `&ocean_psurf_nml enable` was never refused here: the cavity
+         ! is the `ms%p_top` producer (P5.2: `p_ice_ref + sf%p_surf`), so
+         ! the seam composes with the ice load rather than clobbering it.
          if (cfg%ocean%ice%enable) then
             call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
                               "exclusive with &ocean_ice_nml enable=.true.  Sea ice "// &

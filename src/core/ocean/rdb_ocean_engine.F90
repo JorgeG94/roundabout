@@ -1316,10 +1316,24 @@ contains
                                   active=engine%state%dyn%enable_thermodynamics &
                                   .and. engine%state%dyn%is_thermo_step())
 
-      call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
-                                       engine%state%multilayer, &
-                                       active=engine%state%dyn%enable_thermodynamics &
-                                       .and. engine%state%dyn%is_thermo_step())
+      ! Ice-shelf cover: the assembler is where the atmospheric bands and
+      ! the cavity's own heat_cavity/salt_cavity are still separable, so
+      ! it is where `1 - cover_frac` is applied — and applying it there
+      ! (rather than at apply time) is also what makes the `Q_heat` /
+      ! `Q_salt` that KPP and EPBL read for `B_0` the MASKED values.
+      ! Cavity off ⇒ the original call, byte-identical.
+      if (engine%state%metrics%use_cavity) then
+         call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
+                                          engine%state%multilayer, &
+                                          active=engine%state%dyn%enable_thermodynamics &
+                                          .and. engine%state%dyn%is_thermo_step(), &
+                                          cover_frac=engine%state%metrics%cover_frac)
+      else
+         call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
+                                          engine%state%multilayer, &
+                                          active=engine%state%dyn%enable_thermodynamics &
+                                          .and. engine%state%dyn%is_thermo_step())
+      end if
 
       if (engine%diag_enabled) then
          call engine%state%diag%step(engine%state, dt, t + dt)

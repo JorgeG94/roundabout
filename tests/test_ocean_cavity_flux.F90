@@ -46,7 +46,12 @@ module test_ocean_cavity_flux
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_assemble, &
-                                     ocean_surface_flux_apply_tracers
+                                     ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_apply_sw_penetration, &
+                                     ocean_surface_restore_apply_tracers
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
+                                       ocean_surface_stress_apply_cover
+   use rdb_ocean_top_drag, only: top_drag_fill_face_cover_impl
    use rdb_ocean_cavity_melt, only: cavity_melt_point, cavity_ustar, &
                                     ocean_cavity_exchange_t, ocean_cavity_ice_t, &
                                     ocean_cavity_const_t, CAVITY_MELT_OK, &
@@ -106,6 +111,13 @@ contains
                   new_unittest("cavity_status_fresh_column_counted", test_status_fresh), &
                   new_unittest("cavity_gamma_s_sentinel_resolves", test_gamma_s_sentinel), &
                   new_unittest("cavity_melt_off_is_placeholder", test_off_placeholder), &
+                  new_unittest("cavity_cover_absent_is_unmasked", test_cover_absent), &
+                  new_unittest("cavity_cover_stress_zero_wind_under_ice", test_cover_stress), &
+                  new_unittest("cavity_cover_face_rule_matches_top_drag", &
+                               test_cover_face_rule), &
+                  new_unittest("cavity_cover_assembler_masks_atmosphere", test_cover_assemble), &
+                  new_unittest("cavity_cover_blocks_sw_and_restore", test_cover_sw_restore), &
+                  new_unittest("cavity_cover_budget_closes_both_sources", test_cover_budget), &
                   new_unittest("cavity_melt_validate_refusals", test_validate_refusals) &
                   ]
    end subroutine collect_ocean_cavity_flux_tests
@@ -883,6 +895,480 @@ contains
    end subroutine test_off_placeholder
 
    ! ------------------------------------------------------------------
+   ! P2c: the cover mask on atmospheric forcing
+   ! ------------------------------------------------------------------
+   !
+   ! Under `cover_frac = 1` there is no atmosphere.  What that has to
+   ! mean, field by field, is asserted below.  Two properties run through
+   ! every one of them:
+   !
+   !   ABSENT ⇒ UNMASKED.  Every masked kernel is reached through an
+   !   OPTIONAL `cover_frac`; with the argument absent the call dispatches
+   !   to the untouched `_impl`, so a run without a cavity is byte-
+   !   identical by construction.  `test_cover_absent` pins that the
+   !   cover-aware twin agrees with it when the cover is all zero, which
+   !   is the part construction does NOT give you for free.
+   !
+   !   THE CAVITY'S OWN FLUXES ARE NOT MASKED.  `heat_cavity` /
+   !   `salt_cavity` are the melt interface, not the atmosphere.  A mask
+   !   applied after the assembler would scale them away with everything
+   !   else, which is why it is applied inside it.
+
+   subroutine test_cover_absent(error)
+      !! Cover present-but-zero reproduces cover-absent.  Asserted to a
+      !! stated relative tolerance rather than bitwise: the two kernels
+      !! are different expression trees (`open_f*(sum)` vs `sum`), and an
+      !! FMA-contracting build is free to round them differently — even
+      !! though `open_f` is exactly 1 here.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      type(ocean_cavity_flux_t) :: cav
+      type(eos_t) :: eos
+      real(wp), allocatable :: zero_cover(:, :), qh_ref(:, :), qs_ref(:, :)
+      integer :: nx, ny
+
+      call build_cavity_plane(grid, metrics, ms, sf, cav, eos, P_DRAFT, T_WARM, &
+                              0.05_wp, 0)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      allocate (zero_cover(nx, ny), source=0.0_wp)
+      allocate (qh_ref(nx, ny), source=0.0_wp)
+      allocate (qs_ref(nx, ny), source=0.0_wp)
+      ! A live atmosphere so the comparison has something to compare.
+      call sf%set_surface_flux_const(40.0_wp, 1.0e-5_wp)
+      !$acc update device(sf%Q_heat, sf%Q_salt)
+      !$acc enter data copyin(zero_cover) create(qh_ref, qs_ref)
+
+      call ocean_surface_flux_assemble(grid, sf, ms)
+      !$acc update self(sf%Q_heat, sf%Q_salt)
+      qh_ref = sf%Q_heat
+      qs_ref = sf%Q_salt
+
+      call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=zero_cover)
+      !$acc update self(sf%Q_heat, sf%Q_salt)
+
+      call check(error, maxval(abs(sf%Q_heat - qh_ref)) <= TOL_PATH*max(maxval(abs(qh_ref)), 1.0_wp), &
+                 "a zero cover must reproduce the unmasked Q_heat")
+      if (allocated(error)) go to 900
+      call check(error, maxval(abs(sf%Q_salt - qs_ref)) <= TOL_PATH*max(maxval(abs(qs_ref)), 1.0_wp), &
+                 "a zero cover must reproduce the unmasked Q_salt")
+      if (allocated(error)) go to 900
+      call check(error, maxval(abs(qh_ref)) > 0.0_wp, &
+                 "the comparison must not be 0 == 0")
+
+900   continue
+      !$acc exit data delete(zero_cover, qh_ref, qs_ref)
+      call teardown_cavity_plane(metrics, ms, sf, cav)
+   end subroutine test_cover_absent
+
+   subroutine test_cover_stress(error)
+      !! No wind acts on a covered cell, and KPP/EPBL see that.
+      !!
+      !! FACE RULE: a face is closed when EITHER neighbour is covered.
+      !! Both of a covered cell's faces therefore close, so its
+      !! `stress_mag` — the ONLY source of `u*` for KPP and EPBL — is
+      !! EXACTLY zero.  The price, asserted here rather than hidden, is
+      !! one face-wide transition: the first OPEN cell at the calving
+      !! front keeps one live face and so reads half the open-ocean
+      !! `|tau|`, which is the `u*` consistent with the momentum it
+      !! actually received.  An open cell with two open neighbours is
+      !! untouched, bitwise (its `tau` pair never changed, and
+      !! `stress_mag` is recomputed by the same three lines).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_surface_stress_t) :: ss
+      real(wp), allocatable :: cover(:, :), mag0(:, :)
+      real(wp), parameter :: TAUX = 0.2_wp, TAUY = 0.1_wp
+      real(wp) :: full_mag
+      integer :: nx, ny, i, j, i_ice, i_front, i_open
+
+      call grid%init(NX_PHYS, NY_PHYS, NGHOST, DX, DY)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      call ss%init(grid, NZ)
+      call ss%set_wind_stress_const(TAUX, TAUY)
+      full_mag = sqrt(TAUX*TAUX + TAUY*TAUY)
+
+      ! Ice on the two westmost physical columns; open to the east.
+      allocate (cover(nx, ny), source=0.0_wp)
+      allocate (mag0(nx, ny), source=0.0_wp)
+      i_ice = NGHOST + 1
+      i_front = NGHOST + 3      ! first OPEN column, shares a face with ice
+      i_open = NGHOST + 4       ! open with open neighbours on both sides
+      do j = 1, ny
+         cover(NGHOST + 1, j) = 1.0_wp
+         cover(NGHOST + 2, j) = 1.0_wp
+      end do
+      mag0 = ss%stress_mag
+
+      call ss%enter_data()
+      !$acc enter data copyin(cover)
+      call ocean_surface_stress_apply_cover(ss, cover)
+      ! Idempotence: the mask multiplies by 0 or 1, so a second pass —
+      ! which the per-bracket forcing seam would do — must change nothing.
+      call ocean_surface_stress_apply_cover(ss, cover)
+      !$acc update self(ss%tau_x, ss%tau_y, ss%stress_mag)
+
+      j = NGHOST + 1
+      call check(error, ss%stress_mag(i_ice, j) == 0.0_wp, &
+                 "stress_mag must be EXACTLY zero under cover (KPP/EPBL u* = 0)")
+      if (allocated(error)) go to 900
+      call check(error, ss%tau_x(i_ice, j) == 0.0_wp .and. &
+                 ss%tau_x(i_ice + 1, j) == 0.0_wp, &
+                 "both u-faces of a covered cell must carry zero stress")
+      if (allocated(error)) go to 900
+      call check(error, ss%tau_y(i_ice, j) == 0.0_wp .and. &
+                 ss%tau_y(i_ice, j + 1) == 0.0_wp, &
+                 "both v-faces of a covered cell must carry zero stress")
+      if (allocated(error)) go to 900
+      call check(error, ss%stress_mag(i_open, j) == mag0(i_open, j), &
+                 "an open cell away from the front must be bitwise untouched")
+      if (allocated(error)) go to 900
+      call check(error, rel_diff(mag0(i_open, j), full_mag) <= TOL_EXACT, &
+                 "the untouched open cell must still carry the full |tau|")
+      if (allocated(error)) go to 900
+      ! The documented one-face transition, asserted as a fact rather
+      ! than tolerated silently.
+      call check(error, ss%stress_mag(i_front, j) > 0.0_wp .and. &
+                 ss%stress_mag(i_front, j) < full_mag, &
+                 "the first open cell at the front keeps exactly one live "// &
+                 "u-face, so 0 < |tau| < full")
+      if (allocated(error)) go to 900
+      call check(error, ss%tau_x(i_front, j) == 0.0_wp, &
+                 "the face SHARED with the ice must be closed (EITHER-neighbour rule)")
+
+900   continue
+      !$acc exit data delete(cover)
+      call ss%exit_data()
+      call ss%destroy()
+   end subroutine test_cover_stress
+
+   subroutine test_cover_face_rule(error)
+      !! ONE FACE RULE, NOT TWO.
+      !!
+      !! The wind mask and the ice-shelf top drag both project the
+      !! cell-centred `cover_frac` onto velocity faces, and if they ever
+      !! disagreed the calving-front face would take the drag while still
+      !! feeling the wind (or the reverse) — a slip/no-slip line that is
+      !! exactly one face wide and in exactly the place the cavity
+      !! outflow jet leaves.  The rule is STATED once, in
+      !! `rdb_ocean_top_drag`'s module docstring; this is what keeps the
+      !! two IMPLEMENTATIONS of it honest, the same way
+      !! `mirror_of_bottom_drag` keeps the top and bottom drag one
+      !! closure rather than two.
+      !!
+      !! Method: run `top_drag_fill_face_cover_impl` to get the drag's
+      !! own face masks, then run the wind mask over a `tau` pair of
+      !! ones and read back `1 - tau`, which IS the wind mask's face
+      !! cover.  Asserted face-for-face over the whole plane, rim faces
+      !! included — those are the only ones where the two could plausibly
+      !! have drifted apart, since there is only one neighbour in range.
+      !!
+      !! A ragged cover (not a clean western block) so the comparison
+      !! sees interior fronts in BOTH directions, not just one edge.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_surface_stress_t) :: ss
+      real(wp), allocatable :: cover(:, :), cu(:, :), cv(:, :)
+      integer :: nx, ny, i, j, n_front
+      real(wp) :: worst_u, worst_v
+
+      call grid%init(NX_PHYS, NY_PHYS, NGHOST, DX, DY)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      call ss%init(grid, NZ)
+      ! tau = 1 everywhere, so `1 - tau` after masking IS the face cover.
+      call ss%set_wind_stress_const(1.0_wp, 1.0_wp)
+
+      allocate (cover(nx, ny), source=0.0_wp)
+      allocate (cu(nx + 1, ny), source=-1.0_wp)
+      allocate (cv(nx, ny + 1), source=-1.0_wp)
+      do j = 1, ny
+         do i = 1, nx
+            ! Ragged: a western block plus a southern tongue, so fronts
+            ! run in x AND y and touch the rim on two sides.
+            if (i <= 3 .or. (j <= 2 .and. i <= 5)) cover(i, j) = 1.0_wp
+         end do
+      end do
+
+      call top_drag_fill_face_cover_impl(cu, cv, cover, nx, ny)
+      call ocean_surface_stress_apply_cover(ss, cover)
+
+      worst_u = 0.0_wp
+      do j = 1, ny
+         do i = 1, nx + 1
+            worst_u = max(worst_u, abs((1.0_wp - ss%tau_x(i, j)) - cu(i, j)))
+         end do
+      end do
+      worst_v = 0.0_wp
+      do j = 1, ny + 1
+         do i = 1, nx
+            worst_v = max(worst_v, abs((1.0_wp - ss%tau_y(i, j)) - cv(i, j)))
+         end do
+      end do
+
+      call check(error, worst_u == 0.0_wp, &
+                 "the wind mask and the top drag must agree on EVERY u-face "// &
+                 "(one rule, two implementations)")
+      if (allocated(error)) go to 900
+      call check(error, worst_v == 0.0_wp, &
+                 "the same on every v-face")
+      if (allocated(error)) go to 900
+
+      ! Non-vacuity: the plane must actually contain frontal faces, i.e.
+      ! faces the OR rule closes and an AND rule would have left open.
+      n_front = 0
+      do j = 1, ny
+         do i = 2, nx
+            if (cover(i - 1, j) /= cover(i, j)) n_front = n_front + 1
+         end do
+      end do
+      call check(error, n_front > 0, &
+                 "the test plane must contain a calving front, else the two "// &
+                 "rules agree trivially")
+      if (allocated(error)) go to 900
+      call check(error, cu(4, NGHOST + 1) == 1.0_wp, &
+                 "a frontal u-face must be CLOSED by the shared OR rule")
+
+900   continue
+      call ss%destroy()
+   end subroutine test_cover_face_rule
+
+   subroutine test_cover_assemble(error)
+      !! The assembler masks the ATMOSPHERE and passes the CAVITY
+      !! through.  Under cover `Q_heat` must be exactly `heat_cavity` and
+      !! `Q_salt` exactly `salt_cavity` — every atmospheric band gone,
+      !! the melt flux intact.  In the open cells the answer must be the
+      !! no-cavity answer.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      type(ocean_cavity_flux_t) :: cav
+      type(eos_t) :: eos
+      real(wp), allocatable :: qh_open(:, :), qs_open(:, :)
+      integer :: nx, ny, i_ice, i_open, j
+      integer, parameter :: COVER_TO = 2
+
+      call build_cavity_plane(grid, metrics, ms, sf, cav, eos, P_DRAFT, T_WARM, &
+                              0.05_wp, COVER_TO)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      allocate (qh_open(nx, ny), source=0.0_wp)
+      allocate (qs_open(nx, ny), source=0.0_wp)
+      i_ice = NGHOST + 1
+      i_open = NGHOST + COVER_TO + 1
+      j = NGHOST + 1
+
+      ! A full atmosphere: the uniform scalar fill AND two component
+      ! bands, so the test would catch a mask that only covered one of
+      ! the two routes into Q_heat.
+      call sf%set_surface_flux_const(40.0_wp, 2.0e-5_wp)
+      sf%heat_added = -15.0_wp
+      sf%q_lw = -30.0_wp
+      sf%salt_flux = 5.0e-6_wp
+      !$acc update device(sf%Q_heat, sf%Q_salt, sf%heat_added, sf%q_lw, sf%salt_flux)
+
+      ! Reference: the SAME state assembled with no cover at all.
+      call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
+      call ocean_surface_flux_assemble(grid, sf, ms)
+      !$acc update self(sf%Q_heat, sf%Q_salt)
+      qh_open = sf%Q_heat
+      qs_open = sf%Q_salt
+
+      call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=metrics%cover_frac)
+      !$acc update self(sf%Q_heat, sf%Q_salt, sf%heat_cavity, sf%salt_cavity)
+      !$acc update self(sf%heat_content_massin, sf%heat_content_massout)
+
+      call check(error, sf%heat_cavity(i_ice, j) /= 0.0_wp, &
+                 "the covered probe column must actually be melting")
+      if (allocated(error)) go to 900
+      call check(error, sf%Q_heat(i_ice, j) == sf%heat_cavity(i_ice, j), &
+                 "under cover Q_heat must be EXACTLY heat_cavity — every "// &
+                 "atmospheric band masked, the melt flux untouched")
+      if (allocated(error)) go to 900
+      call check(error, sf%Q_salt(i_ice, j) == sf%salt_cavity(i_ice, j), &
+                 "under cover Q_salt must be EXACTLY salt_cavity")
+      if (allocated(error)) go to 900
+      call check(error, sf%heat_content_massin(i_ice, j) == 0.0_wp .and. &
+                 sf%heat_content_massout(i_ice, j) == 0.0_wp, &
+                 "the mass-enthalpy ledger must read zero under cover, so it "// &
+                 "adds up against the masked Q_heat")
+      if (allocated(error)) go to 900
+      ! Open water: unchanged, to the two-expression-trees tolerance.
+      call check(error, sf%heat_cavity(i_open, j) == 0.0_wp, &
+                 "an uncovered column has no melt flux to protect")
+      if (allocated(error)) go to 900
+      call check(error, rel_diff(sf%Q_heat(i_open, j), qh_open(i_open, j)) <= TOL_PATH, &
+                 "an open column must get the no-cavity Q_heat")
+      if (allocated(error)) go to 900
+      call check(error, rel_diff(sf%Q_salt(i_open, j), qs_open(i_open, j)) <= TOL_PATH, &
+                 "an open column must get the no-cavity Q_salt")
+      if (allocated(error)) go to 900
+      call check(error, abs(qh_open(i_open, j)) > 0.0_wp, &
+                 "the open-water comparison must not be 0 == 0")
+
+900   call teardown_cavity_plane(metrics, ms, sf, cav)
+   end subroutine test_cover_assemble
+
+   subroutine test_cover_sw_restore(error)
+      !! Sunlight and an atmospheric restoring target both stop at the
+      !! ice base.  A covered column's `hTr` and its surface budget
+      !! contributor must come out EXACTLY unchanged (the increment is a
+      !! literal `+ 0.0`, not a small number), while an open column moves
+      !! by the same amount it would without a cavity.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      type(ocean_cavity_flux_t) :: cav
+      type(eos_t) :: eos
+      real(wp), allocatable :: t_before(:, :, :), t_ref(:, :, :)
+      integer :: nx, ny, nzl, i_ice, i_open, j, k
+      integer, parameter :: COVER_TO = 2
+      real(wp), parameter :: DT = 3600.0_wp
+
+      call build_cavity_plane(grid, metrics, ms, sf, cav, eos, P_DRAFT, T_WARM, &
+                              0.05_wp, COVER_TO)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nzl = NZ
+      i_ice = NGHOST + 1
+      i_open = NGHOST + COVER_TO + 1
+      j = NGHOST + 1
+      allocate (t_before(nx, ny, nzl), source=0.0_wp)
+      allocate (t_ref(nx, ny, nzl), source=0.0_wp)
+
+      ! A strong sun and a cold restoring target: either one leaking
+      ! under the shelf would be unmissable.
+      call sf%set_surface_flux_const(200.0_wp, 0.0_wp)
+      call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
+      call sf%set_restore(.true., .false., 10.0_wp, 0.0_wp, -20.0_wp, 0.0_wp)
+      !$acc update device(sf%Q_heat, sf%Q_salt)
+      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      t_before = ms%tracers(ms%idx_temperature)%hTr
+
+      ! Reference pass with NO cover, on a scratch copy of the state.
+      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
+      call ocean_surface_restore_apply_tracers(grid, sf, ms, DT)
+      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      t_ref = ms%tracers(ms%idx_temperature)%hTr
+
+      ! Restore the pre-pass state and redo it WITH the cover.
+      ms%tracers(ms%idx_temperature)%hTr = t_before
+      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT, &
+                                                   cover_frac=metrics%cover_frac)
+      call ocean_surface_restore_apply_tracers(grid, sf, ms, DT, &
+                                               cover_frac=metrics%cover_frac)
+      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+
+      do k = 1, nzl
+         call check(error, ms%tracers(ms%idx_temperature)%hTr(i_ice, j, k) == &
+                    t_before(i_ice, j, k), &
+                    "a covered column must take EXACTLY zero shortwave and zero "// &
+                    "restoring, at every layer")
+         if (allocated(error)) go to 900
+      end do
+      call check(error, t_ref(i_ice, j, nzl) /= t_before(i_ice, j, nzl), &
+                 "the unmasked reference must have moved the covered column, "// &
+                 "else the assertion above is vacuous")
+      if (allocated(error)) go to 900
+      call check(error, ms%tracers(ms%idx_temperature)%hTr(i_open, j, nzl) == &
+                 t_ref(i_open, j, nzl), &
+                 "an open column must get the no-cavity answer, bitwise (the "// &
+                 "cover factor there is exactly 1)")
+      if (allocated(error)) go to 900
+      call check(error, t_ref(i_open, j, nzl) /= t_before(i_open, j, nzl), &
+                 "the open column must actually have been forced")
+
+900   call teardown_cavity_plane(metrics, ms, sf, cav)
+   end subroutine test_cover_sw_restore
+
+   subroutine test_cover_budget(error)
+      !! Heat and salt still close to round-off with BOTH sources live —
+      !! an atmosphere over the open cells and a melting interface under
+      !! the covered ones.  This is the composition the lifted refusals
+      !! made legal, so it is the one that has to be shown conservative.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      type(ocean_cavity_flux_t) :: cav
+      type(eos_t) :: eos
+      real(wp) :: heat0, salt0, heat1, salt1, bud_h, bud_s, scale
+      real(wp) :: bud_ice, bud_open
+      integer :: nx, ny, step, i_ice, i_open, j
+      integer, parameter :: N_STEP = 5, COVER_TO = 2
+      real(wp), parameter :: DT = 1800.0_wp
+
+      call build_cavity_plane(grid, metrics, ms, sf, cav, eos, P_DRAFT, T_WARM, &
+                              0.05_wp, COVER_TO)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      scale = grid%dx*grid%dy*RHO_WATER
+      i_ice = NGHOST + 1
+      i_open = NGHOST + COVER_TO + 1
+      j = NGHOST + 1
+
+      call sf%set_surface_flux_const(60.0_wp, 3.0e-5_wp)
+      !$acc update device(sf%Q_heat, sf%Q_salt)
+
+      heat0 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
+                                                     NGHOST + 1:ny - NGHOST, :))*scale
+      salt0 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
+                                                  NGHOST + 1:ny - NGHOST, :))*scale
+
+      do step = 1, N_STEP
+         call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
+         call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=metrics%cover_frac)
+         call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
+      end do
+
+      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
+      !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
+      !$acc&            ms%heat_budget_surface, ms%salt_budget_surface)
+
+      heat1 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
+                                                     NGHOST + 1:ny - NGHOST, :))*scale
+      salt1 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
+                                                  NGHOST + 1:ny - NGHOST, :))*scale
+      bud_h = sum(ms%heat_budget_surface(NGHOST + 1:nx - NGHOST, &
+                                         NGHOST + 1:ny - NGHOST, :))*scale
+      bud_s = sum(ms%salt_budget_surface(NGHOST + 1:nx - NGHOST, &
+                                         NGHOST + 1:ny - NGHOST, :))*scale
+      bud_ice = sum(ms%heat_budget_surface(i_ice, j, :))
+      bud_open = sum(ms%heat_budget_surface(i_open, j, :))
+
+      ! Non-vacuity: the covered column must be COOLING (cavity only) and
+      ! the open one WARMING (atmosphere only).  Opposite signs are the
+      ! cheapest proof that the mask separated the two.
+      call check(error, bud_ice < 0.0_wp, &
+                 "the covered column's only heat source is the melt interface, "// &
+                 "which cools it")
+      if (allocated(error)) go to 900
+      call check(error, bud_open > 0.0_wp, &
+                 "the open column's only heat source is the +60 W/m^2 atmosphere")
+      if (allocated(error)) go to 900
+      ! Normalised against the INITIAL TOTAL, exactly as the console's
+      ! `relative_drift` does and for the reason documented in
+      ! `test_budget_closes`.
+      call check(error, abs((heat1 - heat0) - bud_h) <= 1.0e-13_wp*abs(heat0), &
+                 "heat must close to round-off with atmosphere AND cavity live")
+      if (allocated(error)) go to 900
+      call check(error, abs((salt1 - salt0) - bud_s) <= 1.0e-13_wp*abs(salt0), &
+                 "salt must close to round-off with atmosphere AND cavity live")
+
+900   call teardown_cavity_plane(metrics, ms, sf, cav)
+   end subroutine test_cover_budget
+
+   ! ------------------------------------------------------------------
    ! Refusal matrix
    ! ------------------------------------------------------------------
 
@@ -893,12 +1379,22 @@ contains
       !! to PARSE cleanly first, so a silently mis-built namelist cannot
       !! make a refusal test pass for the wrong reason.
       !!
-      !! One of these exists because a piece of the coupling is NOT in
-      !! this slice — the cover mask on atmospheric forcing — and it is a
-      !! refusal precisely so nothing runs half-wired.  The interface
-      !! pressure is NOT such a gap any more: the cavity assembles
-      !! `ms%p_top = p_ice_ref + sf%p_surf`, so `&ocean_psurf_nml` is
-      !! asserted ACCEPTED below rather than refused.
+      !! Four entries here used to be refusals and are now ACCEPTANCES:
+      !! wind stress, surface restoring, shortwave penetration and the
+      !! uniform scalar `q_heat`/`q_salt` were all refused while there
+      !! was no per-cell cover mask on the atmospheric forcing.  P2c
+      !! ships one, so the verdict flips — and the acceptance is asserted
+      !! rather than deleted, so a regression that re-introduced the
+      !! refusal has to delete a test to pass.  The MASKING itself is
+      !! asserted numerically in the `cavity_cover_*` suite above; this
+      !! test only pins the configure-time verdict.
+      !!
+      !! What remains a refusal, and why, is the file-driven data
+      !! override: it rewrites `tau` (and `Q_heat`) per time bracket
+      !! without the cover, so it would silently restore the unmasked
+      !! atmosphere under the shelf.  The interface pressure is NOT a
+      !! gap: the cavity assembles `ms%p_top = p_ice_ref + sf%p_surf`, so
+      !! `&ocean_psurf_nml` is asserted ACCEPTED below.
       type(error_type), allocatable, intent(out) :: error
 
       ! --- the prerequisites ---
@@ -932,23 +1428,40 @@ contains
                                    "isomip", .true., "", .true.), error)
       if (allocated(error)) return
 
-      ! --- the v1 gaps: no cover mask on atmospheric forcing ---
-      call expect_refused("a non-zero wind stress with no cover mask", &
-                          melt_nml("enable = .true.", "isomip", .true., &
-                                   "&physics_nml wind_stress_x = 0.05 /", .true.), error)
+      ! --- the cover mask SHIPS (P2c): four ACCEPTANCES that used to be
+      !     refusals.  Kept as explicit acceptances rather than deleted,
+      !     so a regression that re-introduced the refusal — or that
+      !     quietly dropped the mask and had to put it back — has to
+      !     delete a test to pass.  The masking ITSELF is asserted
+      !     numerically in `cavity_cover_*` below; this block only pins
+      !     the configure-time verdict.
+      call expect_accepted("a non-zero wind stress, now cover-masked", &
+                           melt_nml("enable = .true.", "isomip", .true., &
+                                    "&physics_nml wind_stress_x = 0.05 /", .true.), error)
       if (allocated(error)) return
-      call expect_refused("surface restoring with no cover mask", &
-                          melt_nml("enable = .true.", "isomip", .true., &
-                                   "&ocean_restore_nml enable_restore_temp = .true., "// &
-                                   "piston_t = 1.0 /", .true.), error)
+      call expect_accepted("surface restoring, now cover-masked", &
+                           melt_nml("enable = .true.", "isomip", .true., &
+                                    "&ocean_restore_nml enable_restore_temp = .true., "// &
+                                    "piston_t = 1.0 /", .true.), error)
       if (allocated(error)) return
-      call expect_refused("shortwave penetration with no cover mask", &
-                          melt_nml("enable = .true.", "isomip", .true., &
-                                   "&ocean_thermo_nml sw_pen_frac = 0.3 /", .true.), error)
+      call expect_accepted("shortwave penetration, now cover-masked", &
+                           melt_nml("enable = .true.", "isomip", .true., &
+                                    "&ocean_thermo_nml sw_pen_frac = 0.3 /", .true.), error)
       if (allocated(error)) return
-      call expect_refused("a uniform scalar surface flux with no cover mask", &
+      call expect_accepted("a uniform scalar surface flux, now cover-masked", &
+                           melt_nml("enable = .true.", "isomip", .true., &
+                                    "&ocean_thermo_nml q_heat = 10.0 /", .true.), error)
+      if (allocated(error)) return
+
+      ! --- the ONE atmospheric-forcing path the mask does not reach ---
+      ! `ocean_data_forcing_apply` rewrites tau_x/tau_y (and Q_heat) per
+      ! time bracket and is handed no metrics slot, so it would restore
+      ! the unmasked atmosphere under the shelf.  Refused on the GEOMETRY
+      ! group, because that is where the cover comes from.
+      call expect_refused("the file-driven data override, which re-writes tau "// &
+                          "per bracket with no cover", &
                           melt_nml("enable = .true.", "isomip", .true., &
-                                   "&ocean_thermo_nml q_heat = 10.0 /", .true.), error)
+                                   "&ocean_dataovr_nml enable = .true. /", .true.), error)
       if (allocated(error)) return
 
       ! --- NOT a gap: the psurf seam composes, it does not clobber ---

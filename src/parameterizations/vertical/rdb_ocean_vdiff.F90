@@ -1257,16 +1257,22 @@ contains
          ! the single DC.
          ! ICE COVER: under a shelf there is no atmosphere, so the wind
          ! RHS is scaled by `(1 − cover_face)` — a covered face takes the
-         ! top DRAG (the diagonal add above) and not the wind.  That makes
-         ! the implicit path correct on its own, without depending on any
-         ! other branch to zero `tau` under cover.  Note the deliberate
-         ! asymmetry with the EXPLICIT top-drag path, which adds a drag
-         ! and masks nothing: there the wind apply belongs to
-         ! `ocean_surface_stress`, a separate kernel this PR does not
-         ! touch, and the shipped cavity configurations refuse a non-zero
-         ! wind outright.  Threading the cover mask through the explicit
-         ! surface-stress kernel is the follow-up that makes the two paths
-         ! agree in a configuration that has both.
+         ! top DRAG (the diagonal add above) and not the wind.
+         !
+         ! This is now BELT AND BRACES, and deliberately kept.  P2c masks
+         ! the wind at its SOURCE: `ocean_surface_stress_apply_cover`
+         ! zeroes the `tau` pair on every face touching a covered cell
+         ! (the same OR rule `top_drag_fill_face_cover_impl` uses — one
+         ! rule, enforced face-for-face by
+         ! `cavity_cover_face_rule_matches_top_drag`), so `tau_face` is
+         ! already exactly zero here and this factor multiplies zero by
+         ! zero.  It stays because it costs one multiply on a row that is
+         ! already being assembled and it keeps the fold correct
+         ! STANDALONE — a future forcing path that writes `tau` after the
+         ! configure-time mask (a file reader, say) would be caught here
+         ! rather than blowing an atmosphere through the ice.  The
+         ! asymmetry with the explicit path is GONE: the explicit surface
+         ! stress reads the same masked `tau`.
          if (do_stress) then
             wind_open = 1.0_wp
             if (do_top) wind_open = 1.0_wp - cover_face(i, j)
