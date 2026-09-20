@@ -38,6 +38,8 @@ program rdb_tests
    use test_ocean_pgf_fv_mom6, only: ocean_pgf_fv_mom6_collect => collect_ocean_pgf_fv_mom6_tests
    use test_ocean_pgf_reconstruct, only: ocean_pgf_reconstruct_collect => &
                                          collect_ocean_pgf_reconstruct_tests
+   use test_ocean_pgf_sigma_rest, only: ocean_pgf_sigma_rest_collect => &
+                                        collect_ocean_pgf_sigma_rest_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
    use test_ocean_pgf_rho_ref, only: ocean_pgf_rho_ref_collect => collect_ocean_pgf_rho_ref_tests
    use test_ocean_forcing_rho_ref, only: ocean_forcing_rho_ref_collect => &
@@ -199,6 +201,7 @@ program rdb_tests
                 new_testsuite("ocean_pgf_grounded", ocean_pgf_grounded_collect), &
                 new_testsuite("ocean_pgf_fv_mom6", ocean_pgf_fv_mom6_collect), &
                 new_testsuite("ocean_pgf_reconstruct", ocean_pgf_reconstruct_collect), &
+                new_testsuite("ocean_pgf_sigma_rest", ocean_pgf_sigma_rest_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &
                 new_testsuite("ocean_pgf_rho_ref", ocean_pgf_rho_ref_collect), &
                 new_testsuite("ocean_forcing_rho_ref", ocean_forcing_rho_ref_collect), &
