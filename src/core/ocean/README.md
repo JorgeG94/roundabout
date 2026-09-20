@@ -481,6 +481,24 @@ bed drag) against the outer scheme's exact analytic decay under **both**
   MaxCFL / panic / CFL truncation). All gates test
   `coord_type == VCOORD_LAGRANGIAN` specifically — other vcoords
   (sigma, zstar, etc.) remain byte-identical.
+- **ALE remap boundary-cell closure** (`&vcoord_nml
+  remap_boundary_extrap`, default `.false.` ⇒ bit-identical; MOM6
+  `BOUNDARY_EXTRAPOLATION`): every reconstruction above PCM needs a
+  stencil the outermost cells do not have, and by default `k=1` /
+  `k=nz` collapse to PCM — so PLM, PPM, PPM_H4 and PQM are all
+  FIRST-ORDER in the two cells next to the bed and the surface. On
+  `.true.` those two cells take the linear-exact one-sided edge pair
+  (`boundary_half_jump` in `../../ALE/rdb_remap_column.F90`, the
+  remap-side twin of the FV PGF's `boundary_edges_linear`), making the
+  column exact for a tracer linear in z. That is the resting
+  stratified state, so under a terrain-following coordinate over a
+  slope the default closure injects a spurious diapycnal flux into
+  exactly the layers the σ rest-state grid mode lives in; the knob
+  drops its growth rate to the no-remap floor. Threaded
+  `cfg%remap_boundary_extrap` → `vcoord%remap_boundary_extrap` →
+  `remap_column(..., bnd_extrap)`. Gate:
+  `tests/test_remap_boundary_extrap.F90`; numbers in
+  `docs/CAPABILITIES_AND_LIMITATIONS.md`.
 - **Initial layer thickness** (`&vcoord_nml thickness_config`, default
   `"sigma"` ⇒ bit-identical): selects what `h_layer` is *seeded* to in
   `ocean_state_seed_from_cfg`, independently of `vcoord_type` (which

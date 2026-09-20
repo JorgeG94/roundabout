@@ -939,12 +939,35 @@ Two facts follow, and they point in different directions:
   switched off** (`vcoord_type="lagrangian"`, where the remap is an
   early-return no-op: 0.05 /day, i.e. the same residual creep as `f = 0`).
 
+**Which part of the remap — and the knob that removes it.** Isolated by
+substitution on the same configuration: the face-velocity (momentum) leg is
+**inert** (skipping it entirely moves day-45 En by 0.1 %, 1.714E-20 vs
+1.712E-20, and the remap's ΔKE is a *negative* 1e-11 of column KE per
+call). The interior reconstruction order is **irrelevant** — `plm`, `ppm`,
+`ppm_h4` and `pqm` give `σ_En` = 0.353, 0.355, 0.355, 0.354 /day. What is
+left is the **boundary-cell closure the four share**: `k=1` and `k=nz`
+reconstruct as PCM (MOM6 `BOUNDARY_EXTRAPOLATION = False`), so the remap is
+first-order in exactly the two layers the mode occupies, and every step
+injects a spurious diapycnal tracer flux there. Per-remap energetics
+confirm the direction: ΔPE is **positive at every sample** and grows in
+lock-step with the mode (3.2E-16 → 1.2E-13 J/kg per call, days 5 → 45)
+while ΔKE is four to eight decades smaller and negative. **Setting
+`&vcoord_nml remap_boundary_extrap = .true.`** — the linear-exact one-sided
+closure — collapses the growth to the no-remap floor: `σ_En` 0.355 → 0.047
+/day, day-45 En 1.712E-20 → 4.745E-25, against 0.046 /day and 1.5E-25 with
+the remap switched off entirely. Default `.false.` ⇒ bit-identical; see the
+boundary-cell-closure block of `docs/CLOSURE_MATRIX.md` and
+`test_remap_boundary_extrap`.
+
 **Practical envelope.** Any long, quiescent, weakly-forced terrain-following
 run over a slope — a spin-up from rest, a sub-shelf cavity, a continental
-slope at rest — needs a **constant** `&ocean_hvisc_nml nu_h` or `nu_4`
-floor. Marginal values measured at 2 km on this family: `nu_h ≈ 50 m² s⁻¹`
-or `nu_4 ≈ 1e8 m⁴ s⁻¹`. The requirement grows as `dy` shrinks and is not
-yet measured as a function of resolution.
+slope at rest — should set `&vcoord_nml remap_boundary_extrap = .true.`
+and, failing that (or under `remap_method = "pcm"`, where the knob is
+inert), carry a **constant** `&ocean_hvisc_nml nu_h` or `nu_4` floor.
+Marginal viscosities measured at 2 km on this family: `nu_h ≈ 50 m² s⁻¹`
+or `nu_4 ≈ 1e8 m⁴ s⁻¹`. The viscous requirement grows as `dy` shrinks and
+is not yet measured as a function of resolution; the boundary-closure fix
+has no such scaling because it removes the source rather than damping it.
 
 **Flow-aware closures do NOT qualify.** Smagorinsky, Leith,
 Leith-biharmonic and Smagorinsky-AH all set their coefficient from the
