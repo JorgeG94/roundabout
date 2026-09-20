@@ -376,7 +376,7 @@ the default too. Its per-step cost is ~7 % over `ssp_rk2`. Full detail in
 | Coord | ocean |
 |---|---|
 | Sigma | `"sigma"` |
-| Z-sigma hybrid | `"zsigma"` |
+| Z-sigma hybrid | `"zsigma"` — **REFUSED at configure**: the deep branch reads `z_ref_global` as metres while its only writer fills it with the dimensionless `k/nz`, so every z-level interval is `1/nz` m and the whole column collapses into the bed layer (with `Σ = H + η` still exact). Returns when the table is filled in metres — `test_ocean_vcoord_hygiene :: zsigma_is_refused`, `test_ocean_vcoord_interface_depths :: documents_zsigma_dimensionless_zref_collapse` |
 | Z-star (lite) | `"zstar"` |
 | Z-star/sigma hybrid | `"zstar_sigma"` |
 | Z-star full (per-column) | `"zstar_full"` |

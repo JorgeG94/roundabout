@@ -229,6 +229,7 @@ set(RDB_TESTS
     "test_ocean_vcoord_rho|test_ocean_vcoord_rho|collect_ocean_vcoord_rho_tests|ocean_vcoord_rho|ocean"
     "test_ocean_vcoord_hycom|test_ocean_vcoord_hycom|collect_ocean_vcoord_hycom_tests|ocean_vcoord_hycom|ocean"
     "test_ocean_vcoord_interface_depths|test_ocean_vcoord_interface_depths|collect_ocean_vcoord_interface_depths_tests|ocean_vcoord_interface_depths|ocean"
+    "test_ocean_vcoord_hygiene|test_ocean_vcoord_hygiene|collect_ocean_vcoord_hygiene_tests|ocean_vcoord_hygiene|ocean"
     "test_vcoord_parse|test_vcoord_parse|collect_vcoord_parse_tests|vcoord_parse|ocean"
     "test_ocean_remap|test_ocean_remap|collect_ocean_remap_tests|ocean_remap|ocean"
     "test_ocean_regrid_refine|test_ocean_regrid_refine|collect_ocean_regrid_refine_tests|ocean_regrid_refine|ocean"
