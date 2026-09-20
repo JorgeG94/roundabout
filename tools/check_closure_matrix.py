@@ -49,6 +49,11 @@ CURATED_KNOBS = [
     # v1 gaps (no cover mask on atmospheric forcing, no top drag) are
     # configure REFUSALS — exactly the kind of scoping prose forgets.
     "ocean_cavity_melt_nml",
+    # Ice-shelf TOP drag.  Listed because the FACE cover rule (OR, so the
+    # calving-front face is dragged) and the ONE-C_d agreement rule with
+    # &ocean_cavity_melt_nml cdrag_top are both deliberate choices that a
+    # reader cannot recover from the code without being told.
+    "ocean_tdrag_nml",
 ]
 
 # Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —

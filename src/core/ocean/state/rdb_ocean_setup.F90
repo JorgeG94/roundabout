@@ -29,6 +29,8 @@ module rdb_ocean_setup
                                VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN
    use rdb_vcoord, only: parse_remap_method
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
+   use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
+                                 top_drag_fill_face_cover_impl
    use rdb_ocean_lateral_mix, only: parse_lateral_closure, LMIX_NONE, &
                                     LMIX_LEITH, LMIX_SMAGORINSKY, &
                                     LMIX_BIHARMONIC, LMIX_LEITH_BIHARM
@@ -111,6 +113,7 @@ module rdb_ocean_setup
    public :: configure_ocean_porous
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
+   public :: configure_ocean_top_drag
    public :: cavity_resolve_gamma_s
    public :: cavity_count_zero_f
    public :: cavity_count_unloaded_p_top
@@ -3300,6 +3303,89 @@ contains
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_cavity_melt
+
+   subroutine configure_ocean_top_drag(cfg, ocean_state, grid, compute_rank)
+      !! Ice-shelf TOP drag (`&ocean_tdrag_nml`, Phase 4a): copy the
+      !! variant + coefficients onto the slot, project the static
+      !! cell-centred `metrics%cover_frac` onto the velocity FACES, and
+      !! enforce the ONE-`C_d` rule against the melt slot.
+      !!
+      !! Runs AFTER `configure_ocean_cavity_melt` (which is where the melt
+      !! slot's `cdrag_top` is seeded, and which this routine then
+      !! overwrites from `&ocean_tdrag_nml cd` — `validate_config` has
+      !! already refused a disagreement, so the assignment is structural,
+      !! not a silent override) and AFTER the `cover_frac` halo exchange,
+      !! and BEFORE `ocean_state_enter_data` so the host-filled face masks
+      !! reach the device with the `copyin` map.
+      !!
+      !! Disabled ⇒ nothing is written, the slot keeps its placeholder
+      !! arrays, and the run is bit-identical.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+
+      integer :: nx, ny
+
+      if (.not. cfg%ocean%tdrag%enable) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+
+      ocean_state%tdrag%variant = parse_tdrag_variant(cfg%ocean%tdrag%form)
+      ocean_state%tdrag%c_drag = cfg%ocean%tdrag%cd
+      ocean_state%tdrag%r_linear = cfg%ocean%tdrag%r
+      ocean_state%tdrag%htbl = cfg%ocean%tdrag%htbl
+      ocean_state%tdrag%drag_bg_vel = cfg%ocean%tdrag%bg_vel
+      ocean_state%tdrag%tbl_thick_min = cfg%ocean%tdrag%tbl_thick_min
+      ocean_state%tdrag%implicit = cfg%ocean%tdrag%implicit
+      ! `rho0` is only ever used to scale the `stress_top` diagnostic into
+      ! N/m^2; no dynamics reads it.  The one rho0 of record is
+      ! `&ocean_ic_nml rho_0` -> `eos%rho0`, already resolved by
+      ! `configure_ocean_reference_density` well before this point.
+      ocean_state%tdrag%rho0 = ocean_state%eos%rho0
+
+      ! Static face cover, OR of the two abutting cells (see
+      ! `rdb_ocean_top_drag`'s module docstring for why OR at a calving
+      ! front), plus the cell-centred copy the `stress_top` diagnostic
+      ! reads.  `cover_frac` is `&ocean_cavity_dyn_nml` geometry: filled
+      ! in the IC seed, halo-exchanged by the engine, never touched again.
+      call top_drag_fill_face_cover_impl(ocean_state%tdrag%cover_u, &
+                                         ocean_state%tdrag%cover_v, &
+                                         ocean_state%metrics%cover_frac, nx, ny)
+      ocean_state%tdrag%cover_t(:, :) = ocean_state%metrics%cover_frac(:, :)
+
+      ! ONE drag coefficient for momentum and melt.  MOM6 carries two
+      ! independent top-drag coefficients; we deliberately do not — see
+      ! the agreement rule in `validate_config`, which has already failed
+      ! loud if the user set two different values.
+      if (cfg%ocean%cavity_melt%enable .and. &
+          ocean_state%tdrag%variant == TDRAG_QUADRATIC) then
+         ocean_state%cavity_flux%cdrag_top = cfg%ocean%tdrag%cd
+      end if
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf top drag: "//trim(cfg%ocean%tdrag%form)// &
+                          "  C_d="//to_string(cfg%ocean%tdrag%cd)// &
+                          "  r="//to_string(cfg%ocean%tdrag%r)//" 1/s")
+         if (cfg%ocean%tdrag%htbl > 0.0_wp) then
+            call logger%info("  top BL:         HTBL="//to_string(cfg%ocean%tdrag%htbl)// &
+                             " m  bg_vel="//to_string(cfg%ocean%tdrag%bg_vel)// &
+                             " m/s  thick_min="// &
+                             to_string(cfg%ocean%tdrag%tbl_thick_min)//" m")
+         else
+            call logger%info("  top BL:         layer-nz only (HTBL=0)")
+         end if
+         call logger%info("  covered faces:  u "// &
+                          to_string(int(sum(ocean_state%tdrag%cover_u)))//", v "// &
+                          to_string(int(sum(ocean_state%tdrag%cover_v)))// &
+                          " (OR of the two abutting cells)")
+         if (cfg%ocean%cavity_melt%enable) then
+            call logger%info("  melt u* C_d:    taken from &ocean_tdrag_nml cd "// &
+                             "(one coefficient for momentum and melt)")
+         end if
+      end if
+   end subroutine configure_ocean_top_drag
 
    pure function cavity_resolve_gamma_s(gamma_s, gamma_t) result(gamma_s_eff)
       !! Resolve the `&ocean_cavity_melt_nml gamma_s` "unset" sentinel to
