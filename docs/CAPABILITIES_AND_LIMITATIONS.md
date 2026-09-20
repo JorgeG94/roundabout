@@ -348,6 +348,25 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (log-layer, MOM6/ROMS default `Cd ≈ 2.5e-3`). Both have an
   HBBL-distributed mode that spreads the stress across the bottom
   `hbbl` metres rather than the bed-most layer alone.
+- **Side-wall (channel) drag** (`&ocean_bdrag_nml channel_drag`,
+  `cdrag_side`; default off ⇒ bit-identical): a per-layer lateral
+  Rayleigh rate at every face whose cross-stream perimeter is blocked by
+  land or a vanished neighbour layer, applied as a frozen-rate
+  backward-Euler factor `u ← u/(1 + dt·λ_side)` — thin-layer stable, and
+  a literal no-op on an all-wet flat bed. **Limitation, documented not
+  defective:** because it is multiplicative rather than an additive
+  `du/dt` buffer, it is the one corrected-set tendency NOT summed into
+  the split solver's `F_slow`, so the barotropic substep does not feel it
+  *during* the fast loop and the time-mean transports `bt_uhbt` handed to
+  continuity are undragged. The depth mean is still applied exactly once
+  (`apply_bt_correction` adds an increment, it does not replace the depth
+  mean), so nothing is lost or double counted — the cost is one
+  first-order-in-dt operator split. Algebra, decision table and the
+  analytic gate (`tests/test_ocean_bt_slow_forcing.F90`, both split
+  schemes, agreement to ~1e-14) are in the "`F_slow` seam contract"
+  section of `src/core/ocean/README.md`. Folding it into `visc_rem` for
+  MOM6 parity is future work, alongside the barotropic-coupling flip for
+  the implicit stress/drag folds.
 - **Time-varying NetCDF input reader** (PR-14, `rdb_ocean_data_input`):
   the shared, target-agnostic reader every forced-hindcast/regional-
   nesting capability builds on. A consumer registers a `(file,
