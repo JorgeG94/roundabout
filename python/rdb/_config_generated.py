@@ -1911,6 +1911,114 @@ class OceanCavityDyn(Group):
     )
 
 
+class OceanCavityMelt(Group):
+    """`&ocean_cavity_melt_nml` -- Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange law, and the far-field sampling depth."""
+
+    _nml_name = 'ocean_cavity_melt'
+
+    enable = Bool(
+        'enable',
+        doc="Master switch (requires &ocean_cavity_dyn_nml, tfreeze_set='isomip' and the surface-flux component set)",
+        units='',
+        required=False,
+        default=False,
+    )
+
+    exchange_law = Enum(
+        'exchange_law',
+        doc='Turbulent exchange law; laws other than const_gamma/hj99/yung25 are RESERVED and refused at configure',
+        units='',
+        required=False,
+        default='const_gamma',
+        allowed=('const_gamma', 'hj99', 'yung25', 'jenkins91', 'rosevear22', 'vt19', 'mk18', 'burchard22', 'jenkins21'),
+    )
+
+    gamma_t = Real(
+        'gamma_t',
+        doc='Dimensionless heat-transfer coefficient Gamma_T (ISOMIP+ starting guess; tune per coordinate)',
+        units='',
+        required=False,
+        default=0.022,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    gamma_s = Real(
+        'gamma_s',
+        doc='Dimensionless salt-transfer coefficient Gamma_S (negative = unset = gamma_t/35)',
+        units='',
+        required=False,
+        default=-1.0,
+    )
+
+    cdrag_top = Real(
+        'cdrag_top',
+        doc='Top drag coefficient for the MELT friction velocity (no momentum drag yet - that is Phase 4)',
+        units='',
+        required=False,
+        default=0.0025,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    u_tide = Real(
+        'u_tide',
+        doc='RMS tidal velocity in the melt u* only, never the drag',
+        units='m/s',
+        required=False,
+        default=0.01,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    ustar_min = Real(
+        'ustar_min',
+        doc='Friction-velocity floor (Yung et al. 2025 eq. 14)',
+        units='m/s',
+        required=False,
+        default=0.0001,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    ice_conduction = Enum(
+        'ice_conduction',
+        doc="Ice-side conduction; 'diffusive' is RESERVED and refused (it changes the melt/freeze branch logic)",
+        units='',
+        required=False,
+        default='insulating',
+        allowed=('insulating', 'adv_diff', 'diffusive'),
+    )
+
+    t_ice = Real(
+        't_ice',
+        doc="Ice interior temperature; read by ice_conduction='adv_diff' only",
+        units='degC',
+        required=False,
+        default=-25.0,
+    )
+
+    s_ice = Real(
+        's_ice',
+        doc='Ice salinity; must stay strictly below the far-field salinity',
+        units='g/kg',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    far_field_depth = Real(
+        'far_field_depth',
+        doc='Thickness below the ice base the far-field T/S/u are averaged over (METRES, not layers)',
+        units='m',
+        required=False,
+        default=10.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+
 class OceanEpbl(Group):
     """`&ocean_epbl_nml` -- RH18 energetics-based planetary boundary layer."""
 
@@ -5740,6 +5848,7 @@ GENERATED_GROUPS = {
     'ocean_tides': OceanTides,
     'ocean_psurf': OceanPsurf,
     'ocean_cavity_dyn': OceanCavityDyn,
+    'ocean_cavity_melt': OceanCavityMelt,
     'ocean_epbl': OceanEpbl,
     'ocean_wavespeed': OceanWavespeed,
     'ocean_foxkemper': OceanFoxkemper,
@@ -5775,5 +5884,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 58
-N_KNOBS = 632
+N_GROUPS = 59
+N_KNOBS = 643

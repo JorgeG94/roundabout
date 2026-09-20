@@ -427,6 +427,22 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   (`&ocean_psurf_nml in_eos`); it is never added to `sf%p_surf`, so the
   `eta_forcing` seam carries the load ANOMALY only and the datum carries
   the rest exactly once.  Single-rank, `fv_mom6` + sigma/z*-lite only.
+- **Ice-shelf basal melt** (`&ocean_cavity_melt_nml`, default off ⇒
+  bit-identical) — the Holland & Jenkins (1999) three-equation
+  interface on every ice-covered column, once per thermo step,
+  delivered as the two OWNED surface-flux components `heat_cavity`
+  (= −`q_ocean`, so warm water COOLS) and `salt_cavity`
+  (= −`m_mass·(S_far − s_ice)`, a **virtual** salt flux — the
+  meltwater carries no mass). Far field sampled over
+  `far_field_depth` METRES below the ice base, not "layer nz". The
+  liquidus is evaluated at `ms%p_top`, the assembled
+  `p_ice_ref + sf%p_surf` above — the melt kernel is that field's
+  THIRD consumer, after the FV-MOM6 top BC and the in-situ EOS.
+  Requires `&ocean_cavity_dyn_nml`, `tfreeze_set="isomip"` and the
+  surface-flux component set; refused with atmospheric forcing (no
+  cover mask yet). No top drag, and KPP/EPBL do not see the shelf
+  `u*`. See
+  [`CAPABILITIES_AND_LIMITATIONS.md`](CAPABILITIES_AND_LIMITATIONS.md).
 - **Interior land masking** (static free-slip walls via metric-zeroing)
   and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma / z*-lite,
   single-rank, positive-definite outflow limiter).
@@ -719,6 +735,22 @@ knob list with defaults is in [`docs/generated_nml_knobs.md`](generated_nml_knob
 | `h_min_cavity` | Grounding cutoff (m): less water than this under the ice ⇒ the column is LAND. |
 | `grounded_max_frac` | Fail loud if more than this fraction of the interior columns ground. |
 | `rho_ice` | Ice density, consulted only by `draft_source="thickness"`. |
+
+### `&ocean_cavity_melt_nml`
+
+Ice-shelf basal-melt thermodynamics. Default off ⇒ bit-identical; the
+full knob list with defaults is in
+[`docs/generated_nml_knobs.md`](generated_nml_knobs.md).
+
+| Key | Meaning |
+|---|---|
+| `enable` | Master switch. Requires `&ocean_cavity_dyn_nml enable`, `&ocean_eos_nml tfreeze_set="isomip"` and `&ocean_forcing_nml enable_components`; mutually exclusive with a non-zero wind stress, `&ocean_restore_nml` restoring, `sw_pen_frac > 0`, a non-zero `q_heat`/`q_salt`, `&ocean_psurf_nml enable` and sea ice. Every one of those is a fail-loud configure error naming the knob and the follow-up. |
+| `exchange_law` | `const_gamma` (default, `γ = Γ·u*`, ISOMIP+) / `hj99` (needs a non-zero Coriolis under the cover) / `yung25`. The six reserved names parse and are refused by name (`CAVITY_MELT_NOT_IMPLEMENTED`). |
+| `gamma_t`, `gamma_s` | Dimensionless transfer coefficients. `gamma_s < 0` (default) resolves to the ISOMIP+ `gamma_t/35`; `gamma_s = 0` is refused (the three-equation form divides by it). `gamma_t = 2.2e-2` is the ISOMIP+ STARTING GUESS — re-derive it per vertical coordinate. |
+| `cdrag_top`, `u_tide`, `ustar_min` | The melt friction velocity `u* = max(√(C_d(u²+v²+u_tide²)), u*_min)`. The tidal term belongs to the melt `u*` ONLY (ISOMIP+ p. 2486); `cdrag_top` drives no momentum drag in this release. |
+| `ice_conduction`, `t_ice` | `insulating` (default, the ISOMIP+ prescription; `t_ice` unread) or `adv_diff` (H&J99 eq. 31, `q_ice = m·c_i·(T_b − T_ice)`, zero on freezing). `diffusive` is reserved and refused. |
+| `s_ice` | Ice salinity (g/kg), 0 by the protocol. Must stay strictly below the far-field salinity; a column violating it is counted and given zero melt. |
+| `far_field_depth` | Thickness (m) the far-field `T`/`S`/`u` are averaged over below the ice base — **metres, never layers**. Hold it FIXED across any vertical-coordinate comparison, or the comparison measures the sampling depth. |
 
 ### `&initial_condition_nml`
 

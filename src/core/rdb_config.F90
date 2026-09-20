@@ -70,7 +70,7 @@ module rdb_config
              ocean_tidal_mixing_config_t, ocean_conv_config_t, ocean_tides_config_t, &
              ocean_porous_config_t, &
              ocean_psurf_config_t, &
-             ocean_cavity_dyn_config_t, &
+             ocean_cavity_dyn_config_t, ocean_cavity_melt_config_t, &
              ocean_continuity_config_t, ocean_isopycnal_config_t, &
              ocean_topo_config_t, &
              ocean_ic_config_t, ocean_zinit_config_t, &
@@ -1921,6 +1921,134 @@ module rdb_config
          !! Ice density (kg/m^3), consulted ONLY by
          !! `draft_source = "thickness"`.
    end type ocean_cavity_dyn_config_t
+
+   type :: ocean_cavity_melt_config_t
+      !! Ice-shelf basal-melt THERMODYNAMICS (`&ocean_cavity_melt_nml`,
+      !! Phase 2b).  The three-equation interface of Holland & Jenkins
+      !! (1999), solved once per thermo step on every ice-covered column
+      !! and delivered to the ocean as two OWNED surface-flux components
+      !! (`heat_cavity`, `salt_cavity`).
+      !!
+      !! GEOMETRY IS A DIFFERENT GROUP.  The draft, the cover mask and
+      !! the barotropic datum are `&ocean_cavity_dyn_nml`'s, and this
+      !! group REQUIRES it: without a draft there is no interface to melt
+      !! and `cover_frac` is identically zero.  The split is the
+      !! per-concern sub-namelist convention, and it is also the honest
+      !! one — a datum-only cavity run is a legitimate configuration.
+      !!
+      !! VIRTUAL SALT, NO MASS.  v1 delivers the meltwater as a virtual
+      !! salt flux; the freshwater MASS (and therefore its volume and its
+      !! direct buoyancy) is Phase 3.  That is a FIRST-ORDER limitation
+      !! for cavity circulation, recorded in
+      !! `docs/CAPABILITIES_AND_LIMITATIONS.md`, not a detail.
+      !!
+      !! `enable = .false.` (default) ⇒ no slot arrays, no kernel, no
+      !! component written, byte-identical.  Knob table:
+      !! `docs/generated_nml_knobs.md`.
+      logical :: enable = .false.
+         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`,
+         !! `&ocean_eos_nml tfreeze_set="isomip"` and
+         !! `&ocean_forcing_nml enable_components`; mutually exclusive
+         !! with atmospheric surface forcing (wind stress, surface
+         !! restoring, shortwave penetration, the uniform scalar
+         !! `q_heat`/`q_salt`) until the per-cell cover mask lands, and
+         !! with sea ice.  Every one of those fails loud at configure,
+         !! naming the knob and the follow-up.  `&ocean_psurf_nml`
+         !! composes freely: the liquidus reads the ASSEMBLED
+         !! `ms%p_top = p_ice_ref + sf%p_surf`, so an atmospheric load
+         !! under the shelf depresses the freezing point with no extra
+         !! wiring.
+      character(len=32) :: exchange_law = "const_gamma"
+         !! Turbulent exchange-velocity law.  `"const_gamma"` (default)
+         !! is `gamma = Gamma*u*` — Jenkins, Nicholls & Corr (2010)
+         !! eqs. (1),(2),(5) p. 2300 and the ISOMIP+ form.  `"hj99"` is
+         !! Holland & Jenkins (1999) eqs. (14)-(18) p. 1792 (needs a
+         !! non-zero Coriolis parameter under the cover).  `"yung25"` is
+         !! Yung et al. (2025) "StratFeedback" eqs. (7)-(8) p. 5832.
+         !! Every other name the kernel's enum reserves
+         !! (`jenkins91`, `rosevear22`, `vt19`, `mk18`, `burchard22`,
+         !! `jenkins21`) PARSES but is refused at configure naming
+         !! `CAVITY_MELT_NOT_IMPLEMENTED` — a reserved law and a typo
+         !! must stay distinguishable.
+      real(wp) :: gamma_t = 2.2e-2_wp
+         !! Dimensionless heat-transfer coefficient `Gamma_T` of
+         !! `gamma_t = Gamma_T*u*`.  ISOMIP+ starting guess, Asay-Davis
+         !! et al. (2016) §3.2.1 p. 2487 — **a starting guess, not a
+         !! constant of nature**: the protocol has participants tune it,
+         !! and Yung et al. (2026) Table 2 p. 2058 shows the twelve
+         !! submissions spanning 0.011 to 0.2.  Re-derive it per vertical
+         !! coordinate; a single value across a coordinate sweep makes
+         !! the sweep measure its own tuning.
+      real(wp) :: gamma_s = -1.0_wp
+         !! Dimensionless salt-transfer coefficient `Gamma_S`.
+         !! **Negative = unset ⇒ resolved to `gamma_t/35`**, the ISOMIP+
+         !! ratio (Asay-Davis et al. (2016) Table 4 p. 2483, after
+         !! Jenkins, Nicholls & Corr (2010) p. 2309: the ratio "should
+         !! lie somewhere in the range 35-70.  Adopting a value at the
+         !! lower end of this range...").  Zero and positive values are
+         !! taken literally, so `gamma_s = 0` is refused as a range
+         !! error rather than silently re-triggering the default.
+      real(wp) :: cdrag_top = 2.5e-3_wp
+         !! Top drag coefficient `C_D,top` entering the MELT friction
+         !! velocity `u*^2 = C_D (U^2 + u_tide^2)`.  ISOMIP+ Table 4
+         !! p. 2483.  The least constrained number in the subject: the
+         !! literature spans 1.5e-3 (Holland & Jenkins 1999 Table 1) to
+         !! 9.7e-3 (Jenkins et al. 2010 Table 2).  **This knob does not
+         !! yet drive any momentum drag** — top drag is Phase 4; here it
+         !! only scales `u*` for the exchange velocities.
+      real(wp) :: u_tide = 1.0e-2_wp
+         !! RMS tidal velocity (m/s) in the melt friction velocity —
+         !! ISOMIP+ Table 4 p. 2483 and eq. (27) p. 2485, after Jenkins,
+         !! Nicholls & Corr (2010) eq. (10) p. 2309.  TRAP, and the
+         !! protocol says it outright (p. 2486): "The computation of top
+         !! and bottom drag do not incorporate utidal" — it belongs to
+         !! the melt `u*` ONLY.
+      real(wp) :: ustar_min = 1.0e-4_wp
+         !! Friction-velocity floor (m/s) — Yung et al. (2025) eq. (14)
+         !! p. 5836, value from their Table 2 p. 5838.  It exists because
+         !! "a friction velocity of zero (perhaps created by initialising
+         !! the model at rest) will result in identically zero melt ...
+         !! which would be inconsistent with the presence of heat
+         !! available for melting".
+      character(len=32) :: ice_conduction = "insulating"
+         !! Ice-side heat conduction.  `"insulating"` (default) is
+         !! `q_ice = 0`, which the ISOMIP+ protocol PRESCRIBES
+         !! (Asay-Davis et al. (2016) Table 4 p. 2483 sets `kappa_i = 0`
+         !! and p. 2485 instructs participants not to use the H&J99
+         !! advection-diffusion scheme); `t_ice` is then unread.
+         !! `"adv_diff"` is Holland & Jenkins (1999) eq. (31) p. 1794 in
+         !! its melting asymptote, which collapses to
+         !! `q_ice = m_mass*c_i*(T_b - T_ice)` and is zero on freezing.
+         !! `"diffusive"` is RESERVED and refused: it changes the
+         !! melt/freeze BRANCH logic, not just a coefficient.
+      real(wp) :: t_ice = -25.0_wp
+         !! Ice interior temperature (degC), read by
+         !! `ice_conduction="adv_diff"` only — Holland & Jenkins (1999)
+         !! Table 1 p. 1790 uses `T_S ~ -25`.  Under `"insulating"` the
+         !! kernel substitutes exactly zero, so a stale value here cannot
+         !! leak into an insulating run.
+      real(wp) :: s_ice = 0.0_wp
+         !! Ice salinity (g/kg), `>= 0`.  Zero is the ISOMIP+ value
+         !! (Asay-Davis et al. (2016) Table 4 p. 2483).  It must stay
+         !! strictly below the far-field salinity — that inequality is
+         !! what the three-equation root bracketing rests on — and a
+         !! column violating it is COUNTED and given zero melt, not
+         !! guessed at.
+      real(wp) :: far_field_depth = 10.0_wp
+         !! Thickness (m) below the ice base over which the far-field
+         !! `(T, S, u, v)` are thickness-averaged, with a partial last
+         !! layer.  **Metres, deliberately, never "layer nz".**  The melt
+         !! rate is roughly linear in the thermal driving it is handed,
+         !! and how far from the ice that was sampled is the dominant
+         !! resolution artefact in the subject (Gwyther et al. 2020;
+         !! Burchard et al. (2022) Table 2 p. 15 — the all-bulk error
+         !! GROWS under refinement; Yung et al. (2026) p. 2074).  No
+         !! protocol prescribes a value; 10 m is this repository's
+         !! default and it must be held FIXED across any
+         !! vertical-coordinate comparison, or the comparison measures
+         !! the sampling depth instead.
+   end type ocean_cavity_melt_config_t
+
    type :: ocean_continuity_config_t
       real(wp) :: h_min = 1.0e-6_wp
          !! Floor used by the PPM positivity limiter (MOM6
@@ -2616,6 +2744,9 @@ module rdb_config
       type(ocean_cavity_dyn_config_t) :: cavity_dyn
          !! Static ice-shelf cavity geometry (`&ocean_cavity_dyn_nml`).
          !! Default-OFF ⇒ bit-identical.
+      type(ocean_cavity_melt_config_t) :: cavity_melt
+         !! Ice-shelf basal-melt thermodynamics
+         !! (`&ocean_cavity_melt_nml`).  Default-OFF ⇒ bit-identical.
       type(ocean_continuity_config_t)  :: continuity
       type(ocean_isopycnal_config_t)   :: isopycnal
          !! Lagrangian grounding-stability controls (`&ocean_isopycnal_nml`).
@@ -3438,6 +3569,11 @@ contains
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 bkgnd_henyey_conflicts_profile
       use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID
+      use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
+                                       CAVITY_LAW_INVALID, CAVITY_LAW_CONST_GAMMA, &
+                                       CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25, &
+                                       CAVITY_ICE_INVALID, CAVITY_ICE_INSULATING, &
+                                       CAVITY_ICE_ADV_DIFF
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
          !! Non-zero on any cross-knob semantic validation failure when
@@ -4799,6 +4935,190 @@ contains
                                 "production cavity.")
          end if
       end if
+      ! ---- Ice-shelf basal melt, v1 scope (Phase 2b) ----
+      ! Every restriction fails loud.  One of them exists because a piece
+      ! of the coupling is NOT in this slice: there is no per-cell cover
+      ! mask on the atmospheric forcing yet, and leaving that silently
+      ! half-wired would run an atmosphere through several hundred metres
+      ! of solid ice.  The interface pressure is NOT such a gap — the
+      ! cavity assembles `ms%p_top = p_ice_ref + sf%p_surf` (P5.2) and
+      ! the melt liquidus is its third consumer.
+      if (cfg%ocean%cavity_melt%enable) then
+         if (.not. cfg%ocean%cavity_dyn%enable) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_cavity_dyn_nml enable=.true.  The melt "// &
+                              "interface stands on that group's geometry: without a "// &
+                              "draft there is no ice base, cover_frac is identically "// &
+                              "zero and the kernel would never be called.")
+            has_error = .true.
+         end if
+         if (trim(adjustl(cfg%ocean%eos%tfreeze_set)) /= "isomip") then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_eos_nml tfreeze_set='isomip' (got '"// &
+                              trim(adjustl(cfg%ocean%eos%tfreeze_set))//"').  The "// &
+                              "two shipped liquidi differ by ~0.03 degC at S = 34.5, "// &
+                              "which is enough to flip the SIGN of the basal melt "// &
+                              "rate over a 0.03 degC band of far-field temperature — "// &
+                              "the sea-ice set is not a defensible default for a "// &
+                              "cavity.")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true.  The melt "// &
+                              "fluxes are delivered as the OWNED components "// &
+                              "heat_cavity/salt_cavity, which are allocated only "// &
+                              "with the component set, and only "// &
+                              "ocean_surface_flux_assemble folds them into "// &
+                              "Q_heat/Q_salt.  Writing Q_heat/Q_salt directly is "// &
+                              "refused by the fill contract — the sea-ice coupler "// &
+                              "full-overwrites those.")
+            has_error = .true.
+         end if
+         block
+            integer :: melt_law_code, melt_ice_code
+            melt_law_code = parse_cavity_exchange_law(cfg%ocean%cavity_melt%exchange_law)
+            select case (melt_law_code)
+            case (CAVITY_LAW_CONST_GAMMA, CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25)
+               continue
+            case (CAVITY_LAW_INVALID)
+               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                                 "' is not recognised (shipped: const_gamma, hj99, "// &
+                                 "yung25).")
+               has_error = .true.
+            case default
+               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                                 "' is RESERVED, not implemented "// &
+                                 "(CAVITY_MELT_NOT_IMPLEMENTED).  Its enum value is "// &
+                                 "nailed down so adding it later is not a "// &
+                                 "renumbering, and the Python prototype has it, but "// &
+                                 "no Fortran physics ships.  Shipped: const_gamma, "// &
+                                 "hj99, yung25.")
+               has_error = .true.
+            end select
+            ! Holland & Jenkins (1999) eq. (15) p. 1792 takes
+            ! `ln(u* xi_N eta*^2 / (|f| h_nu))` and eq. (18) divides by
+            ! `f L_O`: the law does not exist on the equator.  The
+            ! per-column check over the covered cells is taken at
+            ! configure (`configure_ocean_cavity_melt`), where f_centre
+            ! exists; here we can only catch the whole-domain f = 0 case,
+            ! and catching it early is worth the duplication.
+            if (melt_law_code == CAVITY_LAW_HJ99) then
+               if (cfg%coriolis_f == 0.0_wp .and. &
+                   cfg%ocean%topo%coriolis_beta == 0.0_wp) then
+                  call logger%error("&ocean_cavity_melt_nml exchange_law='hj99' on an "// &
+                                    "f = 0 grid (coriolis_f = 0, coriolis_beta = 0). "// &
+                                    "Holland & Jenkins (1999) eq. (15) takes "// &
+                                    "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, "// &
+                                    "so the law has no value there — the same "// &
+                                    "fail-loud stance &ocean_vmix_nml bkgnd_henyey "// &
+                                    "takes on a cartesian grid.  Use "// &
+                                    "exchange_law='const_gamma' or set a Coriolis "// &
+                                    "parameter.")
+                  has_error = .true.
+               end if
+            end if
+            melt_ice_code = parse_cavity_ice_mode(cfg%ocean%cavity_melt%ice_conduction)
+            select case (melt_ice_code)
+            case (CAVITY_ICE_INSULATING, CAVITY_ICE_ADV_DIFF)
+               continue
+            case (CAVITY_ICE_INVALID)
+               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
+                                 "' is not recognised (shipped: insulating, "// &
+                                 "adv_diff).")
+               has_error = .true.
+            case default
+               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
+                                 "' is RESERVED, not implemented "// &
+                                 "(CAVITY_MELT_NOT_IMPLEMENTED).  The steady "// &
+                                 "diffusive form makes q_ice independent of m_mass, "// &
+                                 "so sign(m) = sign(T*) no longer holds and the "// &
+                                 "pre-solve melt/freeze branch has to be revisited — "// &
+                                 "it is not a coefficient change.")
+               has_error = .true.
+            end select
+         end block
+         if (cfg%ocean%cavity_melt%gamma_t <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml gamma_t must be > 0 (it "// &
+                              "multiplies u* to give the heat exchange velocity; "// &
+                              "zero is identically zero melt, which is what "// &
+                              "enable=.false. is for).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%gamma_s >= 0.0_wp .and. &
+             cfg%ocean%cavity_melt%gamma_s <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml gamma_s = 0 is refused: the "// &
+                              "three-equation form divides by gamma_s.  Leave it "// &
+                              "NEGATIVE (the default) to take the ISOMIP+ "// &
+                              "gamma_t/35, or set a positive value.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%far_field_depth <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml far_field_depth must be > 0 m "// &
+                              "(it is the thickness the far-field T/S/u are averaged "// &
+                              "over; zero would sample nothing).")
+            has_error = .true.
+         end if
+         ! --- v1 gap, refused rather than half-wired: no cover mask ---
+         ! `&ocean_psurf_nml enable` is NOT refused here.  The cavity is
+         ! the `ms%p_top` producer (P5.2: `p_ice_ref + sf%p_surf`, at
+         ! configure and again per outer step when the seam makes
+         ! `sf%p_surf` live), so the seam can no longer overwrite the ice
+         ! load with the atmospheric one alone — the melt liquidus reads
+         ! the assembled total, which is what it should read.
+         if (cfg%wind_stress_x /= 0.0_wp .or. cfg%wind_stress_y /= 0.0_wp .or. &
+             trim(adjustl(cfg%ocean%topo%wind_config)) /= "constant") then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with a non-zero surface wind stress "// &
+                              "(wind_stress_x/y, &ocean_topo_nml wind_config) in "// &
+                              "this slice: there is no per-cell ice-COVER MASK on "// &
+                              "the atmospheric forcing yet, so the wind would blow "// &
+                              "through solid ice.  Follow-up: thread cover_frac "// &
+                              "through surface-stress/flux/sw-pen/restore as an "// &
+                              "optional argument, the way wet_dyn is threaded.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%restore%enable_restore_temp .or. &
+             cfg%ocean%restore%enable_restore_salt) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_restore_nml surface restoring "// &
+                              "in this slice (same missing cover mask: restoring the "// &
+                              "top layer toward an ATMOSPHERIC target under an ice "// &
+                              "shelf would overwhelm the melt signal).  Same "// &
+                              "follow-up.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_thermo_nml sw_pen_frac > 0 in "// &
+                              "this slice (same missing cover mask: no sunlight "// &
+                              "reaches the ocean through several hundred metres of "// &
+                              "ice).  Same follow-up.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%thermo%q_heat /= 0.0_wp .or. cfg%ocean%thermo%q_salt /= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with a non-zero &ocean_thermo_nml "// &
+                              "q_heat/q_salt in this slice: those are UNIFORM scalar "// &
+                              "surface fluxes the assembler adds everywhere, "// &
+                              "including under the shelf, and the cover mask that "// &
+                              "would exclude them is the same follow-up.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_ice_nml enable=.true.  Sea ice "// &
+                              "full-overwrites heat_added/salt_flux and runs its own "// &
+                              "instant-relaxation basal flux with a DIFFERENT "// &
+                              "liquidus set; two interface thermodynamics in one "// &
+                              "column is not a configuration.")
+            has_error = .true.
+         end if
+      end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its
       ! validated envelope is the coastal ZSTAR_FULL salt-leak foot-gun class.
@@ -6009,6 +6329,7 @@ contains
       call register_ocean_tides(cfg, schema)
       call register_ocean_psurf(cfg, schema)
       call register_ocean_cavity_dyn(cfg, schema)
+      call register_ocean_cavity_melt(cfg, schema)
       call register_epbl(cfg, schema)
       call register_wavespeed(cfg, schema)
       call register_foxkemper(cfg, schema)
@@ -6823,6 +7144,84 @@ contains
 
       call schema%add_group(g)
    end subroutine register_ocean_cavity_dyn
+
+   subroutine register_ocean_cavity_melt(cfg, schema)
+      !! `&ocean_cavity_melt` (P2b ice-shelf basal-melt thermodynamics:
+      !! the three-equation interface, its exchange law and the
+      !! far-field sampling depth).  The `exchange_law` and
+      !! `ice_conduction` enums MIRROR `parse_cavity_exchange_law` /
+      !! `parse_cavity_ice_mode` in `rdb_ocean_cavity_melt` — the two
+      !! lists move together, and `validate_config` re-checks them
+      !! belt-and-braces so a RESERVED law is refused by name rather
+      !! than silently falling through the kernel's dispatch.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+
+      g%name = "ocean_cavity_melt"
+      g%doc = "Ice-shelf basal-melt thermodynamics: the three-equation "// &
+              "interface, its exchange law, and the far-field sampling depth."
+
+      pl => cfg%ocean%cavity_melt%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (requires &ocean_cavity_dyn_nml, "// &
+                             "tfreeze_set='isomip' and the surface-flux "// &
+                             "component set)"))
+      ps => cfg%ocean%cavity_melt%exchange_law
+      call g%add(nml_enum("exchange_law", ps, &
+                          "Turbulent exchange law; laws other than "// &
+                          "const_gamma/hj99/yung25 are RESERVED and refused "// &
+                          "at configure", &
+                          allowed=[character(len=12) :: "const_gamma", "hj99", &
+                                   "yung25", "jenkins91", "rosevear22", "vt19", &
+                                   "mk18", "burchard22", "jenkins21"]))
+      pr => cfg%ocean%cavity_melt%gamma_t
+      call g%add(nml_real("gamma_t", pr, &
+                          "Dimensionless heat-transfer coefficient Gamma_T "// &
+                          "(ISOMIP+ starting guess; tune per coordinate)", &
+                          min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%gamma_s
+      call g%add(nml_real("gamma_s", pr, &
+                          "Dimensionless salt-transfer coefficient Gamma_S "// &
+                          "(negative = unset = gamma_t/35)"))
+      pr => cfg%ocean%cavity_melt%cdrag_top
+      call g%add(nml_real("cdrag_top", pr, &
+                          "Top drag coefficient for the MELT friction velocity "// &
+                          "(no momentum drag yet - that is Phase 4)", &
+                          min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%u_tide
+      call g%add(nml_real("u_tide", pr, &
+                          "RMS tidal velocity in the melt u* only, never the drag", &
+                          units="m/s", min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%ustar_min
+      call g%add(nml_real("ustar_min", pr, &
+                          "Friction-velocity floor (Yung et al. 2025 eq. 14)", &
+                          units="m/s", min=0.0_wp))
+      ps => cfg%ocean%cavity_melt%ice_conduction
+      call g%add(nml_enum("ice_conduction", ps, &
+                          "Ice-side conduction; 'diffusive' is RESERVED and "// &
+                          "refused (it changes the melt/freeze branch logic)", &
+                          allowed=[character(len=10) :: "insulating", "adv_diff", &
+                                   "diffusive"]))
+      pr => cfg%ocean%cavity_melt%t_ice
+      call g%add(nml_real("t_ice", pr, &
+                          "Ice interior temperature; read by ice_conduction="// &
+                          "'adv_diff' only", units="degC"))
+      pr => cfg%ocean%cavity_melt%s_ice
+      call g%add(nml_real("s_ice", pr, &
+                          "Ice salinity; must stay strictly below the far-field "// &
+                          "salinity", units="g/kg", min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%far_field_depth
+      call g%add(nml_real("far_field_depth", pr, &
+                          "Thickness below the ice base the far-field T/S/u are "// &
+                          "averaged over (METRES, not layers)", units="m", &
+                          min=0.0_wp))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_cavity_melt
 
    subroutine register_epbl(cfg, schema)
       !! `&ocean_epbl` (Reichl & Hallberg 2018 energetics-based PBL).

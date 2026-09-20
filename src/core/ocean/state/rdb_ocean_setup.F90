@@ -58,6 +58,7 @@ module rdb_ocean_setup
                                 metrics_porous_alloc
    use rdb_ocean_cavity, only: cavity_water_column_impl, cavity_fill_p_ice_ref, &
                                cavity_datum_residual
+   use rdb_ocean_cavity_melt, only: CAVITY_GAMMA_RATIO_ISOMIP
    use rdb_ocean_porous, only: parse_porous_source, parse_porous_eta_interp, &
                                porous_fill_stats_resolved, &
                                porous_stats_are_ordered, &
@@ -109,6 +110,10 @@ module rdb_ocean_setup
    public :: wave_drag_roughness_proxy
    public :: configure_ocean_porous
    public :: configure_ocean_cavity
+   public :: configure_ocean_cavity_melt
+   public :: cavity_resolve_gamma_s
+   public :: cavity_count_zero_f
+   public :: cavity_count_unloaded_p_top
    public :: configure_ocean_wetdry
    public :: bt_auto_n_inner
    public :: metrics_bt_cfl_length
@@ -3153,6 +3158,223 @@ contains
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_cavity
+
+   subroutine configure_ocean_cavity_melt(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Configure the ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`,
+      !! P2b): copy the knobs onto the slot's three flat parameter
+      !! bundles, resolve the `gamma_s` sentinel, build the per-column
+      !! Coriolis array the `hj99` law needs, and CHECK that the
+      !! interface pressure the liquidus will read has actually been
+      !! loaded.
+      !!
+      !! Runs immediately after `configure_ocean_cavity` — which is the
+      !! SOLE producer of `ms%p_top` — and before
+      !! `ocean_state_enter_data`, like every other static fill the
+      !! device map has to capture.
+      !!
+      !! **`ms%p_top`: this routine is a CONSUMER, not a writer.**
+      !! `ms%p_top` is THE interface pressure
+      !! (`src/core/ocean/README.md`, the `p_top` seam contract), and the
+      !! melt liquidus is its THIRD consumer alongside the FV_MOM6
+      !! `pa(nz+1)` surface boundary condition and the in-situ EOS.  It
+      !! has exactly ONE producer, `configure_ocean_cavity`, which
+      !! assembles `ms%p_top = metrics%p_ice_ref + sf%p_surf` (P5.2) —
+      !! rebuilt per outer step in `ocean_dyn_step_split` when the psurf
+      !! seam makes `sf%p_surf` live.  A second writer here would be a
+      !! silent clobber, so there is none: what this routine does instead
+      !! is ASSERT that every ice-covered column carries at least its own
+      !! isostatic load, which catches a producer that was skipped or
+      !! reordered rather than trusting the call order.
+      use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
+                                       CAVITY_LAW_HJ99
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a melt configuration conflict when present;
+         !! absent behaves as today (`error stop`).
+      integer :: nx, ny, n_zero_f, n_unloaded
+      real(wp) :: gamma_s_eff
+
+      if (.not. ocean_state%cavity_flux%enable) then
+         if (present(ierr)) ierr = OCEAN_STATUS_OK
+         return
+      end if
+
+      nx = size(ocean_state%cavity_flux%f_cor, 1)
+      ny = size(ocean_state%cavity_flux%f_cor, 2)
+
+      ! ---- knobs -> slot ----
+      ocean_state%cavity_flux%far_field_depth = cfg%ocean%cavity_melt%far_field_depth
+      ocean_state%cavity_flux%cdrag_top = cfg%ocean%cavity_melt%cdrag_top
+      ocean_state%cavity_flux%u_tide = cfg%ocean%cavity_melt%u_tide
+      ocean_state%cavity_flux%ustar_min = cfg%ocean%cavity_melt%ustar_min
+      ocean_state%cavity_flux%s_ice = cfg%ocean%cavity_melt%s_ice
+
+      ! `gamma_s` carries the repo's negative "unset" sentinel; resolve
+      ! it to the ISOMIP+ `gamma_t/35` exactly once, here, so the value
+      ! the kernel is handed is the value the log prints.
+      gamma_s_eff = cavity_resolve_gamma_s(cfg%ocean%cavity_melt%gamma_s, &
+                                           cfg%ocean%cavity_melt%gamma_t)
+      ocean_state%cavity_flux%par%law = &
+         parse_cavity_exchange_law(cfg%ocean%cavity_melt%exchange_law)
+      ocean_state%cavity_flux%par%gamma_t_coeff = cfg%ocean%cavity_melt%gamma_t
+      ocean_state%cavity_flux%par%gamma_s_coeff = gamma_s_eff
+      ocean_state%cavity_flux%ice%mode = &
+         parse_cavity_ice_mode(cfg%ocean%cavity_melt%ice_conduction)
+      ocean_state%cavity_flux%ice%T_ice = cfg%ocean%cavity_melt%t_ice
+
+      ! `cavity_flux%const` is deliberately LEFT at its ISOMIP+ defaults
+      ! (Asay-Davis et al. (2016) Table 4): `rho_w`, `c_w`, `alpha_T`,
+      ! `beta_S` there are the melt law's own calibrated constants, not
+      ! copies of the Boussinesq `rho_0` — the same "out of scope on
+      ! purpose" category the README's reference-density table already
+      ! lists `RHO_WATER` and `&ocean_ice_nml rho_ocean` under.
+      ! Overriding them would silently break ISOMIP+ comparability,
+      ! which is the reason this path exists.
+
+      ! ---- per-column Coriolis for the hj99 law ----
+      call fill_coriolis_centre(cfg, ocean_state%metrics, grid, ocean_state%cavity_flux%f_cor)
+      if (ocean_state%cavity_flux%par%law == CAVITY_LAW_HJ99) then
+         n_zero_f = cavity_count_zero_f(ocean_state%cavity_flux%f_cor, &
+                                        ocean_state%metrics%cover_frac, &
+                                        ocean_state%multilayer%wet_mask, nx, ny)
+         if (n_zero_f > 0) then
+            call fail("&ocean_cavity_melt_nml exchange_law='hj99': "// &
+                      to_string(n_zero_f)//" ice-covered wet column(s) sit at "// &
+                      "f = 0.  Holland & Jenkins (1999) eq. (15) takes "// &
+                      "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, so the law "// &
+                      "has no value there and the kernel would return "// &
+                      "CAVITY_MELT_NO_CORIOLIS for every one of them.  Use "// &
+                      "exchange_law='const_gamma', or move the cavity off the "// &
+                      "f = 0 line.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! ---- the interface pressure: ASSERT, never write (see the docstring) ----
+      ! `p_surf >= 0` by contract, so a correctly assembled `p_top` is
+      ! `>= p_ice_ref` on every cell.  A zero `p_top` under a loaded
+      ! draft means the producer never ran (or ran before the load was
+      ! built), which would melt against a surface-pressure liquidus and
+      ! silently delete the entire ice pump.
+      n_unloaded = cavity_count_unloaded_p_top(ocean_state%multilayer%p_top, &
+                                               ocean_state%metrics%p_ice_ref, nx, ny)
+      if (n_unloaded > 0) then
+         call fail("&ocean_cavity_melt_nml: "//to_string(n_unloaded)//" column(s) "// &
+                   "have ms%p_top < metrics%p_ice_ref, so the top-of-column load was "// &
+                   "never assembled.  The melt liquidus is a CONSUMER of ms%p_top; "// &
+                   "its sole producer is configure_ocean_cavity "// &
+                   "(p_top = p_ice_ref + sf%p_surf), which must run before this "// &
+                   "routine.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf basal melt: exchange_law='"// &
+                          trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                          "', Gamma_T = "//to_string(cfg%ocean%cavity_melt%gamma_t)// &
+                          ", Gamma_S = "//to_string(gamma_s_eff)// &
+                          ", ice='"// &
+                          trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))//"'")
+         call logger%info("                      far_field_depth = "// &
+                          to_string(cfg%ocean%cavity_melt%far_field_depth)// &
+                          " m (METRES below the ice base, not 'layer nz'), "// &
+                          "C_d,top = "//to_string(cfg%ocean%cavity_melt%cdrag_top)// &
+                          ", u_tide = "//to_string(cfg%ocean%cavity_melt%u_tide)//" m/s")
+         call logger%info("                      liquidus evaluated at ms%p_top "// &
+                          "(max = "// &
+                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          " Pa), assembled by configure_ocean_cavity as "// &
+                          "p_ice_ref + sf%p_surf")
+         call logger%warning("Ice-shelf basal melt: the meltwater is a VIRTUAL SALT "// &
+                             "FLUX — it carries no mass, so it adds no volume and no "// &
+                             "direct buoyancy.  That is a first-order limitation for "// &
+                             "cavity circulation until the real-freshwater slice "// &
+                             "(Phase 3); Ocean0-style melt numbers from a "// &
+                             "virtual-salt run are not publishable.")
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_cavity_melt
+
+   pure function cavity_resolve_gamma_s(gamma_s, gamma_t) result(gamma_s_eff)
+      !! Resolve the `&ocean_cavity_melt_nml gamma_s` "unset" sentinel to
+      !! the ISOMIP+ default `gamma_t/CAVITY_GAMMA_RATIO_ISOMIP`
+      !! (Asay-Davis et al. (2016) Table 4 p. 2483; the 35 is Jenkins,
+      !! Nicholls & Corr (2010) p. 2309).
+      !!
+      !! A NEGATIVE `gamma_s` means "not set by the user"; zero and
+      !! positive values are taken literally — zero is then refused as a
+      !! range error by `validate_config` rather than silently
+      !! re-triggering the default, because the three-equation form
+      !! divides by `gamma_s`.
+      real(wp), intent(in) :: gamma_s
+         !! The raw knob; negative = unset sentinel.
+      real(wp), intent(in) :: gamma_t
+         !! Heat-transfer coefficient the default is a fraction of.
+      real(wp) :: gamma_s_eff
+      gamma_s_eff = merge(gamma_t/CAVITY_GAMMA_RATIO_ISOMIP, gamma_s, gamma_s < 0.0_wp)
+   end function cavity_resolve_gamma_s
+
+   pure function cavity_count_zero_f(f_cor, cover_frac, wet_mask, nx, ny) result(n_zero)
+      !! Count ice-covered WET columns sitting at exactly `f = 0` — the
+      !! configure-time domain check for `exchange_law = "hj99"`.
+      !!
+      !! Exactly zero, not "small": the law's failure at `f = 0` is a
+      !! division and a logarithm, not a loss of accuracy, and a small
+      !! `|f|` is a legitimate (if strongly suppressed) answer.
+      integer, intent(in) :: nx
+         !! First dimension.
+      integer, intent(in) :: ny
+         !! Second dimension.
+      real(wp), intent(in) :: f_cor(nx, ny)
+         !! Cell-centred Coriolis parameter (1/s).
+      real(wp), intent(in) :: cover_frac(nx, ny)
+         !! Ice-cover fraction.
+      real(wp), intent(in) :: wet_mask(nx, ny)
+         !! Static wet/land mask.
+      integer :: n_zero
+      integer :: i, j
+      n_zero = 0
+      do j = 1, ny
+         do i = 1, nx
+            if (cover_frac(i, j) > 0.5_wp .and. wet_mask(i, j) > 0.5_wp) then
+               if (f_cor(i, j) == 0.0_wp) n_zero = n_zero + 1
+            end if
+         end do
+      end do
+   end function cavity_count_zero_f
+
+   pure function cavity_count_unloaded_p_top(p_top, p_ice_ref, nx, ny) result(n_unloaded)
+      !! Count cells whose top-of-column pressure does NOT carry the
+      !! isostatic ice load — the melt path's guard that
+      !! `configure_ocean_cavity` (the sole `ms%p_top` producer) ran, and
+      !! ran before this check.
+      !!
+      !! The test is `p_top < p_ice_ref`, which is exact rather than a
+      !! tolerance: `ms%p_top = p_ice_ref + sf%p_surf` with
+      !! `sf%p_surf >= 0` by contract, so a loaded column satisfies it
+      !! with no rounding argument at all, and an unloaded one misses it
+      !! by the whole 5e6 Pa.  A `pure` predicate, so the refusal can be
+      !! tested without provoking the `error stop`.
+      integer, intent(in) :: nx
+         !! First dimension.
+      integer, intent(in) :: ny
+         !! Second dimension.
+      real(wp), intent(in) :: p_top(nx, ny)
+         !! `multilayer_state_t%p_top` (Pa).
+      real(wp), intent(in) :: p_ice_ref(nx, ny)
+         !! `metrics%p_ice_ref` (Pa) = `rho_ref*GRAVITY*z_draft`.
+      integer :: n_unloaded
+      integer :: i, j
+      n_unloaded = 0
+      do j = 1, ny
+         do i = 1, nx
+            if (p_top(i, j) < p_ice_ref(i, j)) n_unloaded = n_unloaded + 1
+         end do
+      end do
+   end function cavity_count_unloaded_p_top
 
    subroutine configure_ocean_wetdry(cfg, ocean_state, grid, compute_rank)
       !! Dynamic wetting/drying (docs/ocean_wetdry_plan.md): copy the
