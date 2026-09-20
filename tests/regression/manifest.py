@@ -538,7 +538,7 @@ CASES = [
 # two structural blind spots -- it stops before most physics exists, and a
 # golden captured from a broken run passes forever.
 #
-# `STABILITY_CASES` is the answer to both: every one of the 62 tracked ocean
+# `STABILITY_CASES` is the answer to both: every one of the 68 tracked ocean
 # namelists, run long enough that its physics manifests, asserted against
 # PHYSICS (finite / closed budgets / energy must not grow in an unforced case /
 # bounded CFL / the case's own stated claims) rather than against a stored
