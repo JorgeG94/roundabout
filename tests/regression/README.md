@@ -22,7 +22,7 @@ See `docs/regression_suite_plan.md` for the full design.
 
 ## What the suite runs
 
-**28 bathymetry-free ocean cases**, each run for a handful of outer timesteps
+**35 bathymetry-free ocean cases**, each run for a handful of outer timesteps
 (the runner rewrites `&time_nml` so `t_end = n_steps * dt_fixed`). Every case is
 formula bathymetry (no DEM/file load) and finishes in O(seconds). The single
 source of truth is `manifest.py` (each case carries the `tags` = closures it
@@ -89,6 +89,18 @@ in their own namelists because the `pred_corr` v1 envelope REFUSES their
 windowed tracer-advect configuration, so both branches of the dispatcher stay
 golden-covered.
 
+**Skipped on update — how a golden goes stale.** `compare.py --update-golden`
+writes a golden only for a case that PASSES the run-clean gate; a gate-failing
+case keeps its old file. Five goldens (`double_gyre_mom6`,
+`double_gyre_dataovr`, `flow_past_island`, `coriolis_coast`, `island_at_rest`)
+sat stale that way: the NaN missing-data sentinel in the T/S diagnostics made
+their console `mean` print `NaN`, the gate rejected them, and every
+regeneration skipped them — so three still held `ssp_rk2`-era answers under an
+unpinned namelist after the 2026-09-14 default flip, and `coriolis_coast` held
+its pre-wind-fix (En = 0) answer. The console reduction now skips non-finite
+cells (`missing=<n>/<total>` on the line), all five were regenerated, and an
+update that skips any case now names the stale goldens and exits non-zero.
+
 The two cases below PIN `pred_corr` explicitly. They predate the flip — they
 existed to keep the then-non-default branches warm — and they stay because
 the pin is what holds their goldens still across any future default move,
@@ -107,7 +119,7 @@ See `stability_manifest.py`, "The OUTER SPLIT-SCHEME axis".
 | `seamount_pred_corr` | quiescent stratified-free seamount (zstar_sigma, NK=15), `pred_corr` PINNED — rest-preservation guard: the pc loop holds the rest state to machine precision on a non-Lagrangian ALE coord |
 | `double_gyre_pred_corr` | active wind-driven double-gyre (fv_lite PGF, NK=10, zstar), `pred_corr` PINNED — the corrector runs on **real** tendencies, a meaningful golden drift target |
 
-**Coverage** these 28 exercise: **~53% of ocean-closure source lines** (gcov).
+**Coverage** (measured when the corpus was 28 cases; not re-measured at 35): **~53% of ocean-closure source lines** (gcov).
 The two WENO cases also lift the shared tracer module
 `src/tracer/rdb_recon_weno.F90` (weno5/7/9 + WENO-Z
 swept-average faces, reused by the ocean windowed drain) from **~3% to ~28%**

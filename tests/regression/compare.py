@@ -451,6 +451,7 @@ def main(argv=None):
 
     rows = []
     n_pass = 0
+    skipped_on_update = []
     for case in cases:
         name = case["name"]
         res = runs.get(name, {})
@@ -469,6 +470,14 @@ def main(argv=None):
         # The P0 run-clean/NaN gate must hold first.
         if not res.get("passed", False):
             row["reason"] = "gate: {}".format(res.get("reason", "did not run"))
+            if update:
+                # A gate-failing case gets NO new golden -- its old file stays
+                # on disk.  Say so by name: a bare "FAIL gate:" row in a table
+                # of 30 "golden written" rows is how five goldens silently
+                # survived two default changes (see README, "Skipped on
+                # update").
+                row["reason"] += "  [golden NOT written]"
+                skipped_on_update.append(name)
             rows.append(row)
             continue
 
@@ -509,6 +518,15 @@ def main(argv=None):
         n_pass, len(cases), verb, total_wall, total_wall / 60.0, args.budget_min))
     if budget_blown:
         print("         !! BUDGET BLOWN -- failing loud.")
+    if skipped_on_update:
+        print("         !! {} golden(s) NOT written -- the case failed the "
+              "run-clean gate, so its".format(len(skipped_on_update)))
+        print("            OLD golden is still on disk and is now STALE "
+              "relative to this update:")
+        for nm in skipped_on_update:
+            print("              - {}".format(nm))
+        print("            Fix the gate failure and re-run --update-golden "
+              "for these cases. Exiting non-zero.")
 
     # Detail the failing values so a drift is actionable.
     if not update:
