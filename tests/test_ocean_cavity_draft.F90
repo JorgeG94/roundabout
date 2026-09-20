@@ -110,7 +110,12 @@ contains
       if (present(vcoord)) vcoord_l = vcoord
       bt_l = "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"
       if (present(bt)) bt_l = bt
-      pgf_l = "&ocean_pgf_nml form = 'fv_mom6' /"
+      ! The production cavity spelling (P5.2): the isostatic load has to
+      ! have a consumer, and `p_top_in_bc` is the only one.  Configure
+      ! refuses a NON-UNIFORM draft without it, so the default carries it
+      ! — the `expect_invalid` rows that probe the PGF envelope override
+      ! this whole line anyway.
+      pgf_l = "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"
       if (present(pgf)) pgf_l = pgf
       extra_l = ""
       if (present(extra)) extra_l = extra
@@ -750,6 +755,29 @@ contains
       if (allocated(error)) return
       call expect_invalid(error, nml_case(on//", grounded_max_frac = 1.5"), &
                           "grounded_max_frac outside (0, 1]")
+      if (allocated(error)) return
+
+      ! --- the load must have a consumer once it has a gradient (P5.2) ---
+      ! A draft that VARIES needs `&ocean_pgf_nml p_top_in_bc`: that knob
+      ! is the only route by which rho_ref*g*z_draft reaches the FV_MOM6
+      ! pa(nz+1) surface BC.  Refused, not auto-enabled.
+      call expect_invalid(error, nml_case("enable = .true., draft_config = 'linear', "// &
+                                          "draft_depth = 100.0, draft_slope = 0.01, "// &
+                                          "draft_x0 = 0.0", &
+                                          pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+                          "a sloping draft without p_top_in_bc")
+      if (allocated(error)) return
+      call expect_invalid(error, nml_case("enable = .true., draft_config = 'flat', "// &
+                                          "draft_depth = 300.0, draft_x1 = 4000.0", &
+                                          pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+                          "a flat draft with a CALVING FRONT (a step) and no p_top_in_bc")
+      if (allocated(error)) return
+      ! ... but a draft that is UNIFORM over the whole array is EXEMPT: a
+      ! load with no gradient is bit-identically inert in the top BC, and
+      ! that exemption is what keeps the unloaded flat-lid datum-
+      ! equivalence gate expressible at all.
+      call expect_valid(error, nml_case(on, pgf="&ocean_pgf_nml form = 'fv_mom6' /"), &
+                        "a UNIFORM draft without p_top_in_bc (provably inert)")
       if (allocated(error)) return
 
       ! --- pressure-gradient envelope ---

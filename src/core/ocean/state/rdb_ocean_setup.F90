@@ -2974,8 +2974,9 @@ contains
 
    subroutine configure_ocean_cavity(cfg, ocean_state, grid, compute_rank, ierr)
       !! Build the static ice-shelf cavity LOAD field
-      !! `metrics%p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) and assert
-      !! the counted-once datum invariant.
+      !! `metrics%p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa), ASSEMBLE it
+      !! into the top-of-column pressure `multilayer_state_t%p_top`, and
+      !! assert the counted-once datum invariant.
       !!
       !! The GEOMETRY (`z_draft`, `cover_frac`) is filled much earlier, in
       !! `ocean_state_seed_from_cfg`, because the wet mask and the layer
@@ -2989,8 +2990,31 @@ contains
       !! `rho_ref*GRAVITY` is formed as ONE product, the same one the
       !! FV_MOM6 Pass-1 surface BC forms, so that
       !! `pa(nz+1) = rho_ref*g*(−z_draft) + p_ice_ref` cancels to bit-zero
-      !! at rest once the load is wired to `ms%p_top` (the next slice).
-      !! Nothing consumes `p_ice_ref` yet — this slice is datum-only.
+      !! at rest (exactly when the toolchain rounds the product before the
+      !! add; under FMA contraction, to the rounding of `p_ice_ref`).
+      !!
+      !! ### The partition (P5.2)
+      !!
+      !! ```
+      !! ms%p_top = metrics%p_ice_ref  +  sf%p_surf
+      !!            (static ice load)     (atmospheric / anomaly load)
+      !! ```
+      !!
+      !! `p_ice_ref` goes HERE and to the datum (`bt_H_ref = b − z_draft`)
+      !! and NOWHERE else — in particular it is never added into
+      !! `sf%p_surf`, because `eta_ib = −p_surf/(ρ₀ g_bt)` is built from
+      !! the assembled total and the datum already carries exactly this
+      !! much.  Only the load ANOMALY reaches the `eta_forcing` seam, and
+      !! for the Boussinesq-isostatic default that anomaly IS `sf%p_surf`
+      !! (a cavity with no atmospheric load sends the seam nothing at
+      !! all).  See `src/core/ocean/README.md`'s `p_top` / `eta_forcing`
+      !! seam contracts.
+      !!
+      !! This seed is the FINAL value for a cavity without the psurf seam
+      !! (the draft is static, so there is nothing to refresh); with psurf
+      !! enabled, `ocean_dyn_step_split` rebuilds the same sum once per
+      !! outer step from the live `sf%p_surf`.  Host-side plain `do`
+      !! loops, before `ocean_state_enter_data` maps the result.
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
       type(hgrid_t), intent(in) :: grid
@@ -2999,7 +3023,7 @@ contains
          !! Non-zero on a cavity configuration conflict when present;
          !! absent behaves as today (`error stop`).
 
-      integer :: nx, ny
+      integer :: nx, ny, i, j
       real(wp) :: resid, datum_tol
 
       if (.not. ocean_state%metrics%use_cavity) then
@@ -3013,6 +3037,73 @@ contains
       call cavity_fill_p_ice_ref(ocean_state%metrics%p_ice_ref, &
                                  ocean_state%metrics%z_draft, &
                                  ocean_state%pressure_force%rho_ref*GRAVITY, nx, ny)
+
+      ! P5.2 — THE LOAD MUST HAVE A CONSUMER WHEN IT HAS A GRADIENT.
+      !
+      ! `&ocean_pgf_nml p_top_in_bc` is the only route by which a cavity
+      ! load reaches the pressure stack, and a cavity whose draft VARIES
+      ! is not in hydrostatic balance without it: `pa(nz+1)` then carries
+      ! the uncancelled `-rho_ref*g*z_draft`, so the stack sits ~5e6 Pa
+      ! off its anomaly scale (every `h_neglect` face-divisor leak grows
+      ! by the same factor), the UNSPLIT driver — which has no
+      ! depth-mean replacement — feels a raw `g*grad(z_draft)` ~ 0.1 m/s^2,
+      ! and `&ocean_bt_nml correction_h_weighted` turns the uncancelled
+      ! depth-uniform force into a real per-layer shear.  Refused, not
+      ! auto-enabled: the namelist should say what the run does.
+      !
+      ! EXEMPTION, and it is a theorem rather than a courtesy: a draft
+      ! that is UNIFORM over the whole array has a load with no gradient,
+      ! and a gradient-free `p_top` is bit-identically inert in the top BC
+      ! (`test_ocean_pgf_p_top_bc::uniform_p_top_bit_identical`).  Such a
+      ! run — the flat-lid datum-equivalence case — is refused by nothing.
+      !
+      ! Tested on the FILLED array, not on the namelist shape: land
+      ! exclusion can zero `z_draft` under a formula that looks uniform.
+      ! `validate_config` carries the same refusal on the config-level
+      ! predicate so the user meets it before any state is built.
+      if (.not. ocean_state%pressure_force%p_top_in_bc) then
+         if (maxval(ocean_state%metrics%z_draft) /= &
+             minval(ocean_state%metrics%z_draft)) then
+            call fail("&ocean_cavity_dyn_nml enable=.true. with a NON-UNIFORM "// &
+                      "draft requires &ocean_pgf_nml p_top_in_bc=.true.  The "// &
+                      "isostatic load rho_ref*g*z_draft would otherwise never "// &
+                      "reach the FV_MOM6 pa(nz+1) surface boundary condition, "// &
+                      "leaving the pressure stack ~"// &
+                      to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                      " Pa off its anomaly scale and the column out of "// &
+                      "hydrostatic balance.  (A UNIFORM draft is exempt: a "// &
+                      "load with no gradient is provably inert in the top BC.)", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! P5.2: assemble the top-of-column load.  Rebuilt from scratch (not
+      ! `+=` onto whatever the earlier psurf seed left) so the result does
+      ! not depend on which of the two seeds ran first, and over the WHOLE
+      ! array including ghosts — `p_top` owes no halo exchange of its own
+      ! precisely because both of its sources are already ghost-valid.
+      if (.not. (size(ocean_state%multilayer%p_top, 1) == nx .and. &
+                 size(ocean_state%multilayer%p_top, 2) == ny)) then
+         call fail("configure_ocean_cavity: ms%p_top and metrics%p_ice_ref "// &
+                   "have different shapes — the top-of-column load cannot be "// &
+                   "assembled.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      do j = 1, ny
+         do i = 1, nx
+            ocean_state%multilayer%p_top(i, j) = ocean_state%metrics%p_ice_ref(i, j)
+         end do
+      end do
+      if (allocated(ocean_state%surface_flux%p_surf)) then
+         do j = 1, ny
+            do i = 1, nx
+               ocean_state%multilayer%p_top(i, j) = &
+                  ocean_state%multilayer%p_top(i, j) + &
+                  ocean_state%surface_flux%p_surf(i, j)
+            end do
+         end do
+      end if
 
       ! The counted-once invariant (I), in metres of reference depth:
       !     rho*g*z_draft + (bt_H_ref - b)*rho*g == 0   <=>   bt_H_ref == b - z_draft.
@@ -3047,8 +3138,18 @@ contains
                           to_string(maxval(ocean_state%metrics%p_ice_ref))// &
                           " Pa (rho_ref = "// &
                           to_string(ocean_state%pressure_force%rho_ref)//" kg/m^3)")
-         call logger%info("                  NOT yet applied: this build carries the "// &
-                          "cavity geometry + datum only (ms%p_top is untouched)")
+         call logger%info("                  assembled into ms%p_top (max = "// &
+                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          " Pa = p_ice_ref + sf%p_surf); NOT into sf%p_surf, "// &
+                          "which the eta_forcing seam is built from")
+         if (ocean_state%pressure_force%p_top_in_bc) then
+            call logger%info("                  consumed by the FV_MOM6 pa(nz+1) "// &
+                             "surface BC (&ocean_pgf_nml p_top_in_bc)")
+         else
+            call logger%info("                  the draft is UNIFORM here, so the "// &
+                             "load has no gradient and the PGF top BC is provably "// &
+                             "inert; &ocean_pgf_nml p_top_in_bc is not required")
+         end if
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_cavity
