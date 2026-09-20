@@ -123,6 +123,8 @@ module rdb_ocean_cavity_melt
    public :: cavity_solve_melt
    public :: cavity_melt_point
    public :: cavity_melt_columns
+   public :: cavity_melt_columns_2d
+   public :: cavity_exchange_with_f
    public :: cavity_heat_fluxes
    public :: cavity_salt_fluxes
    public :: cavity_buoyancy_flux
@@ -299,7 +301,16 @@ module rdb_ocean_cavity_melt
       !! p. 2058 shows the twelve ISOMIP+ submissions landing anywhere
       !! from 0.011 to 0.2.  A namelist knob in the coupling PR, never a
       !! hard-wired number.
-   real(wp), parameter, public :: CAVITY_GAMMA_S_ISOMIP = CAVITY_GAMMA_T_ISOMIP/35.0_wp
+   real(wp), parameter, public :: CAVITY_GAMMA_RATIO_ISOMIP = 35.0_wp
+      !! `Gamma_T/Gamma_S`, the ratio the ISOMIP+ protocol adopts —
+      !! Asay-Davis et al. (2016) Table 4 p. 2483.  The 35 is Jenkins,
+      !! Nicholls & Corr (2010) p. 2309: the ratio "should lie somewhere
+      !! in the range 35-70.  Adopting a value at the lower end of this
+      !! range...".  Named because the coupling layer resolves the
+      !! `&ocean_cavity_melt_nml gamma_s` "unset" sentinel through it,
+      !! and a second literal 35 in a second file is how the two drift.
+   real(wp), parameter, public :: CAVITY_GAMMA_S_ISOMIP = &
+                                  CAVITY_GAMMA_T_ISOMIP/CAVITY_GAMMA_RATIO_ISOMIP
       !! ISOMIP+ salt-transfer coefficient, `Gamma_S = Gamma_T/35` —
       !! Asay-Davis et al. (2016) Table 4 p. 2483.  The 35 is Jenkins,
       !! Nicholls & Corr (2010) p. 2309: the ratio "should lie somewhere
@@ -2007,5 +2018,161 @@ contains
                                 ierr_col(i))
       end do
    end subroutine cavity_melt_columns
+
+   pure function cavity_exchange_with_f(par, f_cor) result(par_out)
+      !! Copy of an exchange bundle with `f_cor` replaced — the seam that
+      !! lets a 2-D kernel give EVERY COLUMN its own Coriolis parameter
+      !! while `ocean_cavity_exchange_t` keeps its scalar member.
+      !!
+      !! It is a FUNCTION, not a `do concurrent` `local(...)` variable,
+      !! and deliberately: `ocean_cavity_exchange_t` carries default
+      !! initialisers, and gfortran 15 refuses a `local(...)` of a derived
+      !! type that has any ("LOCAL specifier ... not yet supported") —
+      !! the same constraint that shaped `ocean_cavity_solution_t`.  A
+      !! function result used directly as an actual argument is a
+      !! per-iteration compiler temporary, which is exactly what is
+      !! wanted and needs no locality clause at all.
+      !!
+      !! Only `CAVITY_LAW_HJ99` reads `f_cor`; for every other law this
+      !! is an inert copy, so the 2-D driver dispatches on ONE code path.
+      !$acc routine seq
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Exchange bundle to clone.
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter for THIS column (1/s); used as `|f|`.
+      type(ocean_cavity_exchange_t) :: par_out
+      par_out = par
+      par_out%f_cor = f_cor
+   end function cavity_exchange_with_f
+
+   pure subroutine cavity_melt_columns_2d(nx, ny, cover, T_w, S_w, p_b, u_far, v_far, &
+                                          S_i, f_cor, cd, u_tide, ustar_min, &
+                                          par, ice, eos, const, &
+                                          u_star, T_b, S_b, m_mass, q_ocean, ierr_col)
+      !! Masked 2-D driver: form the friction velocity and solve the
+      !! interface on every ICE-COVERED column of an `(nx, ny)` plane,
+      !! leaving the rest untouched at exactly zero.
+      !!
+      !! **This routine exists for the same reason `cavity_melt_columns`
+      !! does, and the reason is a linker one.**  On the GPU build the
+      !! kernel lives in `librdb_core.so` and nvlink cannot resolve an
+      !! `!$acc routine seq` device symbol out of a shared library into a
+      !! `do concurrent` compiled in a DIFFERENT translation unit.  So the
+      !! coupling layer (`rdb_ocean_cavity_flux`) samples the far field
+      !! and then calls THIS routine — it does not write its own column
+      !! loop over `cavity_ustar` / `cavity_melt_point`.  `u*` is folded
+      !! in here for the same reason, and because it keeps ONE status per
+      !! column: a non-finite far-field velocity comes back as
+      !! `CAVITY_MELT_NONFINITE_INPUT` rather than being laundered into
+      !! `ustar_min` and then into a small, plausible melt rate.
+      !!
+      !! It is additive: `cavity_melt_columns`' 1-D signature is
+      !! untouched, and so are its tests.
+      !!
+      !! `cover` is the ICE-COVER MASK (v1 binary, `metrics%cover_frac`,
+      !! composed by the caller with the wet mask and with "the far-field
+      !! sample found mass"), tested `> 0.5`.  An UNCOVERED column is not
+      !! open ocean with zero melt — it is a column the interface physics
+      !! does not apply to at all — so it gets
+      !! `u_star = T_b = S_b = m_mass = q_ocean = 0` exactly and
+      !! `CAVITY_MELT_OK`, and the caller's flux components stay zero
+      !! there.  Counting an uncovered column as a solver failure would
+      !! drown the real failures.
+      !!
+      !! `f_cor` is a per-column ARRAY (not `par%f_cor`):
+      !! `CAVITY_LAW_HJ99` divides by `|f|` and takes `ln(.../|f| h_nu)`,
+      !! so on a beta plane or a spherical sector the law's domain is a
+      !! property of the COLUMN, not of the namelist.
+      !! `cavity_exchange_with_f` substitutes it per iteration, and
+      !! `CAVITY_MELT_NO_CORIOLIS` comes back for any covered column at
+      !! `f = 0` instead of a plausible number.  `S_i` stays SCALAR: the
+      !! ice salinity is a namelist constant in v1 (`s_ice`, 0 by the
+      !! ISOMIP+ protocol), and a 2-D array of one repeated number is
+      !! device traffic for nothing.
+      !!
+      !! `mem:separate` contract, unchanged from the 1-D driver: this
+      !! routine MOVES NOTHING.  Every array must already be
+      !! device-present, and the caller owns the `update self` of the
+      !! outputs it reads on the host.
+      !!
+      !! HOST routine — it LAUNCHES the kernel, so it carries no
+      !! `!$acc routine seq` of its own.
+      integer, intent(in) :: nx
+         !! First dimension (ghosts included — the caller decides).
+      integer, intent(in) :: ny
+         !! Second dimension.
+      real(wp), intent(in) :: cover(nx, ny)
+         !! Ice-cover mask; a column is solved iff `cover > 0.5`.
+      real(wp), intent(in) :: T_w(nx, ny)
+         !! Far-field temperature (degC).
+      real(wp), intent(in) :: S_w(nx, ny)
+         !! Far-field salinity (g/kg).
+      real(wp), intent(in) :: p_b(nx, ny)
+         !! Interface pressure (Pa) — `multilayer_state_t%p_top`.
+      real(wp), intent(in) :: u_far(nx, ny)
+         !! Far-field x velocity at the CELL CENTRE (m/s).
+      real(wp), intent(in) :: v_far(nx, ny)
+         !! Far-field y velocity at the CELL CENTRE (m/s).
+      real(wp), intent(in) :: S_i
+         !! Ice salinity (g/kg), >= 0; one scalar for the whole plane.
+      real(wp), intent(in) :: f_cor(nx, ny)
+         !! Coriolis parameter (1/s) per column; read by `hj99` only.
+      real(wp), intent(in) :: cd
+         !! Top drag coefficient for the MELT friction velocity.
+      real(wp), intent(in) :: u_tide
+         !! RMS tidal velocity (m/s); melt `u*` only, never the drag.
+      real(wp), intent(in) :: ustar_min
+         !! Friction-velocity floor (m/s).
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Exchange-law bundle; its `f_cor` member is OVERRIDDEN per
+         !! column by the `f_cor` array above.
+      type(ocean_cavity_ice_t), intent(in) :: ice
+         !! Ice-conduction bundle, shared by every column.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle — the liquidus.  Flat POD, by value.
+      type(ocean_cavity_const_t), intent(in) :: const
+         !! Constants bundle, shared by every column.
+      real(wp), intent(out) :: u_star(nx, ny)
+         !! Friction velocity (m/s); 0 where uncovered or refused.
+      real(wp), intent(out) :: T_b(nx, ny)
+         !! Interface temperature (degC); 0 where uncovered.
+      real(wp), intent(out) :: S_b(nx, ny)
+         !! Interface salinity (g/kg); 0 where uncovered.
+      real(wp), intent(out) :: m_mass(nx, ny)
+         !! Melt mass flux (kg/m^2/s), > 0 melting; 0 where uncovered.
+      real(wp), intent(out) :: q_ocean(nx, ny)
+         !! Ocean -> interface heat flux (W/m^2); 0 where uncovered.
+      integer, intent(out) :: ierr_col(nx, ny)
+         !! `CAVITY_MELT_*` status per column; `CAVITY_MELT_OK` where
+         !! uncovered.
+      integer :: i, j, ie
+      real(wp) :: us
+
+      do concurrent(j=1:ny, i=1:nx) local(ie, us)
+         if (cover(i, j) > 0.5_wp) then
+            call cavity_ustar(u_far(i, j), v_far(i, j), cd, u_tide, ustar_min, us, ie)
+            u_star(i, j) = us
+            if (ie == CAVITY_MELT_OK) then
+               call cavity_melt_point(T_w(i, j), S_w(i, j), p_b(i, j), us, S_i, &
+                                      cavity_exchange_with_f(par, f_cor(i, j)), &
+                                      ice, eos, const, T_b(i, j), S_b(i, j), &
+                                      m_mass(i, j), q_ocean(i, j), ierr_col(i, j))
+            else
+               T_b(i, j) = 0.0_wp
+               S_b(i, j) = 0.0_wp
+               m_mass(i, j) = 0.0_wp
+               q_ocean(i, j) = 0.0_wp
+               ierr_col(i, j) = ie
+            end if
+         else
+            u_star(i, j) = 0.0_wp
+            T_b(i, j) = 0.0_wp
+            S_b(i, j) = 0.0_wp
+            m_mass(i, j) = 0.0_wp
+            q_ocean(i, j) = 0.0_wp
+            ierr_col(i, j) = CAVITY_MELT_OK
+         end if
+      end do
+   end subroutine cavity_melt_columns_2d
 
 end module rdb_ocean_cavity_melt
