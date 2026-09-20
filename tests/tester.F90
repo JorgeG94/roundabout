@@ -54,6 +54,8 @@ program rdb_tests
                                             collect_ocean_cavity_equivalence_tests
    use test_ocean_cavity_load, only: ocean_cavity_load_collect => &
                                      collect_ocean_cavity_load_tests
+   use test_ocean_cavity_flux, only: ocean_cavity_flux_collect => &
+                                     collect_ocean_cavity_flux_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
    use test_ocean_pgf_rho_ref, only: ocean_pgf_rho_ref_collect => collect_ocean_pgf_rho_ref_tests
    use test_ocean_forcing_rho_ref, only: ocean_forcing_rho_ref_collect => &
@@ -224,6 +226,7 @@ program rdb_tests
                 new_testsuite("ocean_cavity_draft", ocean_cavity_draft_collect), &
                 new_testsuite("ocean_cavity_equivalence", ocean_cavity_equivalence_collect), &
                 new_testsuite("ocean_cavity_load", ocean_cavity_load_collect), &
+                new_testsuite("ocean_cavity_flux", ocean_cavity_flux_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &
                 new_testsuite("ocean_pgf_rho_ref", ocean_pgf_rho_ref_collect), &
                 new_testsuite("ocean_forcing_rho_ref", ocean_forcing_rho_ref_collect), &

@@ -44,6 +44,11 @@ CURATED_KNOBS = [
     # MEANS (deviation from the loaded equilibrium, not from z = 0), which
     # is exactly the kind of thing prose forgets.
     "ocean_cavity_dyn_nml",
+    # Ice-shelf basal-melt thermodynamics.  Listed because the capability
+    # is delivered as a VIRTUAL salt flux with no mass, and because the
+    # v1 gaps (no cover mask on atmospheric forcing, no top drag) are
+    # configure REFUSALS — exactly the kind of scoping prose forgets.
+    "ocean_cavity_melt_nml",
 ]
 
 # Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —
