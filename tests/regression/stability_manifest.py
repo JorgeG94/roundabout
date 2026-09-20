@@ -745,6 +745,45 @@ STABILITY_CASES = [
           tags=["cavity", "ice_shelf", "sloping_lid", "calving_front",
                 "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "rest"]),
 
+    _case("isomip_plus_ocean0_idealised",
+          V + "isomip_plus/ocean0_idealised_draft.nml",
+          "forced", 288, 100, t1_timeout=900, t2_timeout=300,
+          # THE GROUNDED-CAVITY CONSERVATION GATE, at case scale.
+          #
+          # 3778 of 9600 interior columns (39.4 %) GROUND -- the ice draft
+          # meets the bed and they become land through `seed_wet_mask_impl`
+          # -- which is the largest grounded fraction anywhere in this
+          # corpus and the configuration that exposed the land-state defect
+          # (a grounded column's seeded `h_layer` is NEGATIVE, so the old
+          # land tracer hold was an algebraic identity and left a
+          # full-column `hTr` beside a floored `h`).  Measured at day 1
+          # pre-fix: Salt Error 6.088E-01, Heat -7.994E-02 -- a step change
+          # at step 1, flat thereafter -- against a Mass that closed at
+          # -5.0E-14.  Post-fix all three read ~5E-14.
+          #
+          # So this row is carried for `conserve:*` (BUDGET_EXACT, 1e-11)
+          # above everything else: `en_max` and `cfl:no-runaway` are the
+          # ordinary finite/stability guards, and the case is not a
+          # rest-state gate at all (melt and the northern sponge drive it).
+          # A budget that steps is the defect, and only a case with real
+          # grounded ice can see it.
+          #
+          # Cost: 0.63 s/step on one core, so tier 1 is the protocol's own
+          # 1 simulated day (288 steps at dt = 300) and tier 2 is 100 steps.
+          # Not downscaled -- 240x40x36 is the COM resolution the grounding
+          # line is resolved at, and halving it moves the grounding line
+          # rather than the numerics.
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 300.0,
+                            "nu_h": 6.0, "nghost": 2,
+                            "has_western_boundary": False, "eddying": False},
+          note="ISOMIP+ Ocean0 with the idealised linear draft -- the "
+               "grounded-cavity conservation gate.  See "
+               "validation_examples/ocean/isomip_plus/README.md and "
+               "tests/test_ocean_cavity_grounded_budget.F90, which pins the "
+               "same statement at unit scale and to 1e-12.",
+          tags=["cavity", "ice_shelf", "grounded", "basal_melt", "sponge",
+                "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "conserve"]),
+
     # ===================== geometry / masking ==============================
     _case("island_at_rest", V + "island_at_rest/island_at_rest.nml",
           "rest", 2880, 300, en_rest_max=REST_1UM_S,

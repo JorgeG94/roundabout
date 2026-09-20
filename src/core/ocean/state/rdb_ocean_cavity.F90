@@ -10,8 +10,12 @@ module rdb_ocean_cavity
    !!
    !! ```
    !! (D)  datum :  bt_H_ref = b - z_draft            (was: bt_H_ref = b)
+   !!               ... and exactly 0 on a GROUNDED column, which has no
+   !!               water column at all -- see `cavity_datum_impl`
    !! (P)  load  :  p_ice_ref = rho_ref*GRAVITY*z_draft
    !! (I)  invariant :  rho_ref*g*z_draft + (bt_H_ref - b)*rho_ref*g == 0
+   !!               on every WET column (a grounded one carries no
+   !!               barotropic momentum equation, so no load to count)
    !! ```
    !!
    !! (I) says the load is counted exactly ONCE: whatever the datum
@@ -92,6 +96,7 @@ module rdb_ocean_cavity
    public :: cavity_fill_cover_frac
    public :: cavity_fill_p_ice_ref
    public :: cavity_draft_is_finite_nonneg
+   public :: cavity_datum_impl
    public :: cavity_datum_residual
    public :: CAVITY_BOUND_INF
 
@@ -474,25 +479,104 @@ contains
       end do
    end function cavity_draft_is_finite_nonneg
 
-   pure function cavity_datum_residual(bt_H_ref, b, z_draft, nx, ny) result(resid)
+   pure subroutine cavity_datum_impl(H_ref, b, z_draft, h_min, nx, ny)
+      !! The BAROTROPIC DATUM: `bt_H_ref = b - z_draft` on a column that
+      !! has water under the ice, and exactly `0` on one that is
+      !! GROUNDED (`b - z_draft < h_min`, i.e. land by the very rule
+      !! `seed_wet_mask_impl` applies).
+      !!
+      !! ### Why the grounded branch is not `b - z_draft`
+      !!
+      !! `bt_H_ref` is the reference WATER-COLUMN thickness.  A grounded
+      !! column has no water column, and `b - z_draft` there is not a
+      !! small thickness — it is NEGATIVE, by hundreds of metres for a
+      !! real draft over a real bed.  Carrying that number had three
+      !! consequences, none of them wanted:
+      !!
+      !!   * `bt_eta = sum h_layer - bt_H_ref` came out at `+|b -
+      !!     z_draft|` on every grounded column — a phantom few-hundred-
+      !!     metre free surface, masked out of the dynamics but visible
+      !!     in `eta` min/max and in the `ssh` diagnostic;
+      !!   * the ALE target on that column is built as
+      !!     `(remap_h_ref + bt_eta)*dsig` with `remap_h_ref = total_h -
+      !!     bt_eta`, so recovering the land column's `nz*H_VANISHED`
+      !!     total meant CANCELLING two numbers of order the draft.  The
+      !!     land thickness then jittered at `eps*z_draft` — round-off of
+      !!     the wrong quantity — instead of sitting bit-stably at
+      !!     `H_VANISHED`;
+      !!   * it made a grounded column distinguishable from an ordinary
+      !!     land column (`bt_H_ref = b`), for no dynamical reason: every
+      !!     face metric on a land cell is zeroed, so nothing downstream
+      !!     reads either value.
+      !!
+      !! Zero is the value that says "no water column" and the value that
+      !! makes a grounded column arithmetically indistinguishable from
+      !! the ordinary land it IS.
+      !!
+      !! ### Why this does not un-count the ice load
+      !!
+      !! Invariant (I) — the load reaching the barotropic mode exactly
+      !! once, through the datum — is a statement about the BAROTROPIC
+      !! MOMENTUM EQUATION, and that equation exists only on wet columns:
+      !! on a land column every face metric is zero, `-G*grad(eta -
+      !! eta_forcing)` is multiplied by nothing, and there is no load to
+      !! count once or twice.  So (I) is asserted, by
+      !! `cavity_datum_residual`, over the WET columns — which is where
+      !! it is a physical statement rather than a bookkeeping one.
+      !!
+      !! Explicit-shape by the house rule; host-only (setup).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(out) :: H_ref(nx, ny)
+      real(wp), intent(in) :: b(nx, ny)
+      real(wp), intent(in) :: z_draft(nx, ny)
+      real(wp), intent(in) :: h_min
+         !! `&ocean_cavity_dyn_nml h_min_cavity` (m, validated `> 0`) —
+         !! the SAME grounding cutoff the wet-mask seed applies, passed
+         !! rather than re-spelled so the two decisions cannot drift.
+      real(wp) :: water
+      integer :: i, j
+      do j = 1, ny
+         do i = 1, nx
+            water = b(i, j) - z_draft(i, j)
+            if (water < h_min) then
+               H_ref(i, j) = 0.0_wp
+            else
+               H_ref(i, j) = water
+            end if
+         end do
+      end do
+   end subroutine cavity_datum_impl
+
+   pure function cavity_datum_residual(bt_H_ref, b, z_draft, h_min, nx, ny) result(resid)
       !! Max violation of the counted-once invariant (I) in METRES of
-      !! reference depth: `max |bt_H_ref - (b - z_draft)|`.
+      !! reference depth, over the WET columns:
+      !! `max |bt_H_ref - (b - z_draft)|` where `b - z_draft >= h_min`.
       !!
       !! (I) itself is `rho_ref*g*z_draft + (bt_H_ref - b)*rho_ref*g == 0`;
       !! dividing out the common positive factor `rho_ref*g` leaves
       !! exactly this length, which is the form worth asserting — it is
       !! scale-free and it does not fabricate a product that the code
       !! never forms.
+      !!
+      !! GROUNDED columns are excluded on purpose, and `cavity_datum_impl`
+      !! carries the argument: they are land, they carry no barotropic
+      !! momentum equation, and their datum is deliberately `0` rather
+      !! than a negative water column.  Including them would assert a
+      !! load-counting statement where there is no load being counted.
       integer, intent(in) :: nx, ny
       real(wp), intent(in) :: bt_H_ref(nx, ny)
       real(wp), intent(in) :: b(nx, ny)
       real(wp), intent(in) :: z_draft(nx, ny)
+      real(wp), intent(in) :: h_min
       real(wp) :: resid
+      real(wp) :: water
       integer :: i, j
       resid = 0.0_wp
       do j = 1, ny
          do i = 1, nx
-            resid = max(resid, abs(bt_H_ref(i, j) - (b(i, j) - z_draft(i, j))))
+            water = b(i, j) - z_draft(i, j)
+            if (water < h_min) cycle
+            resid = max(resid, abs(bt_H_ref(i, j) - water))
          end do
       end do
    end function cavity_datum_residual
