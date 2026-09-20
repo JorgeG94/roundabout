@@ -456,7 +456,14 @@ contains
       ! `p_surf` dynamic.  Gated: with `in_eos = .false.` `p_top` stays the
       ! zero array it was allocated as and every EOS evaluation is
       ! bit-identical.
-      if (cfg%ocean%psurf%in_eos .and. allocated(engine%state%surface_flux%p_surf)) then
+      !
+      ! P5.0 joins `&ocean_pgf_nml p_top_in_bc` — the load in the FV_MOM6
+      ! pressure-stack surface BC — to the SAME seed, so the unsplit
+      ! driver (which has no per-step refresh) still gets the configure
+      ! value rather than a zero array, and the split driver's step-1 PGF
+      ! is already loaded.
+      if ((cfg%ocean%psurf%in_eos .or. cfg%ocean%pgf%p_top_in_bc) .and. &
+          allocated(engine%state%surface_flux%p_surf)) then
          engine%state%multilayer%p_top = engine%state%surface_flux%p_surf
       end if
       call engine%state%surface_flux%set_sw_penetration( &

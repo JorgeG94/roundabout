@@ -133,7 +133,7 @@ slot without reading the rest of the tree.  A future portability lint
 | Split-RK2 driver | `ocean_dyn_t` | `dynamics/split_rk2/rdb_ocean_dyn.F90` | 4 | tendencies from continuity/coriolis/pressure/vmix/lateral | `ubt_sum / vbt_sum / eta_sum` time-mean accumulators, advances state |
 | Continuity-PPM ✓ (barotropic + windowed tracer advect) | `continuity_t` | `kernels/continuity_ppm/rdb_continuity.F90` | 2 / P2 | `barotropic.u_face_x`, `multilayer.h_layer` | per-face `mass_flux_x_layer`, `mass_flux_y_layer`; accumulator slots `uhtr`/`vhtr` (face transport m³, ½-weight per RK2 stage) + `t_dyn_rel_adv` (elapsed time since last drain); `continuity_tracer_drain` spends them via swept-average CW-PPM with fixed-budget CFL sub-cycling (MOM6 `DT_TRACER_ADVECT`; `dt_tracer_advect_ratio` knob in `&ocean_vmix_nml`). **Positive-definite continuity** (`&ocean_continuity_nml positive_definite`, default off ⇒ bit-identical): a `2·h_lim` PPM edge floor + a per-donor θ outflux limiter scale the folded `mass_flux_*_layer` so every layer stays `h ≥ h_lim` with **zero mass created** (contrast: MOM6's injecting `max(h,Angstrom)` clamp is NOT ported; the `conservative_floor` borrow stays the backstop). `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0; D3 single-source scaling keeps CWC exact; fail-loud vs `&ocean_wetdry_nml enable`; per-call `n_limited_step` + int64 `n_limited_total` drained to the console. See `docs/CLOSURE_MATRIX.md` |
 | PV-conserving Coriolis+adv ✓ (Sadourny enstrophy / energy `sadourny_energy` / Arakawa-Hsu `sadourny_hk`) | `coriolis_adv_t` | `kernels/coriolis_adv/rdb_coriolis_adv.F90` | 3 | per-layer u, v, layer thickness | momentum tendency at faces |
-| FV pressure force | `ocean_pressure_force_t` | `../../pressure_force/rdb_ocean_pressure_force.F90` | 5d | `multilayer.h_layer`, T, S, `eos` — including `eos%rho0`, which `configure_ocean_pgf` copies into BOTH slot reference densities (see the **PGF reference densities** contract below) | momentum tendency at faces; `e_face` for the barotropic `compute_pbce` |
+| FV pressure force | `ocean_pressure_force_t` | `../../pressure_force/rdb_ocean_pressure_force.F90` | 5d | `multilayer.h_layer`, T, S, `eos` — including `eos%rho0`, which `configure_ocean_pgf` copies into BOTH slot reference densities (see the **PGF reference densities** contract below); `multilayer.p_top` when `&ocean_pgf_nml p_top_in_bc` (FV_MOM6 only, default off ⇒ bit-identical — see the **`p_top` seam contract** below) | momentum tendency at faces; `e_face` for the barotropic `compute_pbce` |
 | Surface momentum stress ✓ | `ocean_surface_stress_t` | `../../parameterizations/vertical/rdb_ocean_surface_stress.F90` | 5b | `tau_x`/`tau_y` (wind, or ice-blended via `rdb_ice_ocean_coupler`); `rho0` from `eos%rho0` via `configure_ocean_reference_density` | momentum tendency at `k=nz`; `stress_mag` (cell-centred `\|tau\|`, always allocated, refreshed by EVERY writer of the `tau` pair — the `set_wind_stress_*` setters at configure, the data-forcing seam refresh, and the sea-ice blend on device each outer step, all through `ocean_surface_stress_refresh_mag` — PR-12 dedup, read by both KPP and EPBL instead of each re-deriving it inline, so a `tau` write that skips the refresh freezes both schemes' `u_*`) |
 | Surface heat/salt flux ✓ (PR-12 component-set reshape) | `ocean_surface_flux_t` | `../../parameterizations/vertical/rdb_ocean_surface_flux.F90` | 5b | const scalars (`&ocean_thermo_nml q_heat/q_salt`) +, when `&ocean_forcing_nml enable_components`, the component set (`q_sw/q_lw/q_lat/q_sens/heat_added`, mass fluxes `evap/lprec/fprec/vprec/lrunoff/frunoff/seaice_melt`, their `heat_content_*` enthalpy companions, `salt_flux`, `p_surf_atm`); `rho0` from `eos%rho0` via `configure_ocean_reference_density` | `Q_heat`/`Q_salt` — **derived views**, always the fields every downstream kernel (KPP, EPBL, `apply_tracers`) reads. Components off (default): `Q_heat`/`Q_salt` = the const scalar fill, byte-identical to pre-PR-12. Components on: `ocean_surface_flux_assemble` (the single gate, `vmix_assemble`'s analogue) rebuilds them every thermo step from const + components (`heat_content_massin`/`massout` also assembler-owned outputs) — a filler writes ITS OWN component and MUST NOT write `Q_heat`/`Q_salt` directly, must set `has_heat`/`has_salt` (+ `has_mass_flux`/`has_q_sw` as it fills mass/`q_sw`) host-side, and must register a time-varying component itself in the restart registry (`Q_heat`/`Q_salt` themselves are never registered — derived-field rule). The sea-ice coupler (`rdb_ice_ocean_coupler`) is the only v1 filler: it writes `salt_flux`/`heat_added` when components are on, the legacy full-overwrite of `Q_salt`/`Q_heat` when off. `p_surf`/`p_surf_atm` ship zeroed with no consumer yet (PR-17 follow-up) |
 | Vertical mixing (KPP) | `ocean_vmix_t` | `../../parameterizations/vertical/rdb_ocean_vmix.F90` | 5b | u, v, T, S, surface forcing; `rho0` from `eos%rho0` via `configure_ocean_reference_density` (the ONE of these copies a kernel reads on-device) | `kv`, `kt`, `ks` on interfaces; non-local `gamma_t/s`. `ks` is DERIVED from `kt` by `vmix_split_kd_heat_salt` (last statement before `vmix_assemble`, PR-20; `ks ≡ kt` until a double-diffusion contributor lands) and consumed by `vdiff_apply_tracers` for salinity + every passive tracer |
@@ -261,6 +261,35 @@ EXPLICIT width fails loud in `validate_config`, and the `bt_halo` AUTO default
 resolves to 0 (psurf is in `bt_halo_auto_exclusion`, alongside the tide that
 shares the seam).
 
+**The partition rule (what belongs on this seam and what does not).** The seam
+owns the **barotropic** response to a surface load, and owns it *alone*. The
+reason is structural, not conventional: `run_stage_split` subtracts the depth
+mean of the layer PGF from the barotropic forcing
+(`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`, `rdb_ocean_dyn.F90`) and then folds the
+barotropic solution back over the layers, so the column-integrated FV pressure
+force is *discarded* and the substep's `−G·∇(η − eta_forcing)` is the only
+barotropic term there is. Two consequences you must carry into any load work:
+
+- A **depth-uniform** contribution to the layer PGF is annihilated — it does not
+  reach the baroclinic modes (its deviation from the depth mean is zero) and it
+  does not reach the barotropic mode (the depth mean is replaced). So putting a
+  depth-uniform top load into the PGF boundary condition
+  (`&ocean_pgf_nml p_top_in_bc`, see the `p_top` contract below) is **not** a
+  double count of this seam: the two are orthogonal by construction, and each
+  covers what the other cannot. (Exactly true for the default uniform-Δu BT
+  corrector; under `&ocean_bt_nml correction_h_weighted` the redistribution
+  leaves a residual `−dt·δPFu·(w_k − 1)` whose depth mean is still zero by
+  `⟨w⟩_h = 1`, i.e. a shear-only redistribution of an already-cancelled force.)
+- A load a future **datum** absorbs (an ice draft moved into `bt_H_ref`, so that
+  `η ≈ 0` at rest) must **NOT** also be added to `sf%p_surf`, because `eta_ib` is
+  built from the assembled total and would re-inject it. Only the load
+  *anomaly* — what the datum does not already carry — belongs here. The
+  configure-time invariant is `ρ₀·g·z_draft + (bt_H_ref − b)·ρ₀·g ≡ 0`.
+
+`compute_pbce` is deliberately load-blind: `pbce` is `∂p_k/∂η`, the response to a
+CHANGE in `η`, and a static top load has none, so `p_top` must not enter it (nor
+`gtot_*`, nor `e_anom`) — the bc-PGF retro-correction stays exactly what it was.
+
 ### The `p_top` seam contract (surface load in the IN-SITU EOS pressure, E3)
 
 **There are three distinct pressures on this path. Conflating any two of them is
@@ -309,13 +338,23 @@ Rules for a builder that joins this seam:
   `p_top_sign_and_monotone` asserts exactly that by *inverting* the EOS (no
   duplicated coefficient), because MOM6 shipped a NEGATIVE EOS pressure in one
   path for years.
-- **EOS argument only.** `p_top` does NOT enter the PGF top boundary condition
-  (`pa(nz+1) = rho_ref*g*eta` in FV_MOM6, `p_edge(nz+1) = 0` in
-  FV_WRIGHT/FV_LITE). Under a sloping load the along-layer difference
-  `p_centre(i) − p_centre(i−1)` therefore omits `Δp_top` — which is depth-uniform
-  and *already carried* by the `eta_forcing` seam, so the momentum is not missing
-  it and adding it here too would **double-count**. Changing that split is a
-  separate PR that must move both seams at once.
+- **The EOS argument and the PGF boundary condition are two separate consumers.**
+  `&ocean_psurf_nml in_eos` gives `p_top` to the EOS's IN-SITU pressure
+  *arguments*; `&ocean_pgf_nml p_top_in_bc` (P5.0, FV_MOM6 only, default off ⇒
+  bit-identical) adds it to the FV_MOM6 pressure-stack *boundary condition*,
+  `pa(nz+1) = rho_ref*g*eta_geo + p_top`. Either, both or neither; they are
+  independent knobs on one field, and the per-step inline refresh fires on the
+  **disjunction** so neither can read a p_top the configure seed left stale.
+  Adding the load at `pa(nz+1)` does **not** double-count the `eta_forcing` seam:
+  a depth-uniform `p_top` perturbs every layer's `PFu` by the same
+  `−(1/ρ₀)∇p_top` (theorem in `compute_fv_mom6_impl`'s docstring) and the split's
+  depth-mean replacement annihilates exactly that — see the partition rule in the
+  `eta_forcing` contract above. What it buys under a large load is that `pa`, an
+  anomaly stack about `rho_ref*g*z`, stays `O(1e4 Pa)` instead of `O(5e6 Pa)`,
+  shrinking the `h_neglect` face-divisor leak by the same factor. FV_WRIGHT's
+  `p_edge(nz+1) = 0` and FV_LITE's are still untouched — a separate follow-up.
+  `mont` hard-zeroes `M(nz)` and has no stack to inject at all, which is why
+  `p_top_in_bc` is refused for every form but `fv_mom6`.
 - **Fill it from `sf%p_surf`, whole-array.** The refresh is an inline
   `do concurrent` over the WHOLE array, ghosts included, so `p_top` inherits
   exactly the halo validity `p_surf` has and owes no exchange of its own.

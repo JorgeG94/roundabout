@@ -291,6 +291,24 @@ module rdb_ocean_pressure_force
       integer :: recon_scheme = PGF_RECON_PLM
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM. Only consulted
          !! when `reconstruct_for_pressure = .true.`.
+      logical :: p_top_in_bc = .false.
+         !! FV_MOM6 top-of-column pressure in the surface boundary
+         !! condition (`&ocean_pgf_nml p_top_in_bc`). `.false.` (default):
+         !! `pa(nz+1) = rho_ref·g·eta_geo`, bit-identical. `.true.`: the
+         !! load `multilayer_state_t%p_top` (Pa) is ADDED there, so the
+         !! pressure stack measures down from the loaded surface —
+         !! `pa(nz+1) = rho_ref·g·eta_geo + p_top`. Only consulted by
+         !! FV_MOM6 (both the PCM and the `reconstruct_for_pressure`
+         !! branch); fail-loud at configure for any other variant, which
+         !! carries no injectable `pa` stack.
+         !!
+         !! A DEPTH-UNIFORM `p_top` perturbs every layer's `PFu` by the
+         !! SAME `−(1/ρ₀)∇p_top` (Theorem 1 in the Pass-1 docstring
+         !! below), and the split solver replaces the depth mean of the
+         !! layer PGF with the barotropic solution, so the baroclinic
+         !! operator does not see it and this does NOT double-count the
+         !! `eta_forcing` seam. See the `p_top` seam contract in
+         !! `src/core/ocean/README.md`.
       real(wp) :: gfs_scale = 1.0_wp
          !! Free-surface gravity scaling (= GFS / G_EARTH). Default 1.0 ⇒
          !! pure FV_MOM6, bit-identical. When < 1, Pass 5 applies the
@@ -791,6 +809,7 @@ contains
                                                   pgf%dpdx_face%data, pgf%dpdy_face%data, &
                                                   pgf%rho0, pgf%rho_ref, pgf%h_neglect, &
                                                   pgf%gfs_scale, pgf%recon_scheme, &
+                                                  ms%p_top, pgf%p_top_in_bc, &
                                                   metrics%idxCu, metrics%idyCv, nx, ny, nz)
          else
             call compute_fv_mom6_impl(ms%h_layer, ms%rho_layer, pgf%b, &
@@ -801,6 +820,7 @@ contains
                                       pgf%dpdx_face%data, pgf%dpdy_face%data, &
                                       pgf%rho0, pgf%rho_ref, pgf%h_neglect, &
                                       pgf%gfs_scale, pgf%mass_weight, &
+                                      ms%p_top, pgf%p_top_in_bc, &
                                       metrics%idxCu, metrics%idyCv, nx, ny, nz)
          end if
       else
@@ -1074,6 +1094,7 @@ contains
                                         dpdx_face, dpdy_face, &
                                         rho0, rho_ref, h_neglect, &
                                         gfs_scale, mass_weight, &
+                                        p_top, p_top_in_bc, &
                                         idxCu, idyCv, nx, ny, nz)
       !! Faithful port of MOM6's `PressureForce_FV_Bouss` per-layer PGF
       !! for the Boussinesq + per-layer Rlay path.
@@ -1084,7 +1105,8 @@ contains
       !!     e_face(i, j, k_face) — interface heights, positive up.
       !!       e_face(1) = -b (bed); e_face(k+1) = e_face(k) + h_layer(k);
       !!       e_face(nz+1) = -b + sum(h_layer) = η (free surface).
-      !!     pa(i, j, nz+1) = rho_ref · g · η  (surface BC).
+      !!     pa(i, j, nz+1) = rho_ref · g · η  (surface BC), plus
+      !!       `p_top(i, j)` when `p_top_in_bc` (see the theorem below).
       !!     pa(i, j, k) = pa(i, j, k+1) + (rho_layer(k) − rho_ref) · g · h(k)
       !!       (marching down).
       !!     intz_dpa(i, j, k) = 0.5 · (rho_layer(k) − rho_ref) · g · h(k)²
@@ -1133,6 +1155,34 @@ contains
       !!
       !! Wall faces (face index 1 and N+1) get zero by convention — the
       !! BT-substep / slow continuity already enforces u=0 there.
+      !!
+      !! ## Theorem — a depth-uniform top load is baroclinically inert here
+      !!
+      !! Perturb the TOP boundary condition only: `pa(·,nz+1) → pa(·,nz+1)
+      !! + δp` with `δp(i,j)` independent of `k`. Every `dpa`, `intz_dpa`
+      !! and `intx_dpa` is unchanged, and the Pass-2 recurrence shifts
+      !! `intx_pa(K) → intx_pa(K) + ½(δp_L + δp_R)` for EVERY `K`. The
+      !! Pass-3 numerator therefore moves by
+      !!
+      !!   δnumer = δp_L·h_L − δp_R·h_R + (h_R − h_L)·½(δp_L + δp_R)
+      !!          = ½(h_L + h_R)·(δp_L − δp_R)
+      !!   δPFu(k) = −(1/ρ₀)·(δp_R − δp_L)·IdxCu · (h_L+h_R)/(h_L+h_R+h_neglect)
+      !!
+      !! — i.e. exactly `−(1/ρ₀)·∂δp/∂x`, **the same in every layer**, up
+      !! to the `h_neglect` divisor (a relative `h_n/h_k ≈ 1e-10` for a
+      !! metre-thick layer, `≈7e-7` for one at `H_VANISHED`).
+      !!
+      !! Consequence for the SPLIT solver: the depth mean of the layer PGF
+      !! is subtracted from the barotropic forcing
+      !! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`, `rdb_ocean_dyn.F90`) and the
+      !! barotropic solution is then folded back over the layers, so a
+      !! depth-uniform `δPFu` cancels identically and only the
+      !! `eta_forcing` seam carries the load's barotropic response. Adding
+      !! `p_top` here therefore does NOT double-count that seam — the two
+      !! are orthogonal by construction. The UNSPLIT driver has neither
+      !! the depth-mean replacement nor the seam, so there this term is
+      !! the load's only path into the momentum, and it is a correction,
+      !! not a duplicate.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: rho_layer(nx, ny, nz)
@@ -1148,6 +1198,14 @@ contains
       real(wp), intent(inout) :: dpdy_face(nx, ny + 1, nz)
       real(wp), intent(in)    :: rho0, rho_ref, h_neglect, gfs_scale
       logical, intent(in)    :: mass_weight
+      real(wp), intent(in)    :: p_top(nx, ny)
+         !! Top-of-column pressure (Pa, `>= 0`), `multilayer_state_t%p_top`.
+         !! Consulted only when `p_top_in_bc`; the zero array otherwise.
+      logical, intent(in)    :: p_top_in_bc
+         !! Add `p_top` to the Pass-1 surface BC. `.false.` ⇒ the
+         !! assignment is character-for-character the pre-knob one ⇒
+         !! bit-identical (same branch-on-a-scalar-knob shape as
+         !! `mass_weight` in Pass 2).
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
 
       integer  :: i, j, k
@@ -1167,7 +1225,11 @@ contains
             e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
          end do
          eta = e_face(i, j, nz + 1)
-         pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+         if (p_top_in_bc) then
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
+         else
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+         end if
          do k = nz, 1, -1
             rho_anom = rho_layer(i, j, k) - rho_ref
             dpa_kk = rho_anom*GRAVITY*h_layer(i, j, k)
@@ -1355,6 +1417,7 @@ contains
                                                     dpdx_face, dpdy_face, &
                                                     rho0, rho_ref, h_neglect, &
                                                     gfs_scale, recon_scheme, &
+                                                    p_top, p_top_in_bc, &
                                                     idxCu, idyCv, nx, ny, nz)
       !! FV_MOM6 pressure-gradient with in-layer T/S reconstruction.
       !!
@@ -1368,6 +1431,21 @@ contains
       !! `mass_weight` (hWght blend) is NOT applied here: it needs a
       !! per-cell density, whereas reconstruction works on column T/S
       !! edges. Boundary layers fall back to PCM edges in the edge helper.
+      !!
+      !! `p_top_in_bc` injects the top load into the SAME Pass-1 surface
+      !! BC as the PCM twin, and the Theorem in `compute_fv_mom6_impl`
+      !! carries over verbatim: the reconstruction only changes `dpa` /
+      !! `intz_dpa`, never the `pa(nz+1)` seed or the `intx_pa`
+      !! recurrence, so a depth-uniform `p_top` still perturbs every
+      !! layer's `PFu` by the same `−(1/ρ₀)∇p_top`. NOTE that this branch
+      !! builds its OWN in-layer EOS pressure inside
+      !! `boole_dpa_intz_layer` (`p = −g·ρ₀·z` from the surface-relative
+      !! interface height) and that one is NOT offset by `p_top` — which
+      !! is exactly why `validate_config` refuses
+      !! `&ocean_psurf_nml in_eos` together with
+      !! `reconstruct_for_pressure`. The BC injection here is a PRESSURE
+      !! boundary condition, not an EOS argument; the two are independent
+      !! seams.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: hS(nx, ny, nz)
@@ -1389,6 +1467,10 @@ contains
       real(wp), intent(inout) :: dpdy_face(nx, ny + 1, nz)
       real(wp), intent(in)    :: rho0, rho_ref, h_neglect, gfs_scale
       integer, intent(in)    :: recon_scheme
+      real(wp), intent(in)    :: p_top(nx, ny)
+         !! Top-of-column pressure (Pa, `>= 0`), `multilayer_state_t%p_top`.
+      logical, intent(in)    :: p_top_in_bc
+         !! Add `p_top` to the Pass-1 surface BC (`.false.` ⇒ bit-identical).
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
 
       integer  :: i, j, k
@@ -1464,7 +1546,11 @@ contains
             end if
          end do
          eta = e_face(i, j, nz + 1)
-         pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+         if (p_top_in_bc) then
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
+         else
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+         end if
          do k = nz, 1, -1
             call boole_dpa_intz_layer(eos, rho0, rho_ref, &
                                       e_face(i, j, k + 1), h_layer(i, j, k), &

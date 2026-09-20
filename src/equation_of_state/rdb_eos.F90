@@ -755,13 +755,28 @@ contains
       !!
       !! **`p_top` reaches the EOS ARGUMENT only.**  `p_edge_out` stays an
       !! anomaly stack seeded at `p_edge_out(nz+1) = 0` exactly as before,
-      !! so the PGF top boundary condition is untouched.  Consequence,
-      !! stated plainly: under a SLOPING load the along-layer difference
+      !! so the PGF top boundary condition THIS kernel feeds (FV_WRIGHT's
+      !! `p_edge`) is untouched.  Consequence, stated plainly: under a
+      !! SLOPING load the along-layer difference
       !! `p_centre(i) − p_centre(i−1)` omits `Δp_top`.  That term is
       !! depth-uniform and is already carried by the barotropic
       !! `eta_forcing` seam as `−(1/ρ₀)∇p_surf`, so the momentum is not
-      !! missing it — adding it here as well would DOUBLE-COUNT.  What
-      !! moves in this kernel is the COMPRESSIBILITY: `rho_insitu` is
+      !! missing it.
+      !!
+      !! **Amended (P5.0).**  The original wording here said adding the
+      !! load to a PGF top BC "would DOUBLE-COUNT".  That is the
+      !! conservative statement, and it is stronger than the truth.  A
+      !! depth-uniform `p_top` in the top BC perturbs EVERY layer's `PFu`
+      !! by the SAME `−(1/ρ₀)∇p_top`, and the split solver replaces the
+      !! depth mean of the layer PGF with the barotropic solution
+      !! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`), so the uniform piece cancels
+      !! identically and the seam keeps sole ownership of the barotropic
+      !! response — the two are ORTHOGONAL, not additive.  That is what
+      !! `&ocean_pgf_nml p_top_in_bc` does for FV_MOM6 (theorem in
+      !! `compute_fv_mom6_impl`'s docstring).  It is NOT done here:
+      !! FV_WRIGHT's `p_edge` seed is a separate follow-up, and this
+      !! kernel's contract remains "EOS argument only".  What moves in
+      !! this kernel is the COMPRESSIBILITY: `rho_insitu` is
       !! evaluated at the pressure the water actually sits at, which is
       !! the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.
       !! Bit-identical when `p_top` is the zero array it ships as

@@ -827,6 +827,43 @@ module rdb_config
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM.  Mirrors
          !! MOM6 `Recon_Scheme`.  Only consulted when
          !! `reconstruct_for_pressure = .true.`.
+      logical :: p_top_in_bc = .false.
+         !! Add the top-of-column load `multilayer_state_t%p_top` (Pa) to
+         !! the FV_MOM6 pressure-stack surface boundary condition:
+         !! `pa(nz+1) = rho_ref*g*eta_geo + p_top`.  Default `.false.` =>
+         !! `pa(nz+1) = rho_ref*g*eta_geo`, bit-identical to every run
+         !! before this knob existed.
+         !!
+         !! WHY IT IS NOT A DOUBLE COUNT.  A depth-uniform `p_top`
+         !! perturbs EVERY layer's `PFu` by the same `-(1/rho_0)*grad
+         !! p_top` (the theorem in `compute_fv_mom6_impl`'s docstring).
+         !! The split solver subtracts the depth mean of the layer PGF
+         !! from the barotropic forcing and then folds the barotropic
+         !! solution back over the layers, so that uniform piece cancels
+         !! identically and the load's barotropic response is carried by
+         !! the `eta_forcing` seam alone — the two seams are orthogonal,
+         !! not additive.  On the UNSPLIT driver (`n_inner = 0`) there is
+         !! neither a depth-mean replacement nor a seam, so this term is
+         !! the load's ONLY path into the momentum: a correction, not a
+         !! duplicate.
+         !!
+         !! What it buys where the load is LARGE (an ice-shelf draft,
+         !! `5e6 Pa`): `pa` is built as an anomaly about `rho_ref*g*z`,
+         !! and with the load cancelled inside `pa(nz+1)` against
+         !! `rho_ref*g*eta_geo` the whole stack stays `O(1e4 Pa)` instead
+         !! of `O(5e6 Pa)`, which shrinks the `h_neglect` face-divisor
+         !! leak by the same factor.
+         !!
+         !! FV_MOM6 ONLY (both the PCM and the `reconstruct_for_pressure`
+         !! branch) — `validate_config` refuses it for any other `form`,
+         !! which carries no `pa` stack to inject into.  Orthogonal to
+         !! `&ocean_psurf_nml in_eos`: that knob puts the same `p_top`
+         !! into the EOS's IN-SITU pressure ARGUMENTS, this one into the
+         !! PGF's pressure BOUNDARY CONDITION.  Either, both or neither.
+         !! `p_top` itself is produced today only by the `&ocean_psurf_nml`
+         !! seam, so with `enable = .false.` it is the zero array and this
+         !! knob is inert — a warning says so rather than leaving it
+         !! silent.
    end type ocean_pgf_config_t
    type :: ocean_eos_config_t
       character(len=16) :: eos = "linear"
@@ -4350,6 +4387,39 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- Top-of-column load in the PGF surface boundary condition (P5.0) ----
+      ! `pa(nz+1) = rho_ref*g*eta_geo + ms%p_top`.  Only the FV_MOM6 family
+      ! builds a `pa` stack at all — `mont` hard-zeroes `M(nz)` and
+      ! `fv_lite`/`fv_wright` seed `p_edge(nz+1) = 0` — so there is
+      ! literally no boundary condition to inject anywhere else.  Refuse
+      ! rather than accept a knob that would silently do nothing on a form
+      ! the user believes is carrying an ice load.
+      if (cfg%ocean%pgf%p_top_in_bc) then
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
+            call logger%error("&ocean_pgf_nml p_top_in_bc=.true. requires "// &
+                              "form='fv_mom6' (got '"// &
+                              trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
+                              "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
+                              "boundary condition the load is injected into; mont "// &
+                              "hard-zeroes M(nz) and fv_lite/fv_wright seed "// &
+                              "p_edge(nz+1)=0.")
+            has_error = .true.
+         end if
+         ! Inert-configuration warning, not a refusal (the house rule, cf.
+         ! &ocean_psurf_nml in_eos and &ocean_tidal_mixing_nml e_uniform):
+         ! `ms%p_top` has exactly ONE producer today, the &ocean_psurf_nml
+         ! seam.  Without it `p_top` is the zero array it is allocated as,
+         ! so the knob is honestly inert — and it is ZERO, never stale: the
+         ! per-step inline refresh in `ocean_dyn_step_split` covers
+         ! `p_top_in_bc` exactly as it covers `in_eos`.
+         if (.not. cfg%ocean%psurf%enable) then
+            call logger%warning("&ocean_pgf_nml p_top_in_bc=.true. is INERT "// &
+                                "without &ocean_psurf_nml enable=.true.: the "// &
+                                "surface-pressure seam is the only producer of "// &
+                                "ms%p_top today, so p_top is the zero array and "// &
+                                "pa(nz+1) is unchanged.")
+         end if
+      end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its
       ! validated envelope is the coastal ZSTAR_FULL salt-leak foot-gun class.
@@ -7446,6 +7516,11 @@ contains
       pi => cfg%ocean%pgf%recon_scheme
       call g%add(nml_int("recon_scheme", pi, &
                          "In-layer reconstruction scheme: 1=PLM, 2=PPM", min=1, max=2))
+      pl => cfg%ocean%pgf%p_top_in_bc
+      call g%add(nml_logical("p_top_in_bc", pl, &
+                             "FV_MOM6: add the top-of-column load ms%p_top to "// &
+                             "the pressure-stack surface boundary condition "// &
+                             "pa(nz+1) = rho_ref*g*eta + p_top"))
       call schema%add_group(g)
    end subroutine register_ocean_pgf
 

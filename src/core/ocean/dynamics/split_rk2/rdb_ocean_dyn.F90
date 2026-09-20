@@ -2384,7 +2384,7 @@ contains
       integer :: it, stage
       integer :: i, j, nx_ptop, ny_ptop
          !! Loop indices + extents for the E3 `ms%p_top` refresh below.
-      logical :: tide_on, psurf_on, psurf_eos_on
+      logical :: tide_on, psurf_on, p_top_live
       real(wp) :: t_now
          !! Model time (s) for `ocean_ideal_age_young_val`; `t` fallback (PR-7).
       integer :: nan_i, nan_j, nan_k
@@ -2471,6 +2471,13 @@ contains
       ! per outer step, before the PGF of the step and held static across
       ! the stages.
       !
+      ! P5.0: the SAME refresh also covers `&ocean_pgf_nml p_top_in_bc`,
+      ! the second consumer of `ms%p_top` — it puts the load in the
+      ! FV_MOM6 pressure-stack surface BC (`pa(nz+1)`), independently of
+      ! whether it also reaches the EOS arguments.  The gate is the
+      ! DISJUNCTION so neither consumer can ever read a p_top that the
+      ! configure-time seed left behind while `sf%p_surf` moved on.
+      !
       ! Written INLINE as a `do concurrent` rather than as a call: a
       ! host-gated call handing a state array to an EXTERNAL subroutine
       ! makes nvfortran treat that array as escaping and pessimises EVERY
@@ -2479,11 +2486,11 @@ contains
       ! The copy spans the WHOLE array, ghosts included, so `p_top`
       ! inherits exactly the halo validity `p_surf` has and needs no
       ! exchange of its own.
-      psurf_eos_on = .false.
+      p_top_live = .false.
       if (psurf_on) then
-         if (psurf%in_eos) psurf_eos_on = .true.
+         if (psurf%in_eos .or. pgf%p_top_in_bc) p_top_live = .true.
       end if
-      if (psurf_eos_on) then
+      if (p_top_live) then
          nx_ptop = size(ms%p_top, 1)
          ny_ptop = size(ms%p_top, 2)
          do concurrent(j=1:ny_ptop, i=1:nx_ptop)

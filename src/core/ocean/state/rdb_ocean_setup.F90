@@ -2659,6 +2659,20 @@ contains
       ocean_state%pressure_force%reconstruct_for_pressure = &
          cfg%ocean%pgf%reconstruct_for_pressure
       ocean_state%pressure_force%recon_scheme = cfg%ocean%pgf%recon_scheme
+      ocean_state%pressure_force%p_top_in_bc = cfg%ocean%pgf%p_top_in_bc
+      ! The top-of-column load enters the `pa` stack's surface boundary
+      ! condition, which only the FV_MOM6 family builds.  Mirrors the
+      ! `validate_config` refusal so an in-memory namelist / API caller
+      ! that bypasses validation still fails loud instead of running a
+      ! silently inert knob.
+      if (cfg%ocean%pgf%p_top_in_bc .and. &
+          ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
+         call fail("configure_ocean_pgf: p_top_in_bc=.true. requires "// &
+                   "form='fv_mom6'. Other PGF variants build no pa(nz+1) "// &
+                   "pressure-stack boundary condition for the load to enter.", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
       ! In-layer T/S reconstruction wires into the FV_MOM6 layer-integrated
       ! form only (it carries e_face / pa / intz_dpa).  Fail loud if the
       ! knob is on with any other PGF form.
