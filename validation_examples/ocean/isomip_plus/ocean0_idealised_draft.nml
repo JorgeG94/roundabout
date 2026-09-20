@@ -1,0 +1,278 @@
+! ISOMIP+ Ocean0 with an IDEALISED (analytic) ice draft — the variant
+! that RUNS TODAY with no external data.
+!
+! Asay-Davis, Cornford, Durand, Galton-Fenzi, Gladstone, Gudmundsson,
+! Hattermann, Holland, Holland, Holland, Martin, Mathiot, Pattyn and
+! Seroussi (2016), "Experimental design for three interrelated marine ice
+! sheet and ocean model intercomparison projects", Geosci. Model Dev. 9,
+! 2471-2497, doi:10.5194/gmd-9-2471-2016.  Ocean0: WARM initial
+! condition, WARM far-field restoring, static topography (their Table 2 +
+! Sect. 3.2.1).
+!
+! WHAT IS IDEALISED, AND WHY THIS FILE EXISTS.  The protocol's ice draft
+! is NOT analytic — Sect. 3.1.1 says so outright ("Because the ice-draft
+! topography is derived from ice-sheet model results, it cannot be
+! described by an analytic function") and ships it as BISICLES NetCDF
+! (Cornford and Asay-Davis 2016).  `ocean0.nml` reads that file.  THIS
+! file replaces it with a linear-in-x draft anchored on the two numbers
+! the paper does print, so the configuration can be exercised end to end
+! with nothing to download:
+!
+!   * the steady-state GROUNDING LINE crosses the centreline of the
+!     trough at x = 450 +/- 10 km (their Sect. 2.1);
+!   * the CALVING FRONT is at x_calve = 640 km, where ice thinner than
+!     H_calve = 100 m -- "equivalent to an ice draft above ~ -90 m"
+!     (Sect. 3.1.2) -- has been removed.
+!
+! Fitting a straight line through (450 km, 600 m) and (640 km, 90 m)
+! gives d(draft)/dx = -2.6842e-3, and anchoring it at x0 = -10 km of
+! MODEL x (i.e. 310 km of paper x, outside the domain) puts 975.79 m
+! there.  West of the grounding line the formula is deeper than the bed,
+! so those columns ground through the ordinary `h_min_cavity` path and
+! become land -- which is what "grounded ice sheet" means here.  Measured
+! at configure: the trough-centre grounding line lands at x = 449 km, the
+! draft at the calving front is exactly 90.0 m, and 3778 of 9600 interior
+! columns (39.4 %) ground.
+!
+! EVERYTHING ELSE follows the protocol.  See ../isomip_plus/README.md for
+! the full parameter-by-parameter mapping, including the rows this build
+! cannot honour (no-slip walls, real freshwater mass flux, under-ice u*
+! in the boundary-layer scheme).
+!
+! t_end below is the PROTOCOL duration (Sect. 3.2.1: quasi-equilibrium
+! plus 6 months, expected 1-2 years).  For a smoke test, override it:
+!     ./build/rdb <this file>            # the real thing
+!   with `&time_nml t_end = 86400.0 /` appended, one simulated day.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   ! 480 km x 80 km at the COM resolution (Table 3 Lx/Ly, Table 4 dx=dy).
+   nx     = 240
+   ny     = 40
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 31536000.0   ! 1 year (Sect. 3.2.1: 1-2 yr to quasi-equilibrium)
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   ! f-plane at 75 S (Sect. 3.1.1): f = -2*Omega*sin(75 deg).
+   coriolis_f    = -1.409e-4
+   wind_stress_x = 0.0         ! "There is no forcing at the surface of the
+   wind_stress_y = 0.0         !  open ocean" (Sect. 3.1.3)
+/
+
+&nonhydrostatic_nml
+   nz_layers = 36              ! Sect. 3.1.5: "all models should have 36
+                               ! vertical layers", distribution at the
+                               ! modeller's discretion
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"       ! terrain-following: follows both the bed and
+                               ! the ice base, so no layer can vanish
+/
+
+&ocean_topo_nml
+   topo_config    = "isomip_plus"   ! Eqs. (1)-(4) + Table 1
+   max_depth      = 720.0           ! = -z_b,deep, the Eq. (1) deep clip
+   x_origin       = 320000.0        ! Table 3 x0: the ocean box starts at
+                                    ! x = 320 km on the MISMIP+ axis
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "linear"     ! the idealised stand-in; ocean0.nml reads the file
+   draft_depth  = 975.79       ! draft AT draft_x0
+   draft_slope  = -2.6842e-3   ! (90 - 600)/(640 - 450) km, shallowing seaward
+   draft_x0     = -10000.0     ! anchor OUTSIDE the domain so the ghosts are iced
+   draft_x1     = 320000.0     ! x_calve = 640 km in model x; open ocean beyond
+   h_min_cavity = 20.0         ! minimum ocean column (Sect. 3.1.5 leaves the
+                               ! value to the modeller; this is the
+                               ! "mark it land" branch they offer)
+/
+
+&ocean_cavity_melt_nml
+   enable          = .true.
+   exchange_law    = "const_gamma"   ! Sect. 3.1.8: three-equation, constant
+                                     ! Gamma_T/Gamma_S
+   gamma_t         = 2.2e-2          ! Sect. 3.2.1 starting guess
+                                     ! (St = sqrt(C_D)*Gamma_T = 1.1e-3)
+   gamma_s         = -1.0            ! < 0 => derived as Gamma_T/35 (Table 4)
+   cdrag_top       = 2.5e-3          ! Table 4 C_D,top; must match &ocean_tdrag_nml cd
+   u_tide          = 1.0e-2          ! Table 4 u_tidal (melt u* only, never the drag)
+   ice_conduction  = "insulating"    ! Table 4 kappa_i = 0
+   s_ice           = 0.0             ! Table 4 / Sect. 3.1.8
+   far_field_depth = 10.0            ! METRES below the ice base; the protocol
+                                     ! leaves the method to the modeller
+                                     ! (Sect. 3.1.8) and asks it be documented
+/
+
+&ocean_tdrag_nml
+   enable = .true.
+   form   = "quadratic"
+   cd     = 2.5e-3             ! Table 4 C_D,top
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 2.5e-3               ! Table 4 C_D,bot
+/
+
+&ocean_forcing_nml
+   enable_components = .true.  ! required by the melt path (it owns two
+                               ! surface-flux components)
+/
+
+&ocean_pgf_nml
+   form        = "fv_mom6"     ! the only form with an injectable top BC
+   p_top_in_bc = .true.        ! REQUIRED for a varying draft
+   maxvel      = 5.0
+/
+
+&ocean_eos_nml
+   eos          = "linear"     ! Sect. 3.1.7 / Eq. (23)
+   tfreeze_set  = "isomip"     ! Table 4 lambda1/2/3, used by Eq. (25)
+/
+
+&ocean_ic_nml
+   ! Roundabout's alpha_T/beta_S are DIMENSIONAL (kg/m3 per unit) whereas
+   ! the protocol's alpha_lin/beta_lin are FRACTIONAL (they multiply
+   ! rho_ref inside the bracket of Eq. 23).  Feeding the fractional
+   ! numbers straight in under-states the density response ~1000x and
+   ! looks like a plausible weak run.
+   alpha_T = 3.8356948e-2      ! rho_ref * 3.733e-5 /degC   (Table 4)
+   beta_S  = 8.0587609e-1      ! rho_ref * 7.843e-4 /PSU    (Table 4)
+   T_ref   = -1.0              ! Table 4 T_ref
+   S_ref   = 34.2              ! Table 4 S_ref
+   rho_0   = 1027.51           ! Table 4 rho_ref
+/
+
+&ocean_zinit_nml
+   ! WARM initial condition, Eqs. (21)-(22) + Table 6, written in the
+   ! z-positive-UP convention.  NOTE the printed Eq. (22) has a typo
+   ! (`S0 + (S_bot - T0)*z/z_b,deep`); it must be `(S_bot - S0)`.
+   !   T: -1.9 degC at z = 0  ->  +1.0 degC at z = -720 m
+   !      dT/dz = -(1.0 - (-1.9))/720 = -4.0277778e-3  (WARM is thermally
+   !      UNSTABLE -- CDW at depth -- stabilised by the salinity gradient)
+   !   S: 33.8 PSU at z = 0   ->  34.7 PSU at z = -720 m
+   !      dS/dz = -(34.7 - 33.8)/720 = -1.25e-3
+   enable    = .true.
+   source    = "linear"        ! analytic T(z)/S(z) at the TRUE geopotential
+                               ! depth (column top at z = -z_draft), so the
+                               ! isopycnals are flat in z under a tilted lid
+   lin_t_ref = -1.9
+   lin_dt_dz = -4.0277778e-3
+   lin_s_ref = 33.8
+   lin_ds_dz = -1.25e-3
+/
+
+&tracer_nml
+   ! Overwritten everywhere by the zinit overlay; kept consistent so a
+   ! reader is not misled about what is seeded.
+   initial_temperature = -0.45
+   initial_salinity    = 34.25
+/
+
+&ocean_bc_nml
+   ! "the only forcing is via 3-D restoring within 10 km of the northern
+   !  boundary" (Sect. 3.1.3).  The paper's +x is north; in model terms
+   !  that is the EAST edge.  OBC_SPONGE leaves the edge itself a WALL
+   !  (it is not a tracer-open type) and adds the interior relaxation
+   !  band -- which is exactly the protocol's "northern wall adjacent to
+   !  the restoring region" (Sect. 3.1.4).
+   west  = "wall"
+   east  = "sponge"
+   south = "wall"
+   north = "wall"
+   sponge_width    = 5           ! (x_r1 - x_r0)/dx = 10 km / 2 km, Table 3
+   sponge_strength = 1.1574074e-4  ! gamma0 = 10 day^-1 = 10/86400 s^-1
+/
+
+&ocean_sponge_nml
+   ! Ocean0 restores to the WARM profile it was initialised with, so
+   ! target_source="ic" would give the same answer here -- linear_z is
+   ! used anyway so Ocean0/1/2 differ by their profile numbers ALONE and
+   ! nothing else in the file has to change.
+   enable        = .true.
+   damp_source   = "band"
+   ramp          = "linear"      ! Eq. (20): gamma rises linearly from 0 at
+                                 ! x_r0 = 790 km to gamma0 at x_r1 = 800 km
+   target_source = "linear_z"
+   relax_uv      = .false.       ! Eqs. (18)-(19) restore T and S only
+   relax_tracers = .true.
+   lin_t_ref     = -1.9          ! WARM restoring (Table 6), as above
+   lin_dt_dz     = -4.0277778e-3
+   lin_s_ref     = 33.8
+   lin_ds_dz     = -1.25e-3
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h = 6.0                  ! Table 4 nu_H (harmonic, constant)
+   nu_4 = 0.0
+/
+
+&ocean_hdiff_nml
+   kappa_h = 1.0               ! Table 4 kappa_H (harmonic, constant)
+/
+
+&ocean_vmix_nml
+   ! Sect. 3.1.6 asks for CONSTANT vertical viscosity/diffusivity.  PP81
+   ! with nu0 = 0 degenerates to exactly that: kv == pp81_nu_bg and
+   ! kt == ks == pp81_kappa_bg at every interface, with no Richardson
+   ! dependence left.  KPP is off for the same reason -- the protocol
+   ! prescribes harmonic diffusion with fixed coefficients, and a
+   ! boundary-layer scheme would be a different experiment.
+   use_closure   = .true.
+   use_kpp       = .false.
+   pp81_nu0      = 0.0
+   pp81_nu_bg    = 1.0e-3      ! Table 4 nu_stab
+   pp81_kappa_bg = 5.0e-5      ! Table 4 kappa_stab
+/
+
+&ocean_conv_nml
+   ! Table 4 nu_unstab = kappa_unstab = 0.1 m2/s, applied "when the local
+   ! stratification is unstable" (Sect. 3.1.6).
+   enable       = .true.
+   kd_conv      = 0.1
+   prandtl_conv = 1.0          ! Kv_conv = Kd_conv
+   n2_thresh    = 0.0          ! trigger on N^2 < 0
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.
+   ! split_scheme left at the default pred_corr (the protocol says nothing
+   ! about the outer time split).
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "isomip_ocean0_idealised"
+   dt_out   = 2592000.0        ! monthly
+/
+
+&output_nml
+   output_dir     = "./out_isomip_ocean0_idealised"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/
