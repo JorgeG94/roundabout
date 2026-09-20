@@ -94,6 +94,7 @@ module rdb_ocean_data_input
    public :: ocean_data_input_update_3d
    public :: ocean_data_input_fill_static_host
    public :: ocean_data_input_fill_static_host_3d
+   public :: ocean_data_input_load_static_2d
    public :: ocean_data_input_update_all
 
    public :: data_input_locate
@@ -1168,6 +1169,71 @@ contains
          end do
       end do
    end subroutine ocean_data_input_fill_static_host
+
+   subroutine ocean_data_input_load_static_2d(file, var, grid, n1, n2, dest_i0, dest_j0, &
+                                              dest, ierr)
+      !! One-shot STATIC 2-D read: register, fill, close.  The setup-time
+      !! convenience wrapper over `register_2d(time_mode="static")` +
+      !! `fill_static_host` for a field that is read ONCE and never
+      !! updated — a prescribed, time-constant geometry rather than a
+      !! forcing.  `&ocean_cavity_dyn_nml draft_config="file"` is the
+      !! first consumer.
+      !!
+      !! The reader is LOCAL and destroyed on the way out: nothing is left
+      !! on `ocean_state_t%data_input`, which exists for the per-step
+      !! forcing tags and whose registry would otherwise be permanently
+      !! one slot smaller for a field never read again.  It also keeps the
+      !! static geometry out of `enter_data` — the destination array is
+      !! the state's own, and IT is what gets mapped.
+      !!
+      !! FILE CONTRACT (inherited from `register_common`, not weakened
+      !! here): `var` must be rank 3 in FORTRAN storage order `(x, y, t)`
+      !! — i.e. `(nTime, ny, nx)` as a C/Python writer or `ncdump` spells
+      !! it — with a time COORDINATE VARIABLE, and its horizontal extents
+      !! must cover this rank's slab.  Record 1 is read.  There is NO
+      !! horizontal interpolation: the file must already be on the model
+      !! grid, exactly as `bathymetry_file` and `&ocean_zinit_nml file`
+      !! require.
+      !!
+      !! HOST-ONLY: runs at setup, before `dest` is device-mapped.
+      character(len=*), intent(in) :: file, var
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: n1, n2
+         !! Shape of `dest` — the FULL ghosted `(nx_total, ny_total)`.
+      integer, intent(in) :: dest_i0, dest_j0
+         !! Destination index of the first PHYSICAL cell (`nghost + 1`).
+      real(wp), intent(inout) :: dest(n1, n2)
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a registry / file / dimension failure when
+         !! present; absent behaves as the rest of the reader
+         !! (`error stop`).
+
+      type(ocean_data_input_t) :: reader
+      integer :: id, local_ierr
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+
+      call reader%init()
+      if (present(ierr)) then
+         call ocean_data_input_register_2d(reader, file, var, grid, &
+                                           dest_n1=n1, dest_n2=n2, &
+                                           dest_i0=dest_i0, dest_j0=dest_j0, &
+                                           id=id, time_mode="static", ierr=local_ierr)
+         if (local_ierr /= OCEAN_STATUS_OK) then
+            call reader%destroy()
+            ierr = local_ierr
+            return
+         end if
+      else
+         call ocean_data_input_register_2d(reader, file, var, grid, &
+                                           dest_n1=n1, dest_n2=n2, &
+                                           dest_i0=dest_i0, dest_j0=dest_j0, &
+                                           id=id, time_mode="static")
+      end if
+
+      call ocean_data_input_fill_static_host(reader, id, n1, n2, dest)
+      call reader%destroy()
+   end subroutine ocean_data_input_load_static_2d
 
    subroutine ocean_data_input_fill_static_host_3d(this, id, n1, n2, n3, dest)
       !! 3-D twin of `fill_static_host`.

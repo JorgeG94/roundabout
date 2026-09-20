@@ -1846,7 +1846,7 @@ class OceanCavityDyn(Group):
 
     draft_config = Enum(
         'draft_config',
-        doc="Analytic draft shape ('file' is deferred: the static-2-D reader lands in a later slice)",
+        doc="Draft source: analytic shape, or 'file' (static 2-D NetCDF on the model grid, single rank)",
         units='',
         required=False,
         default='none',
@@ -1908,6 +1908,33 @@ class OceanCavityDyn(Group):
         units='m',
         required=False,
         default=1e+30,
+    )
+
+    draft_file = Str(
+        'draft_file',
+        doc="draft_config='file': NetCDF path (variable must be (x,y,t) Fortran order, on the model grid; record 1 read)",
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    draft_var = Str(
+        'draft_var',
+        doc="draft_config='file': 2-D variable name (ISOMIP+ ships 'iceDraft')",
+        units='',
+        required=False,
+        default='iceDraft',
+        max_len=64,
+    )
+
+    draft_sign = Enum(
+        'draft_sign',
+        doc="draft_config='file': sign convention of the file values (ISOMIP+ iceDraft is an ELEVATION)",
+        units='',
+        required=False,
+        default='depth',
+        allowed=('depth', 'positive_down', 'elevation', 'positive_up'),
     )
 
     h_min_cavity = Real(
@@ -6089,4 +6116,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 663
+N_KNOBS = 666
