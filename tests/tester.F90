@@ -162,6 +162,7 @@ program rdb_tests
    use test_ocean_restart, only: ocean_restart_collect => collect_ocean_restart_tests
 #endif
    use test_ocean_bottom_drag, only: ocean_bottom_drag_collect => collect_ocean_bottom_drag_tests
+   use test_ocean_top_drag, only: ocean_top_drag_collect => collect_ocean_top_drag_tests
    use test_ocean_cfl_trunc, only: ocean_cfl_trunc_collect => collect_ocean_cfl_trunc_tests
    use test_ocean_periodic, only: ocean_periodic_collect => collect_ocean_periodic_tests
    use test_ocean_fold, only: ocean_fold_collect => collect_ocean_fold_tests
@@ -312,6 +313,7 @@ program rdb_tests
                 new_testsuite("ocean_restart", ocean_restart_collect), &
 #endif
                 new_testsuite("ocean_bottom_drag", ocean_bottom_drag_collect), &
+                new_testsuite("ocean_top_drag", ocean_top_drag_collect), &
                 new_testsuite("ocean_cfl_trunc", ocean_cfl_trunc_collect), &
                 new_testsuite("ocean_periodic", ocean_periodic_collect), &
                 new_testsuite("ocean_fold", ocean_fold_collect), &

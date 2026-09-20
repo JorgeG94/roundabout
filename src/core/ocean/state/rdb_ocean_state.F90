@@ -37,6 +37,7 @@ module rdb_ocean_state
    use rdb_ocean_meke, only: ocean_meke_t
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
+   use rdb_ocean_top_drag, only: ocean_top_drag_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t
@@ -187,6 +188,10 @@ module rdb_ocean_state
       type(ocean_bottom_drag_t) :: bdrag
          !! Bottom-drag kernel (linear Rayleigh or quadratic log-layer).
          !! Acts on the k=1 layer only.
+      type(ocean_top_drag_t) :: tdrag
+         !! Ice-shelf TOP-drag kernel (`&ocean_tdrag_nml`, default off).
+         !! The mirror of `bdrag` at `k = nz`, masked by ice cover on
+         !! faces.  Off ⇒ placeholder arrays, no kernel.
       type(ocean_surface_stress_t) :: surface_stress
          !! Surface wind-stress kernel.  Acts on the k=nz layer only.
       type(ocean_cavity_flux_t) :: cavity_flux
@@ -367,6 +372,7 @@ contains
          call this%pressure_force%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%hvisc%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%bdrag%init(grid, nz_ml=this%multilayer%nz_ml)
+         call this%tdrag%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_stress%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_flux%init(grid)
          call this%cavity_flux%init(grid)
@@ -379,6 +385,7 @@ contains
          call this%pressure_force%init(grid)
          call this%hvisc%init(grid)
          call this%bdrag%init(grid)
+         call this%tdrag%init(grid)
          call this%surface_stress%init(grid)
          call this%surface_flux%init(grid)
          call this%cavity_flux%init(grid)
@@ -499,6 +506,9 @@ contains
       ! Ice-shelf basal melt: the melt slot's own gate, latched here for
       ! the same reason (its `init` sizes eleven 2-D arrays off it).
       this%cavity_flux%enable = cfg%ocean%cavity_melt%enable
+      ! Ice-shelf top drag: same gate discipline — its `init` sizes the
+      ! two face scratch buffers and five 2-D fields off `enable`.
+      this%tdrag%enable = cfg%ocean%tdrag%enable
       this%epbl%enable = cfg%ocean%epbl%enable
       this%kshear%enable = cfg%ocean%kshear%enable
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
@@ -684,6 +694,7 @@ contains
                + this%lateral_mix%bytes() &
                + this%hvisc%bytes() &
                + this%bdrag%bytes() &
+               + this%tdrag%bytes() &
                + this%surface_stress%bytes() &
                + this%surface_flux%bytes() &
                + this%cavity_flux%bytes() &
@@ -752,6 +763,7 @@ contains
       call profiler_stop("ed_hvisc")
       call profiler_start("ed_bdrag", nvtx_only=.true.)
       call state%bdrag%enter_data()
+      call state%tdrag%enter_data()
       call profiler_stop("ed_bdrag")
       call profiler_start("ed_surface_stress", nvtx_only=.true.)
       call state%surface_stress%enter_data()
@@ -924,6 +936,7 @@ contains
       call state%surface_stress%exit_data()
       call profiler_stop("xd_surface_stress")
       call profiler_start("xd_bdrag", nvtx_only=.true.)
+      call state%tdrag%exit_data()
       call state%bdrag%exit_data()
       call profiler_stop("xd_bdrag")
       call profiler_start("xd_hvisc", nvtx_only=.true.)
@@ -984,6 +997,7 @@ contains
       call this%vmix_tidal%destroy()
       call this%hvisc%destroy()
       call this%bdrag%destroy()
+      call this%tdrag%destroy()
       call this%cavity_flux%destroy()
       call this%surface_flux%destroy()
       call this%surface_stress%destroy()

@@ -15,6 +15,7 @@ module rdb_barotropic_coupling
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, OPGF_VARIANT_FV_MOM6
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
+   use rdb_ocean_top_drag, only: ocean_top_drag_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_boundary_types, only: OBC_PERIODIC
    implicit none
@@ -23,6 +24,7 @@ module rdb_barotropic_coupling
    public :: derive_bt_from_layers
    public :: compute_h_face_upstream
    public :: sum_slow_tendencies_into_F_slow
+   public :: add_top_drag_into_F_slow
    public :: subtract_fast_cor_ref
    public :: set_cor_ref_velocity
    public :: face_depth_mean_u
@@ -312,6 +314,58 @@ contains
                                      ss%dv_stress%data(i, j, k)
       end do
    end subroutine sum_slow_tendencies_into_F_slow
+
+   pure subroutine add_top_drag_into_F_slow(bt_work, td, ms)
+      !! Add the ice-shelf top-drag tendency into the already-summed
+      !! slow forcing.  Separate from `sum_slow_tendencies_into_F_slow`
+      !! (rather than a sixth term in it) for one reason: the top-drag
+      !! slot is OPTIONAL all the way down the driver chain, and the sum
+      !! above must stay a single unconditional kernel with no `present`
+      !! branch inside its `do concurrent`.
+      !!
+      !! **Why it has to be here at all.**  `F_slow` is depth-meaned into
+      !! `F_bt`, the barotropic substep integrates `F_bt`, and
+      !! `apply_bt_correction` subtracts `dt*F_bt` back out of the layer
+      !! update.  A layer tendency that is applied to the layers but NOT
+      !! in `F_slow` is therefore (a) invisible to the fast mode — a
+      !! barotropic cavity flow would feel no top friction at all inside
+      !! the substep loop — and (b) not subtracted by the correction, so
+      !! its damping re-enters the barotropic state one stage late as an
+      !! uncorrected residue.  Bottom drag is in the sum for exactly this
+      !! reason; the side-wall (channel) drag is NOT, and is the standing
+      !! counter-example of the bug this avoids.
+      !!
+      !! The buffer is added whether or not the explicit apply runs: when
+      !! the drag is folded into the vdiff `k = nz` diagonal the layers
+      !! get it implicitly AFTER the barotropic correction, while the fast
+      !! mode still needs the explicit estimate — the same split the
+      !! bottom drag's `implicit_drag` path already takes.
+      !!
+      !! No-op (and no kernel launch) when the slot is disabled: its
+      !! buffers are `(1,1,1)` placeholders then.
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      type(ocean_top_drag_t), intent(in) :: td
+      type(multilayer_state_t), intent(in) :: ms
+
+      integer :: i, j, k, nu, nv, nx, ny, nz
+
+      if (.not. td%enable) return
+
+      nu = size(bt_work%F_slow_u, 1)
+      nv = size(bt_work%F_slow_v, 2)
+      nx = size(bt_work%F_slow_v, 1)
+      ny = size(bt_work%F_slow_u, 2)
+      nz = ms%nz_ml
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nu)
+         bt_work%F_slow_u(i, j, k) = bt_work%F_slow_u(i, j, k) + &
+                                     td%du_drag%data(i, j, k)
+      end do
+      do concurrent(k=1:nz, j=1:nv, i=1:nx)
+         bt_work%F_slow_v(i, j, k) = bt_work%F_slow_v(i, j, k) + &
+                                     td%dv_drag%data(i, j, k)
+      end do
+   end subroutine add_top_drag_into_F_slow
 
    pure subroutine subtract_fast_cor_ref(grid, metrics, bt_work, f_corner, &
                                          bc_w, bc_e, bc_s, bc_n, &

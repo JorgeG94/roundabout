@@ -3924,6 +3924,87 @@ class OceanBdrag(Group):
     )
 
 
+class OceanTdrag(Group):
+    """`&ocean_tdrag_nml` -- Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."""
+
+    _nml_name = 'ocean_tdrag'
+
+    enable = Bool(
+        'enable',
+        doc='Enable the ice-shelf top drag (requires &ocean_cavity_dyn_nml enable)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    form = Enum(
+        'form',
+        doc='Top-drag variant',
+        units='',
+        required=False,
+        default='quadratic',
+        allowed=('quadratic', 'linear'),
+    )
+
+    cd = Real(
+        'cd',
+        doc='Quadratic top-drag coefficient (0 disables); must equal &ocean_cavity_melt_nml cdrag_top when melt is on',
+        units='',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    r = Real(
+        'r',
+        doc='Linear Rayleigh top-drag coefficient (0 disables)',
+        units='1/s',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    htbl = Real(
+        'htbl',
+        doc='Top-boundary-layer thickness for distributed drag (0 = layer-nz only)',
+        units='m',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    bg_vel = Real(
+        'bg_vel',
+        doc='Background velocity floor in the quadratic top-drag speed',
+        units='m/s',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    tbl_thick_min = Real(
+        'tbl_thick_min',
+        doc='Minimum effective TBL thickness (0 = fall back to h_min)',
+        units='m',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    implicit = Bool(
+        'implicit',
+        doc='Backward-Euler top drag inside the drag kernel (stable for thin top layers)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+
 class OceanHdiff(Group):
     """`&ocean_hdiff_nml` -- Along-coordinate (not neutral) constant-coefficient tracer diffusion."""
 
@@ -5893,6 +5974,7 @@ GENERATED_GROUPS = {
     'ocean_pgf': OceanPgf,
     'ocean_eos': OceanEos,
     'ocean_bdrag': OceanBdrag,
+    'ocean_tdrag': OceanTdrag,
     'ocean_hdiff': OceanHdiff,
     'ocean_hvisc': OceanHvisc,
     'ocean_vmix': OceanVmix,
@@ -5908,5 +5990,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 59
-N_KNOBS = 646
+N_GROUPS = 60
+N_KNOBS = 651

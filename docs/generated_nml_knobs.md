@@ -751,6 +751,21 @@ Bottom-drag selector + coefficients.
 | `cdrag_side` | `0.0000000000E+00` |  | Side-wall drag coefficient (0 disables channel drag) |
 | `implicit` | `.false.` |  | Backward-Euler implicit drag (stable for thin bottom layers) |
 
+### &ocean_tdrag_nml
+
+Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Enable the ice-shelf top drag (requires &ocean_cavity_dyn_nml enable) |
+| `form` | `"quadratic"` |  | Top-drag variant |
+| `cd` | `0.0000000000E+00` |  | Quadratic top-drag coefficient (0 disables); must equal &ocean_cavity_melt_nml cdrag_top when melt is on |
+| `r` | `0.0000000000E+00` | 1/s | Linear Rayleigh top-drag coefficient (0 disables) |
+| `htbl` | `0.0000000000E+00` | m | Top-boundary-layer thickness for distributed drag (0 = layer-nz only) |
+| `bg_vel` | `0.0000000000E+00` | m/s | Background velocity floor in the quadratic top-drag speed |
+| `tbl_thick_min` | `0.0000000000E+00` | m | Minimum effective TBL thickness (0 = fall back to h_min) |
+| `implicit` | `.false.` |  | Backward-Euler top drag inside the drag kernel (stable for thin top layers) |
+
 ### &ocean_hdiff_nml
 
 Along-coordinate (not neutral) constant-coefficient tracer diffusion.

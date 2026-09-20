@@ -46,6 +46,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_kappa_shear.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_tidal_mixing.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_bottom_drag.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_top_drag.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_stress.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_flux.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_geothermal.F90

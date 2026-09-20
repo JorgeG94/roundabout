@@ -190,6 +190,31 @@ bit-identical.  Deferred: biharmonic `Au`, EBT/SQG vertical structure.
 | HBBL-distributed | `hbbl` | spreads stress over bottom `hbbl` m |
 | Implicit-fold (backward-Euler vdiff bed diagonal) | `&ocean_vdiff_nml implicit_drag` | folds bottom drag into the vdiff bed (`k=1`) diagonal as a stress bottom-BC instead of the explicit pre-solve add; thin-layer (z*/ZSTAR_FULL pinch-out) CFL-stable. Mutually exclusive with `&ocean_bdrag_nml implicit` (split-apply) and HBBL (`hbbl>0`), fail-loud at configure. Test: `test_ocean_vdiff_implicit_stress_drag` |
 
+## Ice-shelf top drag (`&ocean_tdrag_nml`; ocean only, default off)
+
+Kernel + slot: `src/parameterizations/vertical/rdb_ocean_top_drag.F90`
+(`ocean_top_drag_t`), computed and applied beside the bottom drag in
+`run_stage` / `run_stage_split` and added into the barotropic slow forcing by
+`add_top_drag_into_F_slow`.  The mirror of the bottom drag about the middle of
+the column: the sink lives at `k = nz`, masked by ice cover on FACES.  Requires
+`&ocean_cavity_dyn_nml enable` (fail-loud) — without a draft every face mask is
+zero.  Default off ⇒ bit-identical.
+
+**The face cover rule is OR:** `cover_u(i,j) = max(cover_frac(i−1,j),
+cover_frac(i,j))`, so the CALVING-FRONT face feels the drag.  AND would leave a
+free-slip band exactly where the cavity outflow leaves.  **One `C_d`:** with
+`&ocean_cavity_melt_nml` on, the melt `u*` takes its coefficient from
+`&ocean_tdrag_nml cd` and a disagreeing `cdrag_top` is refused at configure —
+MOM6 carries two independent coefficients, this model deliberately does not.
+
+| Form | ocean | Notes |
+|---|---|---|
+| Quadratic log-layer (Cd) | `default` when enabled | ISOMIP+ `C_d = 2.5e-3` (Asay-Davis et al. 2016, Table 4, which prescribes the same quadratic law top and bottom); `du/dt = −C_d·\|U\|·u/h_nz`.  Test: `test_ocean_top_drag` |
+| Linear (Rayleigh) | `form="linear"` | rate `r` (1/s); the form with a closed-form spin-down.  Test: `test_ocean_top_drag` |
+| HTBL-distributed | `htbl` | spreads the stress over the top `htbl` m — the `hbbl` mode reflected; keeps the explicit rate finite where sigma thins the top layer near a grounding line (Killworth & Edwards 1999).  Distributed linear rate `r·htbl/h_nz` asserted in closed form |
+| Implicit (backward-Euler in the drag kernel) | `implicit` | tendency formed as `−λ·u/(1 + dt·λ)` so the ordinary apply gives `u/(1 + dt·λ)`; unconditionally stable for any top-layer thickness.  Test asserts it stays monotone and same-signed at `dt·λ = 2.5`, where the explicit form amplifies and flips sign |
+| Top-drag stress magnitude | (always, when enabled) | `stress_top(nx,ny)` = cell-centred `\|τ_top\|` (N/m²), device-resident.  WRITTEN here, read by nothing yet — KPP/EPBL still take `u_*` from `stress_mag`; blending `ustar_shelf` in is a separate PR |
+
 ## Porous barriers (subgrid topography; ocean only)
 
 Represent a subgrid sill/strait by reducing the **open** fraction of a C-grid
@@ -618,8 +643,10 @@ tfreeze_set="isomip"` and `&ocean_forcing_nml enable_components`; every one of
 those is a fail-loud configure requirement. Default off ⇒ bit-identical.
 
 **v1 is VIRTUAL SALT, thermodynamics only.** The meltwater carries no mass, so
-it adds no volume and no direct buoyancy (Phase 3); there is no top drag and
-KPP/EPBL do not see `ustar_shelf` (Phase 4); and there is no per-cell cover
+it adds no volume and no direct buoyancy (Phase 3); the ice-base MOMENTUM
+sink is now a separate opt-in (`&ocean_tdrag_nml`, above — off by default, and
+sharing this group's `C_d` when on) and KPP/EPBL still do not see
+`ustar_shelf`; and there is no per-cell cover
 mask on the atmospheric forcing yet, so cavity melt is REFUSED together with
 wind stress, surface restoring, shortwave penetration and the uniform
 `&ocean_thermo_nml q_heat/q_salt` — nothing runs half-wired.
