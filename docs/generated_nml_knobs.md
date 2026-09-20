@@ -896,6 +896,7 @@ Basin geometry + surface forcing + Coriolis tilt.
 | `taux_magnitude` | `0.1000000000E+00` | Pa | Peak zonal wind stress for wind_config=2gyre/neverworld2 |
 | `coriolis_beta` | `0.0000000000E+00` | 1/(s m) | Meridional gradient of f (0 = f-plane) |
 | `coriolis_y_ref` | `0.0000000000E+00` | m | Reference y where f = coriolis_f under beta-plane |
+| `x_origin` | `0.0000000000E+00` | m | Absolute x of the domain west edge, for topo_config='isomip_plus' (ISOMIP+ ocean box starts at the MISMIP+ x = 320 km) |
 
 ### &ocean_ic_nml
 

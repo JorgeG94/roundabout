@@ -4653,7 +4653,7 @@ class OceanTopo(Group):
         units='',
         required=False,
         default='flat',
-        allowed=('flat', 'spoon', 'seamount', 'neverworld2', 'island', 'double_drake', 'file'),
+        allowed=('flat', 'spoon', 'seamount', 'neverworld2', 'island', 'double_drake', 'isomip_plus', 'file'),
     )
 
     max_depth = Real(
@@ -4738,6 +4738,14 @@ class OceanTopo(Group):
     coriolis_y_ref = Real(
         'coriolis_y_ref',
         doc='Reference y where f = coriolis_f under beta-plane',
+        units='m',
+        required=False,
+        default=0.0,
+    )
+
+    x_origin = Real(
+        'x_origin',
+        doc="Absolute x of the domain west edge, for topo_config='isomip_plus' (ISOMIP+ ocean box starts at the MISMIP+ x = 320 km)",
         units='m',
         required=False,
         default=0.0,
@@ -6016,4 +6024,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 657
+N_KNOBS = 658

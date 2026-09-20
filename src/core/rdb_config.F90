@@ -2296,6 +2296,16 @@ module rdb_config
       real(wp) :: coriolis_y_ref = 0.0_wp
          !! Reference y-coordinate (m) at which f = coriolis_f under
          !! the beta-plane: f(y) = coriolis_f + beta*(y - y_ref).
+      real(wp) :: x_origin = 0.0_wp
+         !! Absolute x-coordinate (m) of the domain's WEST edge, for the
+         !! formula bathymetries whose published formula is written in an
+         !! absolute coordinate frame rather than a domain-relative one.
+         !! Read ONLY by `topo_config="isomip_plus"`, whose bedrock
+         !! polynomial is a function of the MISMIP+ `x` that runs from the
+         !! ice divide at 0, while the ISOMIP+ *ocean* box starts at
+         !! `x = 320 km` (Asay-Davis et al. 2016, Table 3 `x0`).  Default
+         !! `0` ⇒ the model's own `x = 0` west edge ⇒ bit-identical for
+         !! every other `topo_config`.
    end type ocean_topo_config_t
    type :: ocean_ic_config_t
       !! Initial-condition overlay + EOS reference state.  Drives
@@ -3986,10 +3996,11 @@ contains
              trim(cfg%ocean%topo%topo_config) /= "neverworld2" .and. &
              trim(cfg%ocean%topo%topo_config) /= "island" .and. &
              trim(cfg%ocean%topo%topo_config) /= "double_drake" .and. &
+             trim(cfg%ocean%topo%topo_config) /= "isomip_plus" .and. &
              trim(cfg%ocean%topo%topo_config) /= "file") then
             call logger%error("Invalid topo_config = '"//trim(cfg%ocean%topo%topo_config)// &
                               "': must be 'flat', 'spoon', 'seamount', 'neverworld2', "// &
-                              "'island', 'double_drake', or 'file'")
+                              "'island', 'double_drake', 'isomip_plus', or 'file'")
             has_error = .true.
          end if
          if (trim(cfg%ocean%ic%ic_config) /= "" .and. &
@@ -9101,7 +9112,8 @@ contains
       ps => cfg%ocean%topo%topo_config
       call g%add(nml_enum("topo_config", ps, "Bathymetry profile selector", &
                           allowed=[character(len=12) :: "flat", "spoon", "seamount", &
-                                   "neverworld2", "island", "double_drake", "file"]))
+                                   "neverworld2", "island", "double_drake", &
+                                   "isomip_plus", "file"]))
       pr => cfg%ocean%topo%max_depth
       call g%add(nml_real("max_depth", pr, "Basin maximum depth", units="m"))
       pr => cfg%ocean%topo%edge_depth
@@ -9131,6 +9143,10 @@ contains
       pr => cfg%ocean%topo%coriolis_y_ref
       call g%add(nml_real("coriolis_y_ref", pr, "Reference y where f = coriolis_f under beta-plane", &
                           units="m"))
+      pr => cfg%ocean%topo%x_origin
+      call g%add(nml_real("x_origin", pr, &
+                          "Absolute x of the domain west edge, for topo_config='isomip_plus' "// &
+                          "(ISOMIP+ ocean box starts at the MISMIP+ x = 320 km)", units="m"))
       call schema%add_group(g)
    end subroutine register_ocean_topo
 

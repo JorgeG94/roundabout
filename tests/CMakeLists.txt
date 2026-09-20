@@ -139,6 +139,7 @@ set(RDB_TESTS
     "test_ocean_tracer_advect_window|test_ocean_tracer_advect_window|collect_ocean_tracer_advect_window_tests|ocean_tracer_advect_window|ocean"
     "test_ocean_tracer_weno|test_ocean_tracer_weno|collect_ocean_tracer_weno_tests|ocean_tracer_weno|ocean+core"
     "test_ocean_bathymetry_fill|test_ocean_bathymetry_fill|collect_ocean_bathymetry_fill_tests|ocean_bathymetry_fill|ocean"
+    "test_ocean_topo_isomip_plus|test_ocean_topo_isomip_plus|collect_ocean_topo_isomip_plus_tests|ocean_topo_isomip_plus|ocean"
     "test_ocean_neverworld2|test_ocean_neverworld2|collect_ocean_neverworld2_tests|ocean_neverworld2|ocean"
     "test_ocean_layer_rho_init|test_ocean_layer_rho_init|collect_ocean_layer_rho_init_tests|ocean_layer_rho_init|ocean"
     "test_ocean_thickness_config|test_ocean_thickness_config|collect_ocean_thickness_config_tests|ocean_thickness_config|ocean"
