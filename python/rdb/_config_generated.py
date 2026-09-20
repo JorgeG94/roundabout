@@ -4523,6 +4523,14 @@ class OceanVdiff(Group):
         default=False,
     )
 
+    implicit_top_drag = Bool(
+        'implicit_top_drag',
+        doc='Fold the ice-shelf top drag into the vdiff surface (k=nz) diagonal, masking the wind RHS under cover',
+        units='',
+        required=False,
+        default=False,
+    )
+
     hvel_mom6 = Bool(
         'hvel_mom6',
         doc='MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does',
@@ -5991,4 +5999,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 651
+N_KNOBS = 655

@@ -28,6 +28,12 @@
 !!     face and none one face further out.
 !!   * `disabled_is_exact_no_op` — knob off ⇒ byte-identical velocities
 !!     and an essentially-zero byte count.
+!!   * `implicit_fold_matches_analytic` — with the interior viscosity
+!!     switched off, the vdiff `k = nz` diagonal fold reproduces
+!!     `u/(1 + dt*lambda)` exactly, and layers below are untouched.
+!!   * `implicit_fold_masks_wind_under_cover` — with the wind-stress
+!!     fold ALSO on, a covered face takes the drag and no wind while an
+!!     open face on the same grid takes the full wind.
 !!   * `parse_and_gate` — `form` round-trips; a typo is `TDRAG_INVALID`.
 !!   * `validate_refusals` — the configure-time matrix, including the
 !!     ONE-`C_d` agreement rule against `&ocean_cavity_melt_nml
@@ -41,6 +47,7 @@ module test_ocean_top_drag
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t, BDRAG_QUADRATIC, &
                                     ocean_bottom_drag_compute_tendencies
+   use rdb_ocean_vdiff, only: ocean_vdiff_t, vdiff_apply_momentum
    use rdb_ocean_top_drag, only: ocean_top_drag_t, &
                                  TDRAG_LINEAR, TDRAG_QUADRATIC, TDRAG_INVALID, &
                                  ocean_top_drag_compute_tendencies, &
@@ -75,6 +82,8 @@ contains
                   new_unittest("drag_removes_kinetic_energy", test_energy_sink), &
                   new_unittest("calving_front_face_mask", test_calving_front), &
                   new_unittest("disabled_is_exact_no_op", test_disabled_no_op), &
+                  new_unittest("implicit_fold_matches_analytic", test_fold_analytic), &
+                  new_unittest("implicit_fold_masks_wind_under_cover", test_fold_masks_wind), &
                   new_unittest("parse_and_gate", test_parse_and_gate), &
                   new_unittest("validate_refusals", test_validate_refusals) &
                   ]
@@ -743,6 +752,173 @@ contains
    end subroutine test_disabled_no_op
 
    ! ------------------------------------------------------------------
+   ! (ii, part 2) the IMPLICIT path: the vdiff k = nz diagonal fold
+   ! ------------------------------------------------------------------
+
+   subroutine test_fold_analytic(error)
+      !! `&ocean_vdiff_nml implicit_top_drag` puts the top-drag Rayleigh
+      !! rate on the vertical-friction tridiagonal's SURFACE diagonal
+      !! instead of applying it explicitly.  With the interior viscosity
+      !! switched off (`K_v_momentum = 0`, no `kv_source`) the matrix is
+      !! the identity plus that one term, so the solve is exactly
+      !!
+      !!     u_nz^{n+1} = u_nz / (1 + dt*lambda),   lambda = C_d*|U|/h_nz
+      !!
+      !! and every layer below is left alone.  That isolates the fold: the
+      !! same closed form the in-kernel `implicit` branch produces,
+      !! reached through a completely different operator.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_top_drag_t) :: td
+      type(ocean_vdiff_t) :: vd
+      real(wp), parameter :: U0 = 0.4_wp
+      real(wp), parameter :: CD = 2.5e-3_wp
+      real(wp), parameter :: H = 0.05_wp
+         !! A PINCHED top layer — 5 cm, the sigma-near-the-grounding-line
+         !! case this fold exists for.  With `C_d|U|/h = 0.02 1/s` and
+         !! `dt = 400 s` the rate is `dt*lambda = 8`, four times past the
+         !! explicit form's `dt*lambda = 2` reversal threshold.
+      real(wp), parameter :: DT = 400.0_wp
+      integer :: nx, ny
+      real(wp) :: lambda, expect, got, max_lower
+      checks: block
+
+         call make_grid(grid, 10, 8)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         td%enable = .true.
+         call td%init(grid, nz_ml=NZ)
+         td%variant = TDRAG_QUADRATIC
+         td%c_drag = CD
+         td%implicit_fold = .true.
+         call cover_all(td)
+         call vd%init(grid, nz_ml=NZ)
+         vd%K_v_momentum = 0.0_wp
+         vd%implicit_top_drag = .true.
+         nx = grid%nx_total
+         ny = grid%ny_total
+
+         ms%h_layer = H
+         ms%u_face_x_layer = 0.0_wp
+         ms%v_face_y_layer = 0.0_wp
+         ms%u_face_x_layer(:, :, NZ) = U0
+
+         call map_in(ms, td)
+         !$acc enter data copyin(vd)
+         call vd%enter_data()
+         ! Fill lambda_top from the SAME kernel the production path uses,
+         ! then let the vdiff solve consume it.
+         call ocean_top_drag_compute_tendencies(td, ms, DT)
+         call vdiff_apply_momentum(grid, vd, ms, DT, &
+                                   lambda_top_u=td%lambda_top_u, &
+                                   lambda_top_v=td%lambda_top_v, &
+                                   cover_u=td%cover_u, cover_v=td%cover_v)
+         call vd%exit_data()
+         !$acc exit data delete(vd)
+         call map_out(ms, td)
+
+         lambda = CD*U0/H
+         expect = U0/(1.0_wp + DT*lambda)
+         got = ms%u_face_x_layer(nx/2, ny/2, NZ)
+         call check(error, abs(got - expect) <= TOL_REL*abs(expect), &
+                    "the vdiff k=nz fold is not u/(1 + dt*C_d*|U|/h_nz)")
+         if (allocated(error)) exit checks
+         max_lower = maxval(abs(ms%u_face_x_layer(:, :, 1:NZ - 1)))
+         call check(error, max_lower == 0.0_wp, &
+                    "the top-drag fold moved a layer below k=nz")
+         if (allocated(error)) exit checks
+         ! ... and the fold really was the active term: at dt*lambda = 8
+         ! an EXPLICIT apply of the same rate would have reversed the flow.
+         call check(error, DT*lambda > 2.0_wp .and. got*U0 > 0.0_wp, &
+                    "the fold case must sit beyond the explicit stability "// &
+                    "bound, else it proves nothing about stability")
+
+      end block checks
+      call vd%destroy(); call td%destroy(); call ms%destroy()
+   end subroutine test_fold_analytic
+
+   subroutine test_fold_masks_wind(error)
+      !! The surface row is the row the WIND owns as a Neumann RHS.  With
+      !! both folds on, a COVERED face must take the drag and NO wind
+      !! (there is no atmosphere under a shelf), while an OPEN face on the
+      !! same grid takes the full explicit-equivalent wind increment
+      !! `dt*tau/(rho0*h_nz)`.  Asserting both halves is what makes this a
+      !! test of the MASK rather than of the wind being off everywhere.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_top_drag_t) :: td
+      type(ocean_vdiff_t) :: vd
+      real(wp), parameter :: CD = 2.5e-3_wp
+      real(wp), parameter :: H = 5.0_wp
+      real(wp), parameter :: DT = 100.0_wp
+      real(wp), parameter :: TAU = 0.1_wp
+      real(wp), parameter :: RHO0 = 1027.51_wp
+      real(wp), allocatable :: tau_u(:, :), tau_v(:, :)
+      integer :: nx, ny, i0, j_p
+      real(wp) :: u_open, u_cov, expect_open
+      checks: block
+
+         call make_grid(grid, 12, 10)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         td%enable = .true.
+         call td%init(grid, nz_ml=NZ)
+         td%variant = TDRAG_QUADRATIC
+         td%c_drag = CD
+         td%implicit_fold = .true.
+         call vd%init(grid, nz_ml=NZ)
+         vd%K_v_momentum = 0.0_wp
+         vd%implicit_top_drag = .true.
+         vd%implicit_stress = .true.
+         nx = grid%nx_total
+         ny = grid%ny_total
+         i0 = nx/2
+         j_p = ny/2
+
+         ! Covered west of i0; faces at i >= i0+2 are fully open.
+         td%cover_t(:, :) = 0.0_wp
+         td%cover_t(1:i0, :) = 1.0_wp
+         call top_drag_fill_face_cover_impl(td%cover_u, td%cover_v, td%cover_t, nx, ny)
+
+         ms%h_layer = H
+         ms%u_face_x_layer = 0.0_wp
+         ms%v_face_y_layer = 0.0_wp
+
+         allocate (tau_u(nx + 1, ny), source=TAU)
+         allocate (tau_v(nx, ny + 1), source=0.0_wp)
+         call map_in(ms, td)
+         !$acc enter data copyin(vd)
+         call vd%enter_data()
+         !$acc enter data copyin(tau_u, tau_v)
+         call ocean_top_drag_compute_tendencies(td, ms, DT)
+         call vdiff_apply_momentum(grid, vd, ms, DT, &
+                                   tau_u=tau_u, tau_v=tau_v, rho0=RHO0, &
+                                   lambda_top_u=td%lambda_top_u, &
+                                   lambda_top_v=td%lambda_top_v, &
+                                   cover_u=td%cover_u, cover_v=td%cover_v)
+         !$acc exit data delete(tau_u, tau_v)
+         call vd%exit_data()
+         !$acc exit data delete(vd)
+         call map_out(ms, td)
+
+         u_open = ms%u_face_x_layer(i0 + 3, j_p, NZ)
+         u_cov = ms%u_face_x_layer(i0/2, j_p, NZ)
+         expect_open = DT*TAU/(RHO0*H)
+
+         call check(error, abs(u_open - expect_open) <= TOL_REL*abs(expect_open), &
+                    "an OPEN face must take the full wind increment")
+         if (allocated(error)) exit checks
+         call check(error, u_cov == 0.0_wp, &
+                    "a COVERED face must take NO wind — there is no atmosphere "// &
+                    "under an ice shelf")
+
+      end block checks
+      call vd%destroy(); call td%destroy(); call ms%destroy()
+   end subroutine test_fold_masks_wind
+
+   ! ------------------------------------------------------------------
    ! (v) parsing + the configure-time matrix
    ! ------------------------------------------------------------------
 
@@ -798,6 +974,21 @@ contains
                                     melt_group("cdrag_top = 2.5e-3")), error)
       if (allocated(error)) return
 
+      call expect_refused("the vdiff top-drag fold without a top drag", &
+                          tdrag_nml("", .true., &
+                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+      if (allocated(error)) return
+      call expect_refused("BOTH implicit top-drag forms (a double count)", &
+                          tdrag_nml("enable = .true., cd = 2.5e-3, implicit = .true.", &
+                                    .true., &
+                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+      if (allocated(error)) return
+      call expect_refused("the vdiff fold with a DISTRIBUTED top drag", &
+                          tdrag_nml("enable = .true., cd = 2.5e-3, htbl = 10.0", &
+                                    .true., &
+                                    "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
+      if (allocated(error)) return
+
       call expect_accepted("top drag alongside the cavity geometry", &
                            tdrag_nml("enable = .true., cd = 2.5e-3", .true., ""), error)
       if (allocated(error)) return
@@ -808,6 +999,10 @@ contains
       call expect_accepted("top drag and melt sharing ONE cd", &
                            tdrag_nml("enable = .true., cd = 2.5e-3", .true., &
                                      melt_group("cdrag_top = 2.5e-3")), error)
+      if (allocated(error)) return
+      call expect_accepted("the layer-only vdiff top-drag fold", &
+                           tdrag_nml("enable = .true., cd = 2.5e-3", .true., &
+                                     "&ocean_vdiff_nml implicit_top_drag = .true. /"), error)
       if (allocated(error)) return
       call expect_accepted("the default (top drag off)", &
                            tdrag_nml("", .true., ""), error)
