@@ -832,8 +832,24 @@ contains
       call expect_invalid(error, nml_case(on, extra="&ocean_tides_nml enable = .true., "// &
                                           "use_sal = .true. /"), "tidal SAL")
       if (allocated(error)) return
+      ! `&ocean_zinit_nml` was refused here until `build_z_ctr` learned to
+      ! measure the layer-centre depth from `z = 0` rather than from the
+      ! column top.  It now COMPOSES with a cavity, so the row is a
+      ! POSITIVE one — and the analytic `source='linear'` profile is the
+      ! one an idealised sloping-lid case actually wants.
+      call expect_valid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
+                                        "source = 'linear', lin_t_ref = -1.0, "// &
+                                        "lin_dt_dz = 0.002 /"), &
+                        "the analytic z-level T/S IC composes with a cavity")
+      if (allocated(error)) return
+      ! ... and its own knobs stay fail-loud.
       call expect_invalid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
-                                          "file = 'ts.nc' /"), "the z-level T/S IC")
+                                          "source = 'linear', file = 'ts.nc' /"), &
+                          "source='linear' with a file= that would be ignored")
+      if (allocated(error)) return
+      call expect_invalid(error, nml_case(on, extra="&ocean_zinit_nml enable = .true., "// &
+                                          "source = 'file' /"), &
+                          "source='file' with no file= path")
       if (allocated(error)) return
 
       ! --- and the knob-off path stays acceptable everywhere ---

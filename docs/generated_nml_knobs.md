@@ -937,12 +937,17 @@ Z-level T/S initial-condition overlay (A2).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (default off; requires RDB_ENABLE_NETCDF=ON) |
+| `source` | `"file"` |  | Where the T(z)/S(z) profile comes from: a pre-regridded NetCDF, or the analytic affine lin_* profile (no file) |
 | `file` | `""` |  | Path to the model-grid T/S NetCDF |
 | `t_var` | `""` |  | Temperature variable-name override (blank tries temp/T/temperature) |
 | `s_var` | `""` |  | Salinity variable-name override (blank tries salt/S/salinity) |
 | `z_var` | `""` |  | Source-axis variable-name override (blank tries z_src/z/depth/lev) |
 | `land_fill_t` | `0.1000000000E+02` | degC | Fallback temperature for dry columns |
 | `land_fill_s` | `0.3500000000E+02` | PSU | Fallback salinity for dry columns |
+| `lin_t_ref` | `0.0000000000E+00` | degC | source='linear': temperature at the z = 0 datum |
+| `lin_dt_dz` | `0.0000000000E+00` | degC/m | source='linear': dT/dz, z positive UP (stable > 0) |
+| `lin_s_ref` | `0.3500000000E+02` | PSU | source='linear': salinity at the z = 0 datum |
+| `lin_ds_dz` | `0.0000000000E+00` | PSU/m | source='linear': dS/dz, z positive UP (stable < 0) |
 
 ### &ocean_data_nml
 

@@ -106,7 +106,7 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
   — second order in `dx`, cubic in the slope, independent of `nz`. **Measured `max|u| = 7.08e-8 m/s`** against the derived `a_peak·t = 1.04e-7 m/s` (asserted with a ×4 safety, 5.9× margin); the unit-level deviation matches the formula to **1.2 %**. With the stratification removed (`N² = 0`, every trapezoid error `G(K)` identically zero) the residual falls five decades to `2.6e-13 m/s`. For scale, the figure the Phase-5 design quotes for quiet linear-stratification cavity cases *with* the sloping-coordinate PGF corrections is `O(1e-9 m/s)`; this build carries none of those corrections yet, and `7.08e-8` is their baseline. (The design also records that the paper that figure is attributed to is not the paper in `papers/` — see `test_ocean_cavity_load`'s header.)
 
   **The `ρ̂`-vs-`ρ₀` load approximation, stated rather than hidden.** `ρ₀·g·z_draft` is the displaced weight at the REFERENCE density; a stratified column's true overburden `g∫ρ̂` differs by `−g∫(ρ̂ − ρ₀)`, whose gradient is a **depth-uniform** `N²·z_draft·∇z_draft` residual in the raw PGF — measured at `5.81e-6 m/s²` (vs `1.96e-2 = g·s` with the load off entirely). It is chosen anyway because it is the load that makes the discrete BAROTROPIC state exactly at rest, and it is what ISOMIP+ prescribes; being depth-uniform, the split's depth-mean replacement annihilates it. `draft_source="in_situ"` (the true isostatic solve) is deferred and fails loud.
-  **Envelope**, each refused fail-loud: `&ocean_pgf_nml form="fv_mom6"` + `gfs_scale = 1`; `vcoord_type` ∈ {sigma, zstar} and `thickness_config /= "uniform_z"` (every z-like family anchors its target interfaces at `z = 0`, which under a shelf is inside the ice); the split solver (`n_inner ≥ 1`); single rank; `bt_halo = 0` (and in `bt_halo_auto_exclusion`, so AUTO resolves to 0 rather than manufacturing a width that then aborts); mutually exclusive with wet/dry, porous barriers, sea ice, `&ocean_tides_nml use_sal` and `&ocean_zinit_nml enable`. Without `&ocean_psurf_nml in_eos` configure WARNS that the in-situ EOS still ignores the load.
+  **Envelope**, each refused fail-loud: `&ocean_pgf_nml form="fv_mom6"` + `gfs_scale = 1`; `vcoord_type` ∈ {sigma, zstar} and `thickness_config /= "uniform_z"` (every z-like family anchors its target interfaces at `z = 0`, which under a shelf is inside the ice); the split solver (`n_inner ≥ 1`); single rank; `bt_halo = 0` (and in `bt_halo_auto_exclusion`, so AUTO resolves to 0 rather than manufacturing a width that then aborts); mutually exclusive with wet/dry, porous barriers, sea ice and `&ocean_tides_nml use_sal`. `&ocean_zinit_nml enable` **composes** (the refusal was lifted with P5.3): the overlay now measures each layer centre's depth from `z = 0` rather than from the column top, so a geopotential `T(z)`/`S(z)` lands at the right depth under a draft instead of `z_draft` metres too shallow. Without `&ocean_psurf_nml in_eos` configure WARNS that the in-situ EOS still ignores the load.
 - **Ice-shelf basal melt** (`&ocean_cavity_melt_nml enable`, default off ⇒ byte-identical) — the Holland & Jenkins (1999) three-equation interface, solved once per thermo step on every ice-covered column and delivered to the ocean as two OWNED surface-flux components, `heat_cavity = −q_ocean` (W/m², positive down, so warm water under a shelf COOLS the top of the column) and `salt_cavity = −m_mass·(S_far − s_ice)`. Requires `&ocean_cavity_dyn_nml` (the draft and the datum), `&ocean_eos_nml tfreeze_set="isomip"` (the sea-ice liquidus is ~0.03 °C away, enough to flip the SIGN of melt over a 0.03 °C band) and `&ocean_forcing_nml enable_components`. The far field is sampled over `far_field_depth` **METRES** below the ice base, thickness-weighted with a partial last layer — never "layer `nz`", because the sampling distance is the dominant resolution artefact in the subject and "layer nz" would make the melt rate a function of the vertical coordinate's cell thickness. The liquidus is evaluated at `multilayer_state_t%p_top` = `p_ice_ref + sf%p_surf`, the one interface pressure the FV-MOM6 surface BC and the in-situ EOS also read — the melt path is a pure consumer of it and writes nothing, asserting instead that the load was assembled. `&ocean_psurf_nml` therefore composes freely. Per-column solver status is reduced on device: a non-finite covered column is FATAL, while a non-converged or unbracketed one is counted, warned and given the kernel's zero-melt safe state. Tests: `test_ocean_cavity_flux` (coupling), `test_ocean_cavity_melt` (kernel, against a 17-digit oracle).
 
   **Limitations you must read before quoting a number.**
@@ -762,20 +762,50 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   device-mapped); OBC registers its own live state when it lands.
 - **Initial conditions**: analytical ICs (uniform / linear-T(z) /
   Eady-front / geostrophic-adjustment / per-layer `gprime` density)
-  plus **z-level T/S from NetCDF** (`&ocean_zinit_nml enable`,
-  capability A2). The file must be **pre-regridded to the model
-  horizontal grid** (`nx_phys × ny_phys`, bathymetry-loader
-  precedent); A2 does the in-core vertical step — linear-in-depth
-  interpolation of `temp`/`salt` onto the seeded layer-centre depths
-  with constant extrapolation beyond the source z-range, written as
-  `hTr = value · h_layer`. Dry columns (`wet_mask ≤ 0`) get the
-  namelist `land_fill_t/_s` constants. Default off (`enable=.false.`)
-  ⇒ analytical IC bit-identical. Source `temp` is taken as the
-  prognostic T directly. **Not yet shipped:** on-the-fly horizontal
-  regrid + nearest-wet land flood-fill (MOM6 `horiz_interp_and_extrap`
-  half — deferred to a Python preprocessor + v2), and conservative
-  (cell-integral-preserving) vertical remap (v1 uses point linear
-  interp at layer centres; the first ALE remap re-grids anyway).
+  plus the **geopotential T(z)/S(z) overlay** (`&ocean_zinit_nml
+  enable`, capability A2), which has two sources.
+
+  `source = "file"` (the default) reads T/S from NetCDF. The file must
+  be **pre-regridded to the model horizontal grid** (`nx_phys ×
+  ny_phys`, bathymetry-loader precedent); A2 does the in-core vertical
+  step — linear-in-depth interpolation of `temp`/`salt` onto the seeded
+  layer-centre depths with constant extrapolation beyond the source
+  z-range, written as `hTr = value · h_layer`. Dry columns
+  (`wet_mask ≤ 0`) get the namelist `land_fill_t/_s` constants; the
+  ghost rows keep whatever the analytical IC seeded, because the file
+  carries no data for them. Source `temp` is taken as the prognostic T
+  directly.
+
+  `source = "linear"` needs no file: it evaluates the affine profiles
+  `T(z) = lin_t_ref + lin_dt_dz·z`, `S(z) = lin_s_ref + lin_ds_dz·z`
+  (**`z` positive UP**, zero at the `z = 0` datum — the
+  `&ocean_ic_nml eady_dT_dz` convention; a stable column has
+  `lin_dt_dz > 0` and `lin_ds_dz < 0`) at every layer centre's true
+  geopotential depth, and — being analytic — fills the FULL array
+  including ghosts and land columns. This is the profile an idealised
+  ice-shelf cavity or ISOMIP+-style case needs: `&tracer_nml
+  T_init_surface` / `T_init_bottom` (and their `S_init_*` twins) are
+  linear in LAYER INDEX, so under a terrain-following coordinate with a
+  SLOPING lid they tilt the isopycnals with the coordinate, which is
+  not a state of rest.
+
+  Both sources measure depth from `z = 0`, so under
+  `&ocean_cavity_dyn_nml` the column-top offset `metrics%z_draft` is
+  passed through and the profile lands at the right geopotential depth
+  (before P5.3 the two were refused together, because the overlay
+  measured from the column top and so sat `z_draft` metres too
+  shallow). Default off (`enable=.false.`) ⇒ analytical IC
+  bit-identical, and `z_draft = 0` reproduces the no-draft answer
+  bit-for-bit (`test_ocean_zinit :: zinit_draft_bitident`).
+
+  **Not yet shipped:** on-the-fly horizontal regrid + nearest-wet land
+  flood-fill (MOM6 `horiz_interp_and_extrap` half — deferred to a
+  Python preprocessor + v2), and conservative (cell-integral-
+  preserving) vertical remap (v1 uses point linear interp at layer
+  centres; the first ALE remap re-grids anyway). The whole overlay,
+  `source = "linear"` included, lives in the NetCDF-gated
+  `rdb_ocean_z_init` and so needs `RDB_ENABLE_NETCDF=ON` even when it
+  opens nothing.
 
 ### Sea ice
 

@@ -2416,7 +2416,24 @@ module rdb_config
       !! Design + MOM6 divergences: `local_archive/specs/a2_zinit_spec.md`.
       logical :: enable = .false.
          !! Master switch.  Default `.false.` keeps the analytical IC.
-         !! Requires `RDB_ENABLE_NETCDF=ON` at build time.
+         !! Requires `RDB_ENABLE_NETCDF=ON` at build time (the overlay
+         !! lives in the NetCDF-gated `rdb_ocean_z_init`, including the
+         !! `source = "linear"` path, which opens nothing).
+      character(len=32) :: source = "file"
+         !! Where the T(z)/S(z) profile comes from.
+         !!
+         !! `"file"` (default) reads the pre-regridded NetCDF named by
+         !! `file` and interpolates linearly in depth.
+         !!
+         !! `"linear"` evaluates the ANALYTIC affine profiles
+         !! `T(z) = lin_t_ref + lin_dt_dz*z`, `S(z) = lin_s_ref +
+         !! lin_ds_dz*z` at every layer centre's true geopotential depth
+         !! — no file, no interpolation, defined on ghosts and land too.
+         !! This is the profile an idealised sloping-lid cavity (or any
+         !! ISOMIP+-style case) needs: the `&tracer_nml T_init_surface` /
+         !! `T_init_bottom` family is linear in LAYER INDEX, so under a
+         !! terrain-following coordinate with a tilted lid it tilts the
+         !! isopycnals with the coordinate and the column is NOT at rest.
       character(len=256) :: file = ""
          !! Path to the model-grid T/S NetCDF (dims x/y/z; vars
          !! temp/salt/z_src with the documented name-fallbacks).
@@ -2430,6 +2447,22 @@ module rdb_config
          !! Fallback temperature (°C) written to dry (wet_mask <= 0) columns.
       real(wp) :: land_fill_s = 35.0_wp
          !! Fallback salinity (PSU) written to dry (wet_mask <= 0) columns.
+         !! `source = "file"` only — the analytic path has a value
+         !! everywhere and uses it.
+      real(wp) :: lin_t_ref = 0.0_wp
+         !! `source = "linear"`: temperature (degC) at the `z = 0` datum.
+      real(wp) :: lin_dt_dz = 0.0_wp
+         !! `source = "linear"`: `dT/dz` (degC/m) with **z positive UP**
+         !! — the same convention as `&ocean_ic_nml eady_dT_dz`.  A
+         !! thermally STABLE column has `lin_dt_dz > 0` (warm on top).
+         !! `0` (the default) is a uniform column.
+      real(wp) :: lin_s_ref = 35.0_wp
+         !! `source = "linear"`: salinity (PSU) at the `z = 0` datum.
+      real(wp) :: lin_ds_dz = 0.0_wp
+         !! `source = "linear"`: `dS/dz` (PSU/m) with **z positive UP**.
+         !! Note the polarity is the INVERSE of temperature's: salty
+         !! water belongs at the bed, so a halinely STABLE column has
+         !! `lin_ds_dz < 0`.  `0` (the default) is a uniform column.
    end type ocean_zinit_config_t
    type :: ocean_data_config_t
       !! `&ocean_data_nml`: the shared time-varying NetCDF input reader
@@ -4748,6 +4781,35 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- Z-level T/S initial-condition overlay (`&ocean_zinit_nml`) ----
+      if (cfg%ocean%zinit%enable) then
+         select case (trim(adjustl(cfg%ocean%zinit%source)))
+         case ("file")
+            if (len_trim(cfg%ocean%zinit%file) == 0) then
+               call logger%error("&ocean_zinit_nml enable=.true. with "// &
+                                 "source='file' requires a non-blank file= path.")
+               has_error = .true.
+            end if
+         case ("linear")
+            ! An analytic profile plus a file path is ambiguous: the file
+            ! would be silently ignored.  Say so rather than pick one.
+            if (len_trim(cfg%ocean%zinit%file) > 0) then
+               call logger%error("&ocean_zinit_nml source='linear' takes the "// &
+                                 "analytic lin_* profile and opens NOTHING, so the "// &
+                                 "file='"//trim(adjustl(cfg%ocean%zinit%file))// &
+                                 "' you also set would be silently ignored.  Pick "// &
+                                 "one: drop file=, or set source='file'.")
+               has_error = .true.
+            end if
+         case default
+            call logger%error("&ocean_zinit_nml source='"// &
+                              trim(adjustl(cfg%ocean%zinit%source))// &
+                              "' is not a known profile source; expected 'file' "// &
+                              "(pre-regridded NetCDF) or 'linear' (analytic "// &
+                              "affine T(z)/S(z)).")
+            has_error = .true.
+         end select
+      end if
       ! ---- Top-of-column load in the PGF surface boundary condition (P5.0) ----
       ! `pa(nz+1) = rho_ref*g*eta_geo + ms%p_top`.  Only the FV_MOM6 family
       ! builds a `pa` stack at all — `mont` hard-zeroes `M(nz)` and
@@ -4958,15 +5020,12 @@ contains
                               "the default sigma-style split.")
             has_error = .true.
          end if
-         if (cfg%ocean%zinit%enable) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
-                              "exclusive with &ocean_zinit_nml enable: the z-level "// &
-                              "T/S overlay measures depth from the COLUMN TOP, which "// &
-                              "under a draft is z_draft metres below z = 0, so the "// &
-                              "profile would land systematically too shallow.  The "// &
-                              "draft-offset z_ctr is a later slice.")
-            has_error = .true.
-         end if
+         ! NOTE: `&ocean_zinit_nml enable` used to be refused here — the
+         ! overlay measured depth from the COLUMN TOP, which under a
+         ! draft is `z_draft` metres below `z = 0`, so a geopotential
+         ! profile landed systematically too shallow.  `build_z_ctr` now
+         ! takes the column-top depth and the seed passes
+         ! `metrics%z_draft`, so the two compose and the refusal is gone.
          ! --- solver envelope ---
          if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires the "// &
@@ -9201,6 +9260,12 @@ contains
       pl => cfg%ocean%zinit%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (default off; requires RDB_ENABLE_NETCDF=ON)"))
+      ps => cfg%ocean%zinit%source
+      call g%add(nml_enum("source", ps, &
+                          "Where the T(z)/S(z) profile comes from: a "// &
+                          "pre-regridded NetCDF, or the analytic affine "// &
+                          "lin_* profile (no file)", &
+                          allowed=[character(len=15) :: "file", "linear"]))
       ps => cfg%ocean%zinit%file
       call g%add(nml_string("file", ps, "Path to the model-grid T/S NetCDF"))
       ps => cfg%ocean%zinit%t_var
@@ -9216,6 +9281,20 @@ contains
       call g%add(nml_real("land_fill_t", pr, "Fallback temperature for dry columns", units="degC"))
       pr => cfg%ocean%zinit%land_fill_s
       call g%add(nml_real("land_fill_s", pr, "Fallback salinity for dry columns", units="PSU"))
+      pr => cfg%ocean%zinit%lin_t_ref
+      call g%add(nml_real("lin_t_ref", pr, &
+                          "source='linear': temperature at the z = 0 datum", units="degC"))
+      pr => cfg%ocean%zinit%lin_dt_dz
+      call g%add(nml_real("lin_dt_dz", pr, &
+                          "source='linear': dT/dz, z positive UP (stable > 0)", &
+                          units="degC/m"))
+      pr => cfg%ocean%zinit%lin_s_ref
+      call g%add(nml_real("lin_s_ref", pr, &
+                          "source='linear': salinity at the z = 0 datum", units="PSU"))
+      pr => cfg%ocean%zinit%lin_ds_dz
+      call g%add(nml_real("lin_ds_dz", pr, &
+                          "source='linear': dS/dz, z positive UP (stable < 0)", &
+                          units="PSU/m"))
       call schema%add_group(g)
    end subroutine register_ocean_zinit
 
