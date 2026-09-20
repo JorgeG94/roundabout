@@ -104,9 +104,53 @@ module rdb_ocean_state
    public :: topo_length_to_grid_units
    public :: set_bathymetry_neverworld2
    public :: set_bathymetry_island
+   public :: set_bathymetry_isomip_plus
+   public :: isomip_plus_bx, isomip_plus_by
+   public :: ISOMIP_B0, ISOMIP_B2, ISOMIP_B4, ISOMIP_B6
+   public :: ISOMIP_XBAR, ISOMIP_DC, ISOMIP_FC, ISOMIP_WC, ISOMIP_ZB_DEEP
    public :: apply_layer_rho_init
    public :: ocean_linear_layer_density
    public :: pgf_nonoverlap_gate_on
+
+   ! ==================================================================
+   ! MISMIP+ / ISOMIP+ bedrock coefficients
+   !
+   ! Asay-Davis, Cornford, Durand, Galton-Fenzi, Gladstone, Gudmundsson,
+   ! Hattermann, Holland, Holland, Holland, Martin, Mathiot, Pattyn and
+   ! Seroussi (2016), "Experimental design for three interrelated marine
+   ! ice sheet and ocean model intercomparison projects: MISMIP v. 3
+   ! (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1)",
+   ! Geosci. Model Dev. 9, 2471-2497, doi:10.5194/gmd-9-2471-2016.
+   !
+   ! Table 1 (MISMIP+ parameters); the bed itself is their Eqs. (1)-(4).
+   ! ISOMIP+ reuses it verbatim ("The bathymetry is the same as in
+   ! Eq. (1)", their Sect. 3.1.1).  Every value below is METRES and is
+   ! an ELEVATION coefficient (z positive UP, sea level at z = 0) —
+   ! Roundabout's `b` is the opposite sign convention, which is why the
+   ! setter negates at the very end and nowhere else.
+   ! ==================================================================
+   real(wp), parameter :: ISOMIP_B0 = -150.0_wp
+      !! `B0`, bedrock elevation at x = 0 (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B2 = -728.8_wp
+      !! `B2`, second bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B4 = 343.91_wp
+      !! `B4`, third bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B6 = -50.57_wp
+      !! `B6`, fourth bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_XBAR = 300.0e3_wp
+      !! `x_bar`, along-flow length scale of the bedrock (m).  Table 1.
+   real(wp), parameter :: ISOMIP_DC = 500.0_wp
+      !! `d_c`, depth of the trough relative to the side walls (m).  Table 1.
+   real(wp), parameter :: ISOMIP_FC = 4.0e3_wp
+      !! `f_c`, characteristic width of the channel side walls (m).  Table 1.
+   real(wp), parameter :: ISOMIP_WC = 24.0e3_wp
+      !! `w_c`, half-width of the trough (m).  Table 1.
+   real(wp), parameter :: ISOMIP_ZB_DEEP = -720.0_wp
+      !! `z_b,deep`, maximum depth of the bedrock (m, ELEVATION so
+      !! negative).  Table 1.  The dispatch does NOT hard-code this: the
+      !! clip comes from `&ocean_topo_nml max_depth`, so the protocol
+      !! value is `max_depth = 720.0`.  Exported for the unit test and
+      !! for anyone writing an ISOMIP+ namelist.
 
    type :: ocean_state_t
       logical :: is_init = .false.
@@ -1151,6 +1195,22 @@ contains
             call set_bathymetry_double_drake(state%barotropic%b, grid, &
                                              cfg%ocean%topo%max_depth, &
                                              cfg%ocean%topo%slope_scale)
+         case ("isomip_plus")
+            ! MISMIP+/ISOMIP+ analytic bedrock (Asay-Davis et al. 2016,
+            ! Eqs. 1-4 + Table 1).  `max_depth` IS the deep clip
+            ! (`-z_b,deep`, protocol 720 m) and `x_origin` places the
+            ! model's west edge on the paper's absolute x axis (protocol
+            ! 320 km).  The formula is written in METRES, so the setter
+            ! is handed metres-per-grid-unit rather than a converted
+            ! length: `topo_length_to_grid_units(1, ...)` is grid units
+            ! per metre, and this is its reciprocal (exactly 1 on a
+            ! Cartesian grid).
+            call set_bathymetry_isomip_plus(state%barotropic%b, grid, &
+                                            cfg%ocean%topo%max_depth, &
+                                            cfg%ocean%topo%x_origin, &
+                                            1.0_wp/topo_length_to_grid_units(1.0_wp, &
+                                                                             cfg%ocean%grid%grid_config, &
+                                                                             cfg%ocean%grid%rad_earth))
          case ("file")
             ! Real bathymetry from NetCDF.  File must be pre-projected onto
             ! the model's Cartesian grid (matching nx_phys × ny_phys); the
@@ -3667,6 +3727,161 @@ contains
          end do
       end do
    end subroutine set_bathymetry_seamount
+
+   pure function isomip_logistic(t) result(r)
+      !! `1/(1 + exp(t))`, saturated instead of overflowing.
+      !!
+      !! The two logistic terms of Eq. (4) reach `|t| ~ 34` over the
+      !! ISOMIP+ box including ghost rows, but a caller with a much wider
+      !! `y_len` (or a tiny `f_c`) would drive `exp(t)` past the `real64`
+      !! overflow at `t ~ 709`.  Saturating at +/-`T_SAT` is exact to the
+      !! last bit of `r` on both sides (`1/(1+exp(500))` underflows to 0
+      !! and `1/(1+exp(-500))` rounds to 1 anyway), so this costs nothing
+      !! and removes an Inf that would propagate as a NaN.
+      !!
+      !! `t` is built from grid positions and the Table-1 constants, all
+      !! finite by construction, so the CLAUDE.md "if/else clamps launder
+      !! NaN" trap does not apply: there is no path that feeds this a NaN.
+      real(wp), intent(in) :: t
+      real(wp) :: r
+      real(wp), parameter :: T_SAT = 500.0_wp
+      if (t > T_SAT) then
+         r = 0.0_wp
+      else if (t < -T_SAT) then
+         r = 1.0_wp
+      else
+         r = 1.0_wp/(1.0_wp + exp(t))
+      end if
+   end function isomip_logistic
+
+   pure function isomip_plus_bx(x) result(bx)
+      !! Along-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (2):
+      !!
+      !!     Bx(x) = B0 + B2*xt**2 + B4*xt**4 + B6*xt**6,   xt = x/x_bar
+      !!
+      !! `x` is the ABSOLUTE MISMIP+ along-flow coordinate in METRES
+      !! (0 at the ice divide), NOT the model's domain-relative x — the
+      !! ISOMIP+ ocean box starts at `x = 320 km` (their Table 3 `x0`),
+      !! which is what `&ocean_topo_nml x_origin` supplies.  Result is an
+      !! ELEVATION (m, positive up), so it is negative everywhere in the
+      !! ISOMIP+ box.
+      real(wp), intent(in) :: x
+      real(wp) :: bx
+      real(wp) :: xt, xt2
+      xt = x/ISOMIP_XBAR
+      xt2 = xt*xt
+      bx = ISOMIP_B0 + xt2*(ISOMIP_B2 + xt2*(ISOMIP_B4 + xt2*ISOMIP_B6))
+   end function isomip_plus_bx
+
+   pure function isomip_plus_by(y, y_len) result(by)
+      !! Across-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (4):
+      !!
+      !!     By(y) = d_c/(1 + exp(-2*(y - Ly/2 - w_c)/f_c))
+      !!           + d_c/(1 + exp( 2*(y - Ly/2 + w_c)/f_c))
+      !!
+      !! A two-sided logistic trough: ~0 within `|y - Ly/2| < w_c` (the
+      !! trough floor) rising to `d_c` on both side walls over the
+      !! `f_c` transition.  Note the paper's own caveat (their Fig. 1b):
+      !! `By` is an OFFSET relative to the trough, not a transect — the
+      !! bed is `Bx + By`, and `Bx` is never zero.
+      !!
+      !! `y` and `y_len` are METRES.  `y_len` is the model's own domain
+      !! width, which for the prescribed ISOMIP+ box (`0 <= y <= 80 km`)
+      !! is the paper's `Ly` — taking it from the grid rather than
+      !! hard-coding 80 km keeps the trough centred in whatever box the
+      !! caller actually built.
+      real(wp), intent(in) :: y, y_len
+      real(wp) :: by
+      real(wp) :: yc
+      yc = y - 0.5_wp*y_len
+      by = ISOMIP_DC*isomip_logistic(-2.0_wp*(yc - ISOMIP_WC)/ISOMIP_FC) &
+           + ISOMIP_DC*isomip_logistic(2.0_wp*(yc + ISOMIP_WC)/ISOMIP_FC)
+   end function isomip_plus_by
+
+   subroutine set_bathymetry_isomip_plus(b, grid, max_depth, x_origin, m_per_grid)
+      !! Public only for the unit-test suite (no production module imports it);
+      !! ignore when developing production code in other modules.
+      !!
+      !! Fill `b(:,:)` with the MISMIP+ / ISOMIP+ analytic bedrock,
+      !! Asay-Davis et al. (2016) Eqs. (1)-(4) + Table 1:
+      !!
+      !!     z_b(x,y) = max( Bx(x) + By(y), z_b,deep )      [Eq. (1)]
+      !!
+      !! `z_b` is an ELEVATION (positive up, sea level at 0) and is
+      !! negative throughout the ISOMIP+ box; Roundabout's `b` is a
+      !! DEPTH (positive down), so the last line is `b = -z_b`, floored
+      !! at 0 so that a bed which the formula puts ABOVE sea level (it
+      !! does for `x < ~140 km`, outside the ISOMIP+ box but reachable if
+      !! a caller sets a smaller `x_origin`) is reported as dry land
+      !! rather than as a negative depth.  `b = 0` is below
+      !! `LAND_DEPTH_THRESHOLD`, so `seed_wet_mask_impl` masks the column
+      !! out through the ordinary land path — there is no ISOMIP+ branch
+      !! anywhere downstream.
+      !!
+      !! `max_depth` is the deep clip, i.e. `-z_b,deep`; the protocol
+      !! value is `ISOMIP_ZB_DEEP` ⇒ `&ocean_topo_nml max_depth = 720.0`.
+      !!
+      !! MINIMUM WATER COLUMN.  The protocol (their Sect. 3.1.5) asks for
+      !! "the minimum ocean column as thin as can reasonably be achieved"
+      !! and leaves the value to the modeller, with the choice being
+      !! either to modify the topography or to mark the column land.
+      !! Roundabout takes the second option and it is NOT this routine's
+      !! job: `&ocean_cavity_dyn_nml h_min_cavity` is the threshold and
+      !! `seed_wet_mask_impl(water, land_cutoff=h_min_cavity)` is where it
+      !! bites, on `water = b - z_draft`.
+      !!
+      !! UNITS.  Every Table-1 constant is METRES, as printed.  Grid
+      !! positions are in GRID coordinate units (metres on Cartesian,
+      !! DEGREES on spherical/curvilinear), so `m_per_grid` converts them
+      !! to metres before the formula sees them — the inverse of the
+      !! `topo_length_to_grid_units` conversion the spoon/seamount
+      !! dispatch applies to `slope_scale`, and the same trap.  On a
+      !! Cartesian grid `m_per_grid = 1` exactly and this is the identity.
+      !! (The protocol prescribes a Cartesian box; the conversion exists
+      !! so a curvilinear caller degrades predictably rather than
+      !! silently collapsing the basin flat.)
+      !!
+      !! Fills the FULL array INCLUDING ghost rows by evaluating the
+      !! formula at the ghost index — the CLAUDE.md rule every formula
+      !! bathymetry setter follows; a ghost row left at the alloc-time
+      !! zero sends the EOS into its `rho_0` vanishing-layer fallback and
+      !! puts a spurious density jump at every wall-adjacent face.
+      !!
+      !! MPI: positions come off the GLOBAL index offsets + extents, so
+      !! each rank fills its window of ONE global bed.  Single rank ⇒
+      !! offsets 0 ⇒ byte-identical to the undecomposed formula.
+      real(wp), intent(inout) :: b(:, :)
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: max_depth
+         !! Deep clip (m, positive down) = `-z_b,deep`.  Protocol: 720.
+      real(wp), intent(in) :: x_origin
+         !! Absolute MISMIP+ x (m) of the domain's west edge.  Protocol
+         !! (ISOMIP+): 320e3.
+      real(wp), intent(in) :: m_per_grid
+         !! Metres per grid coordinate unit (1 on Cartesian).
+
+      real(wp) :: y_len, x_m, y_m, by, zb
+      integer :: i, j, ng, nxt, nyt, ioff, joff
+
+      ng = grid%nghost
+      ioff = grid%i_offset_global
+      joff = grid%j_offset_global
+      nxt = size(b, 1)
+      nyt = size(b, 2)
+      y_len = real(grid%ny_global, wp)*grid%dy*m_per_grid
+
+      do j = 1, nyt
+         y_m = (real(j - ng + joff, wp) - 0.5_wp)*grid%dy*m_per_grid
+         ! `By` depends on y alone — hoisted out of the i loop.
+         by = isomip_plus_by(y_m, y_len)
+         do i = 1, nxt
+            x_m = x_origin + (real(i - ng + ioff, wp) - 0.5_wp)*grid%dx*m_per_grid
+            zb = isomip_plus_bx(x_m) + by
+            if (zb < -max_depth) zb = -max_depth     ! Eq. (1) deep clip
+            b(i, j) = max(-zb, 0.0_wp)               ! elevation -> depth
+         end do
+      end do
+   end subroutine set_bathymetry_isomip_plus
 
    pure function nw2_cosbell(x, L) result(c)
       !! Cosine-bell kernel for the Neverworld2 basin: `0.5·(1 + cos(π·min(|x/L|,1)))`.

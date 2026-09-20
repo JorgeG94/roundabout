@@ -864,6 +864,43 @@ full knob list with defaults is in
 Ocean initial conditions proper are set by `&ocean_ic_nml`,
 `&ocean_zinit_nml` and `&ocean_topo_nml`.
 
+### Formula bathymetry (`&ocean_topo_nml topo_config`)
+
+| Value | Bed |
+|---|---|
+| `flat` | Uniform `max_depth` (default). |
+| `spoon` | MOM6 spoon: `edge_depth` + sinusoid in x, exponential decay to the north wall over `slope_scale`. |
+| `seamount` | Centred Gaussian bump from `max_depth` up to `edge_depth`, e-folding `slope_scale`. |
+| `neverworld2` | Marques et al. (2022) single-basin continents + roughness (`nl_*` knobs). |
+| `island` / `double_drake` | Flat basin carved with land (mask showcases). |
+| `isomip_plus` | MISMIP+/ISOMIP+ analytic bedrock — see below. |
+| `file` | NetCDF, pre-projected onto the model grid (`bathymetry_file`). |
+
+**`isomip_plus`** is Asay-Davis et al. (2016, *GMD* **9**, 2471–2497)
+Eqs. (1)–(4) with their Table 1 coefficients: a sixth-order polynomial
+`Bx(x)` along flow plus a two-sided logistic trough `By(y)` across it
+(`d_c = 500 m` deep, `w_c = 24 km` half-width, `f_c = 4 km` walls), clipped
+at `z_b,deep`. Two knobs map onto it, and nothing is hard-coded:
+
+- `max_depth` **is** the deep clip `−z_b,deep` ⇒ the protocol value is
+  `max_depth = 720.0`.
+- `x_origin` (m, default `0`) is the absolute MISMIP+ `x` of the model's
+  WEST edge. `Bx` is written in the MISMIP+ frame with `x = 0` at the ice
+  divide, while the ISOMIP+ *ocean* box is `320 ≤ x ≤ 800 km` (their
+  Table 3 `x0`), so an ISOMIP+ run sets `x_origin = 320000.0` on a
+  480 km-wide domain. Default `0` ⇒ every other `topo_config` is
+  unaffected and bit-identical.
+
+`By` is centred on the model's own domain width (`ny·dy`), which for the
+prescribed `0 ≤ y ≤ 80 km` box is the paper's `Ly`. A bed the formula
+places above sea level comes back as `b = 0`, i.e. land through the
+ordinary `LAND_DEPTH_THRESHOLD` path — never a negative depth. The
+protocol's **minimum water column** (their §3.1.5, value left to the
+modeller) is NOT applied here: Roundabout takes their "mark the column
+land" option, via `&ocean_cavity_dyn_nml h_min_cavity` acting on
+`b − z_draft`. Gate: `test_ocean_topo_isomip_plus` (hand-evaluated `Bx`,
+`By`, assembled bed, the deep clip, ghost fill and the `x_origin` shift).
+
 ### `&mpi_nml`
 
 | Parameter | Default | Description |
