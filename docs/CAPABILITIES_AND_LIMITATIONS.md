@@ -1007,6 +1007,7 @@ restarted ice, on a mixed real edge set) and multi-rank.
 | `flow_past_island/` | Wind-driven flow onto an island; verifies no-normal-flow (velocity ≡ 0 inside land) + mass conservation. |
 | `double_drake/` | Ferreira et al. 2010 two-continent world (seam-straddling meridional walls + reentrant southern channel); land-masking showcase. |
 | `sea_ice/` | Polar freeze-up: `polar_freezeup_thermo.nml` (column + frazil + brine) and `polar_freezeup_dynamics.nml` (EVP drift) — physics-sanity runs, not a performance benchmark. |
+| `isomip_plus/` | ISOMIP+ Ocean0/1/2 (Asay-Davis et al. 2016) — 240×40 @ 2 km, 36 sigma layers, analytic MISMIP+ bedrock, ice-shelf cavity + basal melt, far-field 3-D restoring. **Configuration deliverables, not validated results**: they pass `validate_config` and run, the parameter map is auditable row-by-row in the directory README, and nothing is tuned to a melt rate. The blockers to a publishable Ocean0 (virtual salt flux only, untuned Γ_T, no-slip walls unavailable, the sloping-lid rest-state growth mode) are listed there. `ocean0_idealised_draft.nml` runs end to end with no external data. |
 
 ### Working envelope (proven production-stable)
 
