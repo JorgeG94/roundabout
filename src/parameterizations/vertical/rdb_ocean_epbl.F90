@@ -1104,7 +1104,13 @@ contains
          ! (ocean_surface_stress_set_derived) — the inner sqrt(tau_xc^2 +
          ! tau_yc^2) below IS stress_mag, computed with the identical FP
          ! op order, so this substitution is bit-identical (§7.5).
-         ustar = max(sqrt(ss%stress_mag(i, j)/this%rho0), this%ustar_min)
+         ! Phase 4b: `stress_shelf` adds the ICE-SHELF base stress, which
+         ! is not in `tau` (the cover mask zeroes the wind there).  The
+         ! supports are disjoint, the field is always allocated, and it
+         ! is the zero array without a cavity — `x + 0.0` is `x`.  See
+         ! the contract in `rdb_ocean_surface_stress`.
+         ustar = max(sqrt((ss%stress_mag(i, j) + ss%stress_shelf(i, j))/ &
+                          this%rho0), this%ustar_min)
          absf = sqrt((1.0_wp - this%omega_frac)*this%f_centre(i, j)**2 + &
                      this%omega_frac*4.0_wp*this%omega**2)
          idecay = this%tke_decay*absf/ustar

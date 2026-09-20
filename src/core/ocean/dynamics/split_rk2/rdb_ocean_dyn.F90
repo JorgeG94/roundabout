@@ -1047,6 +1047,11 @@ contains
          !! `.true.` when the ice-shelf top drag is folded into the vdiff
          !! `k = nz` diagonal — see the gate note at the `vmix_apply_in_stage`
          !! call below for why the test is `implicit_fold`, not `present(td)`.
+      logical :: publish_shelf
+         !! `.true.` when the ice-shelf top-drag slot is live and its
+         !! `stress_top` is therefore full-sized and freshly written.
+      integer :: i_ss, j_ss, nx_ss, ny_ss
+         !! Loop/extent locals for the inline `stress_shelf` publish.
       real(wp) :: therm_dt
 
       therm_active = dyn%enable_thermodynamics .and. dyn%is_thermo_step()
@@ -1084,6 +1089,33 @@ contains
       ! velocity-tendency computes; the kernel returns immediately when the
       ! slot is disabled, so an ordinary run pays one host branch.
       if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
+      ! Phase 4b: publish the ice-shelf base stress that BOTH boundary-
+      ! layer schemes take `u_*` from.  Under a shelf the wind has been
+      ! masked out of `tau` (so `stress_mag` is exactly 0 there) and the
+      ! turbulent boundary layer is driven by the ice-ocean stress
+      ! instead — `u_*^2 = |tau_top|/rho_0`.
+      !
+      ! Written INLINE as a `do concurrent`, not as a call handing
+      ! `ss%stress_shelf` to an external subroutine: a host-gated call
+      ! with a state array as an actual makes nvfortran treat the array
+      ! as escaping and pessimises every `do concurrent` in this routine
+      ! (CLAUDE.md, measured at +4.8%% on an inert porous pass).
+      !
+      ! Gated on `td%enable`, not `present(td)`: a DISABLED slot carries
+      ! a `(1,1)` placeholder `stress_top`.
+      !
+      ! Placed here — after the top-drag compute, before
+      ! `vmix_apply_in_stage` below — so KPP/EPBL read THIS stage's
+      ! stress.  No lag.
+      publish_shelf = .false.
+      if (present(td)) publish_shelf = td%enable
+      if (publish_shelf) then
+         nx_ss = size(ss%stress_shelf, 1)
+         ny_ss = size(ss%stress_shelf, 2)
+         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
+            ss%stress_shelf(i_ss, j_ss) = td%stress_top(i_ss, j_ss)
+         end do
+      end if
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)
 
       ! Horizontal step + tracer chain.  Continuity-tracer is
@@ -3793,6 +3825,11 @@ contains
          !! the explicit-shape dummy they would reach in
          !! `diffuse_velocity_columns_impl` is device-mapped
          !! unconditionally — see the note in `run_stage`.
+      logical :: publish_shelf
+         !! `.true.` when the ice-shelf top-drag slot is live and its
+         !! `stress_top` is therefore full-sized and freshly written.
+      integer :: i_ss, j_ss, nx_ss, ny_ss
+         !! Loop/extent locals for the inline `stress_shelf` publish.
       real(wp) :: dt_inner, therm_dt
       real(wp) :: h_min_floor
       real(wp) :: chain_weight, dt_vel
@@ -4036,6 +4073,33 @@ contains
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
       ! Ice-shelf top drag (`&ocean_tdrag_nml`) — see `run_stage`.
       if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
+      ! Phase 4b: publish the ice-shelf base stress that BOTH boundary-
+      ! layer schemes take `u_*` from.  Under a shelf the wind has been
+      ! masked out of `tau` (so `stress_mag` is exactly 0 there) and the
+      ! turbulent boundary layer is driven by the ice-ocean stress
+      ! instead — `u_*^2 = |tau_top|/rho_0`.
+      !
+      ! Written INLINE as a `do concurrent`, not as a call handing
+      ! `ss%stress_shelf` to an external subroutine: a host-gated call
+      ! with a state array as an actual makes nvfortran treat the array
+      ! as escaping and pessimises every `do concurrent` in this routine
+      ! (CLAUDE.md, measured at +4.8%% on an inert porous pass).
+      !
+      ! Gated on `td%enable`, not `present(td)`: a DISABLED slot carries
+      ! a `(1,1)` placeholder `stress_top`.
+      !
+      ! Placed here — after the top-drag compute, before
+      ! `vmix_apply_in_stage` below — so KPP/EPBL read THIS stage's
+      ! stress.  No lag.
+      publish_shelf = .false.
+      if (present(td)) publish_shelf = td%enable
+      if (publish_shelf) then
+         nx_ss = size(ss%stress_shelf, 1)
+         ny_ss = size(ss%stress_shelf, 2)
+         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
+            ss%stress_shelf(i_ss, j_ss) = td%stress_top(i_ss, j_ss)
+         end do
+      end if
       call profiler_stop("ocean_bdrag")
       call profiler_start("ocean_surfstress")
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)

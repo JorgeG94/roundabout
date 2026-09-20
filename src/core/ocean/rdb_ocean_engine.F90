@@ -1301,6 +1301,12 @@ contains
          !! `driver_run_ocean`'s post-advance `t_current`.
       integer, intent(out), optional :: ierr
 
+      integer :: i_ss, j_ss, nx_ss, ny_ss
+         !! Loop/extent locals for the inline melt-only `stress_shelf` fill.
+      real(wp) :: rho0_ss
+         !! Reference density (kg/m^3) turning the melt slot's `u_*` back
+         !! into a stress; the single rho0 of record via the stress slot.
+
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
       ! Ice-shelf basal melt (P2b): solve the three-equation interface on
@@ -1315,6 +1321,40 @@ contains
                                   engine%state%eos, engine%state%surface_flux, &
                                   active=engine%state%dyn%enable_thermodynamics &
                                   .and. engine%state%dyn%is_thermo_step())
+
+      ! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.
+      !
+      ! When `&ocean_tdrag_nml` is on, the RK2 stage drivers publish
+      ! `ss%stress_shelf` from the top drag's own `stress_top`, in-stage
+      ! and unlagged, and this branch stays out of the way.  When it is
+      ! OFF but basal melt is on, nothing else would give KPP/EPBL an
+      ! under-ice `u_*` at all — they would mix a covered column on the
+      ! masked (exactly zero) wind stress.  The melt slot already solved
+      ! for a friction velocity with the SAME `C_d` (the one-drag-
+      ! coefficient rule: `&ocean_cavity_melt_nml cdrag_top` must equal
+      ! `&ocean_tdrag_nml cd`), so re-deriving `|tau_top| = rho_0*u_*^2`
+      ! from it is the consistent answer, not a second drag law.
+      !
+      ! HONEST LIMIT: `cav%ustar` is refreshed at the THERMO cadence, at
+      ! the END of the outer step, so this path reaches the boundary-layer
+      ! schemes ONE OUTER STEP LATE.  The top-drag path has no such lag.
+      ! `cav%ustar` is exactly 0 on every uncovered column, so the
+      ! published field keeps `stress_shelf`'s "zero off the cover"
+      ! invariant.
+      !
+      ! Inline `do concurrent` (never a call handing `stress_shelf` to an
+      ! external subroutine — CLAUDE.md's escaping-actual rule), and
+      ! gated so no placeholder-sized array is ever indexed: both slots
+      ! allocate full size only when enabled.
+      if (engine%state%cavity_flux%enable .and. .not. engine%state%tdrag%enable) then
+         nx_ss = size(engine%state%surface_stress%stress_shelf, 1)
+         ny_ss = size(engine%state%surface_stress%stress_shelf, 2)
+         rho0_ss = engine%state%surface_stress%rho0
+         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
+            engine%state%surface_stress%stress_shelf(i_ss, j_ss) = &
+               rho0_ss*engine%state%cavity_flux%ustar(i_ss, j_ss)**2
+         end do
+      end if
 
       ! Ice-shelf cover: the assembler is where the atmospheric bands and
       ! the cavity's own heat_cavity/salt_cavity are still separable, so
