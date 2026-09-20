@@ -244,28 +244,71 @@ Listed rather than worked around. The first is decisive on its own.
    entirely downstream of the sloping-lid PGF error), but it is a spurious
    energy source sitting under every run in this directory, and a 20-year
    Ocean1/Ocean2 integrates it for a long time.
-6. **Grounding shifts the console Salt/Heat baseline once, at step 0.** On
-   a grounded cavity the land columns are re-inflated by the first ALE
-   remap and their (inert, metric-zeroed) tracer mass enters the total
-   *after* the baseline was taken, so the console `Salt`/`Heat` `Error`
-   shows a one-off offset proportional to the grounded fraction — 6.09E-01
-   at 39.4 % grounded, 1.87E-02 at 14 %. It is a **baseline artefact, not
-   a conservation failure**: the reported error is then constant to every
-   printed digit for the rest of the run, and `Mass` closes at 5E-14
-   throughout. It reproduces with melt and sponge switched OFF, so it
-   belongs to the cavity-grounding seed path rather than to anything in
-   these files. The existing `../ice_shelf_cavity/` cases ground zero
-   columns, which is why it had not been seen.
-7. **`&ocean_pgf_nml p_top_in_bc = .true.` emits a stale configure
-   WARNING** claiming it is inert without `&ocean_psurf_nml enable`. It is
-   not: the log a few lines later reports the 9.64 MPa cavity load being
-   assembled into `ms%p_top` and consumed by the FV-MOM6 `pa(nz+1)` BC. The
-   warning predates the cavity load and does not know about it.
+6. **No-slip walls, virtual meltwater and the sloping-lid mode above are
+   the remaining blockers.** The grounded-cavity budget defect that used to
+   be listed here is FIXED — see the next section.
 
-These namelists are deliberately **not** registered in
-`tests/regression/stability_manifest.py`. That manifest is a hand-curated
-list (not a directory glob), the cases here are multi-year protocol
-configurations rather than short stability probes, and item 6 above means
-an honest conservation assertion would have to encode a known baseline
-artefact. Registering them is the right follow-up once items 1 and 6 are
-closed.
+These namelists are registered in
+`tests/regression/stability_manifest.py` as
+`isomip_plus_ocean0_idealised` (the idealised-draft file only; the three
+file-backed ones need a download and stay out). It is a `forced` case run
+for 1 simulated day at tier 1 and 100 steps at tier 2, asserting finite,
+`conserve:{Mass,Salt,Heat}` at `1e-11` and the CFL guards — deliberately
+NOT a melt-rate or a rest-state gate, because neither is meaningful until
+blocker 1 is closed. It is carried for the conservation assertion above
+everything else: 39.4 % of its interior columns ground, the largest
+grounded fraction anywhere in the corpus.
+
+---
+
+## Grounded columns and the budget (FIXED)
+
+A column whose ice draft meets the bed (`b − z_draft < &ocean_cavity_dyn_nml
+h_min_cavity`) is LAND, through the same `seed_wet_mask_impl` the
+bathymetry uses. 3778 of this case's 9600 interior columns (39.4 %) are.
+
+Until 2026-09-20 such a column was seeded wrong, and the console said so:
+
+```
+Mass : 1.277811397E+16  Error -5.005E-14
+Salt : 4.379651448E+17  Error  6.088E-01  out 1.732E+06  src -4.348E+12
+Heat :-4.723233226E+15  Error -7.994E-02  out 5.593E+06  src -1.062E+13
+```
+
+61 % of the initial salt content, appearing as a step change between step 0
+and step 1 and then flat. **It was a real defect, not a baseline artefact.**
+A grounded column's water column `b − z_draft` is NEGATIVE — −314 m on
+average here — so its seeded `h_layer` was negative, and the land tracer
+hold `val = hTr/max(h_old, H_VANISHED); hTr = val*H_VANISHED` is an exact
+algebraic identity for `h_old ≤ H_VANISHED`: it left a FULL-COLUMN `hTr`
+beside a thickness floored to `1.5e-4 m`. The budget latch integrated that;
+the first ALE regrid discarded it (a land layer sits AT the vanish marker,
+so the remap's `h > H_FLOOR` gate is false and it writes `hTr = 0`).
+
+That also explains the shape of the numbers: the offset scaled with the
+grounded columns' summed DEPTH DEFICIT `Σ(z_draft − b)`, not their area,
+which is why 39.4 % and 14 % grounded gave 6.09E-01 and 1.87E-02 rather
+than anything proportional to the fraction.
+
+A land T-cell now holds `h_layer = H_VANISHED` and `hTr = 0` — the state
+every vanished-gated operator already holds it at — and a grounded column's
+barotropic datum is `0` rather than a negative water column. The same run
+today:
+
+```
+Mass : 1.277811397E+16  Error -5.255E-14
+Salt : 4.379651448E+17  Error -5.242E-14  out 1.732E+06  src -4.348E+12
+Heat :-4.723233226E+15  Error  6.544E-14  out 5.593E+06  src -1.062E+13
+```
+
+The day-1 totals are unchanged to every printed digit: no wet cell was ever
+affected (verified bitwise — `tests/test_ocean_cavity_grounded_budget.F90`
+runs the same 64 cells as grounded ice and as ordinary island land and
+finds every wet column identical). What moved is the step-0 latch, which
+was the thing that was wrong.
+
+The contract is in `src/core/ocean/README.md` ("the land-state contract"
+and "the cavity datum contract"); the gate is
+`tests/test_ocean_cavity_grounded_budget.F90`, which holds all three
+relative residuals at `1e-12` for 20 steps of the full split solver, with
+melt off and with melt on.

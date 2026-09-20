@@ -61,8 +61,8 @@ module rdb_ocean_setup
                                 GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, &
                                 GRID_CONFIG_SUPERGRID, GRID_CONFIG_TRIPOLAR, &
                                 metrics_porous_alloc
-   use rdb_ocean_cavity, only: cavity_water_column_impl, cavity_fill_p_ice_ref, &
-                               cavity_datum_residual
+   use rdb_ocean_cavity, only: cavity_fill_p_ice_ref, &
+                               cavity_datum_impl, cavity_datum_residual
    use rdb_ocean_cavity_melt, only: CAVITY_GAMMA_RATIO_ISOMIP
    use rdb_ocean_porous, only: parse_porous_source, parse_porous_eta_interp, &
                                porous_fill_stats_resolved, &
@@ -3012,11 +3012,18 @@ contains
       ! answer-changing decision.
       if (cfg%ocean%bt%n_inner >= 1) then
          if (ocean_state%metrics%use_cavity) then
-            call cavity_water_column_impl(ocean_state%dyn%bt_work%bt_H_ref, &
-                                          ocean_state%barotropic%b, &
-                                          ocean_state%metrics%z_draft, &
-                                          size(ocean_state%barotropic%b, 1), &
-                                          size(ocean_state%barotropic%b, 2))
+            ! `cavity_datum_impl`, not the raw `b - z_draft`: a GROUNDED
+            ! column has no water column, and its datum is 0 rather than
+            ! a negative thickness.  See that routine for why — in short,
+            ! it is land, nothing downstream reads its datum, and the
+            ! negative value put a phantom few-hundred-metre `bt_eta` on
+            ! it and turned the ALE land target into a cancellation.
+            call cavity_datum_impl(ocean_state%dyn%bt_work%bt_H_ref, &
+                                   ocean_state%barotropic%b, &
+                                   ocean_state%metrics%z_draft, &
+                                   cfg%ocean%cavity_dyn%h_min_cavity, &
+                                   size(ocean_state%barotropic%b, 1), &
+                                   size(ocean_state%barotropic%b, 2))
          else
             ocean_state%dyn%bt_work%bt_H_ref = ocean_state%barotropic%b
          end if
@@ -3156,8 +3163,13 @@ contains
          end do
       end if
 
-      ! The counted-once invariant (I), in metres of reference depth:
+      ! The counted-once invariant (I), in metres of reference depth, over
+      ! the WET columns:
       !     rho*g*z_draft + (bt_H_ref - b)*rho*g == 0   <=>   bt_H_ref == b - z_draft.
+      ! GROUNDED columns are excluded because they are LAND: every face
+      ! metric on them is zero, so they carry no barotropic momentum
+      ! equation and there is no load on them to count once or twice.
+      ! Their datum is deliberately 0 (`cavity_datum_impl`).
       ! Asserted on the common positive factor divided out — scale-free,
       ! and it does not fabricate a product the code never forms.  The
       ! bound is a pure round-off allowance on the ONE subtraction
@@ -3171,7 +3183,8 @@ contains
                      max(maxval(abs(ocean_state%barotropic%b)), 1.0_wp)
          resid = cavity_datum_residual(ocean_state%dyn%bt_work%bt_H_ref, &
                                        ocean_state%barotropic%b, &
-                                       ocean_state%metrics%z_draft, nx, ny)
+                                       ocean_state%metrics%z_draft, &
+                                       cfg%ocean%cavity_dyn%h_min_cavity, nx, ny)
          if (.not. (resid <= datum_tol)) then
             call fail("&ocean_cavity_dyn_nml: the barotropic datum and the ice "// &
                       "draft disagree (max |bt_H_ref - (b - z_draft)| = "// &

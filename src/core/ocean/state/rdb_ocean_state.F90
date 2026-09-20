@@ -3133,10 +3133,14 @@ contains
       !! times a NaN land contribution is still NaN).  Spec §13.3 /
       !! `land_mask_final_resolution.md` R-land-state:
       !!   * `h_layer` floored to `H_VANISHED` (never 0 — avoids 1/0);
-      !!   * tracers held at their seeded per-layer value (`hTr/h_old`),
-      !!     re-scaled onto the floored thickness so `T/S = hTr/h` is
-      !!     preserved and finite;
+      !!   * tracer content zeroed (`hTr = 0`, so `T = S = 0` — finite);
       !!   * layer + barotropic face velocities zeroed at land faces.
+      !!
+      !! The `(h, hTr) = (H_VANISHED, 0)` pair is the LAND-STATE CONTRACT:
+      !! it is what every vanished-gated operator already holds a land
+      !! column at, so a land column looks the same to the budget at the
+      !! latch and at every later step.  `seed_land_tracer_hold_impl`
+      !! carries the full statement and the history.
       !!
       !! Runs at SETUP, after `metrics_apply_land_mask` has derived
       !! `wet_u/wet_v`, BEFORE `ocean_state_enter_data`.  Plain host loops
@@ -3149,13 +3153,14 @@ contains
       associate (ms => state%multilayer)
          nz_ml = size(ms%h_layer, 3)
 
-         ! Tracers FIRST: read the old (pre-floor) h to recover T/S, then
-         ! re-scale hTr onto the floored thickness.  Must precede the
-         ! h_layer floor so the per-layer value is recovered from the
-         ! thickness it was seeded against.
+         ! Tracer content on land is ZERO — the state every vanished-gated
+         ! operator (ALE remap first) holds a land column at, and therefore
+         ! the state the budget latch must see.  Order-independent of the
+         ! thickness floor below: neither reads the other.  See
+         ! `seed_land_tracer_hold_impl`'s land-state contract.
          if (allocated(ms%tracers)) then
             do t = 1, size(ms%tracers)
-               call seed_land_tracer_hold_impl(ms%tracers(t)%hTr, ms%h_layer, &
+               call seed_land_tracer_hold_impl(ms%tracers(t)%hTr, &
                                                ms%wet_mask, nz_ml)
             end do
          end if
@@ -3186,26 +3191,57 @@ contains
       end associate
    end subroutine ocean_state_seed_land_cells
 
-   pure subroutine seed_land_tracer_hold_impl(hTr, h_layer, wet_mask, nz)
-      !! On land T-cells, recover the seeded per-layer tracer value
-      !! `val = hTr/h_old` and re-scale onto the `H_VANISHED` floor so
-      !! `hTr = val*H_VANISHED` stays finite and `T/S` is held.  Wet cells
-      !! untouched (bit-identical when `wet_mask≡1`).
+   pure subroutine seed_land_tracer_hold_impl(hTr, wet_mask, nz)
+      !! Zero the extensive tracer content `hTr` on land T-cells
+      !! (`wet_mask == 0`).  Wet cells untouched (bit-identical when
+      !! `wet_mask ≡ 1`).
+      !!
+      !! ### The land-state contract: `h = H_VANISHED`, `hTr = 0`
+      !!
+      !! `seed_land_h_floor_impl` pins a land layer's thickness EXACTLY at
+      !! `H_VANISHED`, which is the D4 *vanished* marker.  Every
+      !! vanished-gated operator in the tree tests `h > H_VANISHED`
+      !! (strictly), so a land layer is on the VANISHED side of every one
+      !! of those gates — in particular the ALE remap's concentration
+      !! step (`rdb_ocean_remap::ocean_remap_tracer_field`, `c = hTr/h` if
+      !! `h > H_FLOOR` else `c = 0`), which therefore writes `hTr = 0` on
+      !! every land column at the first regrid.
+      !!
+      !! So `hTr = 0` is not a choice made here — it is the land content
+      !! the running solver holds.  The seed's job is to hand the budget
+      !! latch the SAME land state that every later step will have, and
+      !! any other seeded value is content the first regrid discards
+      !! silently and un-budgeted, which shows up as a step change in the
+      !! console `Error` residual between step 0 and step 1.
+      !!
+      !! This replaced a "recover `val = hTr/max(h_old, H_VANISHED)` and
+      !! re-scale onto the floor" hold, which was wrong twice:
+      !!
+      !!   * the `max(...)` divisor makes the re-scale an exact IDENTITY
+      !!     whenever `h_old <= H_VANISHED` — including `h_old < 0`, which
+      !!     is what an ice-shelf column GROUNDED by `&ocean_cavity_dyn_nml
+      !!     h_min_cavity` has (its water column `b - z_draft` is negative
+      !!     by hundreds of metres).  Those columns kept a FULL-COLUMN,
+      !!     negative `hTr` next to a floored `h`, i.e. an implied
+      !!     concentration of order `-1e7` PSU, and contributed it to the
+      !!     budget latch: 61 % of the initial salt content on
+      !!     `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`;
+      !!   * even where the re-scale DID work (ordinary land, `0 < h_old`),
+      !!     the `val*H_VANISHED` it left is discarded by the first regrid,
+      !!     a ~1e-8 relative step change in every land-bearing case.
+      !!
+      !! The `0*NaN` hazard the old hold existed to avoid is avoided the
+      !! same way: `T = S = hTr/h = 0` is finite.
       integer, intent(in) :: nz
       real(wp), intent(inout) :: hTr(:, :, :)
-      real(wp), intent(in) :: h_layer(:, :, :)
       real(wp), intent(in) :: wet_mask(:, :)
       integer :: i, j, k, nx, ny
-      real(wp) :: val
       nx = size(hTr, 1)
       ny = size(hTr, 2)
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
-               if (wet_mask(i, j) == 0.0_wp) then
-                  val = hTr(i, j, k)/max(h_layer(i, j, k), H_VANISHED)
-                  hTr(i, j, k) = val*H_VANISHED
-               end if
+               if (wet_mask(i, j) == 0.0_wp) hTr(i, j, k) = 0.0_wp
             end do
          end do
       end do
@@ -3652,7 +3688,8 @@ contains
                           to_string(maxval(state%metrics%z_draft))//" m, "// &
                           "h_min_cavity = "// &
                           to_string(cfg%ocean%cavity_dyn%h_min_cavity)//" m")
-         call logger%info("                  datum bt_H_ref = b - z_draft; "// &
+         call logger%info("                  datum bt_H_ref = b - z_draft afloat, "// &
+                          "0 where grounded; "// &
                           to_string(n_grounded)//" of "//to_string(n_interior)// &
                           " interior columns grounded (-> LAND via the wet mask)")
          if (n_over_land > 0) then
