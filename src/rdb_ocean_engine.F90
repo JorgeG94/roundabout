@@ -111,6 +111,7 @@ module rdb_ocean_engine
                               configure_ocean_drag, &
                               configure_ocean_hdiff, &
                               configure_ocean_vmix, configure_ocean_tracers, configure_ocean_lateral, &
+                              configure_ocean_reference_density, &
                               configure_ocean_pgf, configure_ocean_bt, &
                               configure_ocean_bt_split, configure_ocean_bc, &
                               configure_ocean_tides, configure_ocean_p_surf, &
@@ -584,6 +585,16 @@ contains
 
       call configure_ocean_pgf(cfg, engine%state, rank, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! The single configured ρ₀ (`&ocean_ic_nml rho_0` -> `eos%rho0`) out to
+      ! the slots that keep their own copy: surface heat/salt flux, wind
+      ! stress, KPP-vmix and the engine-held geothermal slot.  Runs after
+      ! every slot-specific configure (nothing downstream re-derives a
+      ! reference density) and well before `ocean_state_enter_data`, which is
+      ! what makes the on-device `vmix%rho0` reads correct without an
+      ! explicit `!$acc update device` — see the routine's docstring.
+      call configure_ocean_reference_density(engine%state, geo=engine%geo)
+
       call configure_ocean_bt(cfg, engine%state, engine%grid, rank)
 
       call configure_ocean_bt_split(cfg, engine%state, engine%grid, rank)   ! may auto-set n_inner

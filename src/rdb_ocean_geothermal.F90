@@ -26,7 +26,16 @@ module rdb_ocean_geothermal
          !! Master switch.  Default `.false.` — the kernel no-ops, so
          !! existing nmls + tests stay bit-identical.
       real(wp) :: rho0 = 1035.0_wp
-         !! Boussinesq reference density (kg/m^3).
+         !! Boussinesq reference density (kg/m^3) — the `dt*Q_geo/(rho0*cp)`
+         !! divisor of the bed heat source.
+         !!
+         !! ASSIGNED FROM CONFIG by `configure_ocean_reference_density`,
+         !! which copies the single rho0 of record (`&ocean_ic_nml rho_0`
+         !! -> `eos%rho0`); this slot lives on the engine rather than on
+         !! `ocean_state_t`, so it is handed in as that routine's optional
+         !! `geo` argument.  The literal here is only the pre-configure
+         !! type default.  Host scalar: folded into `src_T` before the
+         !! kernel, so no `!$acc update device`.
       real(wp) :: cp = SEAWATER_CP
          !! Specific heat capacity (J/kg/K).
       real(wp) :: h_min = 1.0e-3_wp

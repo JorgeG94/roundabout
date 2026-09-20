@@ -359,6 +359,17 @@ contains
       real(wp), intent(in), optional :: tau_u(:, :), tau_v(:, :)
       real(wp), intent(in), optional :: lambda_bot_u(:, :), lambda_bot_v(:, :)
       real(wp), intent(in), optional :: rho0
+         !! Boussinesq reference density for the implicit surface-stress
+         !! fold, `dt*(tau/rho0)/h_nz`.  READ ONLY when that fold is active
+         !! (`do_stress` below); every other path never reaches it.  There
+         !! is deliberately NO defaulted value: the one rho0 of record is
+         !! `&ocean_ic_nml rho_0` -> `eos%rho0`, which the production call
+         !! site hands over as `surface_stress%rho0`
+         !! (`configure_ocean_reference_density`).  Omitting it WITH the
+         !! fold active is a wiring bug and fails loud — it used to fall
+         !! back to a silent literal 1035, which is how a run configured at
+         !! a different rho_0 could fold its wind stress in on the wrong
+         !! one.
       real(wp), intent(inout), optional :: visc_rem_u(:, :, :), visc_rem_v(:, :, :)
       logical, intent(in), optional :: remnant_only
          !! `.true.` = build the matrices and (re)fill `visc_rem_u/v`
@@ -394,8 +405,18 @@ contains
       solve_mom = .true.
       if (present(remnant_only)) solve_mom = .not. remnant_only
       if (.not. solve_mom .and. .not. do_remnant) return   ! nothing to produce
-      rho0_l = 1035.0_wp
-      if (present(rho0)) rho0_l = rho0
+      ! Reference density for the implicit stress fold.  The placeholder is
+      ! inert — `rho0_l` only reaches an answer under `do_stress`, and that
+      ! branch is guarded below — so it must never be a plausible-looking
+      ! seawater density that a caller could silently inherit.
+      rho0_l = 1.0_wp
+      if (present(rho0)) then
+         rho0_l = rho0
+      else if (do_stress) then
+         error stop "vdiff_apply_momentum: implicit_stress is on and tau_u/tau_v "// &
+            "were supplied, but rho0 was not — pass the configured reference "// &
+            "density (surface_stress%rho0, from &ocean_ic_nml rho_0)"
+      end if
       do_corner = present(kv_corner_source)
       corner_prandtl_l = 1.0_wp
       if (present(kv_corner_prandtl)) corner_prandtl_l = kv_corner_prandtl
