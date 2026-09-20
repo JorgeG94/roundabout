@@ -677,7 +677,10 @@ module rdb_config
          !! values are rounded DOWN to even with a warning.  Fail-loud
          !! exclusions (apply when bt_halo is set EXPLICITLY > 0; AUTO instead
          !! silently resolves to 0): wet/dry enable, use_cont_type,
-         !! upstream_h_face, tides enable, supergrid/tripolar grid_config.
+         !! upstream_h_face, tides enable, psurf enable, porous enable,
+         !! supergrid/tripolar grid_config.  The set of record is
+         !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
+         !! checks in lockstep.
    end type ocean_bt_config_t
 
    type :: ocean_debug_config_t
@@ -5006,6 +5009,12 @@ contains
          reason = "upstream_h_face"
       else if (cfg%ocean%tides%enable) then
          reason = "tides enable"
+      else if (cfg%ocean%psurf%enable) then
+         ! Surface-pressure loading rides the SAME `eta_forcing` seam as
+         ! the body tide, and the wide BT clone carries no copy of it:
+         ! `run_stage_split` `error stop`s on `bt_halo > 0` with an
+         ! `eta_forcing` actual.  Must exclude alongside tides.
+         reason = "psurf enable"
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
       else if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
