@@ -89,7 +89,7 @@ contains
                   new_unittest("instant_does_not_accumulate", test_instant_no_accum), &
                   new_unittest("mean_dt_weighted_varies_with_dt", test_mean_dt_weighted), &
                   new_unittest("integral_constant_rate", test_integral_constant_rate), &
-                  new_unittest("derived_catalog_lists_seven_entries", test_derived_catalog_size), &
+                  new_unittest("derived_catalog_lists_every_entry", test_derived_catalog_size), &
                   new_unittest("derived_h_layer_direct_copy", test_derived_h_layer), &
                   new_unittest("derived_rho_layer_direct_copy", test_derived_rho_layer), &
                   new_unittest("derived_vorticity_z_rigid_rotation", test_derived_vorticity), &
@@ -1346,12 +1346,15 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_derived_catalog_size(error)
-      !! Catalog ships ten entries (7 base + 3 sea-ice velocity diags).
-      !! Locks the count so we notice if an entry is accidentally dropped.
+      !! Catalog ships 23 entries: 7 base + 3 sea-ice velocity diags +
+      !! 13 ice-shelf-cavity diags (11 melt-interface, gated on
+      !! `&ocean_cavity_melt_nml`, and 2 geometry, gated on
+      !! `&ocean_cavity_dyn_nml`).  Locks the count so we notice if an
+      !! entry is accidentally dropped.
       type(error_type), allocatable, intent(out) :: error
       integer :: n
       n = derived_catalog_size()
-      call check(error, n == 10, "derived catalog should hold 10 entries")
+      call check(error, n == 23, "derived catalog should hold 23 entries")
    end subroutine test_derived_catalog_size
 
    subroutine test_derived_h_layer(error)

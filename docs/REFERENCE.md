@@ -665,6 +665,21 @@ Snapshot output itself is driven by the diagnostics manager
 selection knob, per-diag output vcoord remap, `output_precision`).
 Per-rank files merge offline via `tools/merge_output.py`.
 
+**Ice-shelf cavity diagnostics** (derived catalog, opt in through
+`diags`): `melt` (kg m⁻² s⁻¹, **+ = melting**), `melt_m_per_yr` (the
+ISOMIP+ reporting unit — `/ ρ_fw = 1000 kg m⁻³` × a 365-day year, i.e.
+× 31 536 exactly; Asay-Davis et al. 2016 §3.3), `thermal_driving`
+(`T_far − T_f(S_far, p_top)`), `haline_driving` (`S_far − S_b`),
+`tbdry`, `sbdry`, `tfreeze_ib`, `exch_vel_t`, `exch_vel_s`,
+`ustar_shelf` and `cavity_melt_status` — all eleven need
+`&ocean_cavity_melt_nml enable` — plus `z_draft` and `water_column`
+(= `bt_H_ref + bt_eta`), which need only `&ocean_cavity_dyn_nml
+enable`. Outside the ice cover every one of them is the IEEE NaN
+missing-value sentinel rather than zero, so a domain mean is a mean
+over the CAVITY and the console line reports `missing=n/total`.
+Requesting one whose prerequisite knob is off is a **fail-loud**
+configure error.
+
 ### `&boundary_nml`
 
 | Parameter | Default | Description |

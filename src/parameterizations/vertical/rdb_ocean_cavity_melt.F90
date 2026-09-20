@@ -122,6 +122,7 @@ module rdb_ocean_cavity_melt
    public :: cavity_two_equation
    public :: cavity_solve_melt
    public :: cavity_melt_point
+   public :: cavity_melt_point_gamma
    public :: cavity_melt_columns
    public :: cavity_melt_columns_2d
    public :: cavity_exchange_with_f
@@ -1946,6 +1947,72 @@ contains
       q_ocean = sol%q_ocean
    end subroutine cavity_melt_point
 
+   pure subroutine cavity_melt_point_gamma(T_w, S_w, p_b, u_star, S_i, par, ice, eos, &
+                                           const, T_b, S_b, m_mass, q_ocean, &
+                                           gamma_t, gamma_s, ierr)
+      !! `cavity_melt_point` plus the two EXCHANGE VELOCITIES the solve
+      !! converged on.
+      !!
+      !! A separate entry point rather than two more `intent(out)`
+      !! arguments on `cavity_melt_point`: that procedure's signature is
+      !! the scalar oracle the 17-digit kernel suite is written against,
+      !! and widening it would re-signature every one of those calls to
+      !! carry two values they do not check.  The bundle
+      !! (`ocean_cavity_solution_t`) already carries `gamma_t`/`gamma_s`,
+      !! so this wrapper costs nothing but the two extra stores — it is
+      !! the SAME `cavity_solve_melt` call, not a second solve.
+      !!
+      !! `gamma_t`/`gamma_s` exist so the diagnostic catalog can report
+      !! `exch_vel_t`/`exch_vel_s` without re-deriving the exchange law
+      !! outside the module that owns it: under `hj99` or `yung25` they
+      !! are implicit functions of the converged interface state, and a
+      !! diagnostic that re-computed them from `u*` alone would quietly
+      !! report the neutral values instead of the stratification-
+      !! suppressed ones.
+      !$acc routine seq
+      real(wp), intent(in) :: T_w
+         !! Far-field temperature (degC).
+      real(wp), intent(in) :: S_w
+         !! Far-field salinity (g/kg).
+      real(wp), intent(in) :: p_b
+         !! Interface pressure (Pa).
+      real(wp), intent(in) :: u_star
+         !! Friction velocity (m/s).
+      real(wp), intent(in) :: S_i
+         !! Ice salinity (g/kg).
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Exchange-law bundle.
+      type(ocean_cavity_ice_t), intent(in) :: ice
+         !! Ice-conduction bundle.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle — the liquidus.
+      type(ocean_cavity_const_t), intent(in) :: const
+         !! Constants bundle.
+      real(wp), intent(out) :: T_b
+         !! Interface temperature (degC).
+      real(wp), intent(out) :: S_b
+         !! Interface salinity (g/kg).
+      real(wp), intent(out) :: m_mass
+         !! Melt mass flux (kg/m^2/s), > 0 melting.
+      real(wp), intent(out) :: q_ocean
+         !! Turbulent heat flux ocean -> interface (W/m^2).
+      real(wp), intent(out) :: gamma_t
+         !! Thermal exchange velocity (m/s) of the converged solve.
+      real(wp), intent(out) :: gamma_s
+         !! Haline exchange velocity (m/s) of the converged solve.
+      integer, intent(out) :: ierr
+         !! `CAVITY_MELT_*` status.
+      type(ocean_cavity_solution_t) :: sol
+
+      call cavity_solve_melt(T_w, S_w, p_b, u_star, S_i, par, ice, eos, const, sol, ierr)
+      T_b = sol%T_b
+      S_b = sol%S_b
+      m_mass = sol%m_mass
+      q_ocean = sol%q_ocean
+      gamma_t = sol%gamma_t
+      gamma_s = sol%gamma_s
+   end subroutine cavity_melt_point_gamma
+
    pure subroutine cavity_melt_columns(n, T_w, S_w, p_b, u_star, S_i, par, ice, eos, &
                                        const, T_b, S_b, m_mass, q_ocean, ierr_col)
       !! Data-parallel driver: solve `n` independent columns.
@@ -2048,7 +2115,8 @@ contains
    pure subroutine cavity_melt_columns_2d(nx, ny, cover, T_w, S_w, p_b, u_far, v_far, &
                                           S_i, f_cor, cd, u_tide, ustar_min, &
                                           par, ice, eos, const, &
-                                          u_star, T_b, S_b, m_mass, q_ocean, ierr_col)
+                                          u_star, T_b, S_b, m_mass, q_ocean, &
+                                          gamma_t, gamma_s, ierr_col)
       !! Masked 2-D driver: form the friction velocity and solve the
       !! interface on every ICE-COVERED column of an `(nx, ny)` plane,
       !! leaving the rest untouched at exactly zero.
@@ -2142,6 +2210,11 @@ contains
          !! Melt mass flux (kg/m^2/s), > 0 melting; 0 where uncovered.
       real(wp), intent(out) :: q_ocean(nx, ny)
          !! Ocean -> interface heat flux (W/m^2); 0 where uncovered.
+      real(wp), intent(out) :: gamma_t(nx, ny)
+         !! Thermal exchange velocity (m/s) of each column's converged
+         !! solve; EXACTLY zero where the column is not solved.
+      real(wp), intent(out) :: gamma_s(nx, ny)
+         !! Haline exchange velocity (m/s), same convention.
       integer, intent(out) :: ierr_col(nx, ny)
          !! `CAVITY_MELT_*` status per column; `CAVITY_MELT_OK` where
          !! uncovered.
@@ -2153,15 +2226,18 @@ contains
             call cavity_ustar(u_far(i, j), v_far(i, j), cd, u_tide, ustar_min, us, ie)
             u_star(i, j) = us
             if (ie == CAVITY_MELT_OK) then
-               call cavity_melt_point(T_w(i, j), S_w(i, j), p_b(i, j), us, S_i, &
-                                      cavity_exchange_with_f(par, f_cor(i, j)), &
-                                      ice, eos, const, T_b(i, j), S_b(i, j), &
-                                      m_mass(i, j), q_ocean(i, j), ierr_col(i, j))
+               call cavity_melt_point_gamma(T_w(i, j), S_w(i, j), p_b(i, j), us, S_i, &
+                                            cavity_exchange_with_f(par, f_cor(i, j)), &
+                                            ice, eos, const, T_b(i, j), S_b(i, j), &
+                                            m_mass(i, j), q_ocean(i, j), &
+                                            gamma_t(i, j), gamma_s(i, j), ierr_col(i, j))
             else
                T_b(i, j) = 0.0_wp
                S_b(i, j) = 0.0_wp
                m_mass(i, j) = 0.0_wp
                q_ocean(i, j) = 0.0_wp
+               gamma_t(i, j) = 0.0_wp
+               gamma_s(i, j) = 0.0_wp
                ierr_col(i, j) = ie
             end if
          else
@@ -2170,6 +2246,8 @@ contains
             S_b(i, j) = 0.0_wp
             m_mass(i, j) = 0.0_wp
             q_ocean(i, j) = 0.0_wp
+            gamma_t(i, j) = 0.0_wp
+            gamma_s(i, j) = 0.0_wp
             ierr_col(i, j) = CAVITY_MELT_OK
          end if
       end do

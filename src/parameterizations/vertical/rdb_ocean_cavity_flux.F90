@@ -240,6 +240,16 @@ module rdb_ocean_cavity_flux
       real(wp), allocatable :: q_ocean(:, :)
          !! Turbulent heat flux ocean → interface (W/m^2), > 0 cools the
          !! ocean.
+      real(wp), allocatable :: gamma_t(:, :)
+         !! Thermal exchange velocity (m/s) the column's solve converged
+         !! on — NOT `par%gamma_t_coeff`, which is the dimensionless
+         !! coefficient.  Under `hj99` / `yung25` it is an implicit
+         !! function of the converged interface state, so it is stored
+         !! rather than re-derived: a diagnostic that rebuilt it from
+         !! `u*` alone would report the NEUTRAL value instead of the
+         !! stratification-suppressed one.  Zero where inactive.
+      real(wp), allocatable :: gamma_s(:, :)
+         !! Haline exchange velocity (m/s), same convention.
       integer, allocatable :: status(:, :)
          !! `CAVITY_MELT_*` per column; `CAVITY_MELT_OK` where inactive.
 
@@ -280,7 +290,7 @@ contains
    subroutine ocean_cavity_flux_init(this, grid)
       !! Allocate the slot.  Gated on `enable` (latched by
       !! `ocean_state_init_from_config` before this runs), so a run
-      !! without a cavity pays eleven `(1,1)` placeholders.
+      !! without a cavity pays fourteen `(1,1)` placeholders.
       class(ocean_cavity_flux_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       integer :: nx, ny
@@ -304,6 +314,8 @@ contains
       allocate (this%s_b(nx, ny), source=0.0_wp)
       allocate (this%melt(nx, ny), source=0.0_wp)
       allocate (this%q_ocean(nx, ny), source=0.0_wp)
+      allocate (this%gamma_t(nx, ny), source=0.0_wp)
+      allocate (this%gamma_s(nx, ny), source=0.0_wp)
       allocate (this%status(nx, ny), source=CAVITY_MELT_OK)
       this%is_init = .true.
    end subroutine ocean_cavity_flux_init
@@ -323,6 +335,8 @@ contains
       if (allocated(this%s_b)) deallocate (this%s_b)
       if (allocated(this%melt)) deallocate (this%melt)
       if (allocated(this%q_ocean)) deallocate (this%q_ocean)
+      if (allocated(this%gamma_t)) deallocate (this%gamma_t)
+      if (allocated(this%gamma_s)) deallocate (this%gamma_s)
       if (allocated(this%status)) deallocate (this%status)
    end subroutine ocean_cavity_flux_destroy
 
@@ -344,10 +358,12 @@ contains
       type(ocean_cavity_flux_t), intent(inout) :: this
       !$acc enter data copyin(this%f_cor, this%active, this%t_far, this%s_far, &
       !$acc&                  this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                  this%s_b, this%melt, this%q_ocean, this%status)
+      !$acc&                  this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$acc&                  this%gamma_s, this%status)
       !$acc update device(this%f_cor, this%active, this%t_far, this%s_far, &
       !$acc&              this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&              this%s_b, this%melt, this%q_ocean, this%status)
+      !$acc&              this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$acc&              this%gamma_s, this%status)
    end subroutine ocean_cavity_flux_enter_data_impl
 
    subroutine ocean_cavity_flux_exit_data(this)
@@ -362,7 +378,8 @@ contains
       type(ocean_cavity_flux_t), intent(inout) :: this
       !$acc exit data delete(this%f_cor, this%active, this%t_far, this%s_far, &
       !$acc&                 this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                 this%s_b, this%melt, this%q_ocean, this%status)
+      !$acc&                 this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$acc&                 this%gamma_s, this%status)
    end subroutine ocean_cavity_flux_exit_data_impl
 
    pure function ocean_cavity_flux_bytes(this) result(nbytes)
@@ -382,6 +399,8 @@ contains
                + arr_bytes(this%s_b) &
                + arr_bytes(this%melt) &
                + arr_bytes(this%q_ocean) &
+               + arr_bytes(this%gamma_t) &
+               + arr_bytes(this%gamma_s) &
                + arr_bytes(this%status)
    end function ocean_cavity_flux_bytes
 
@@ -692,7 +711,7 @@ contains
                                   cav%cdrag_top, cav%u_tide, cav%ustar_min, &
                                   cav%par, cav%ice, eos, cav%const, &
                                   cav%ustar, cav%t_b, cav%s_b, cav%melt, cav%q_ocean, &
-                                  cav%status)
+                                  cav%gamma_t, cav%gamma_s, cav%status)
 
       call cavity_flux_fill_impl(nx, ny, cav%s_ice, cav%active, cav%melt, cav%q_ocean, &
                                  cav%s_far, sf%heat_cavity, sf%salt_cavity)
