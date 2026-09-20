@@ -437,6 +437,17 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 - **Porous barriers** (`&ocean_porous_nml`, Adcroft 2013) — subgrid
   sill/strait blocking that narrows the continuity and barotropic face
   widths.
+- **Static ice-shelf cavity geometry** (`&ocean_cavity_dyn_nml`, default
+  off ⇒ bit-identical) — a prescribed, time-constant ice draft
+  `z_draft(i,j)` (m, positive down) absorbed into the barotropic DATUM,
+  `bt_H_ref = b − z_draft`, so `bt_eta` is the deviation from the loaded
+  equilibrium (zero at rest under the shelf) and every consumer of the
+  water column `D = bt_H_ref + bt_eta` needs no cavity branch — Losch
+  (2008) §2.1's convention. Analytic `flat` / `linear` drafts with a
+  calving front; a column with less than `h_min_cavity` of water under
+  the ice is LAND through the ordinary wet-mask seed, never a thin film.
+  Single-rank, `fv_mom6` + sigma/z*-lite only, and the isostatic load
+  itself is not yet applied (datum-only; configure says so).
 - **Interior land masking** (static free-slip walls via metric-zeroing)
   and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma / z*-lite,
   single-rank, positive-definite outflow limiter).
@@ -713,6 +724,22 @@ Gates test `coord_type == VCOORD_LAGRANGIAN` specifically; other vcoords
 | `angstrom_h` | `0.0` | Minimum-thickness floor (m) on the Lagrangian continuity h-update — MOM6 GV%Angstrom_H analogue: `h_new = max(h - dt·div, angstrom_h)`. 0 = off (bit-identical). Recommended run value 1e-3..1e-2 m. **Non-conservative**: injects ≤ angstrom_h×cell-area per floored layer-cell; the mass `Error` diagnostic reflects the true divergence. R7 caveat: lifts h but not hTr, so Tr = hTr/h shifts on a floored layer — harmless for adiabatic isopycnal; thermo-on isopycnal correctness is out of scope for v1. |
 | `reset_vanished_u` | `.false.` | Zero the face velocity of a layer vanished on **both** adjacent cells (h ≤ max(angstrom_h, H_VANISHED) on both sides). One-sided faces — a massive-to-thin grounding front — are unchanged so the re-wetting flux survives. |
 | `cfl_ignore_vanished` | `.false.` | Exclude vanished layers (same both-sided criterion) from the console MaxCFL / CFL-panic / `apply_velocity_truncation`. A velocity spike in a vanished layer cannot falsely trigger an abort; the vanished face is zeroed (not CFL-clipped). |
+
+### `&ocean_cavity_dyn_nml`
+
+Static ice-shelf cavity geometry. Default off ⇒ bit-identical; the full
+knob list with defaults is in [`docs/generated_nml_knobs.md`](generated_nml_knobs.md).
+
+| Key | Meaning |
+|---|---|
+| `enable` | Master switch. Requires `sim_type='ocean'`, the split solver, `&ocean_pgf_nml form="fv_mom6"` with `gfs_scale = 1`, `vcoord_type` ∈ {sigma, zstar}, and a single rank; mutually exclusive with wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL and the z-level T/S IC. Every one of those is a fail-loud configure error naming the knob and the reason. |
+| `draft_config` | `none` (identity) / `flat` / `linear` / `file` (deferred, fails loud). |
+| `draft_source` | `draft` (the formula IS the ice-base depth) or `thickness` (an ice thickness, converted by flotation `ρ_ice·h/ρ₀`). `in_situ` is deferred. |
+| `draft_depth`, `draft_slope` | Draft amplitude (m) and, for `linear`, `d(draft)/dx` (dimensionless). |
+| `draft_x0/x1`, `draft_y0/y1` | Shelf box in METRES of GLOBAL physical position (`draft_x1` is the calving front; `draft_x0` also anchors the `linear` profile). Converted to grid units — degrees on a spherical grid — at the dispatch. `±1e30` (the default) means "no limit on that side", which is what a shelf that reaches a wall needs: a box stopping at `x = 0` would put a phantom calving front one cell outside the west wall. |
+| `h_min_cavity` | Grounding cutoff (m): less water than this under the ice ⇒ the column is LAND. |
+| `grounded_max_frac` | Fail loud if more than this fraction of the interior columns ground. |
+| `rho_ice` | Ice density, consulted only by `draft_source="thickness"`. |
 
 ### `&initial_condition_nml`
 
