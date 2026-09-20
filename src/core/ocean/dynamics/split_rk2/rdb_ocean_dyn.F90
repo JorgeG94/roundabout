@@ -1043,6 +1043,10 @@ contains
       type(ocean_tidal_mixing_t), intent(inout), optional :: vmix_tidal
 
       logical :: therm_active
+      logical :: fold_top
+         !! `.true.` when the ice-shelf top drag is folded into the vdiff
+         !! `k = nz` diagonal — see the gate note at the `vmix_apply_in_stage`
+         !! call below for why the test is `implicit_fold`, not `present(td)`.
       real(wp) :: therm_dt
 
       therm_active = dyn%enable_thermodynamics .and. dyn%is_thermo_step()
@@ -1167,11 +1171,36 @@ contains
       !$acc wait(1)
       ! No `bt_work` here: the unsplit path has no BT correction at all,
       ! so there is no consumer for visc_rem — do_remnant stays .false.
-      call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
-                               vmix_tidal=vmix_tidal, metrics=metrics)
+      ! The top-drag fold arrays are handed over as ARRAYS, not as the
+      ! slot: `td` is optional here, and dereferencing an absent
+      ! derived-type dummy is not allowed, whereas forwarding an absent
+      ! optional ARRAY dummy on to another optional dummy is.
+      !
+      ! GATED ON `implicit_fold`, NOT on `present(td)`.  A DISABLED
+      ! top-drag slot carries PLACEHOLDER-sized arrays, and the
+      ! explicit-shape `(nu, nv)` dummy down in
+      ! `diffuse_velocity_columns_impl` is mapped by nvfortran
+      ! UNCONDITIONALLY — the `if (do_top)` guard inside the kernel is a
+      ! runtime branch the compiler cannot see.  Handing over a `(2,1)`
+      ! placeholder therefore aborts the GPU build with "variable in data
+      ! clause is partially present", which is exactly what it did before
+      ! this gate.  The fold requires `&ocean_tdrag_nml enable`
+      ! (validate_config), so when it is on the arrays are full size.
+      fold_top = .false.
+      if (present(td)) fold_top = td%implicit_fold
+      if (fold_top) then
+         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
+                                  vmix_tidal=vmix_tidal, metrics=metrics, &
+                                  lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                  cover_u=td%cover_u, cover_v=td%cover_v)
+      else
+         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
+                                  vmix_tidal=vmix_tidal, metrics=metrics)
+      end if
    end subroutine run_stage
 
    subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, &
+                                  lambda_top_u, lambda_top_v, cover_u, cover_v, &
                                   apply_tracers, metrics)
       !! Bundle the per-stage vmix closure / KPP overlay / KV_ML_INVZ2 /
       !! assembly gate / vdiff dispatch into one routine so the run_stage
@@ -1247,6 +1276,19 @@ contains
          !! it, a one-stage (Δt/2) lag (see the step-9 call site below).
          !! Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.
 
+      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
+         !! Ice-shelf top-drag Rayleigh rate (1/s) at u / v faces — the
+         !! `ocean_top_drag_t` slot's `lambda_top_u/v`, forwarded
+         !! verbatim to `vdiff_apply_momentum`'s `k = nz` diagonal fold.
+         !! Passed as ARRAYS rather than the slot itself because the slot
+         !! is optional one level up: forwarding an absent optional
+         !! ARRAY dummy on to another optional dummy is legal Fortran,
+         !! whereas dereferencing an absent derived-type dummy is not.
+         !! Absent, or `vd%implicit_top_drag` off ⇒ bit-identical.
+      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
+         !! Face ice-cover masks (the OR of the two abutting cells).
+         !! Present together with `lambda_top_*`; used to mask the wind
+         !! RHS off on covered faces.
       logical, intent(in), optional :: apply_tracers
          !! `.false.` = momentum-only: skip the tracer vdiff + KPP
          !! non-local applies regardless of the thermo gate.  The pred_corr
@@ -1391,6 +1433,8 @@ contains
                                          tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                          lambda_bot_u=bd%lambda_bot_u, &
                                          lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                         lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                         cover_u=cover_u, cover_v=cover_v, &
                                          visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v, &
                                          kv_corner_source=kshear%kd_corner, &
                                          kv_corner_prandtl=kshear%prandtl_turb)
@@ -1399,6 +1443,8 @@ contains
                                          tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                          lambda_bot_u=bd%lambda_bot_u, &
                                          lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                         lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                         cover_u=cover_u, cover_v=cover_v, &
                                          kv_corner_source=kshear%kd_corner, &
                                          kv_corner_prandtl=kshear%prandtl_turb)
             end if
@@ -1407,12 +1453,16 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v)
          else
             call vdiff_apply_momentum(grid, vd, ms, dt, kv_source=vmix%kv, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
-                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0)
+                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v)
          end if
          if (do_tracers .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
             call vdiff_apply_tracers(grid, vd, ms, dyn%therm_dt(dt), &
@@ -1429,12 +1479,16 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v)
          else
             call vdiff_apply_momentum(grid, vd, ms, dt, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
-                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0)
+                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v)
          end if
          if (do_tracers .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
             call vdiff_apply_tracers(grid, vd, ms, dyn%therm_dt(dt))
@@ -1443,7 +1497,8 @@ contains
       end if
    end subroutine vmix_apply_in_stage
 
-   subroutine visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear)
+   subroutine visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear, &
+                                  lambda_top_u, lambda_top_v, cover_u, cover_v)
       !! Refresh `bt_work%visc_rem_u/v` from the CURRENT stage state
       !! BEFORE the barotropic forcing assembly (PGF_BUG.md §9) — the
       !! MOM6-order parity (`vertvisc_coef` runs before `btstep` every
@@ -1471,6 +1526,14 @@ contains
       type(ocean_kappa_shear_t), intent(in), optional :: kshear
          !! Kappa-shear slot; only read when enabled + vertex mode
          !! (supplies the corner Kv source).
+      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
+         !! Ice-shelf top-drag Rayleigh rate — forwarded so the REMNANT
+         !! is built from the same operator the stage-end momentum solve
+         !! will build.  A remnant built without a sink the solve has
+         !! would weight the barotropic corrector with a friction
+         !! operator that is not the one applied.
+      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
+         !! Face ice-cover masks, same reason.
 
       logical :: vertex_kv
 
@@ -1483,6 +1546,8 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=dyn%bt_work%visc_rem_u, &
                                       visc_rem_v=dyn%bt_work%visc_rem_v, &
                                       remnant_only=.true., &
@@ -1493,6 +1558,8 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=dyn%bt_work%visc_rem_u, &
                                       visc_rem_v=dyn%bt_work%visc_rem_v, &
                                       remnant_only=.true.)
@@ -1502,6 +1569,8 @@ contains
                                    tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                    lambda_bot_u=bd%lambda_bot_u, &
                                    lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                   lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                   cover_u=cover_u, cover_v=cover_v, &
                                    visc_rem_u=dyn%bt_work%visc_rem_u, &
                                    visc_rem_v=dyn%bt_work%visc_rem_v, &
                                    remnant_only=.true.)
@@ -3664,10 +3733,19 @@ contains
          !! .true. when the map-driven sponge (PR-23) supersedes the legacy
          !! band path. A local logical because Fortran does not guarantee
          !! `.and.` short-circuits past `present()`.
+      logical :: fold_top
+         !! `.true.` when the ice-shelf top drag is folded into the vdiff
+         !! `k = nz` diagonal.  Tested instead of `present(td)` because a
+         !! DISABLED top-drag slot carries placeholder-sized arrays, and
+         !! the explicit-shape dummy they would reach in
+         !! `diffuse_velocity_columns_impl` is device-mapped
+         !! unconditionally — see the note in `run_stage`.
       real(wp) :: dt_inner, therm_dt
       real(wp) :: h_min_floor
       real(wp) :: chain_weight, dt_vel
 
+      fold_top = .false.
+      if (present(td)) fold_top = td%implicit_fold
       stage_id = 0
       if (present(stage)) stage_id = stage
       ! Probes label the OUTER step we're INSIDE — i.e. the one
@@ -3964,7 +4042,13 @@ contains
       ! predictor BEFORE btstep/continuity (SPEC §2 P5).
       if (dyn%bt_work%bt_forcing_visc_rem .or. dyn%bt_work%bt_renorm_visc_rem &
           .or. is_pc) then
-         call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
+         if (fold_top) then
+            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
+         end if
       end if
       call sum_slow_tendencies_into_F_slow(dyn%bt_work, pgf, cor, hv, bd, ss, ms)
       ! The top drag MUST reach the barotropic mode the same way the
@@ -4387,13 +4471,29 @@ contains
       ! predictor continuity forms u_av.  Momentum-only there (tracers
       ! untouched); dt_vel = BE·dt matches MOM6's dt_pred.
       if (is_pred) then
-         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
-                                  kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                  apply_tracers=.false., metrics=metrics)
+         if (fold_top) then
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     apply_tracers=.false., metrics=metrics, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     apply_tracers=.false., metrics=metrics)
+         end if
       else
-         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
-                                  kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                  metrics=metrics)
+         if (fold_top) then
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     metrics=metrics, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     metrics=metrics)
+         end if
       end if
       ! KE attribution: implicit vertical friction (+ folded drag/stress
       ! when implicit_*) — the stage-close segment (debug_ke_attr).

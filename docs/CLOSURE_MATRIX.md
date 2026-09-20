@@ -213,6 +213,7 @@ MOM6 carries two independent coefficients, this model deliberately does not.
 | Linear (Rayleigh) | `form="linear"` | rate `r` (1/s); the form with a closed-form spin-down.  Test: `test_ocean_top_drag` |
 | HTBL-distributed | `htbl` | spreads the stress over the top `htbl` m — the `hbbl` mode reflected; keeps the explicit rate finite where sigma thins the top layer near a grounding line (Killworth & Edwards 1999).  Distributed linear rate `r·htbl/h_nz` asserted in closed form |
 | Implicit (backward-Euler in the drag kernel) | `implicit` | tendency formed as `−λ·u/(1 + dt·λ)` so the ordinary apply gives `u/(1 + dt·λ)`; unconditionally stable for any top-layer thickness.  Test asserts it stays monotone and same-signed at `dt·λ = 2.5`, where the explicit form amplifies and flips sign |
+| Implicit (fold into the vdiff `k=nz` diagonal) | `&ocean_vdiff_nml implicit_top_drag` | the OTHER implicit form, and a different thing: `dt·λ_top` on the surface diagonal of the backward-Euler vertical-friction tridiagonal, so the drag is solved TOGETHER with the interior shear rather than ahead of it.  The wind stress already owns that row's RHS — a drag is a diagonal term and a stress is an RHS term, so they compose — and on a covered face the wind RHS is scaled by `(1 − cover)`: no atmosphere under a shelf.  The explicit apply is gated off.  Layer-`nz` only (`htbl > 0` refused, the mirror of the `implicit_drag`/HBBL restriction) and mutually exclusive with `implicit` above (double count).  Test: `test_ocean_top_drag` (`u/(1 + dt·λ)` at `dt·λ = 8` on a 5 cm pinched top layer; open face takes the full wind, covered face takes none) |
 | Top-drag stress magnitude | (always, when enabled) | `stress_top(nx,ny)` = cell-centred `\|τ_top\|` (N/m²), device-resident.  WRITTEN here, read by nothing yet — KPP/EPBL still take `u_*` from `stress_mag`; blending `ustar_shelf` in is a separate PR |
 
 ## Porous barriers (subgrid topography; ocean only)
@@ -720,6 +721,7 @@ tridiagonal as BCs instead of explicit pre-solve adds — thin-layer
 |---|---|---|
 | `implicit_stress` | `.false.` | Wind stress → vdiff surface (`k=nz`) RHS row (Neumann top-BC). Incompatible with `&ocean_vmix_nml direct_stress`. |
 | `implicit_drag` | `.false.` | Bottom drag → vdiff bed (`k=1`) diagonal (stress bottom-BC). Mutually exclusive with `&ocean_bdrag_nml implicit` and HBBL (`hbbl>0`). |
+| `implicit_top_drag` | `.false.` | Ice-shelf top drag → vdiff surface (`k=nz`) diagonal, AND the wind-stress RHS on that row scaled by `(1 − cover)` so a covered face takes the drag and no wind. Requires `&ocean_tdrag_nml enable`; mutually exclusive with `&ocean_tdrag_nml implicit` and with `htbl>0`. Test: `test_ocean_top_drag`. |
 
 **Barotropic linear wave drag** — `&ocean_bt_nml` (ocean path only; bulk
 energy sink for the barotropic tide, Egbert & Ray 2001 / Jayne & St Laurent
