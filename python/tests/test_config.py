@@ -18,12 +18,12 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 60 groups / 670 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 60 groups / 672 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
-    # bump: &ocean_vmix_nml buoyancy_coeffs, the constant-vs-EOS source
-    # of the thermal-expansion / haline-contraction pair).
+    # bump: &ocean_cavity_melt_nml freshwater + volume_compensation, the
+    # real ice-shelf meltwater MASS flux and its sea-level sink).
     assert N_GROUPS == 60
-    assert N_KNOBS == 670
+    assert N_KNOBS == 672
     assert "ocean_bc" in ALL_GROUPS
 
 

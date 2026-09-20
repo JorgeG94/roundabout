@@ -18,7 +18,7 @@ Every section, equation and table number below refers to that paper.
 row-by-row. They have NOT been spun up, and nothing here has been tuned to
 a melt rate — the shipped `gamma_t` is the protocol's *starting guess*
 (Sect. 3.2.1), not a calibrated value. The blockers to a publishable
-Ocean0 are listed at the bottom, and the first of them is decisive.
+Ocean0 are listed at the bottom.
 
 | File | Init | Far-field restoring | Draft | Duration |
 |---|---|---|---|---|
@@ -125,8 +125,8 @@ knob, stated. "NOT AVAILABLE" = this build cannot express it.
 | `κ_H` (Table 4) | 1.0 m² s⁻¹ harmonic | `&ocean_hdiff_nml kappa_h = 1.0` | exact |
 | `ν_stab`, `κ_stab` (Table 4) | 1e-3, 5e-5 m² s⁻¹, **constant** | `&ocean_vmix_nml use_closure=.true., use_kpp=.false., pp81_nu0=0.0, pp81_nu_bg=1.0e-3, pp81_kappa_bg=5.0e-5` | exact. PP81 with `nu0 = 0` degenerates to `kv ≡ nu_bg`, `kt ≡ ks ≡ kappa_bg` at every interface with no Richardson dependence left — i.e. exactly the protocol's constant-coefficient harmonic vertical mixing. KPP is off deliberately: a boundary-layer scheme is a different experiment (Sect. 3.1.6 allows it but asks that it be documented; this is the COM choice). |
 | `ν_unstab`, `κ_unstab` (Table 4) | 0.1 m² s⁻¹ when stratification is unstable | `&ocean_conv_nml enable=.true., kd_conv=0.1, prandtl_conv=1.0, n2_thresh=0.0` | exact (`prandtl_conv = 1` ⇒ `Kv_conv = Kd_conv = 0.1`; the trigger is `N² < 0`) |
-| Virtual vs volume melt flux (Eqs. 28–33) | either, documented | virtual salt flux only | **NOT AVAILABLE** (volume/mass flux) — see the blockers |
-| Evaporative mass removal (Eqs. 34–36) | needed only for a VOLUME-flux model | n/a | not needed while the flux is virtual |
+| Virtual vs volume melt flux (Eqs. 28–33) | either, documented | `&ocean_cavity_melt_nml freshwater = "virtual"` (default, what these files use) or `"mass"` | **BOTH AVAILABLE.** `"mass"` is the real volume flux: `dh = m·dt/ρ₀` on the top layer with `d(hS) = dh·s_ice`, `d(hT) = dh·T_b`. These namelists stay on `"virtual"` so the shipped configuration is unchanged; flip the one key for the volume form |
+| Evaporative mass removal (Eqs. 34–36) | needed only for a VOLUME-flux model | `&ocean_cavity_melt_nml volume_compensation = "uniform_open_ocean"` | **AVAILABLE but NOT the protocol's choice for Ocean0-2.** Sect. 3.1.3 leaves the restored configurations uncompensated — their only seam is a restoring band that moves no volume — and allows compensation for the closed Ocean3/4. The knob is a uniform per-unit-area removal over the uncovered wet cells, each parcel carrying that cell's own `T`/`S`; it is NOT the protocol's evaporation field. Default `"none"` |
 
 ### Not prescribed by the protocol
 
@@ -217,12 +217,20 @@ on the interior.
 
 Listed rather than worked around. The first is decisive on its own.
 
-1. **The meltwater carries NO MASS — virtual salt flux only.** The melt
-   path delivers `−m·(S_far − s_ice)` as a salinity source and adds no
-   volume and no direct buoyancy. For an ice-shelf cavity the meltwater
-   *volume* is a first-order driver of the overturning, so ISOMIP+-style
-   melt numbers from this build are **not publishable**. Configure warns on
-   every cavity-melt run. The real-freshwater path is a separate slice.
+1. **CLOSED — the meltwater can now carry MASS.** `&ocean_cavity_melt_nml
+   freshwater = "mass"` makes the meltwater a real Boussinesq volume
+   source on the top layer (`dh = m·dt/ρ₀`, `d(hS) = dh·s_ice`,
+   `d(hT) = dh·T_b`), with the virtual salt flux retained in `Q_salt`
+   only as the `B_0` buoyancy forcing KPP/EPBL read and removed again
+   from the tracer in the same stage.  Mass is a tracked budget source,
+   so all three console residuals still sit at round-off at every step.
+   **These namelists stay on the `"virtual"` default**, so they are
+   unchanged; flip the one key for the volume form, and add
+   `volume_compensation = "uniform_open_ocean"` if the sea-level rise of
+   a closed box matters for the horizon you are running (ISOMIP+ itself
+   leaves Ocean0-2 uncompensated).  What remains open is the TUNING
+   (blocker 3): the mass form changes the answer, so `Γ_T` must be
+   re-searched against it, not inherited from a virtual-salt run.
 2. **Under-ice `u*` is not seen by the boundary-layer scheme.** The
    ice-shelf top drag publishes `stress_top`, but KPP/EPBL do not consume
    it. These namelists run with KPP off (the protocol prescribes constant
@@ -244,9 +252,10 @@ Listed rather than worked around. The first is decisive on its own.
    entirely downstream of the sloping-lid PGF error), but it is a spurious
    energy source sitting under every run in this directory, and a 20-year
    Ocean1/Ocean2 integrates it for a long time.
-6. **No-slip walls, virtual meltwater and the sloping-lid mode above are
-   the remaining blockers.** The grounded-cavity budget defect that used to
-   be listed here is FIXED — see the next section.
+6. **No-slip walls (4), the untuned `Γ_T` (3) and the sloping-lid mode (5)
+   are the remaining blockers.** The grounded-cavity budget defect that used
+   to be listed here is FIXED — see the next section — and so is the
+   virtual-meltwater blocker (1).
 
 These namelists are registered in
 `tests/regression/stability_manifest.py` as
@@ -255,7 +264,7 @@ file-backed ones need a download and stay out). It is a `forced` case run
 for 1 simulated day at tier 1 and 100 steps at tier 2, asserting finite,
 `conserve:{Mass,Salt,Heat}` at `1e-11` and the CFL guards — deliberately
 NOT a melt-rate or a rest-state gate, because neither is meaningful until
-blocker 1 is closed. It is carried for the conservation assertion above
+the tuning blocker (3) and the sloping-lid mode (5) are closed. It is carried for the conservation assertion above
 everything else: 39.4 % of its interior columns ground, the largest
 grounded fraction anywhere in the corpus.
 

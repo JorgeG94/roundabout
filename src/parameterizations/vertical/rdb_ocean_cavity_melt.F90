@@ -116,6 +116,8 @@ module rdb_ocean_cavity_melt
    public :: ocean_cavity_solution_t
    public :: parse_cavity_exchange_law
    public :: parse_cavity_ice_mode
+   public :: parse_cavity_freshwater
+   public :: parse_cavity_volume_comp
    public :: cavity_ustar
    public :: cavity_exchange_velocities
    public :: cavity_three_equation
@@ -286,6 +288,31 @@ module rdb_ocean_cavity_melt
       !! p. 1796: "causes a net shift toward freezing").  Wiring it up
       !! means revisiting the pre-solve melt/freeze branch AND adding
       !! `k_ice`/`h_ice` to the parameter bundles.
+
+   ! ======================================================================
+   ! Meltwater DELIVERY (`&ocean_cavity_melt_nml freshwater`) and the
+   ! sea-level compensation that goes with it.  Enumerated here, next to
+   ! the exchange-law and ice-conduction codes, so the one file that owns
+   ! the melt vocabulary owns all of it; the coupling layer
+   ! (`rdb_ocean_cavity_flux`) implements them.
+   ! ======================================================================
+
+   integer, parameter, public :: CAVITY_FW_INVALID = 0
+      !! Unrecognised `freshwater` string.
+   integer, parameter, public :: CAVITY_FW_VIRTUAL = 1
+      !! Fixed column mass; the dilution is emulated by the exact
+      !! fixed-mass equivalent salt flux `-m*(S_far - s_ice)`.  Default.
+   integer, parameter, public :: CAVITY_FW_MASS = 2
+      !! Real Boussinesq volume source on the top layer,
+      !! `dh = m*dt/rho_0`.
+
+   integer, parameter, public :: CAVITY_VC_INVALID = 0
+      !! Unrecognised `volume_compensation` string.
+   integer, parameter, public :: CAVITY_VC_NONE = 1
+      !! No compensation; a closed domain gains the melt volume.
+   integer, parameter, public :: CAVITY_VC_UNIFORM_OPEN = 2
+      !! Remove the domain-integrated melt volume again, uniformly per
+      !! unit area over the wet cells the ice does NOT cover.
 
    ! ======================================================================
    ! Named constants.  House rule: cite the PAPER.
@@ -649,6 +676,42 @@ contains
          code = CAVITY_ICE_INVALID
       end select
    end function parse_cavity_ice_mode
+
+   pure function parse_cavity_freshwater(name) result(code)
+      !! Translate a `&ocean_cavity_melt_nml freshwater` string into a
+      !! `CAVITY_FW_*` code.  The accepted set MIRRORS the `nml_enum`
+      !! registration in `register_ocean_cavity_melt` — the two lists
+      !! move together.
+      character(len=*), intent(in) :: name
+      character(len=:), allocatable :: key
+      integer :: code
+      key = trim(adjustl(name))
+      select case (key)
+      case ("virtual", "VIRTUAL", "virtual_salt")
+         code = CAVITY_FW_VIRTUAL
+      case ("mass", "MASS", "real", "real_mass")
+         code = CAVITY_FW_MASS
+      case default
+         code = CAVITY_FW_INVALID
+      end select
+   end function parse_cavity_freshwater
+
+   pure function parse_cavity_volume_comp(name) result(code)
+      !! Translate a `&ocean_cavity_melt_nml volume_compensation` string
+      !! into a `CAVITY_VC_*` code.  Mirrors the `nml_enum` list.
+      character(len=*), intent(in) :: name
+      character(len=:), allocatable :: key
+      integer :: code
+      key = trim(adjustl(name))
+      select case (key)
+      case ("none", "NONE", "off")
+         code = CAVITY_VC_NONE
+      case ("uniform_open_ocean", "UNIFORM_OPEN_OCEAN")
+         code = CAVITY_VC_UNIFORM_OPEN
+      case default
+         code = CAVITY_VC_INVALID
+      end select
+   end function parse_cavity_volume_comp
 
    ! ======================================================================
    ! Friction velocity

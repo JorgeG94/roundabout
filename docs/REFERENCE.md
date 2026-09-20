@@ -563,8 +563,15 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   interface on every ice-covered column, once per thermo step,
   delivered as the two OWNED surface-flux components `heat_cavity`
   (= −`q_ocean`, so warm water COOLS) and `salt_cavity`
-  (= −`m_mass·(S_far − s_ice)`, a **virtual** salt flux — the
-  meltwater carries no mass). Far field sampled over
+  (= −`m_mass·(S_far − s_ice)`). `freshwater` picks what that salt
+  component MEANS: `"virtual"` (default, bit-identical) is the whole
+  meltwater representation and adds no mass; `"mass"` adds the real
+  Boussinesq volume `dh = m·dt/ρ₀` to the top layer, keeps
+  `salt_cavity` in `Q_salt` purely as the KPP/EPBL `B_0` buoyancy
+  forcing, and removes it again from salinity in the same stage.
+  `volume_compensation="uniform_open_ocean"` removes the melt volume
+  again over the uncovered wet cells for a closed domain. Far field
+  sampled over
   `far_field_depth` METRES below the ice base, not "layer nz". The
   liquidus is evaluated at `ms%p_top`, the assembled
   `p_ice_ref + sf%p_surf` above — the melt kernel is that field's
@@ -957,6 +964,8 @@ full knob list with defaults is in
 | `ice_conduction`, `t_ice` | `insulating` (default, the ISOMIP+ prescription; `t_ice` unread) or `adv_diff` (H&J99 eq. 31, `q_ice = m·c_i·(T_b − T_ice)`, zero on freezing). `diffusive` is reserved and refused. |
 | `s_ice` | Ice salinity (g/kg), 0 by the protocol. Must stay strictly below the far-field salinity; a column violating it is counted and given zero melt. |
 | `far_field_depth` | Thickness (m) the far-field `T`/`S`/`u` are averaged over below the ice base — **metres, never layers**. Hold it FIXED across any vertical-coordinate comparison, or the comparison measures the sampling depth. |
+| `freshwater` | `"virtual"` (default ⇒ bit-identical) — the meltwater is the exact fixed-mass equivalent salt flux and adds no volume. `"mass"` — the meltwater is a REAL Boussinesq volume source on the top layer, `dh = m·dt/ρ₀` (ρ₀, not the freshwater density: the model's mass total is `ρ·volume` by construction), with `d(hS) = dh·s_ice` and `d(hT) = dh·T_b`, so salinity falls by dilution. The virtual flux is NOT also applied to the tracer but IS still assembled into `Q_salt`, because it is the dominant part of the surface buoyancy flux KPP/EPBL read for `B_0`; the mass kernel removes it again from salinity and from the pseudo-salt mirror in the same stage. Mass becomes a TRACKED budget source (`ms%mass_src`, the console's `src` on the `Mass` line). Refused with `&ocean_wetdry_nml enable` and with `dt_tracer_advect_ratio > 1`, each naming its follow-up. |
+| `volume_compensation` | `"none"` (default) or `"uniform_open_ocean"`; requires `freshwater="mass"`. The domain-integrated melt volume is removed again each thermo step, uniformly per unit area over the wet cells the ice does NOT cover, each parcel carrying that cell's own `T` and `S` (so no concentration changes anywhere) and tracked as a sink in all three budgets. Without it a CLOSED domain fills — an ISOMIP+ Ocean0 box at metres per year. ISOMIP+ Sect. 3.1.3 leaves the restored Ocean0-2 uncompensated and allows compensation for the closed Ocean3/4, so the default matches the protocol. |
 
 ### `&initial_condition_nml`
 

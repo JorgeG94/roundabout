@@ -404,6 +404,8 @@ Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange 
 | `t_ice` | `-0.2500000000E+02` | degC | Ice interior temperature; read by ice_conduction='adv_diff' only |
 | `s_ice` | `0.0000000000E+00` | g/kg | Ice salinity; must stay strictly below the far-field salinity |
 | `far_field_depth` | `0.1000000000E+02` | m | Thickness below the ice base the far-field T/S/u are averaged over (METRES, not layers) |
+| `freshwater` | `"virtual"` |  | Meltwater delivery: 'virtual' (default, fixed column mass) or 'mass' (real Boussinesq volume on the top layer) |
+| `volume_compensation` | `"none"` |  | Sea-level compensation for freshwater='mass': 'none' (default) or 'uniform_open_ocean' (remove the melt volume again over uncovered wet cells) |
 
 ### &ocean_epbl_nml
 

@@ -1092,7 +1092,8 @@ contains
                                    vmix_tidal=engine%state%vmix_tidal, &
                                    tides=engine%state%tides, &
                                    psurf=engine%state%p_surf, &
-                                   td=engine%state%tdrag)
+                                   td=engine%state%tdrag, &
+                                   cav=engine%state%cavity_flux)
       else
          call profiler_start("ocean_dyn_step")
          call ocean_dyn_step(engine%grid, engine%state%metrics, engine%state%dyn, engine%state%eos, &
@@ -1107,7 +1108,8 @@ contains
                              epbl=engine%state%epbl, kshear=engine%state%kshear, &
                              slopes=engine%state%slopes, &
                              vmix_tidal=engine%state%vmix_tidal, &
-                             bc=engine%state%bc, t=t, td=engine%state%tdrag)
+                             bc=engine%state%bc, t=t, td=engine%state%tdrag, &
+                             cav=engine%state%cavity_flux)
          call profiler_stop("ocean_dyn_step")
       end if
    end subroutine engine_step
