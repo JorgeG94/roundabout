@@ -56,6 +56,20 @@ CURATED_KNOBS = [
     "ocean_tdrag_nml",
 ]
 
+CURATED_KEYS = [
+    # Individual keys (not whole groups) that select a CLOSURE BEHAVIOUR and
+    # so must be findable in the matrix.  A plain numeric knob does not
+    # belong here; a switch that changes which physics runs does.
+    #
+    # `buoyancy_coeffs` decides whether the KPP surface buoyancy flux and
+    # the double-diffusion density ratio take alpha/beta from the scalar
+    # linear-EOS pair or from the ACTIVE equation of state.  Listed because
+    # the answer is invisible in the output (both settings produce a
+    # plausible Kd) and because it is a no-op under eos="linear" but a
+    # factor-of-several change in an ice-shelf cavity under Wright.
+    "buoyancy_coeffs",
+]
+
 # Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —
 # Winton column thermodynamics, multi-category ITD, category transport +
 # compress_ice, and C-grid EVP dynamics — is gated by these.  Each distinctive
@@ -128,12 +142,12 @@ def main() -> int:
     # 1a. discover vmix_use_* toggles *declared* in config_t (the `= default`
     #     form, so comments and local `logical :: a, b` decls don't match).
     vmix_knobs = sorted(set(re.findall(r"logical\s*::\s*(vmix_use_\w+)\s*=", config)))
-    knobs = vmix_knobs + CURATED_KNOBS + ICE_KNOBS
+    knobs = vmix_knobs + CURATED_KNOBS + CURATED_KEYS + ICE_KNOBS
 
     errors: List[str] = []
 
     # the curated names must actually exist in the config (catch a rename here)
-    phantom = [k for k in CURATED_KNOBS + ICE_KNOBS if k not in config]
+    phantom = [k for k in CURATED_KNOBS + CURATED_KEYS + ICE_KNOBS if k not in config]
     if phantom:
         errors.append(
             "curated knob(s) not found in rdb_config.F90 — renamed/removed in "

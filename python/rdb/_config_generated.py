@@ -4561,6 +4561,15 @@ class OceanVmix(Group):
         vmin=0.0,
     )
 
+    buoyancy_coeffs = Enum(
+        'buoyancy_coeffs',
+        doc='Source of alpha/beta for KPP B_0 + double diffusion: constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives)',
+        units='',
+        required=False,
+        default='constant',
+        allowed=('constant', 'eos'),
+    )
+
 
 class OceanVdiff(Group):
     """`&ocean_vdiff_nml` -- Backward-Euler vertical-friction solver knobs."""
@@ -6116,4 +6125,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 669
+N_KNOBS = 670

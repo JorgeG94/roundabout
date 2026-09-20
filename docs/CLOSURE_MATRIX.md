@@ -541,6 +541,52 @@ Linear-EOS reference state — `ρ = ρ_0 + β_S·(S−S_ref) − α_T·(T−T_r
 state. The coastal-legacy `&tracer_nml alpha_T/beta_S/T_ref/S_ref`
 spellings are RETIRED and fail loud at configure.
 
+### Where α and β come from (E4)
+
+`ρ_0`, `α_T` and `β_S` above are the LINEAR EOS's own coefficients.
+Under `eos = "wright"` / `"roquet_spv"` they are not that EOS's
+coefficients at all — the true α collapses toward zero at the freezing
+point and grows strongly with pressure. `eos_buoyancy_coeffs` (and its
+sign twin `eos_density_derivs`) evaluate `α = −∂ρ/∂T` and `β = +∂ρ/∂S`
+from the ACTIVE EOS in closed form, per variant, as `pure elemental`
+`!$acc routine seq` point routines. Measured (Wright, S = 34.5):
+
+| state | α (kg/m³/°C) | vs the 10 °C value |
+|---|---|---|
+| −1.9 °C, 0 Pa | `2.619e-2` | ÷ 6.5 |
+| −1.9 °C, 5e6 Pa (500 dbar) | `4.262e-2` | ÷ 4.0 |
+| −1.9 °C, 1e7 Pa (1000 dbar) | `5.871e-2` | ÷ 2.9 |
+| 10 °C (S = 35), 0 Pa | `1.711e-1` | — |
+
+Which consumers take which:
+
+| Consumer | Source of α/β | Pressure | Knob |
+|---|---|---|---|
+| KPP `B_0` (both passes of `vmix_kpp_overlay_impl`; also gates the non-local γ via `B_0 < 0`) | selectable | `ms%p_top` under `&ocean_psurf_nml in_eos`, else `eos%p_ref` — a SURFACE flux has no depth of its own | `&ocean_vmix_nml buoyancy_coeffs` |
+| Double-diffusion density ratio `R_ρ = α·ΔT / β·ΔS` (`&ocean_ddiff_nml`) | selectable | true in-situ interface pressure, seeded from `ms%p_top` and accumulated `g·ρ₀·h` downward (EPBL's stack shape) | `&ocean_vmix_nml buoyancy_coeffs` |
+| EPBL, kappa-shear, tidal mixing, isopycnal slopes, Redi | ALWAYS the active EOS (`eos_specvol_derivs`) | each builds its own in-situ stack; only EPBL seeds from `p_top` | — |
+| PP81 N², convective-adjustment N², KPP bulk-Ri buoyancy, wave speed, MLE `b_ml`, `compute_pbce` | ALWAYS the active EOS — they difference `ms%rho_layer` itself | `eos%p_ref` (baked into `rho_layer`) | — |
+| `ocean_cavity_const_t%alpha_T`/`beta_S` (hj99 / yung25 melt buoyancy) | its OWN pair, deliberately | n/a | none — ISOMIP+ Table 4 calibration constants, and **FRACTIONAL** (1/°C, 1/PSU), not the dimensional `eos_t` pair; left at their defaults by `configure_ocean_cavity` so ISOMIP+ comparability is not silently broken |
+| Sea-ice coupler (`rdb_ice_ocean_coupler`) | reads no α/β and no density derivative at all | n/a | — |
+
+| Source of α/β for KPP `B_0` + double diffusion | ocean | Knob | Test |
+|---|---|---|---|
+| `constant` — the scalar `&ocean_ic_nml alpha_T`/`beta_S` pair, whatever the active EOS | `default` ⇒ bit-identical | `&ocean_vmix_nml buoyancy_coeffs="constant"` | `test_ocean_eos_buoyancy` |
+| `eos` — `eos_buoyancy_coeffs` from the ACTIVE EOS, per column (KPP) / per interface (ddiff). BYTE-IDENTICAL to `constant` under `eos="linear"` (that branch returns the handle members themselves, not `−ρ²·dSV/dX`), so the knob only bites under a nonlinear EOS | available | `&ocean_vmix_nml buoyancy_coeffs="eos"` | `test_ocean_eos_buoyancy` |
+
+`validate_config` **warns** (does not refuse) on cavity melt × nonlinear
+EOS × `buoyancy_coeffs="constant"`: ISOMIP+ prescribes the linear EOS, so
+every shipped cavity namelist is unaffected and keeps running untouched.
+
+**Known, out of scope, and NOT introduced here:** the KPP `B_0` line is
+`g·(α·q_T − β·q_S)` with a DIMENSIONAL α, i.e. it is missing the `1/ρ₀`
+that turns `∂ρ` into a buoyancy — EPBL's twin of the same quantity has it
+(`b0 = g·ρ₀·(dSV/dT·q_T + dSV/dS·q_S)`, and `dSV/dT = α/ρ₀²`). The two
+therefore disagree by a factor ρ₀ for the same physical flux. E4 changes
+only WHERE α comes from, in the same units, so the discrepancy is
+untouched and the default stays bit-identical; fixing it moves every KPP
+answer and belongs in its own PR.
+
 ## Initial conditions (analytical seeds)
 
 | IC | ocean | Knob | Test |

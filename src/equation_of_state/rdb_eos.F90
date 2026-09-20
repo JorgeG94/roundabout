@@ -30,6 +30,8 @@ module rdb_eos
    public :: eos_validate
    public :: eos_wright_pgf_column_sweep_impl
    public :: eos_specvol_derivs
+   public :: eos_density_derivs
+   public :: eos_buoyancy_coeffs
    public :: eos_density_point
    public :: eos_freezing_point
    public :: parse_eos_variant
@@ -1088,6 +1090,151 @@ contains
          dsv_ds = -eos%beta_S/(eos%rho0*eos%rho0)
       end if
    end subroutine eos_specvol_derivs
+
+   pure elemental subroutine eos_buoyancy_coeffs(eos, T, S, p, alpha_T, beta_S)
+      !! Thermal-expansion and haline-contraction coefficients of the
+      !! **ACTIVE** equation of state at a point, in the SAME DIMENSIONAL
+      !! convention the `eos_t` members `alpha_T` / `beta_S` carry:
+      !!
+      !!   alpha_T = −∂ρ/∂T   (kg/m³ per degC; > 0 — warm water expands)
+      !!   beta_S  = +∂ρ/∂S   (kg/m³ per PSU;  > 0 — salt contracts)
+      !!
+      !! so that `ρ ≈ ρ_ref − alpha_T·ΔT + beta_S·ΔS` to first order,
+      !! matching the linear branch of `eos_density_point` term for term.
+      !! They are NOT the fractional α = −(1/ρ)∂ρ/∂T; divide by ρ (or by
+      !! ρ₀ in a Boussinesq consumer) for that.  `ocean_cavity_const_t`
+      !! deliberately carries its own FRACTIONAL ISOMIP+ pair — see its
+      !! docstring.
+      !!
+      !! **Why this exists.** Seawater's thermal expansion is strongly
+      !! state-dependent: it collapses toward zero near the freezing point
+      !! and grows with pressure (thermobaricity).  At (−1.9 degC, 34.5
+      !! PSU) Wright (1997) gives roughly a quarter of the 10 degC surface
+      !! value, and about twice that again by 1000 dbar.  Any consumer
+      !! that sizes a buoyancy flux with a CONSTANT α while the dyn-core
+      !! integrates a NONLINEAR ρ is inconsistent with its own density
+      !! field — worst under an ice shelf, where the constant can
+      !! mis-magnitude (and in the cold-fresh corner mis-sign) the
+      !! melt-driven surface buoyancy flux that sets the boundary layer.
+      !!
+      !! **Exactness, per branch — this is load-bearing for bit-identity.**
+      !! Each branch is differentiated in CLOSED FORM from that variant's
+      !! own density expression; no branch round-trips through
+      !! `−ρ²·dSV/dX`, because for the LINEAR branch that would return
+      !! `ρ(T,S)²·alpha_T/ρ₀²` — equal to `eos%alpha_T` only to round-off.
+      !! As written the linear branch returns the handle members
+      !! BIT-FOR-BIT, which is what lets a consumer routed through here
+      !! stay byte-identical to the constant path under `eos = "linear"`.
+      !!
+      !!   * linear — `ρ = ρ₀ + β(S−S_ref) − α(T−T_ref)` ⇒ the members
+      !!     themselves, exactly; `p` is ignored (no pressure dependence).
+      !!   * Wright (1997) — `ρ = P/D` with `P = p + p₀(T,S)` and
+      !!     `D = λ(T,S) + α₀(T,S)·P`, so by the quotient rule
+      !!     `∂ρ/∂X = (P_X·D − P·D_X)/D²`, `D_X = λ_X + α₀_X·P + α₀·P_X`,
+      !!     all three polynomials from Table A1.  Algebraically identical
+      !!     to `−ρ²·dSV/dX` from `eos_specvol_derivs`, evaluated once.
+      !!   * Roquet et al. (2015) SpV — `ρ = 1/SV` ⇒ `∂ρ/∂X = −SV_X/SV²`,
+      !!     reusing the SINGLE fused `roquet_spv_point` evaluation that
+      !!     already returns `SV` and both model-variable sensitivities
+      !!     (no duplicated polynomial — see `eos_specvol_derivs`).
+      !!
+      !! The `else` is unreachable-by-contract: `eos_validate` guarantees
+      !! `eos%variant` is in the device-callable set at configure time
+      !! (device code cannot `error stop`), exactly as for
+      !! `eos_density_point` / `eos_specvol_derivs`.
+      !!
+      !! `elemental` (all dummies scalar, `eos_t` a flat POD by value) so a
+      !! host-side sweep can evaluate whole arrays in one reference, and
+      !! `!$acc routine seq` so a `do concurrent` kernel can call it —
+      !! the same shape `eos_freezing_point` already ships.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle (variant + scalar coeffs), by value.
+      real(wp), intent(in) :: T, S
+         !! Potential temperature (degC) and practical salinity (PSU) —
+         !! the model-prognostic pair, per the `TS_POT_PRAC` convention.
+      real(wp), intent(in) :: p
+         !! Pressure (Pa) at which to evaluate.  Which pressure is the
+         !! CONSUMER's choice and is documented at each call site: a
+         !! surface buoyancy flux wants the top of the column
+         !! (`multilayer_state_t%p_top` under `&ocean_psurf_nml in_eos`,
+         !! else `eos%p_ref`); an interior-interface closure wants the
+         !! true in-situ hydrostatic pressure there.  Never a
+         !! horizontally-varying value fed back into `ms%rho_layer` —
+         !! see the `p_top` seam contract in `src/core/ocean/README.md`.
+      real(wp), intent(out) :: alpha_T
+         !! −∂ρ/∂T (kg/m³ per degC).
+      real(wp), intent(out) :: beta_S
+         !! +∂ρ/∂S (kg/m³ per PSU).
+
+      real(wp) :: T_sq, alpha_0, p_0, lambda, big_p, denom, inv_d2
+      real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
+      real(wp) :: sv_roq, dsv_dt_roq, dsv_ds_roq, inv_sv2
+
+      if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt_roq, dsv_ds_roq)
+         inv_sv2 = 1.0_wp/(sv_roq*sv_roq)
+         alpha_T = dsv_dt_roq*inv_sv2
+         beta_S = -dsv_ds_roq*inv_sv2
+      else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
+         T_sq = T*T
+         alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
+         p_0 = WRIGHT_B0 + WRIGHT_B1*T + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*T + &
+               WRIGHT_B4*S + WRIGHT_B5*S*T
+         lambda = WRIGHT_C0 + WRIGHT_C1*T + WRIGHT_C2*T_sq + WRIGHT_C3*T_sq*T + &
+                  WRIGHT_C4*S + WRIGHT_C5*S*T
+         dp0_dt = WRIGHT_B1 + 2.0_wp*WRIGHT_B2*T + 3.0_wp*WRIGHT_B3*T_sq + &
+                  WRIGHT_B5*S
+         dlam_dt = WRIGHT_C1 + 2.0_wp*WRIGHT_C2*T + 3.0_wp*WRIGHT_C3*T_sq + &
+                   WRIGHT_C5*S
+         dp0_ds = WRIGHT_B4 + WRIGHT_B5*T
+         dlam_ds = WRIGHT_C4 + WRIGHT_C5*T
+         big_p = p + p_0
+         denom = lambda + alpha_0*big_p
+         inv_d2 = 1.0_wp/(denom*denom)
+         alpha_T = -(dp0_dt*denom &
+                     - big_p*(dlam_dt + WRIGHT_A1*big_p + alpha_0*dp0_dt))*inv_d2
+         beta_S = (dp0_ds*denom &
+                   - big_p*(dlam_ds + WRIGHT_A2*big_p + alpha_0*dp0_ds))*inv_d2
+      else
+         alpha_T = eos%alpha_T
+         beta_S = eos%beta_S
+      end if
+   end subroutine eos_buoyancy_coeffs
+
+   pure elemental subroutine eos_density_derivs(eos, T, S, p, drho_dt, drho_ds)
+      !! Density sensitivities `∂ρ/∂T` and `∂ρ/∂S` of the ACTIVE equation
+      !! of state at a point — the signed twin of `eos_buoyancy_coeffs`,
+      !! which is where the per-variant closed forms live:
+      !!
+      !!   ∂ρ/∂T = −alpha_T   (kg/m³ per degC; < 0 in the usual regime)
+      !!   ∂ρ/∂S = +beta_S    (kg/m³ per PSU;  > 0)
+      !!
+      !! Negation is exact in IEEE-754, so this is the same number with
+      !! the opposite sign bit — never a second evaluation of the EOS.
+      !! Prefer this spelling where the consumer wants a density GRADIENT
+      !! (`∇ρ = ∂ρ/∂T·∇T + ∂ρ/∂S·∇S`) and `eos_buoyancy_coeffs` where it
+      !! wants the (α, β) pair in the `eos_t` member convention.
+      !!
+      !! `eos_specvol_derivs` remains the right entry point for a consumer
+      !! that genuinely works in SPECIFIC VOLUME (EPBL's PE weights,
+      !! kappa-shear's `dbuoy = g·ρ₀·dSV/dX`); this routine is the density
+      !! form, not a duplicate of it.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: T, S
+      real(wp), intent(in) :: p
+      real(wp), intent(out) :: drho_dt
+         !! ∂ρ/∂T (kg/m³ per degC).
+      real(wp), intent(out) :: drho_ds
+         !! ∂ρ/∂S (kg/m³ per PSU).
+
+      real(wp) :: alpha_T, beta_S
+
+      call eos_buoyancy_coeffs(eos, T, S, p, alpha_T, beta_S)
+      drho_dt = -alpha_T
+      drho_ds = beta_S
+   end subroutine eos_density_derivs
 
    pure function eos_density_point(eos, T, S, p) result(rho)
       !! Scalar density evaluation at a point — the same formulas the
