@@ -335,6 +335,40 @@ integrals to roundoff and are monotone (no new extrema).
 | PPM, non-uniform H4 edges | `"ppm_h4"` | 2nd (parabola) + 4th edges | thickness-weighted (White & Adcroft 2008) edge estimate — holds 4th order on non-uniform ALE layers where PPM degrades to 2nd; cuts spurious diapycnal mixing (Ilicak 2012). Reuses the PPM limiter + parabola + redistribute verbatim. Boundary edges: PCM-outermost + 3-cell H3 (cubic-fit upgrade deferred to PQM). |
 | Piecewise quartic (PQM) | `"pqm"` | 4th–5th | White & Adcroft (2008) PQM_IH4IH3: implicit-h4 edge values + implicit-h3 edge slopes (per-column tridiagonal solves) → degree-4 reconstruction + W&A monotonicity limiter; prototype shows ~5th-order convergence (vs PPM ~2nd) on smooth profiles, ~10–20× lower remap error. Conservative + monotone. `N<5` falls back to PPM. ~98 regs (no spill); cadence-bounded. Opt-in (PPM stays default). |
 
+#### Boundary-cell closure (`remap_boundary_extrap`) — orthogonal to the order above
+
+Every reconstruction above PCM needs a stencil the outermost cells do not
+have. By default — matching MOM6 `BOUNDARY_EXTRAPOLATION = False` — `k=1`
+and `k=nz` collapse to PCM, so **the remap is first-order in the two cells
+next to the bed and the surface whichever method is selected**: PLM, PPM,
+PPM_H4 and PQM share the closure and remap a linear-in-z profile with the
+same O(h) error there, while their interiors are already exact for it.
+
+| Knob | Default | Effect |
+|---|---|---|
+| `&vcoord_nml remap_boundary_extrap` | `.false.` (bit-identical) | `.true.` ⇒ the boundary cells take the linear-exact one-sided edge pair `q ± dq_up·h_self/(h_self+h_nbr)` (`boundary_half_jump`, the remap-side twin of the FV PGF's `boundary_edges_linear`), making the whole column exact for a profile linear in z. Inert for `"pcm"` — there is no reconstruction to close. |
+
+**Why it matters.** A stratified ocean at rest has a tracer profile linear
+in z, and under a terrain-following coordinate the ALE remap runs on it
+every thermo step. The first-order boundary closure therefore injects a
+spurious diapycnal tracer flux into those two layers on every step; over a
+slope it differs between neighbouring columns, which is a horizontal
+density gradient, which is a pressure-gradient force — and with rotation it
+feeds a growing grid mode trapped in exactly those layers. Measured on an
+undamped 48×6×15 σ-over-slope rest case (bed 226 → 709 m, f-plane 75 °S,
+exact FV pressure gradient, zero viscosity/drag/mixing):
+
+| closure | `σ_En` (days 10–45) | En at day 45 |
+|---|---|---|
+| default (PCM flatten) — `ppm`, `plm`, `ppm_h4`, `pqm` | 0.353–0.355 /day | 1.6–1.7E-20 |
+| `remap_boundary_extrap = .true.` — `ppm` / `plm` / `pqm` | 0.042–0.047 /day | 3.9–4.7E-25 |
+| no remap at all (`vcoord_type = "lagrangian"`) | 0.046 /day | 1.5E-25 |
+| `remap_method = "pcm"` (knob inert) | 0.875 /day | 7.9E-13 |
+
+i.e. with the knob on, the mode's growth rate falls to the no-remap floor.
+Gate: `test_remap_boundary_extrap` (four exactness cases FAIL with the
+default closure, by construction).
+
 ## Tracer advection & reconstruction schemes
 
 Tracer transport has three distinct reconstruction jobs — horizontal tracer
