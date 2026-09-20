@@ -203,11 +203,14 @@ module rdb_ocean_metrics
          !! forms (`rho_ref*GRAVITY`), which is what makes
          !! `pa(nz+1) = rho_ref*g*eta_geo + p_ice_ref` cancel to bit-zero
          !! at rest.  Stored rather than recomputed so `GRAVITY`/`rho_ref`
-         !! cannot drift between the two users.  NOTE: in THIS slice
-         !! nothing reads it — the datum carries the whole dynamical effect
-         !! of a static load (the split solver discards the
-         !! column-integrated PGF); wiring it into
-         !! `multilayer_state_t%p_top` is the next slice.
+         !! cannot drift between the two users.  CONSUMED as the static
+         !! half of `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` —
+         !! seeded in `configure_ocean_cavity` and rebuilt each outer step
+         !! in `ocean_dyn_step_split` whenever the psurf seam makes
+         !! `sf%p_surf` live.  It is the load's route into the PRESSURE
+         !! (the FV_MOM6 `pa(nz+1)` top BC and the in-situ EOS); its route
+         !! into the BAROTROPIC mode is the datum `bt_H_ref = b - z_draft`
+         !! and nothing else, which is why it never joins `sf%p_surf`.
 
       ! ---- Static land masks (real 0/1; derived in metrics_apply_land_mask) ----
       real(wp), allocatable :: wet_T(:, :)

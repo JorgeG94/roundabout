@@ -2480,6 +2480,24 @@ contains
       ! DISJUNCTION so neither consumer can ever read a p_top that the
       ! configure-time seed left behind while `sf%p_surf` moved on.
       !
+      ! P5.2 completes the PARTITION: the assembled top-of-column load is
+      !
+      !     ms%p_top = metrics%p_ice_ref + sf%p_surf
+      !
+      ! — the STATIC isostatic ice load (absorbed into the barotropic
+      ! datum `bt_H_ref = b - z_draft`, and therefore deliberately NOT a
+      ! component of `sf%p_surf`, which the `eta_ib` seam is built from)
+      ! plus whatever atmospheric / anomaly load the psurf seam carries.
+      ! Without the cavity term this refresh would OVERWRITE the
+      ! configure-time ice load with `p_surf` alone on step 1, silently
+      ! unloading the column for every consumer of `p_top`.
+      !
+      ! A cavity WITHOUT the psurf seam needs no refresh at all: the
+      ! draft is static, so the configure-time seed in
+      ! `configure_ocean_cavity` is already the final value and this
+      ! whole block stays switched off (`psurf_on = .false.`).  That is
+      ! why the gate below is still the psurf gate.
+      !
       ! Written INLINE as a `do concurrent` rather than as a call: a
       ! host-gated call handing a state array to an EXTERNAL subroutine
       ! makes nvfortran treat that array as escaping and pessimises EVERY
@@ -2487,7 +2505,9 @@ contains
       ! taken (CLAUDE.md, measured at +4.8 % on `ocean_continuity`).
       ! The copy spans the WHOLE array, ghosts included, so `p_top`
       ! inherits exactly the halo validity `p_surf` has and needs no
-      ! exchange of its own.
+      ! exchange of its own (`p_ice_ref` is ghost-filled at configure,
+      ! from a `z_draft` that went through the bathymetry's own re-wrap
+      ! and halo exchange).
       p_top_live = .false.
       if (psurf_on) then
          if (psurf%in_eos .or. pgf%p_top_in_bc) p_top_live = .true.
@@ -2495,9 +2515,19 @@ contains
       if (p_top_live) then
          nx_ptop = size(ms%p_top, 1)
          ny_ptop = size(ms%p_top, 2)
-         do concurrent(j=1:ny_ptop, i=1:nx_ptop)
-            ms%p_top(i, j) = sf%p_surf(i, j)
-         end do
+         ! Two inline loops rather than one with a branch on `use_cavity`:
+         ! without a cavity `p_ice_ref` is a `(1,1)` PLACEHOLDER, so the
+         ! cavity spelling may not even be written in a form the compiler
+         ! could speculate an index out of.
+         if (metrics%use_cavity) then
+            do concurrent(j=1:ny_ptop, i=1:nx_ptop)
+               ms%p_top(i, j) = metrics%p_ice_ref(i, j) + sf%p_surf(i, j)
+            end do
+         else
+            do concurrent(j=1:ny_ptop, i=1:nx_ptop)
+               ms%p_top(i, j) = sf%p_surf(i, j)
+            end do
+         end if
       end if
 
       call probe_dS(grid, ms, "outer step entry", 0, dyn%outer_step_count + 1)

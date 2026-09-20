@@ -1834,14 +1834,18 @@ module rdb_config
       !! 'sea-surface height' eta is the deviation from the 'reference'
       !! ice-shelf draft h"), not a divergence from it.
       !!
-      !! THIS GROUP CARRIES THE GEOMETRY ONLY.  The isostatic load
-      !! `p_ice_ref = rho_ref*GRAVITY*z_draft` is built at configure and
-      !! stored, but nothing consumes it yet: wiring it into
-      !! `multilayer_state_t%p_top` (and thence the FV_MOM6 surface BC via
-      !! `&ocean_pgf_nml p_top_in_bc`, and the in-situ EOS via
-      !! `&ocean_psurf_nml in_eos`) is the next slice.  Until then a cavity
-      !! run is a DATUM-ONLY run: geometrically correct, dynamically
-      !! unloaded.
+      !! The isostatic load `p_ice_ref = rho_ref*GRAVITY*z_draft` (Pa) is
+      !! built at configure and assembled into the top-of-column pressure
+      !!
+      !!     ms%p_top = metrics%p_ice_ref + sf%p_surf
+      !!
+      !! whose consumers are the FV_MOM6 surface BC
+      !! (`&ocean_pgf_nml p_top_in_bc`, REQUIRED unless the draft is
+      !! uniform) and the in-situ EOS pressure (`&ocean_psurf_nml
+      !! in_eos`).  The load is deliberately NOT added to `sf%p_surf`:
+      !! the datum `bt_H_ref = b - z_draft` already carries its whole
+      !! barotropic effect, and `eta_ib` is built from the assembled
+      !! `sf%p_surf`, so only the load ANOMALY belongs on that seam.
       !!
       !! `enable = .false.` (default) keeps `z_draft` at its `(1,1)`
       !! placeholder, `bt_H_ref = b`, and every path bit-identical.
@@ -4636,6 +4640,50 @@ contains
                               "p_edge(nz+1)=0.")
             has_error = .true.
          end if
+         ! P5.2 — the load must have a consumer once it has a GRADIENT.
+         ! `p_top_in_bc` is the only route by which the isostatic load
+         ! rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) surface BC;
+         ! without it a varying draft leaves the pressure stack ~5e6 Pa
+         ! off its anomaly scale, the unsplit driver feels a raw
+         ! g*grad(z_draft), and `correction_h_weighted` turns the
+         ! uncancelled depth-uniform force into a real per-layer shear.
+         ! REFUSED rather than auto-enabled: an answer-changing knob that
+         ! a second namelist group switches on behind the user's back is
+         ! exactly the class of silent coupling this file exists to
+         ! prevent.  A UNIFORM draft is exempt — a load with no gradient
+         ! is bit-identically inert in the top BC (the theorem in
+         ! `compute_fv_mom6_impl`'s docstring) — which is what keeps the
+         ! flat-lid datum-equivalence gate expressible.  `draft_config`
+         ! "none" is uniform (identically zero); "flat" is uniform only
+         ! when no box bound clips it, else the calving front is a step.
+         if (.not. cfg%ocean%pgf%p_top_in_bc) then
+            block
+               logical :: draft_uniform
+               character(len=:), allocatable :: dcfg
+               dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
+               draft_uniform = (dcfg == "none")
+               if (dcfg == "flat") then
+                  draft_uniform = abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp .and. &
+                                  abs(cfg%ocean%cavity_dyn%draft_x1) >= 1.0e29_wp .and. &
+                                  abs(cfg%ocean%cavity_dyn%draft_y0) >= 1.0e29_wp .and. &
+                                  abs(cfg%ocean%cavity_dyn%draft_y1) >= 1.0e29_wp
+               end if
+               if (.not. draft_uniform) then
+                  call logger%error("&ocean_cavity_dyn_nml enable=.true. with "// &
+                                    "draft_config='"//dcfg//"' requires "// &
+                                    "&ocean_pgf_nml p_top_in_bc=.true.  That knob is "// &
+                                    "the ONLY route by which the isostatic load "// &
+                                    "rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) "// &
+                                    "surface boundary condition; without it a draft "// &
+                                    "that VARIES leaves the pressure stack ~5e6 Pa "// &
+                                    "off its anomaly scale and the column out of "// &
+                                    "hydrostatic balance.  Only a draft that is "// &
+                                    "uniform over the whole domain is exempt (a load "// &
+                                    "with no gradient is provably inert there).")
+                  has_error = .true.
+               end if
+            end block
+         end if
          if (cfg%ocean%pgf%gfs_scale /= 1.0_wp) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
                               "&ocean_pgf_nml gfs_scale=1: the datum "// &
@@ -4751,25 +4799,24 @@ contains
                                 "bt_H_ref = b and the run is bit-identical to a "// &
                                 "cavity-free one.")
          end if
-         if (.not. cfg%ocean%psurf%in_eos) then
-            call logger%warning("&ocean_cavity_dyn_nml enable=.true. without "// &
+         ! Design Q4: WARN, do not refuse, on cavity x in_eos=.false.  The
+         ! load is depth-uniform in `pa`, so the rest and equivalence
+         ! gates pass either way; what is wrong without `in_eos` is the
+         ! THERMOBARICITY, and only a pressure-dependent EOS has any.  A
+         ! linear EOS is pressure-blind, so there the knob is honestly
+         ! inert and there is nothing to warn about.
+         if (.not. cfg%ocean%psurf%in_eos .and. &
+             trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with a "// &
+                                "NONLINEAR equation of state (&ocean_eos_nml eos='"// &
+                                trim(adjustl(cfg%ocean%eos%eos))//"') but without "// &
                                 "&ocean_psurf_nml in_eos=.true.: the in-situ EOS "// &
-                                "pressure still starts at 0 Pa at the ice base, so a "// &
-                                "nonlinear EOS ignores up to ~5e6 Pa of ice load "// &
-                                "(wrong thermobaricity).  Harmless for the rest and "// &
-                                "equivalence gates; not for a production cavity.")
+                                "pressure still starts at 0 Pa at the ice base, so "// &
+                                "the EOS ignores up to ~5e6 Pa of ice load (wrong "// &
+                                "thermobaricity, wrong freezing point).  Harmless "// &
+                                "for the rest and equivalence gates; not for a "// &
+                                "production cavity.")
          end if
-         ! v1 SCOPE: this slice ships the GEOMETRY and the DATUM.  The
-         ! isostatic load p_ice_ref = rho_ref*GRAVITY*z_draft is built at
-         ! configure and stored on the metrics slot, but no consumer reads
-         ! it yet — wiring it into ms%p_top is the next slice.  Say so, so
-         ! nobody reads a datum-only cavity run as a loaded one.
-         call logger%warning("&ocean_cavity_dyn_nml: this build carries the cavity "// &
-                             "GEOMETRY and DATUM only — the isostatic load "// &
-                             "rho_ref*g*z_draft is computed but not yet applied to "// &
-                             "ms%p_top, so a sloping draft is NOT in hydrostatic "// &
-                             "balance.  Use it for datum/geometry work (and the flat-"// &
-                             "lid equivalence gate), not for cavity physics.")
       end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its

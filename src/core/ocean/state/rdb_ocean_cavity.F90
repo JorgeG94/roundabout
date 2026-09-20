@@ -16,6 +16,24 @@ module rdb_ocean_cavity
    !!
    !! (I) says the load is counted exactly ONCE: whatever the datum
    !! absorbs must not also be handed to the `eta_forcing` seam.  The
+   !! two halves of "once" are:
+   !!
+   !!   * BAROTROPIC — the datum (D), and nothing else.  The split solver
+   !!     replaces the depth mean of the layer PGF with the barotropic
+   !!     solution, so the column-integrated pressure force is discarded
+   !!     and `-G*grad(eta - eta_forcing)` is the only barotropic term
+   !!     there is.  `p_ice_ref` therefore never joins `sf%p_surf`, out of
+   !!     which `eta_ib` — and hence `eta_forcing` — is built.
+   !!   * PRESSURE — `p_ice_ref` (P), assembled into
+   !!     `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` and read by
+   !!     the FV_MOM6 `pa(nz+1)` top BC and the in-situ EOS.  Only the
+   !!     load ANOMALY (total minus what the datum carries, i.e. exactly
+   !!     `sf%p_surf` under the Boussinesq-isostatic convention) reaches
+   !!     the seam, so an inverse-barometer run with no cavity is
+   !!     bit-identical and a cavity with no `p_surf` sends the seam
+   !!     nothing at all.
+   !!
+   !! The
    !! consequence of (D) is that the free-surface anomaly
    !! `bt_eta = sum(h_layer) - bt_H_ref` is ZERO under the shelf at rest,
    !! so every consumer of the water-column thickness

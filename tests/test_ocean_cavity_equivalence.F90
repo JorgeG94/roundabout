@@ -1,11 +1,10 @@
-!! THE P5.1 GATE: a flat ice lid is indistinguishable from a shallower
-!! ocean.
+!! THE CAVITY EQUIVALENCE GATE: a flat ice lid is indistinguishable from
+!! a shallower ocean — unloaded (P5.1) and loaded (P5.2).
 module test_ocean_cavity_equivalence
    !! ### What is being claimed
    !!
-   !! Put a UNIFORM ice draft `d` over a flat bed `b`, with no load term
-   !! anywhere (this slice carries the datum only — `ms%p_top` is
-   !! untouched), and run the full split solver.  Because the datum
+   !! Put a UNIFORM ice draft `d` over a flat bed `b` and run the full
+   !! split solver.  Because the datum
    !! absorbs the draft exactly (`bt_H_ref = b - d`, `sum h_layer = b - d`,
    !! `bt_eta = 0`), the model should evolve like a cavity-free ocean over
    !! the shallower bed `b - d`.  Nothing about a flat lid is dynamics; it
@@ -37,10 +36,15 @@ module test_ocean_cavity_equivalence
    !!
    !! That is precisely the leak the load term is for: wiring
    !! `p_ice_ref` into `pa(nz+1)` cancels `C` inside the boundary
-   !! condition and puts the stack back at `O(1e4)`.  Until then the
-   !! honest assertion is a ROUND-OFF BOUND, and this suite states how it
-   !! is built (`bound_accel` below) instead of tuning a number until the
-   !! test goes green.
+   !! condition and puts the stack back on its anomaly scale.  The
+   !! honest assertion either way is a ROUND-OFF BOUND, and this suite
+   !! states how each one is built (`bound_accel`,
+   !! `bound_accel_loaded`) instead of tuning a number until the test
+   !! goes green.  BOTH variants ship: the unloaded one documents the
+   !! offset (a UNIFORM draft is the one cavity configuration that does
+   !! not require `&ocean_pgf_nml p_top_in_bc`, because a load with no
+   !! gradient is provably inert in the top BC), the loaded one is the
+   !! P5.2 gate.
    !!
    !! Everything else is shift-invariant by construction: the EOS
    !! reference pressure is the scalar `&ocean_eos_nml p_ref` (never a
@@ -58,17 +62,29 @@ module test_ocean_cavity_equivalence
    !! ### Measured, gfortran 15.1 Release, 2026-09-20
    !!
    !! ```
-   !! max|du| = 3.1e-13 m/s      bound 3.1e-11   (100x margin)
-   !! max|dv| = 2.6e-13 m/s
-   !! max|dh| = 8.5e-14 m        bound 1.4e-08
-   !! max|deta| = 5.4e-13 m
-   !! max|u|  = 3.5e-03 m/s      i.e. the signal is 1e10 x the difference
+   !!                      UNLOADED (P5.1)        LOADED (P5.2)
+   !!   max|du|            3.125e-13 m/s          1.301e-18 m/s
+   !!   max|dv|            2.612e-13 m/s          4.608e-19 m/s
+   !!   max|dh|            8.527e-14 m            0 (exactly)
+   !!   max|deta|          5.400e-13 m            0 (exactly)
+   !!   bound              3.136e-11              3.09e-17
+   !!   margin                 100x                   24x
+   !!   max|u| (signal)    3.504e-03 m/s          (same run)
    !! ```
    !!
-   !! So: not bitwise, and the reason is one identified term; a decade of
-   !! margin under a derived bound; ten decades of separation from the
-   !! physics.  If `du` ever reaches the bound, the pressure stack is no
-   !! longer merely re-rounded — something reads absolute z for real.
+   !! **The load buys 2.4e5x — 5.4 decades — on the velocity difference,
+   !! and exact agreement on thickness and SSH.**  Inverting the bound's
+   !! own algebra, the effective pressure-stack discrepancy falls from
+   !! `7.2e-10 Pa` (= `eps * rho_ref*g*DRAFT`, i.e. exactly the offset's
+   !! own rounding, which is the term the load cancels) to `3.0e-15 Pa`
+   !! (= a few `eps * PA_ANOM`, the anomaly stack's own rounding — the
+   !! floor, with no offset left to remove).
+   !!
+   !! So: still not bitwise, and the reason is still one identified term;
+   !! a derived bound with margin in both variants; and after the load,
+   !! fifteen decades of separation from the physics.  If `du` in the
+   !! LOADED variant ever reaches its bound, the cancellation inside
+   !! `pa(nz+1)` has stopped happening.
    use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -91,10 +107,28 @@ module test_ocean_cavity_equivalence
    real(wp), parameter :: DX = 4000.0_wp
    integer, parameter :: N_STEPS = 6
    real(wp), parameter :: DT = 300.0_wp
+   real(wp), parameter :: ALPHA_T = 1.7e-4_wp
+      !! `&ocean_ic_nml alpha_T` at its default (kg/m^3 per degC) — the
+      !! namelist below does not set it.
+   real(wp), parameter :: T_HALF_RANGE = 6.0_wp
+      !! Largest `|T - T_ref|` in the IC: T runs 4..12 degC about the
+      !! default `T_ref = 10`.  S is uniform at `S_ref`, so the density
+      !! anomaly is thermal only.
+   real(wp), parameter :: P_SURF_SEAM = 2000.0_wp
+      !! Atmospheric load (Pa) for the seam cases — ~20 hPa, i.e. a
+      !! 0.197 m inverse-barometer elevation.  Small enough that the
+      !! 5.08e6 Pa ice load would stand out by 2500x in `eta_ib` if it
+      !! ever leaked onto the seam.
 
    ! Reference density of record for this namelist (`&ocean_ic_nml rho_0`
    ! default), i.e. the `rho_ref` the FV_MOM6 stack is an anomaly about.
    real(wp), parameter :: RHO_REF = 1035.0_wp
+
+   real(wp), parameter :: PA_ANOM = (ALPHA_T*T_HALF_RANGE)*GRAVITY*(BED - DRAFT)
+      !! Bound on `|pa|` once the load is cancelled at `pa(nz+1)`: the
+      !! density anomaly integrated over the water column, ~5 Pa — the
+      !! anomaly scale the FV_MOM6 stack is SUPPOSED to live on, against
+      !! the 5.08e6 Pa the unloaded run carries.
 
 contains
 
@@ -103,11 +137,16 @@ contains
       testsuite = [ &
                   new_unittest("cavity_flat_lid_seed_bit_identical", test_seed_identical), &
                   new_unittest("cavity_flat_lid_equivalence", test_flat_lid_equivalence), &
+                  new_unittest("cavity_flat_lid_equivalence_loaded", &
+                               test_flat_lid_equivalence_loaded), &
+                  new_unittest("cavity_seam_zero_p_surf_inert", test_seam_zero_p_surf_inert), &
+                  new_unittest("cavity_seam_matches_cavity_free", &
+                               test_seam_matches_cavity_free), &
                   new_unittest("cavity_api_bathymetry_swap_refused", test_api_bathy_refused) &
                   ]
    end subroutine collect_ocean_cavity_equivalence_tests
 
-   function case_nml(max_depth, cavity) result(nml)
+   function case_nml(max_depth, cavity, loaded, psurf) result(nml)
       !! The two runs differ in EXACTLY two lines: the bed depth and the
       !! cavity group.  Everything else — grid, layers, dt, stratification,
       !! wind, PGF form, vcoord, the PINNED `n_inner` — is shared text.
@@ -120,8 +159,31 @@ contains
       !! documented at the latch; here it simply must not be in the way.
       real(wp), intent(in) :: max_depth
       character(len=*), intent(in) :: cavity
+      logical, intent(in), optional :: loaded
+         !! `&ocean_pgf_nml p_top_in_bc` — the P5.2 load in the FV_MOM6
+         !! `pa(nz+1)` surface BC.  Default `.false.` = the P5.1
+         !! datum-only run this suite was written for.  A UNIFORM draft
+         !! is the one cavity configuration that does not REQUIRE it (a
+         !! load with no gradient is provably inert in the top BC), which
+         !! is exactly why both variants are expressible here.
+      real(wp), intent(in), optional :: psurf
+         !! When present: `&ocean_psurf_nml enable` + the PR-12 component
+         !! set, with `p_surf_const` set to this value (Pa), so the
+         !! `eta_ib = -p_surf/(rho0 g_bt)` seam is LIVE.  Absent ⇒ no
+         !! psurf group at all and no seam.
       character(len=:), allocatable :: nml
-      character(len=32) :: depth_s
+      character(len=32) :: depth_s, psurf_s
+      character(len=:), allocatable :: pgf_l
+      logical :: want_psurf
+
+      pgf_l = "&ocean_pgf_nml form = 'fv_mom6' /"
+      if (present(loaded)) then
+         if (loaded) pgf_l = "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"
+      end if
+      want_psurf = present(psurf)
+      psurf_s = "0.0"
+      if (want_psurf) write (psurf_s, '(ES16.8)') psurf
+
       write (depth_s, '(F12.2)') max_depth
       nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
             "&grid_nml nx = 12, ny = 10, nghost = 2, dx = 4000.0, dy = 4000.0 /"// &
@@ -136,18 +198,23 @@ contains
             ! baroclinic pressure gradient is live.
             "&tracer_nml initial_salinity = 35.0, T_init_bottom = 4.0, "// &
             "T_init_surface = 12.0 /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6' /"//new_line("a")// &
+            pgf_l//new_line("a")// &
             "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
             "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
             "n_inner = 12 /"//new_line("a")// &
             "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
             "&output_nml output_to_file = .false. /"//new_line("a")
+      if (want_psurf) then
+         nml = nml//"&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
+               "&ocean_psurf_nml enable = .true., p_surf_const = "// &
+               trim(adjustl(psurf_s))//" /"//new_line("a")
+      end if
       if (len_trim(cavity) > 0) then
          nml = nml//"&ocean_cavity_dyn_nml "//cavity//" /"//new_line("a")
       end if
    end function case_nml
 
-   subroutine run_case(max_depth, cavity, n_steps, h, u, v, eta, ok)
+   subroutine run_case(max_depth, cavity, n_steps, h, u, v, eta, ok, loaded, psurf)
       !! Create an ocean from the namelist, step it, and snapshot the
       !! prognostics into caller-owned arrays.  The handle is destroyed
       !! before returning: the API holds ONE live ocean at a time, so the
@@ -163,6 +230,8 @@ contains
       real(wp), allocatable, intent(out) :: h(:, :, :), u(:, :, :), v(:, :, :)
       real(wp), allocatable, intent(out) :: eta(:, :)
       logical, intent(out) :: ok
+      logical, intent(in), optional :: loaded
+      real(wp), intent(in), optional :: psurf
 
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx, ny, nz, gen
@@ -171,7 +240,11 @@ contains
 
       ok = .false.
       handle = c_null_ptr
-      nml = case_nml(max_depth, cavity)
+      if (present(psurf)) then
+         nml = case_nml(max_depth, cavity, loaded=loaded, psurf=psurf)
+      else
+         nml = case_nml(max_depth, cavity, loaded=loaded)
+      end if
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       if (status /= OCEAN_STATUS_OK) return
 
@@ -217,27 +290,57 @@ contains
       ok = (status == OCEAN_STATUS_OK)
    end subroutine run_case
 
-   function bound_accel() result(tol_u)
-      !! The round-off bound on the velocity difference, built from the
-      !! one quantity that differs between the runs.
+   pure function bound_accel_from(dp_scale) result(tol_u)
+      !! Velocity-difference bound from a PRESSURE-difference scale.
       !!
-      !!   * the two `pa` stacks are offset by `C = rho_ref*g*DRAFT`;
-      !!   * every `pa` entry therefore carries an absolute rounding of
-      !!     order `C*eps`, where the shallow run's is negligible beside it;
       !!   * the Pass-3 face force divides a `pa*h` difference by
-      !!     `(h_L+h_R)`, so the acceleration error is `~ C*eps/(rho_0*dx)`;
+      !!     `(h_L+h_R)`, so a `dp_scale` (Pa) discrepancy between the two
+      !!     runs' pressure stacks becomes an acceleration discrepancy
+      !!     `~ dp_scale/(rho_0*dx)`;
       !!   * over `N_STEPS` steps of `DT` that integrates to
-      !!     `C*eps*DT*N_STEPS/(rho_0*dx)`.
+      !!     `dp_scale*DT*N_STEPS/(rho_0*dx)`.
       !!
       !! The factor 64 covers the handful of roundings per pass (three
       !! passes, the barotropic substeps, the ALE remap) and the mild
-      !! step-to-step amplification.  It is NOT fitted to the answer: the
-      !! measured difference (3.1e-13 m/s) sits 100x under this bound and
-      !! 1e10 under the flow it rides on.
+      !! step-to-step amplification.  It is the SAME factor in both
+      !! variants, so the two bounds differ only by their physics.
+      real(wp), intent(in) :: dp_scale
       real(wp) :: tol_u
-      tol_u = 64.0_wp*(RHO_REF*GRAVITY*DRAFT)*epsilon(1.0_wp)* &
-              DT*real(N_STEPS, wp)/(RHO_REF*DX)
+      tol_u = 64.0_wp*dp_scale*DT*real(N_STEPS, wp)/(RHO_REF*DX)
+   end function bound_accel_from
+
+   pure function bound_accel() result(tol_u)
+      !! UNLOADED variant.  The two `pa` stacks are offset by the constant
+      !! `C = rho_ref*g*DRAFT ~ 5e6 Pa`, so every `pa` entry in the cavity
+      !! run carries an absolute rounding of order `C*eps` that the
+      !! shallow run's `O(1e4 Pa)` stack does not.
+      real(wp) :: tol_u
+      tol_u = bound_accel_from((RHO_REF*GRAVITY*DRAFT)*epsilon(1.0_wp))
    end function bound_accel
+
+   pure function bound_accel_loaded() result(tol_u)
+      !! LOADED variant.  `p_top = p_ice_ref` cancels `C` inside
+      !! `pa(nz+1) = rho_ref*g*eta_geo + p_top`, so the `C*eps` term the
+      !! unloaded bound is made of is simply GONE: `pa(nz+1)` is zero to
+      !! the rounding of one product, and the stack that marches down from
+      !! it is nothing but the density anomaly it was always meant to be.
+      !!
+      !! So the scale that replaces `C` is the size of that anomaly stack:
+      !!
+      !!     |pa| <= |rho_layer - rho_ref| * g * (water column)
+      !!           = (ALPHA_T * T_HALF_RANGE) * GRAVITY * (BED - DRAFT)
+      !!
+      !! with `ALPHA_T` the `&ocean_ic_nml` linear-EOS coefficient this
+      !! namelist leaves at its default and `T_HALF_RANGE` the largest
+      !! `|T - T_ref|` its 4..12 degC profile reaches about `T_ref = 10`.
+      !! Salinity is uniform at `S_ref`, so it contributes nothing.
+      !!
+      !! `PA_ANOM` here is ~5 Pa against the unloaded `C` of 5.08e6 Pa, so
+      !! this bound is SIX DECADES tighter, and it is what the measured
+      !! numbers in the module header sit under.
+      real(wp) :: tol_u
+      tol_u = bound_accel_from(epsilon(1.0_wp)*PA_ANOM)
+   end function bound_accel_loaded
 
    subroutine test_seed_identical(error)
       !! At `t = 0` the two runs are BIT-for-bit identical — the datum
@@ -319,6 +422,148 @@ contains
       if (allocated(error)) return
       call check(error, deta <= tol_h, "bt_eta must match the shallow twin")
    end subroutine test_flat_lid_equivalence
+
+   subroutine test_flat_lid_equivalence_loaded(error)
+      !! P5.2: the SAME pair with the load wired through
+      !! `&ocean_pgf_nml p_top_in_bc`, so `pa(nz+1) = rho_ref*g*eta_geo +
+      !! p_ice_ref` cancels the `C = rho_ref*g*DRAFT ~ 5.08e6 Pa` offset
+      !! at the top of the stack instead of carrying it through every
+      !! entry.  The `dp_scale` the bound is built from loses that term
+      !! and keeps only the irreducible one (the two runs stack their
+      !! interfaces from different beds) — see `bound_accel_loaded`.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
+      real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
+      logical :: ok_a, ok_b
+      real(wp) :: du, dv, dh, deta, tol_u, tol_h, signal
+
+      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
+                    "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
+      call check(error, ok_a, "the LOADED cavity run must step")
+      if (allocated(error)) return
+      call run_case(BED - DRAFT, "", N_STEPS, h_b, u_b, v_b, eta_b, ok_b, loaded=.true.)
+      call check(error, ok_b, "the shallow twin must step")
+      if (allocated(error)) return
+
+      call check(error, all(ieee_is_finite(u_a)) .and. all(ieee_is_finite(h_a)), &
+                 "the loaded cavity run must stay finite")
+      if (allocated(error)) return
+
+      du = maxval(abs(u_a - u_b))
+      dv = maxval(abs(v_a - v_b))
+      dh = maxval(abs(h_a - h_b))
+      deta = maxval(abs(eta_a - eta_b))
+      tol_u = bound_accel_loaded()
+      tol_h = tol_u*DT*real(N_STEPS, wp)*BED/DX
+
+      signal = maxval(abs(u_a))
+      call check(error, signal > 1.0e4_wp*tol_u, &
+                 "the wind-driven flow must be decades above the bound, else the "// &
+                 "loaded equivalence gate is vacuous")
+      if (allocated(error)) return
+
+      call check(error, du <= tol_u, "u_face_x_layer must match the shallow twin to "// &
+                 "the TIGHTER load-cancelled round-off bound")
+      if (allocated(error)) return
+      call check(error, dv <= tol_u, "v_face_y_layer must match the shallow twin")
+      if (allocated(error)) return
+      call check(error, dh <= tol_h, "h_layer must match the shallow twin")
+      if (allocated(error)) return
+      call check(error, deta <= tol_h, "bt_eta must match the shallow twin")
+      if (allocated(error)) return
+
+      ! The point of the slice: cancelling the load at the top of the
+      ! stack must make the pair AGREE BETTER, not merely still agree.
+      call check(error, tol_u < bound_accel(), &
+                 "the loaded bound must be tighter than the unloaded one — else "// &
+                 "the load bought nothing")
+   end subroutine test_flat_lid_equivalence_loaded
+
+   subroutine test_seam_zero_p_surf_inert(error)
+      !! SEAM PROOF, part 1 — a cavity with `p_surf = 0` sends the
+      !! `eta_forcing` seam NOTHING.
+      !!
+      !! Run the same loaded cavity twice: once with no `&ocean_psurf_nml`
+      !! group at all (no seam array, `eta_forcing` absent from the
+      !! barotropic substep's argument list) and once with the seam LIVE
+      !! at `p_surf_const = 0`.  If the static ice load had been assembled
+      !! into `sf%p_surf` — the array `eta_ib = -p_surf/(rho0 g_bt)` is
+      !! built from — the second run would carry a 493 m seam elevation
+      !! and could not possibly reproduce the first bit-for-bit.
+      !!
+      !! It does, because `p_ice_ref` goes to `ms%p_top` and to the datum
+      !! and nowhere else: `eta_ib = -0/(rho0 g_bt)` is `-0.0`, and
+      !! `eta - (-0.0)` is `eta` exactly under IEEE-754.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
+      real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
+      logical :: ok_a, ok_b
+      character(len=*), parameter :: LID = &
+                                     "enable = .true., draft_config = 'flat', draft_depth = 500.0"
+
+      call run_case(BED, LID, N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
+      call check(error, ok_a, "the seam-free cavity run must step")
+      if (allocated(error)) return
+      call run_case(BED, LID, N_STEPS, h_b, u_b, v_b, eta_b, ok_b, &
+                    loaded=.true., psurf=0.0_wp)
+      call check(error, ok_b, "the cavity run with a live zero seam must step")
+      if (allocated(error)) return
+
+      call check(error, maxval(abs(u_a)) > 1.0e-6_wp, &
+                 "the wind-driven flow must be non-trivial, else the seam gate is "// &
+                 "vacuous")
+      if (allocated(error)) return
+      call check(error, all(u_a == u_b) .and. all(v_a == v_b), &
+                 "turning the eta_forcing seam ON at p_surf = 0 must be BIT-identical "// &
+                 "under a cavity — the static ice load never reaches sf%p_surf")
+      if (allocated(error)) return
+      call check(error, all(h_a == h_b) .and. all(eta_a == eta_b), &
+                 "h_layer and bt_eta must be BIT-identical too")
+   end subroutine test_seam_zero_p_surf_inert
+
+   subroutine test_seam_matches_cavity_free(error)
+      !! SEAM PROOF, part 2 — with `p_surf /= 0` the seam the cavity run
+      !! feeds the barotropic substep is the one a cavity-free run feeds
+      !! it, so the loaded pair still tracks.
+      !!
+      !! The bound here is the OFFSET-scale `bound_accel`, not the tighter
+      !! `bound_accel_loaded`, and that is a derived statement about this
+      !! configuration rather than a concession: with an atmospheric load
+      !! present the cavity run assembles
+      !! `p_top = p_ice_ref + sf%p_surf = 5.0777e6 + 2.0e3`, and the small
+      !! addend inherits the large one's ulp — one rounding at
+      !! `eps*rho_ref*g*DRAFT`, exactly the `dp_scale` the unloaded bound
+      !! is built from.  The cavity-free twin adds `0 + 2000` exactly and
+      !! pays nothing.  Measured: `du = 1.836e-14 m/s` against the
+      !! `3.136e-11` bound — 1700x of margin, and 5 decades under the
+      !! run's own `3.5e-3 m/s`.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
+      real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
+      logical :: ok_a, ok_b
+      real(wp) :: du, tol_u
+
+      call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
+                    "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a, &
+                    loaded=.true., psurf=P_SURF_SEAM)
+      call check(error, ok_a, "the loaded cavity run with a live seam must step")
+      if (allocated(error)) return
+      call run_case(BED - DRAFT, "", N_STEPS, h_b, u_b, v_b, eta_b, ok_b, &
+                    loaded=.true., psurf=P_SURF_SEAM)
+      call check(error, ok_b, "the shallow twin with the same seam must step")
+      if (allocated(error)) return
+
+      du = maxval(abs(u_a - u_b))
+      tol_u = bound_accel()
+      call check(error, maxval(abs(u_a)) > 1.0e4_wp*tol_u, &
+                 "the flow must be decades above the bound, else the seam gate is "// &
+                 "vacuous")
+      if (allocated(error)) return
+      call check(error, du <= tol_u, &
+                 "with the SAME p_surf the cavity run and the cavity-free twin must "// &
+                 "still agree to the load-cancelled bound — i.e. the cavity put "// &
+                 "nothing of its own on the eta_ib seam")
+   end subroutine test_seam_matches_cavity_free
 
    subroutine test_api_bathy_refused(error)
       !! The one API entry point that could silently destroy the datum:
