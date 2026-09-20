@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.8% of total for modules and submodules.">401 statements</a>
+                 title=" 0.8% of total for modules and submodules.">427 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -135,6 +135,9 @@
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_vcoord.html#variable-stretch_log">STRETCH_LOG</a>
             <a class="list-group-item" href="../module/rdb_vcoord.html#variable-stretch_uniform">STRETCH_UNIFORM</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_inert">VCOORD_HMIN_INERT</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_keepalive">VCOORD_HMIN_KEEPALIVE</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_unused">VCOORD_HMIN_UNUSED</a>
         </div>
       </div>
     </div>
@@ -169,6 +172,8 @@
             <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_remap_method">parse_remap_method</a>
             <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_stretching_mode">parse_stretching_mode</a>
             <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_vcoord_type">parse_vcoord_type</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_h_min_is_coherent">vcoord_h_min_is_coherent</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_h_min_role">vcoord_h_min_role</a>
             <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_needs_remap">vcoord_needs_remap</a>
         </div>
       </div>
@@ -224,9 +229,9 @@ runtime polymorphism) so the type is GPU-safe.</p>
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item">pic_strings</li>
-                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
                   <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item">pic_strings</li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -834,6 +839,61 @@ parameter
                 
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_inert"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_INERT</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Geometric families (ZSTAR_FULL / Z_FIXED): <code>zstar_h_min</code> is the
+anti-zero thickness of below-bed FILLER layers, which are meant to
+read as vanished downstream ⇒ must stay &lt;= <code>H_VANISHED</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_keepalive"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_KEEPALIVE</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Density families (RHO / HYCOM): collapsed layers carry tracer mass
+and must SURVIVE the remap drain ⇒ that path floors at
+<code>max(zstar_h_min, 2*H_VANISHED)</code> on purpose.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_unused"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_UNUSED</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Every other family never reads <code>zstar_h_min</code>.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -938,7 +998,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~46"></span>
+              <span class="anchor" id="variable-nz~259"></span>
               integer,
             </td>
               <td>public</td>
@@ -955,7 +1015,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_method~2"></span>
+              <span class="anchor" id="variable-remap_method~3"></span>
               integer,
             </td>
               <td>public</td>
@@ -991,7 +1051,7 @@ Only allocated for coord types that use z-levels.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zstar_h_min~2"></span>
+              <span class="anchor" id="variable-zstar_h_min~3"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1004,12 +1064,17 @@ Only allocated for coord types that use z-levels.</p>
                 <td>1.0e-4_wp</td>
             <td>
 <p>Vanishing-layer floor (m).  Layers that would land below the
-local bed get clipped to this thickness rather than going to zero.</p>
+local bed get clipped to this thickness rather than going to zero.
+Deliberately BELOW <code>H_VANISHED</code> (1.5e-4): these are inert filler
+layers that downstream h-dividing kernels are MEANT to skip, so
+the floor is anti-zero armour, not a positivity floor.  See
+<code>vcoord_h_min_role</code> for the other contract the same knob carries
+on the density (RHO/HYCOM) families.</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zstar_h_surf_target~2"></span>
+              <span class="anchor" id="variable-zstar_h_surf_target~3"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1029,7 +1094,7 @@ fixed thickness regardless of total depth H.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zstar_n_surf~2"></span>
+              <span class="anchor" id="variable-zstar_n_surf~3"></span>
               integer,
             </td>
               <td>public</td>
@@ -1047,7 +1112,7 @@ fixed thickness regardless of total depth H.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zstar_stretching~2"></span>
+              <span class="anchor" id="variable-zstar_stretching~3"></span>
               integer,
             </td>
               <td>public</td>
@@ -1078,17 +1143,17 @@ fixed thickness regardless of total depth H.</p>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/vcoord_t.html#boundprocedure-enter_data~5'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_enter_data.html'>vcoord_enter_data</a></td>
+  <strong><a href='../type/vcoord_t.html#boundprocedure-enter_data~27'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_enter_data.html'>vcoord_enter_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/vcoord_t.html#boundprocedure-exit_data~5'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_exit_data.html'>vcoord_exit_data</a></td>
+  <strong><a href='../type/vcoord_t.html#boundprocedure-exit_data~27'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_exit_data.html'>vcoord_exit_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/vcoord_t.html#boundprocedure-init~6'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_init.html'>vcoord_init</a></td>
+  <strong><a href='../type/vcoord_t.html#boundprocedure-init~31'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_init.html'>vcoord_init</a></td>
                   <td></td>
               </tr>
               <tr>
@@ -1126,7 +1191,7 @@ fixed thickness regardless of total depth H.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-str~4"></span>
+              <span class="anchor" id="variable-str~22"></span>
               character(len=*),
             </td>
 <td>intent(in)</td>
@@ -1171,7 +1236,7 @@ fixed thickness regardless of total depth H.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-str~3"></span>
+              <span class="anchor" id="variable-str~21"></span>
               character(len=*),
             </td>
 <td>intent(in)</td>
@@ -1218,7 +1283,7 @@ and ocean backends). Unrecognised ⇒ <code>default_code</code> if given, else
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-str~2"></span>
+              <span class="anchor" id="variable-str~20"></span>
               character(len=*),
             </td>
 <td>intent(in)</td>
@@ -1244,6 +1309,111 @@ and ocean backends). Unrecognised ⇒ <code>default_code</code> if given, else
             <td><strong>default_code</strong></td>
             <td>
 
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_h_min_is_coherent"></span> <h3>public pure function <a href='../proc/vcoord_h_min_is_coherent.html'>vcoord_h_min_is_coherent</a>(coord_type, h_min) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Is <code>zstar_h_min</code> coherent with the contract <code>coord_type</code> gives it?</p><a href="../proc/vcoord_h_min_is_coherent.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+<p><code>VCOORD_*</code> code (from <code>parse_vcoord_type</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~20"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+<p>The configured <code>&amp;vcoord_nml zstar_h_min</code> (m).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_h_min_role"></span> <h3>public pure function <a href='../proc/vcoord_h_min_role.html'>vcoord_h_min_role</a>(coord_type) result(role)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Which of the TWO contracts <code>zstar_h_min</code> carries for <code>coord_type</code>.</p><a href="../proc/vcoord_h_min_role.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+<p><code>VCOORD_*</code> code (from <code>parse_vcoord_type</code>).</p>
             </td>
         </tr>
     </tbody>
@@ -1346,7 +1516,7 @@ Pure, called from <code>do concurrent</code> (one thread per column).</p><a href
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~48"></span>
+              <span class="anchor" id="variable-nz~261"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1439,7 +1609,7 @@ reference interface.  Used for VCOORD_ZSIGMA and VCOORD_ZSTAR.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz~3"></span>
+              <span class="anchor" id="variable-dz~4"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1486,7 +1656,7 @@ and the surface is trimmed to keep sum = H.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~50"></span>
+              <span class="anchor" id="variable-nz~263"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1531,7 +1701,7 @@ and the surface is trimmed to keep sum = H.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~3"></span>
+              <span class="anchor" id="variable-h_min~19"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1546,7 +1716,7 @@ and the surface is trimmed to keep sum = H.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz~4"></span>
+              <span class="anchor" id="variable-dz~5"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1591,7 +1761,7 @@ degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~49"></span>
+              <span class="anchor" id="variable-nz~262"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1843,7 +2013,7 @@ and falls back to uniform spacing.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~47"></span>
+              <span class="anchor" id="variable-nz~260"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1873,7 +2043,7 @@ and falls back to uniform spacing.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_method~3"></span>
+              <span class="anchor" id="variable-remap_method~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1916,7 +2086,7 @@ and falls back to uniform spacing.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 02:35 +0000             </p>
+ on 2026-09-20 03:11 +0000             </p>
           </div>
         </div>
         <br>

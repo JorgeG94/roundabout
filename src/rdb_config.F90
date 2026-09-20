@@ -3115,8 +3115,9 @@ contains
                                        has_biharmonic_backstop, &
                                        leith_biharm_is_inert
       use rdb_ocean_horizontal_viscosity, only: aniso_mode_is_implemented
-      use rdb_vcoord, only: parse_vcoord_type
-      use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z
+      use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent
+      use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z, &
+                               H_VANISHED
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                           OBC_INVALID
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
@@ -3434,6 +3435,67 @@ contains
                               "'sigma' even split")
             has_error = .true.
          end if
+
+         ! `&vcoord_nml zstar_h_min` carries TWO different contracts, picked
+         ! by the coordinate family rather than by the value (see
+         ! `rdb_vcoord :: vcoord_h_min_role`).  On the GEOMETRIC families
+         ! (ZSTAR_FULL / Z_FIXED) it is the anti-zero thickness of below-bed
+         ! FILLER layers that are meant to read as vanished downstream, so it
+         ! belongs at or below the D4 skip/merge marker `H_VANISHED`; on the
+         ! DENSITY families (RHO / HYCOM) the collapsed layers carry real
+         ! tracer mass and that path deliberately floors at
+         ! `max(zstar_h_min, 2*H_VANISHED)` instead.  Nothing else pins the
+         ! knob, so an INERT-role run with `zstar_h_min > H_VANISHED` silently
+         ! promotes its below-bed filler to LIVE layers (real EOS density off
+         ! ghost T/S, a PGF column entry, a remap-drain concentration, a vdiff
+         ! interface) while the coordinate still treats them as throwaway.
+         !
+         ! WARN, do not abort, on that one: the repo's own Python worked
+         ! example (`python/tests/test_worked_example.py`,
+         ! `ZStarFull(h_min=1.0e-3)`) is in exactly this band today, so a hard
+         ! refusal would stop a configuration that runs.  The silence was the
+         ! defect; promoting this to `has_error` is a deliberate,
+         ! answer-changing follow-up once that example is corrected.  A
+         ! non-positive floor IS refused — nothing in the tree sets one and it
+         ! defeats the knob's single documented purpose.
+         block
+            integer :: hmin_vcoord_code
+            hmin_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
+                                                 default_code=VCOORD_EULERIAN_Z)
+            if (.not. vcoord_h_min_is_coherent(hmin_vcoord_code, cfg%zstar_h_min)) then
+               if (cfg%zstar_h_min <= 0.0_wp) then
+                  call logger%error("&vcoord_nml zstar_h_min = "// &
+                                    to_string(cfg%zstar_h_min)//" must be > 0: it exists "// &
+                                    "so a vanishing layer's target thickness is never "// &
+                                    "exactly zero (kernels that divide by h_layer)")
+                  has_error = .true.
+               else
+                  call logger%warning("&vcoord_nml zstar_h_min = "// &
+                                      to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
+                                      to_string(H_VANISHED)//" m under vcoord_type = '"// &
+                                      trim(cfg%vcoord_type)//"': that family uses the knob "// &
+                                      "as an anti-zero floor for BELOW-BED filler layers, "// &
+                                      "which are meant to stay vanished — above "// &
+                                      "H_VANISHED they become dynamically live "// &
+                                      "(EOS/PGF/remap-drain/vdiff) while the coordinate "// &
+                                      "still treats them as throwaway.  For a genuinely "// &
+                                      "live minimum layer thickness use "// &
+                                      "&ocean_isopycnal_nml angstrom_h (the D4 floor "// &
+                                      "knob); the rho/hycom regrid has its own "// &
+                                      "keep-alive floor")
+               end if
+            end if
+            ! NOTE the boundary, deliberately NOT warned about at runtime:
+            ! the five shipped namelists set `zstar_h_min = 1.5e-4`, which is
+            ! H_VANISHED EXACTLY.  That is legal — every downstream vanish
+            ! test is a strict `> H_VANISHED`, so a layer sitting on the
+            ! marker still reads as vanished — but it carries zero margin,
+            ! and any gate relaxed to `>=` would change those runs' answers.
+            ! A per-run warning here would fire on the canonical double-gyre
+            ! reference forever while recommending nothing an operator can do
+            ! without changing answers, so the fact lives in the docs and at
+            ! the gate (`rdb_ocean_remap :: H_FLOOR`) instead.
+         end block
 
          ! GM thickness diffusion consumes the stored isopycnal slope, so
          ! the slopes slot MUST be enabled.  Loud invariant (the kernel is

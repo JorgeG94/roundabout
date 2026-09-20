@@ -175,7 +175,31 @@ module rdb_ocean_vcoord
       real(wp) :: zstar_h_surf_target = 5.0_wp
          !! Surface-layer thickness anchor for `VCOORD_ZSTAR_FULL` (m).
       real(wp) :: zstar_h_min = 1.0e-4_wp
-         !! Bed-side vanishing-layer floor (m).
+         !! Bed-side vanishing-layer floor (m).  **Two contracts, picked by
+         !! the coordinate family — see `rdb_vcoord :: vcoord_h_min_role`.**
+         !!
+         !! On the GEOMETRIC families (`VCOORD_ZSTAR_FULL`, `VCOORD_Z_FIXED`)
+         !! this is the thickness handed to filler layers that lie BELOW the
+         !! local bed.  They hold no water; the floor exists ONLY so
+         !! `target_h` is never exactly zero and no h-dividing kernel can
+         !! 1/0.  They are MEANT to be classified vanished downstream, so the
+         !! default sits deliberately BELOW the D4 skip/merge marker
+         !! `H_VANISHED = 1.5e-4` — not by accident, and not a floor in the
+         !! `angstrom_h` sense (the D4 taxonomy forbids using `H_VANISHED`
+         !! as a positivity floor).  Thinner is also better physics here:
+         !! each filler interface carries the full topographic slope, so the
+         !! spurious rest PGF transport it drives scales WITH the floor (the
+         !! same argument that took `seed_h_layer_uniform_z_impl` off
+         !! `2*H_VANISHED`).  `validate_config` warns on a value above
+         !! `H_VANISHED` under these families, and refuses a non-positive one.
+         !!
+         !! On the DENSITY families (`VCOORD_RHO`, `VCOORD_HYCOM`) the
+         !! collapsed layers are real layers the inversion squeezed shut
+         !! anywhere in the column; they carry tracer mass, so
+         !! `compute_target_h_rho_impl` inflates them to
+         !! `max(zstar_h_min, 2*H_VANISHED)` to keep them above the remap
+         !! drain.  There `zstar_h_min` is additionally the pre-compaction
+         !! strip threshold, so a large value is meaningful rather than wrong.
       integer  :: zstar_n_surf = 0
          !! Number of fine near-surface layers for ZSTAR_FULL.  ≤ 0 =
          !! auto-pick (max(1, nz_ml/3)).
