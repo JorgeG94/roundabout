@@ -1461,6 +1461,14 @@ contains
       !! `z_ref` table (ZSTAR_FULL) or the static land mask + C-grid face
       !! metrics — for those, drive the case from a namelist/restart
       !! instead (matches the recovered precedent's documented limit).
+      !!
+      !! REFUSED under an ice-shelf cavity (`&ocean_cavity_dyn_nml
+      !! enable`). There the mode-split contract is `bt_H_ref = b −
+      !! z_draft`, so the `bt_H_ref = b` re-derivation below would silently
+      !! delete the ice load from the datum — and even re-deriving it
+      !! correctly would not be enough: a new bed changes which columns
+      !! GROUND, and this entry point deliberately does not rebuild the wet
+      !! mask or the land-masked metrics. Re-seed from a namelist instead.
       type(c_ptr), intent(in), value :: c_handle
       integer(c_int), intent(in), value :: nx_p, ny_p
       real(c_double), intent(in) :: b_data(nx_p, ny_p)
@@ -1475,6 +1483,17 @@ contains
       if (nx_p /= h%grid%nx_phys .or. ny_p /= h%grid%ny_phys) then
          call fail("rdb_ocean_set_bathymetry: shape mismatch against the physical interior", &
                    ierr_local, OCEAN_STATUS_ERR_BAD_SHAPE)
+         status = int(ierr_local, c_int)
+         return
+      end if
+
+      if (h%state%metrics%use_cavity) then
+         call fail("rdb_ocean_set_bathymetry: refused with &ocean_cavity_dyn_nml "// &
+                   "enable — the datum is bt_H_ref = b - z_draft, and a mid-run bed "// &
+                   "swap would both drop the ice load from it and change which "// &
+                   "columns ground (this entry point does not rebuild the wet mask). "// &
+                   "Re-seed from a namelist instead.", &
+                   ierr_local, OCEAN_STATUS_ERR_SETUP)
          status = int(ierr_local, c_int)
          return
       end if

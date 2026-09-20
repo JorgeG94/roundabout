@@ -39,6 +39,11 @@ CURATED_KNOBS = [
     "ocean_hvisc_nml",
     "ocean_bdrag_nml",
     "ocean_kappa_shear_nml",
+    # Static ice-shelf cavity geometry + the barotropic datum that absorbs
+    # it.  Listed here because the datum silently changes what `bt_eta`
+    # MEANS (deviation from the loaded equilibrium, not from z = 0), which
+    # is exactly the kind of thing prose forgets.
+    "ocean_cavity_dyn_nml",
 ]
 
 # Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —

@@ -239,6 +239,29 @@ zeroes the barotropic width, so the two modes agree.
 Single-rank only: the open-area fields have no halo exchange (MOM6
 `pass_vector`s them), so a multi-rank C-grid run would see stale seam columns.
 
+## Ice-shelf cavity geometry (static draft + barotropic datum; ocean only)
+
+A prescribed, time-constant ice draft `z_draft(i,j)` (m, positive **down**)
+laid over the bed and absorbed into the **barotropic datum**, so a cavity
+column starts from its loaded equilibrium rather than from `z = 0`.
+
+| Piece | Form | Knob | Numerics / envelope |
+|---|---|---|---|
+| Static ice draft `z_draft` | `"none"` (identity) / `"flat"` (uniform inside the shelf box, 0 beyond the calving front `draft_x1`) / `"linear"` (`d0 + s·(x−x0)`, clipped at 0) / `"file"` (**fails loud** — the MPI-correct static-2-D reader is a later slice, and it is the only route to an ISOMIP+ draft, which has no analytic form) | `&ocean_cavity_dyn_nml enable` + `draft_config` | Filled on the host immediately after the bathymetry, FULL array including ghosts (formula evaluated at the ghost position), then carried through the bathymetry's own periodic/fold re-wrap + halo sequence. Box corners are METRES converted to GRID units (degrees on spherical/curvilinear) at the dispatch, like `&ocean_topo_nml slope_scale`; `±1e30` is the "no limit on this side" sentinel, which is what a shelf that reaches a wall needs. `draft_source="thickness"` converts an ice thickness by flotation, `ρ_ice·h/ρ₀`; `"in_situ"` isostasy fails loud. Tests: `test_ocean_cavity_draft` |
+| **Datum** `bt_H_ref = b − z_draft` | the whole dynamical effect of a STATIC load | (implied by `enable`) | `bt_eta = Σh_layer − bt_H_ref` is then the deviation from the **loaded** equilibrium — zero at rest under the shelf — which is Losch (2008) §2.1's own convention. Every consumer of the water-column thickness `D = bt_H_ref + bt_eta` (BT continuity face thickness, Chapman phase speed, ALE `remap_h_ref`, the BT↔layer rescale) is then correct with NO cavity branch of its own. The geopotential stack is a separate datum and stays absolute (`e_face(1) = −b` from the true bed, so the column top lands at `−z_draft + η` by itself). Counted-once invariant: `ρ_ref·g·z_draft + (bt_H_ref − b)·ρ_ref·g ≡ 0`, asserted at configure. Gate: `test_ocean_cavity_equivalence` — a flat lid over a deep bed evolves like a shallower ocean |
+| **Grounding** → LAND | `b − z_draft < h_min_cavity` ⇒ `wet_mask = 0` | `h_min_cavity` (default 10 m), `grounded_max_frac` | Routed through the SAME `seed_wet_mask_impl` the bathymetry uses, so the static metric-zeroing land mask and the finite land-state hold follow for free. **Never a thin film of water under grounded ice.** More than `grounded_max_frac` of the interior columns grounded ⇒ fail loud. No ice over land: the draft is forced to 0 wherever `b < LAND_DEPTH_THRESHOLD` (count logged), which keeps the counted-once invariant exact on every column |
+| Isostatic load `p_ice_ref = (ρ_ref·GRAVITY)·z_draft` | built, stored, **not yet consumed** | — | Formed as the SAME single product the FV-MOM6 surface BC forms, so `pa(nz+1) = ρ_ref·g·(−z_draft) + p_ice_ref` will cancel to bit-zero at rest once it is wired to `ms%p_top` (next slice). This slice is DATUM-ONLY and configure says so |
+
+**Envelope (every row fails loud at configure, naming the knob and the
+reason):** `&ocean_pgf_nml form="fv_mom6"` and `gfs_scale = 1`; `vcoord_type`
+in {`sigma`, `zstar`} (every z-like family anchors at `z = 0`, which under a
+shelf is inside the ice) and `thickness_config /= "uniform_z"`; the SPLIT
+solver (`n_inner ≥ 1`); single rank; `bt_halo = 0` (also in
+`bt_halo_auto_exclusion`, so AUTO resolves to 0 instead of manufacturing a
+width); and mutually exclusive with wet/dry, porous barriers, sea ice,
+`&ocean_tides_nml use_sal` and `&ocean_zinit_nml enable`. Default off ⇒
+byte-identical.
+
 ## Wind-stress application (multilayer)
 
 | Mode | ocean | Notes |

@@ -1831,6 +1831,110 @@ class OceanPsurf(Group):
     )
 
 
+class OceanCavityDyn(Group):
+    """`&ocean_cavity_dyn_nml` -- Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref = b - z_draft."""
+
+    _nml_name = 'ocean_cavity_dyn'
+
+    enable = Bool(
+        'enable',
+        doc='Master switch (single-rank, split solver, fv_mom6 PGF, sigma/zstar only)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    draft_config = Enum(
+        'draft_config',
+        doc="Analytic draft shape ('file' is deferred: the static-2-D reader lands in a later slice)",
+        units='',
+        required=False,
+        default='none',
+        allowed=('none', 'flat', 'linear', 'file'),
+    )
+
+    draft_source = Enum(
+        'draft_source',
+        doc="Whether the formula gives the ice-base DEPTH or an ice THICKNESS ('in_situ' isostasy is deferred)",
+        units='',
+        required=False,
+        default='draft',
+        allowed=('draft', 'thickness', 'in_situ'),
+    )
+
+    draft_depth = Real(
+        'draft_depth',
+        doc="Draft amplitude (ice thickness under draft_source='thickness')",
+        units='m',
+        required=False,
+        default=0.0,
+    )
+
+    draft_slope = Real(
+        'draft_slope',
+        doc="d(draft)/dx for draft_config='linear' (dimensionless; converted to grid units)",
+        units='',
+        required=False,
+        default=0.0,
+    )
+
+    draft_x0 = Real(
+        'draft_x0',
+        doc="Western edge of the shelf box, and the anchor of the 'linear' profile (+/-1e30 => no limit)",
+        units='m',
+        required=False,
+        default=-1e+30,
+    )
+
+    draft_x1 = Real(
+        'draft_x1',
+        doc='Eastern edge of the shelf box = the calving front (+/-1e30 => no limit)',
+        units='m',
+        required=False,
+        default=1e+30,
+    )
+
+    draft_y0 = Real(
+        'draft_y0',
+        doc='Southern edge of the shelf box (+/-1e30 => no limit)',
+        units='m',
+        required=False,
+        default=-1e+30,
+    )
+
+    draft_y1 = Real(
+        'draft_y1',
+        doc='Northern edge of the shelf box (+/-1e30 => no limit)',
+        units='m',
+        required=False,
+        default=1e+30,
+    )
+
+    h_min_cavity = Real(
+        'h_min_cavity',
+        doc='Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice)',
+        units='m',
+        required=False,
+        default=10.0,
+    )
+
+    grounded_max_frac = Real(
+        'grounded_max_frac',
+        doc='Fail loud if more than this fraction of the interior columns ground',
+        units='',
+        required=False,
+        default=0.5,
+    )
+
+    rho_ice = Real(
+        'rho_ice',
+        doc="Ice density, consulted only by draft_source='thickness'",
+        units='kg/m^3',
+        required=False,
+        default=918.0,
+    )
+
+
 class OceanEpbl(Group):
     """`&ocean_epbl_nml` -- RH18 energetics-based planetary boundary layer."""
 
@@ -5659,6 +5763,7 @@ GENERATED_GROUPS = {
     'ocean_ddiff': OceanDdiff,
     'ocean_tides': OceanTides,
     'ocean_psurf': OceanPsurf,
+    'ocean_cavity_dyn': OceanCavityDyn,
     'ocean_epbl': OceanEpbl,
     'ocean_wavespeed': OceanWavespeed,
     'ocean_foxkemper': OceanFoxkemper,
@@ -5694,5 +5799,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 57
-N_KNOBS = 623
+N_GROUPS = 58
+N_KNOBS = 635

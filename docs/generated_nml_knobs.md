@@ -365,6 +365,25 @@ Atmospheric surface-pressure loading / inverse barometer (PR-17).
 | `in_eos` | `.false.` |  | Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders) |
 | `p_surf_const` | `0.0000000000E+00` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
 
+### &ocean_cavity_dyn_nml
+
+Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref = b - z_draft.
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Master switch (single-rank, split solver, fv_mom6 PGF, sigma/zstar only) |
+| `draft_config` | `"none"` |  | Analytic draft shape ('file' is deferred: the static-2-D reader lands in a later slice) |
+| `draft_source` | `"draft"` |  | Whether the formula gives the ice-base DEPTH or an ice THICKNESS ('in_situ' isostasy is deferred) |
+| `draft_depth` | `0.0000000000E+00` | m | Draft amplitude (ice thickness under draft_source='thickness') |
+| `draft_slope` | `0.0000000000E+00` |  | d(draft)/dx for draft_config='linear' (dimensionless; converted to grid units) |
+| `draft_x0` | `-0.1000000000E+31` | m | Western edge of the shelf box, and the anchor of the 'linear' profile (+/-1e30 => no limit) |
+| `draft_x1` | `0.1000000000E+31` | m | Eastern edge of the shelf box = the calving front (+/-1e30 => no limit) |
+| `draft_y0` | `-0.1000000000E+31` | m | Southern edge of the shelf box (+/-1e30 => no limit) |
+| `draft_y1` | `0.1000000000E+31` | m | Northern edge of the shelf box (+/-1e30 => no limit) |
+| `h_min_cavity` | `0.1000000000E+02` | m | Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice) |
+| `grounded_max_frac` | `0.5000000000E+00` |  | Fail loud if more than this fraction of the interior columns ground |
+| `rho_ice` | `0.9180000000E+03` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |
+
 ### &ocean_epbl_nml
 
 RH18 energetics-based planetary boundary layer.
