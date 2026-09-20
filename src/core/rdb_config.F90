@@ -2695,6 +2695,11 @@ module rdb_config
          !! the baroclinic anomaly per column so column KE is preserved
          !! (Adcroft & Hallberg 2006), capped 1.25×; barotropic mean
          !! untouched.  .false. (default) = momentum-only = bit-identical.
+      logical :: remap_boundary_extrap = .false.
+         !! Linear-exact one-sided reconstruction in the ALE remap's two
+         !! boundary cells (MOM6 `BOUNDARY_EXTRAPOLATION`) instead of the
+         !! PCM flatten, which leaves PLM/PPM/PPM_H4/PQM first-order at
+         !! `k=1` and `k=nz`.  .false. (default) = bit-identical.
 
       ! Logging parameters
       character(len=16) :: log_level = "info"
@@ -5579,6 +5584,10 @@ contains
       pl => cfg%remap_vel_conserve_ke
       call g%add(nml_logical("remap_vel_conserve_ke", pl, &
                              "ALE velocity remap: KE-conserving baroclinic-anomaly rescale"))
+      pl => cfg%remap_boundary_extrap
+      call g%add(nml_logical("remap_boundary_extrap", pl, &
+                             "ALE remap: linear-exact one-sided reconstruction in the "// &
+                             "k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION)"))
       call schema%add_group(g)
    end subroutine register_vcoord
 
