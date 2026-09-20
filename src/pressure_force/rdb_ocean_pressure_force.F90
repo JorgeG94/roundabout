@@ -35,7 +35,7 @@ module rdb_ocean_pressure_force
                              scratch_3d_buffer_exit_data_impl
    use rdb_eos, only: eos_wright_pgf_column_sweep_impl, eos_t
    use rdb_ocean_pgf_reconstruct, only: plm_edges_column, ppm_edges_column, &
-                                        boole_dpa_intz_layer, &
+                                        boole_dpa_intz_layer, boole_dpa_face, &
                                         PGF_RECON_PLM, PGF_RECON_PPM
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -1358,16 +1358,29 @@ contains
                                                     idxCu, idyCv, nx, ny, nz)
       !! FV_MOM6 pressure-gradient with in-layer T/S reconstruction.
       !!
-      !! Identical face assembly to `compute_fv_mom6_impl` (Passes 2-5),
-      !! but Pass 1 replaces the PCM layer-mean `dpa(k)` / `intz_dpa(k)`
-      !! with the 5-point Boole quadrature of a monotone PLM/PPM sub-layer
-      !! T/S profile. The per-layer `dpa` is recovered in the face passes
-      !! from the `pa` stack (`dpa(k) = pa(k) - pa(k+1)`) — no separate
-      !! dpa buffer.
+      !! Same Pass 3-5 face assembly as `compute_fv_mom6_impl`, but the
+      !! two integrals that assembly consumes are BOTH taken from the
+      !! reconstructed sub-layer T/S profile rather than a layer mean:
+      !!
+      !!   * Pass 1 (per column) replaces the PCM `dpa(k)` / `intz_dpa(k)`
+      !!     with the 5-point VERTICAL Boole quadrature of the monotone
+      !!     PLM/PPM profile — the side integrals of the control volume.
+      !!   * Pass 2 (per face) replaces the two-column trapezoid
+      !!     `0.5*(dpa_L + dpa_R)` with the 5-point HORIZONTAL Boole
+      !!     quadrature `boole_dpa_face` — the top/bottom (tilted) edges.
+      !!
+      !! Both are required for the defining property: with a linear EOS
+      !! and T/S linear in z, the PGF then vanishes to round-off for ANY
+      !! layer geometry (Adcroft, Hallberg & Harrison 2008; Yung,
+      !! Hallberg, Adcroft & Morrison 2026 §2.4).  Correcting the vertical
+      !! integral alone leaves the horizontal trapezoid's curvature
+      !! residual `g*(-drho/dz)*Delta_e^2/12` at every tilted interface,
+      !! which is the sigma "second-kind" pressure-gradient error.
       !!
       !! `mass_weight` (hWght blend) is NOT applied here: it needs a
       !! per-cell density, whereas reconstruction works on column T/S
-      !! edges. Boundary layers fall back to PCM edges in the edge helper.
+      !! edges.  Boundary layers take the linear-exact one-sided edge pair
+      !! in the edge helper (`boundary_edges_linear`).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: hS(nx, ny, nz)
@@ -1393,7 +1406,8 @@ contains
 
       integer  :: i, j, k
       real(wp) :: inv_rho0, eta, dpa_kk, intz_kk
-      real(wp) :: dpa_L, dpa_R, h_L, h_R, e_bot_L, e_bot_R
+      real(wp) :: h_L, h_R, e_bot_L, e_bot_R
+      real(wp) :: t_m_L, t_m_R, s_m_L, s_m_R
       real(wp) :: pa_h_intz_L, pa_h_intz_R, numer, denom
       real(wp) :: dM_coeff, ddM_dx, ddM_dy
       logical  :: parabolic
@@ -1477,15 +1491,30 @@ contains
       end do
 
       ! ---- Pass 2a: u-face horizontal integrals ----
-      ! Reconstructed per-cell dpa(k) = pa(k) - pa(k+1); face integral is
-      ! the layer-midpoint average (aligned-face form, no hWght blend).
-      do concurrent(j=1:ny, i=2:nx) local(k, dpa_L, dpa_R)
+      ! The along-face mean of the layer pressure increment, by the 5-point
+      ! cross-face Boole quadrature of `boole_dpa_face` (sub-columns at the
+      ! INTERPOLATED interface height with interpolated T/S).  The
+      ! two-column trapezoid `0.5*(dpa_L + dpa_R)` this replaces is exact
+      ! only for a pressure linear in x along the edge; under a tilted
+      ! interface it leaves the sigma second-kind curvature residual at
+      ! every interface — see the `boole_dpa_face` docstring.
+      do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
          intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
          do k = nz, 1, -1
-            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
-            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-            intx_dpa(i, j, k) = 0.5_wp*(dpa_L + dpa_R)
-            intx_pa(i, j, k) = intx_pa(i, j, k + 1) + intx_dpa(i, j, k)
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            call boole_dpa_face(eos, rho0, rho_ref, &
+                                e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                parabolic, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
+            intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
          end do
       end do
       do concurrent(k=1:nz, j=1:ny)
@@ -1498,13 +1527,23 @@ contains
       end do
 
       ! ---- Pass 2b: v-face horizontal integrals ----
-      do concurrent(j=2:ny, i=1:nx) local(k, dpa_L, dpa_R)
+      do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
          inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
          do k = nz, 1, -1
-            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
-            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-            inty_dpa(i, j, k) = 0.5_wp*(dpa_L + dpa_R)
-            inty_pa(i, j, k) = inty_pa(i, j, k + 1) + inty_dpa(i, j, k)
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            call boole_dpa_face(eos, rho0, rho_ref, &
+                                e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                parabolic, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
+            inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
          end do
       end do
       do concurrent(k=1:nz, i=1:nx)
@@ -1583,6 +1622,26 @@ contains
          end do
       end if
    end subroutine compute_fv_mom6_reconstruct_impl
+
+   pure function recon_layer_mean(hq, h) result(q)
+      !$acc routine seq
+      !! Layer-mean tracer from the thickness-weighted prognostic,
+      !! `q = hq/h`, with the D4 vanished-layer floor.  Same gate as the
+      !! reconstruct kernel's Pass 0/1 (`H_VANISHED`, not `1e-10`): during
+      !! an active drain the PPM positivity limiter only guarantees
+      !! `h >= 0`, so a layer in `(0, H_VANISHED]` would otherwise divide
+      !! by a near-zero thickness.
+      real(wp), intent(in) :: hq
+         !! Thickness-weighted tracer (e.g. `S*h`).
+      real(wp), intent(in) :: h
+         !! Layer thickness (m).
+      real(wp) :: q
+      if (h > H_VANISHED) then
+         q = hq/h
+      else
+         q = hq/H_VANISHED
+      end if
+   end function recon_layer_mean
 
    pure function recon_rho_surf(pa_k, pa_kp1, h_surf, rho_ref) result(rho_surf)
       !$acc routine seq

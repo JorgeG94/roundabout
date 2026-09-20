@@ -26,9 +26,12 @@ module rdb_ocean_pgf_reconstruct
    !! negative below the surface; the Boussinesq hydrostatic pressure
    !! estimate at a sub-point is `p = -g*rho0*z = g*rho0*depth`.
    !!
-   !! Boundary layers (k=1, k=nz) fall back to PCM edges
-   !! (`Q_t = Q_b = Q`) — no boundary extrapolation, matching the
-   !! conservative default.
+   !! Boundary layers (k=1, k=nz) take a LINEAR-EXACT one-sided edge pair
+   !! from the single interior neighbour (`boundary_edges_linear`), not a
+   !! PCM flatten.  That matters: under a terrain-following coordinate the
+   !! layers adjacent to the tilted boundary are exactly where the
+   !! sigma pressure-gradient truncation error lives, and flattening them
+   !! to PCM left the FULL error there while the interior was corrected.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, GRAVITY
 #else
@@ -48,6 +51,7 @@ module rdb_ocean_pgf_reconstruct
    public :: plm_edges_column
    public :: ppm_edges_column
    public :: boole_dpa_intz_layer
+   public :: boole_dpa_face
 
    ! Reconstruction-scheme tags (mirror MOM6 Recon_Scheme; only consulted
    ! when reconstruct_for_pressure is on).
@@ -63,13 +67,63 @@ module rdb_ocean_pgf_reconstruct
 
 contains
 
+   pure subroutine boundary_edges_linear(h_self, h_nbr, q_self, dq_up, q_t, q_b)
+      !$acc routine seq
+      !! Linear-exact one-sided edge pair for a BOUNDARY layer (k=1 or
+      !! k=nz), where a centred slope has no second neighbour.
+      !!
+      !! `dq_up` is the layer-mean increment toward the SURFACE across the
+      !! two cell centres (`q(2)-q(1)` at the bed, `q(nz)-q(nz-1)` at the
+      !! surface).  The centres are `(h_self + h_nbr)/2` apart, so the
+      !! per-metre slope is `dq_up/((h_self+h_nbr)/2)` and the half-jump
+      !! across this layer is
+      !!
+      !!     d = dq_up * h_self / (h_self + h_nbr)
+      !!
+      !! giving `q_t = q + d` (shallower edge) and `q_b = q - d`.  For a
+      !! profile that is linear in z this reproduces the true edge values
+      !! EXACTLY, for any thickness pair — which is the property the FV
+      !! pressure-gradient quadrature needs (Adcroft, Hallberg & Harrison
+      !! 2008; White, Adcroft & Hallberg 2009 §2): a PCM flatten here
+      !! leaves the full terrain-following truncation error in the layers
+      !! next to the tilted boundary.
+      !!
+      !! Limiter: `|d| <= |dq_up|`, i.e. the edge never leaves the
+      !! interval the two cell means span on the other side.  Since
+      !! `h_self/(h_self+h_nbr) < 1` it never bites on a real thickness
+      !! pair — it is armour against a degenerate `h_nbr <= 0`, and it
+      !! keeps the extrapolation from manufacturing a density inversion.
+      real(wp), intent(in)  :: h_self
+         !! Thickness of the boundary layer itself (m).
+      real(wp), intent(in)  :: h_nbr
+         !! Thickness of its single interior neighbour (m).
+      real(wp), intent(in)  :: q_self
+         !! Layer mean of the boundary layer.
+      real(wp), intent(in)  :: dq_up
+         !! Layer-mean increment toward the surface, neighbour -> self at
+         !! the surface layer, self -> neighbour at the bed layer.
+      real(wp), intent(out) :: q_t
+         !! Top (shallower) edge value.
+      real(wp), intent(out) :: q_b
+         !! Bottom (deeper) edge value.
+
+      real(wp), parameter :: H_TINY = 1.0e-30_wp
+      real(wp) :: d
+
+      d = dq_up*h_self/max(h_self + h_nbr, H_TINY)
+      d = sign(min(abs(d), abs(dq_up)), d)
+      q_t = q_self + d
+      q_b = q_self - d
+   end subroutine boundary_edges_linear
+
    pure subroutine plm_edges_column(nz, h, q, q_t, q_b)
       !$acc routine seq
       !! Per-column PLM top/bottom edge values of a layer-mean field `q`,
       !! via a two-stage h-weighted van-Leer slope (White, Adcroft &
       !! Hallberg 2009 §2). Returns the SHALLOWER edge in `q_t` (toward
       !! k+1) and the DEEPER edge in `q_b` (toward k-1), bottom-up.
-      !! Boundary layers (k=1, k=nz) -> PCM edges (q_t=q_b=q).
+      !! Boundary layers (k=1, k=nz) -> `boundary_edges_linear`, the
+      !! linear-exact one-sided pair.
       integer, intent(in) :: nz
       real(wp), intent(in)  :: h(nz)
          !! Layer thicknesses (m), k=1 bed .. k=nz surface.
@@ -85,12 +139,10 @@ contains
       real(wp) :: e_t, e_b, q_lo, q_hi
       integer  :: k
 
-      ! Single / two-layer columns: all PCM (every layer is a boundary).
-      if (nz <= 2) then
-         do k = 1, nz
-            q_t(k) = q(k)
-            q_b(k) = q(k)
-         end do
+      ! Single-layer column: PCM is the only option (no neighbour).
+      if (nz <= 1) then
+         q_t(1) = q(1)
+         q_b(1) = q(1)
          return
       end if
 
@@ -125,10 +177,9 @@ contains
       ! (White, Adcroft & Hallberg 2009 §2 monotonization — prevents the
       ! reconstructed edge from over/undershooting the neighbour mean,
       ! which would manufacture a density inversion under the EOS).
-      q_t(1) = q(1)
-      q_b(1) = q(1)
-      q_t(nz) = q(nz)
-      q_b(nz) = q(nz)
+      call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
+      call boundary_edges_linear(h(nz), h(nz - 1), q(nz), q(nz) - q(nz - 1), &
+                                 q_t(nz), q_b(nz))
       do k = 2, nz - 1
          e_t = q(k) + 0.5_wp*slp(k)   ! shallower edge (toward k+1)
          e_b = q(k) - 0.5_wp*slp(k)   ! deeper edge (toward k-1)
@@ -158,7 +209,10 @@ contains
       !! in-layer curvature — why PPM differs from PLM at the density
       !! integral even at identical edge values.
       !!
-      !! Boundary layers (k=1, k=nz) -> PCM edges.
+      !! Boundary layers (k=1, k=nz) -> `boundary_edges_linear`.  The pair
+      !! is symmetric about the layer mean, so `q6 = 3*(2*q - (q_t+q_b))`
+      !! is identically zero there: the boundary layer carries a straight
+      !! line, which is the exact profile whenever `q(z)` is linear.
       integer, intent(in) :: nz
       real(wp), intent(in)  :: h(nz)
       real(wp), intent(in)  :: q(nz)
@@ -177,11 +231,14 @@ contains
       real(wp), parameter :: H_MIN_FRAC = 1.0e-5_wp
       integer  :: k
 
-      if (nz <= 2) then
-         do k = 1, nz
-            q_t(k) = q(k)
-            q_b(k) = q(k)
-         end do
+      if (nz <= 1) then
+         q_t(1) = q(1)
+         q_b(1) = q(1)
+         return
+      end if
+      if (nz == 2) then
+         call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
+         call boundary_edges_linear(h(2), h(1), q(2), q(2) - q(1), q_t(2), q_b(2))
          return
       end if
 
@@ -219,18 +276,17 @@ contains
       ! interface estimate — the linear-exact value at the shared face of
       ! two piecewise-linear cells, q_f = (q_k h_{k+1} + q_{k+1} h_k) /
       ! (h_k + h_{k+1}).  These touch interior layer 2 (interface 1|2) and
-      ! nz-1 (interface nz-1|nz); the bounding layers 1 and nz fall back to
-      ! PCM, so only these two matter.  (A plain mean biases the thick
-      ! interior layer's edge on non-uniform thicknesses.)
+      ! nz-1 (interface nz-1|nz); the bounding layers 1 and nz take the
+      ! one-sided linear pair, so only these two matter.  (A plain mean
+      ! biases the thick interior layer's edge on non-uniform thicknesses.)
       edge(1) = (q(1)*h(2) + q(2)*h(1))/(h(1) + h(2))
       edge(nz - 1) = (q(nz - 1)*h(nz) + q(nz)*h(nz - 1))/(h(nz - 1) + h(nz))
 
       ! ---- Per-layer edges + Colella-Woodward parabola limiter ----
-      ! Boundary layers: PCM.
-      q_t(1) = q(1)
-      q_b(1) = q(1)
-      q_t(nz) = q(nz)
-      q_b(nz) = q(nz)
+      ! Boundary layers: linear-exact one-sided pair (q6 == 0 there).
+      call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
+      call boundary_edges_linear(h(nz), h(nz - 1), q(nz), q(nz) - q(nz - 1), &
+                                 q_t(nz), q_b(nz))
       do k = 2, nz - 1
          qm = q(k)
          ql = edge(k - 1)   ! deeper interface  -> bottom edge
@@ -340,5 +396,94 @@ contains
       intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
                                        - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
    end subroutine boole_dpa_intz_layer
+
+   pure subroutine boole_dpa_face(eos, rho0, rho_ref, &
+                                  e_top_l, e_top_r, dz_l, dz_r, &
+                                  t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
+                                  s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
+                                  parabolic, dpa_face)
+      !$acc routine seq
+      !! HORIZONTAL (cross-face) Boole quadrature of the layer pressure
+      !! increment `dpa = g * int rho' dz` — the face integral the FV
+      !! pressure-gradient contour needs (Adcroft, Hallberg & Harrison
+      !! 2008 §3; Yung, Hallberg, Adcroft & Morrison 2026 §2.4).
+      !!
+      !! WHY A QUADRATURE AND NOT A MEAN.  The FV assembly evaluates the
+      !! top/bottom edges of the control volume as `Delta_e * pbar`, where
+      !! `pbar` is the mean pressure ALONG that edge; `pbar` is marched
+      !! down from the surface by adding this routine's result layer by
+      !! layer.  `Delta_e * pbar` is the exact `int p dz` along the edge
+      !! only when `pbar` is the true along-face mean.  Replacing it with
+      !! the two-column average `0.5*(dpa_L + dpa_R)` is a TRAPEZOID: it is
+      !! exact only if `p` is linear in x along the edge.  With a tilted
+      !! interface, `z` is linear in x but `p` is QUADRATIC in z under a
+      !! linear stratification, so the trapezoid leaves a curvature
+      !! residual `g*(-drho/dz)*Delta_e^2/12` at every interface — the
+      !! terrain-following "pressure gradient error of the second kind"
+      !! (Haney 1991; Mellor, Ezer & Oey 1994), reported for the sloping
+      !! ice-shelf surface as the LINEAR pressure reconstruction by Yung
+      !! et al. (2026) §3.1 and cured there by the same device.
+      !!
+      !! THE FIX.  Sample five evenly-spaced sub-columns across the face.
+      !! At fraction `w` from the left column, interpolate the interface
+      !! height, the thickness, and the T/S edge + mean triples linearly,
+      !! then run the same in-layer vertical Boole quadrature.  Both
+      !! interpolations are in the SAME parameter, so a sub-column's
+      !! profile is the true profile at the interpolated depth: for T/S
+      !! linear in z the sub-column reconstruction is exact and `dpa(w)`
+      !! is a quadratic in `w`, which the 5-point closed Newton-Cotes rule
+      !! integrates exactly.  The whole PGF then vanishes to round-off on
+      !! a resting linear-EOS/linear-stratification column under ANY
+      !! layer geometry — the algorithm's defining property.
+      !!
+      !! COST: 5 sub-columns x 5 sub-points = 25 EOS evaluations per face
+      !! per layer, against 0 for the trapezoid.  `reconstruct_for_pressure`
+      !! is opt-in and already the expensive branch.
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in)  :: rho0
+         !! Boussinesq reference density used in the pressure estimate.
+      real(wp), intent(in)  :: rho_ref
+         !! Anomaly reference subtracted from the EOS density.
+      real(wp), intent(in)  :: e_top_l, e_top_r
+         !! Shallower-interface heights of the layer in the LEFT and
+         !! RIGHT columns (m, surface-relative, <= 0).
+      real(wp), intent(in)  :: dz_l, dz_r
+         !! Layer thicknesses in the left / right columns (m, >= 0).
+      real(wp), intent(in)  :: t_t_l, t_b_l, t_m_l
+         !! Left column temperature: top edge, bottom edge, layer mean.
+      real(wp), intent(in)  :: t_t_r, t_b_r, t_m_r
+         !! Right column temperature triple.
+      real(wp), intent(in)  :: s_t_l, s_b_l, s_m_l
+         !! Left column salinity triple.
+      real(wp), intent(in)  :: s_t_r, s_b_r, s_m_r
+         !! Right column salinity triple.
+      logical, intent(in)  :: parabolic
+         !! .true. -> the sub-column profiles carry the PPM curvature.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = 0.0_wp
+      do m = 1, N_BOOLE
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         call boole_dpa_intz_layer(eos, rho0, rho_ref, &
+                                   wl*e_top_l + wr*e_top_r, &
+                                   wl*dz_l + wr*dz_r, &
+                                   wl*t_t_l + wr*t_t_r, &
+                                   wl*t_b_l + wr*t_b_r, &
+                                   wl*t_m_l + wr*t_m_r, &
+                                   wl*s_t_l + wr*s_t_r, &
+                                   wl*s_b_l + wr*s_b_r, &
+                                   wl*s_m_l + wr*s_m_r, &
+                                   parabolic, dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine boole_dpa_face
 
 end module rdb_ocean_pgf_reconstruct
