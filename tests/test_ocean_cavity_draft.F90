@@ -411,7 +411,8 @@ contains
       ! evaluate the same difference in two places and a contracting build
       ! may round them differently, so this is not asserted as bit-zero.
       resid = cavity_datum_residual(state%dyn%bt_work%bt_H_ref, state%barotropic%b, &
-                                    state%metrics%z_draft, nxt, nyt)
+                                    state%metrics%z_draft, &
+                                    cfg%ocean%cavity_dyn%h_min_cavity, nxt, nyt)
       tol_datum = 8.0_wp*epsilon(1.0_wp)*BED
       call check(error, resid <= tol_datum, &
                  "the counted-once invariant bt_H_ref == b - z_draft must hold")
@@ -567,9 +568,27 @@ contains
       if (allocated(error)) return
       call check(error, cavity_datum_residual(state%dyn%bt_work%bt_H_ref, &
                                               state%barotropic%b, &
-                                              state%metrics%z_draft, nxt, nyt) &
+                                              state%metrics%z_draft, &
+                                              cfg%ocean%cavity_dyn%h_min_cavity, &
+                                              nxt, nyt) &
                  <= 8.0_wp*epsilon(1.0_wp)*BED, &
-                 "the datum invariant must hold on land columns too")
+                 "the counted-once invariant must hold on every WET column")
+      if (allocated(error)) return
+      ! ... and the pre-existing land columns keep the datum a land column
+      ! always had.  `b = 0` there and the draft is forced to 0, so the
+      ! water column is 0, the grounded branch of `cavity_datum_impl`
+      ! fires, and the 0 it writes IS `b` — the two rules agree exactly on
+      ! ordinary land, which is why enabling a cavity over an island
+      ! changes nothing about the island.
+      clean = .true.
+      do j = 1, nyt
+         do i = 1, nxt
+            if (state%barotropic%b(i, j) >= LAND_DEPTH_THRESHOLD) cycle
+            if (state%dyn%bt_work%bt_H_ref(i, j) /= state%barotropic%b(i, j)) clean = .false.
+         end do
+      end do
+      call check(error, clean, "a pre-existing land column keeps bt_H_ref = b "// &
+                 "exactly, cavity or no cavity")
    end subroutine test_no_ice_over_land
 
    subroutine test_grounded_fraction(error)

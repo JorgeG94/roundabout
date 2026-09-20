@@ -157,7 +157,7 @@ slot without reading the rest of the tree.  A future portability lint
 | Tides | `ocean_tides_t` | `forcing/rdb_ocean_tides.F90` | 5e | astronomical clock + bathymetry | `eta_eq`, `eta_sal`, `itd_coeff` |
 | Surface-pressure loading / inverse barometer ✓ (PR-17, Wunsch & Stammer 1997; `&ocean_psurf_nml enable`, default off ⇒ bit-identical) | `ocean_p_surf_t` | `forcing/rdb_ocean_p_surf.F90` | 5e | `sf%p_surf` (PR-12 component set, needs `enable_components`), `eos%rho0`, `dyn%bt_work%g_bt` | `eta_ib = −p_surf/(ρ₀·g_bt)` + combined `eta_seam`, filled by `p_surf_update_seam` once per outer step and passed as the barotropic `eta_forcing` (see the **`eta_forcing` seam contract** below). Split-solver only; excludes `bt_halo > 0`. With `&ocean_psurf_nml in_eos` (E3, default off ⇒ bit-identical) the SAME `sf%p_surf` is also copied once per outer step into `multilayer_state_t%p_top` (Pa) so the EOS's IN-SITU pressure is measured down from the load rather than from 0 Pa — NOT the potential density `ms%rho_layer`, which stays at the uniform `eos%p_ref`; see the **`p_top` seam contract** below. |
 | Porous barriers ✓ (Adcroft 2013; default off) | fields on `ocean_metrics_t` (`use_porous`, `porous_eta_interp`, `porous_mask_depth`, `por_bed`, `por_{dmin,dmax,davg}_{u,v}`, `por_face_area_{u,v}`) | kernels in `state/rdb_ocean_porous.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_porous`; per-step refresh `ocean_porous_refresh` in `dynamics/split_rk2/rdb_ocean_dyn.F90` | — | `barotropic.b` (negated once to a topographic HEIGHT), `multilayer.h_layer` | `por_face_area_u/v` (nx+1,ny,nz)/(nx,ny+1,nz) — layer-averaged OPEN-AREA fraction, recomputed once per OUTER step (MOM6 cadence) and MULTIPLIED into `mass_flux_{x,y}_layer` by continuity-PPM (before the BT renormalisation, which also takes the narrowed areas) and into `coriolis_adv.mass_flux_{u,v}` by the TRANSPORT Coriolis forms — PLUS `dy_cu_bt`/`dx_cv_bt` (2D, ALWAYS allocated, byte-equal to `dy_cu`/`dx_cv` when off), the widths the BAROTROPIC substep transports on, scaled by the COLUMN-INTEGRATED open fraction so the barotropic solve is not porous-blind (else the renormalisation to `uhbt` returns the blocked transport). `use_porous=.false.` (default) ⇒ the open-area fields stay at their `(1,1,1)` placeholder, no porous kernel is launched, byte-identical. Fails loud with `&ocean_bt_nml bt_halo > 0` (`bt_wide`'s own `metrics_w` carries no porous stats, so the wide BT loop would silently transport on un-narrowed widths) and with `&ocean_wetdry_nml enable` |
-| Ice-shelf cavity statics ✓ (P5.1 geometry + datum, P5.2 load; default off) | fields on `ocean_metrics_t` (`use_cavity`, `z_draft`, `cover_frac`, `p_ice_ref`) | geometry + helpers in `state/rdb_ocean_cavity.F90`; draft fill + grounding in `state/rdb_ocean_state.F90::seed_cavity_draft` (inside the IC seed, before the wet mask); load build + `ms%p_top` assembly + datum assertion in `state/rdb_ocean_setup.F90::configure_ocean_cavity`; per-step re-assembly (psurf seam live only) inline in `dynamics/split_rk2/rdb_ocean_dyn.F90::ocean_dyn_step_split` | — | `&ocean_cavity_dyn_nml`, `barotropic.b`, `pressure_force.rho_ref`, `surface_flux.p_surf` | `z_draft` (m, positive down, ghosts included) — consumed by `configure_ocean_bt_split` as the DATUM `bt_H_ref = b − z_draft`, by the layer/`bt_h` seed as the water column, and by `seed_wet_mask_impl` as the grounding decision; `cover_frac` (binary 0/1) — the solve mask the basal-melt slot composes with the wet mask; `p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) — the static half of `multilayer.p_top = p_ice_ref + sf%p_surf`, and thence the FV_MOM6 `pa(nz+1)` top BC (`&ocean_pgf_nml p_top_in_bc`, REQUIRED for a non-uniform draft) and the in-situ EOS (`&ocean_psurf_nml in_eos`). It is deliberately NOT a component of `sf%p_surf`: the datum already carries its barotropic effect and `eta_ib` is built from that total. `use_cavity=.false.` (default) ⇒ all three stay `(1,1)` placeholders and `bt_H_ref = b` byte-identically. See the **cavity datum contract** below |
+| Ice-shelf cavity statics ✓ (P5.1 geometry + datum, P5.2 load; default off) | fields on `ocean_metrics_t` (`use_cavity`, `z_draft`, `cover_frac`, `p_ice_ref`) | geometry + helpers in `state/rdb_ocean_cavity.F90`; draft fill + grounding in `state/rdb_ocean_state.F90::seed_cavity_draft` (inside the IC seed, before the wet mask); load build + `ms%p_top` assembly + datum assertion in `state/rdb_ocean_setup.F90::configure_ocean_cavity`; per-step re-assembly (psurf seam live only) inline in `dynamics/split_rk2/rdb_ocean_dyn.F90::ocean_dyn_step_split` | — | `&ocean_cavity_dyn_nml`, `barotropic.b`, `pressure_force.rho_ref`, `surface_flux.p_surf` | `z_draft` (m, positive down, ghosts included) — consumed by `configure_ocean_bt_split` as the DATUM `bt_H_ref = b − z_draft` afloat and `0` where GROUNDED (`cavity_datum_impl`), by the layer/`bt_h` seed as the water column, and by `seed_wet_mask_impl` as the grounding decision; `cover_frac` (binary 0/1) — the solve mask the basal-melt slot composes with the wet mask; `p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) — the static half of `multilayer.p_top = p_ice_ref + sf%p_surf`, and thence the FV_MOM6 `pa(nz+1)` top BC (`&ocean_pgf_nml p_top_in_bc`, REQUIRED for a non-uniform draft) and the in-situ EOS (`&ocean_psurf_nml in_eos`). It is deliberately NOT a component of `sf%p_surf`: the datum already carries its barotropic effect and `eta_ib` is built from that total. `use_cavity=.false.` (default) ⇒ all three stay `(1,1)` placeholders and `bt_H_ref = b` byte-identically. See the **cavity datum contract** below |
 | Ice-shelf basal melt ✓ (P2b; default off) | `ocean_cavity_flux_t` | `../../parameterizations/vertical/rdb_ocean_cavity_flux.F90` (kernel: `rdb_ocean_cavity_melt.F90`) | 2b | `metrics.cover_frac`, `multilayer.h_layer` + S/T + face velocities + `wet_mask`, `multilayer.p_top` (THE interface pressure), the shared `eos` handle (the liquidus, `&ocean_eos_nml tfreeze_set="isomip"`), and its own configure-filled `f_cor` | the two OWNED surface-flux components `surface_flux.heat_cavity` (= −`q_ocean`, W/m² positive down ⇒ warm water COOLS) and `surface_flux.salt_cavity` (= −`m_mass·(S_far − s_ice)`, a VIRTUAL salt flux ⇒ melting FRESHENS); plus its own 2-D interface state (`t_far`/`s_far`/`u_far`/`v_far`/`ustar`/`t_b`/`s_b`/`melt`/`q_ocean`/`gamma_t`/`gamma_s`/`active`/`status`). `gamma_t`/`gamma_s` are the exchange VELOCITIES the solve converged on (filled by `cavity_melt_point_gamma`, which is the same `cavity_solve_melt` call, not a second solve) — stored rather than re-derived because under `hj99`/`yung25` they are implicit in the interface state, so an `exch_vel_*` diagnostic rebuilt from `u*` would report the NEUTRAL values. Thirteen derived-diag catalog entries read this slot (`melt`, `melt_m_per_yr`, `thermal_driving`, `haline_driving`, `tbdry`, `sbdry`, `tfreeze_ib`, `exch_vel_t`, `exch_vel_s`, `ustar_shelf`, `cavity_melt_status`, plus the geometry pair `z_draft`/`water_column`), NaN outside the cover and fail-loud at configure without their prerequisite knob. Far field sampled over `far_field_depth` METRES below the ice base, thickness-weighted with a partial last layer — never "layer nz". Driven once per thermo step from `engine_step_finalize`, immediately BEFORE `ocean_surface_flux_assemble`. The `do concurrent` over columns lives in the KERNEL module (`cavity_melt_columns_2d`), not here: nvlink cannot resolve an `!$acc routine seq` device symbol out of `librdb_core.so` into a `do concurrent` in another translation unit. Budgets ride the ordinary `heat_budget_surface`/`salt_budget_surface` contributors, so no new accumulator and no stage-weight decision. `enable=.false.` (default) ⇒ fourteen `(1,1)` placeholders, no kernel, byte-identical |
 | Barotropic linear wave drag ✓ (Egbert & Ray 2001; Jayne & St Laurent 2001) | fields on `barotropic_workstate_t` (`dyn.bt_work`) | kernels in `kernels/barotropic/rdb_barotropic_coupling.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_wave_drag` | — | `lwd_drag_u/v` (static, host-filled at configure from `form="uniform"` or `"roughness_proxy"`; `barotropic.b`, `metrics.wet_T` for the proxy) | MULTIPLIES into `bt_work.bt_rem_u/v` each stage (`compute_bt_rem_wave_drag`); `lwd_enable=.false.` (default) ⇒ arrays unallocated, bit-identical |
 | River / discharge | `ocean_river_t` | `forcing/rdb_ocean_river.F90` | 5e | sources NetCDF | `q_mass`, `q_S`, `q_T` distributed fields |
@@ -506,9 +506,11 @@ both are correct.
 The static draft is absorbed into the **datum**:
 
 ```
-(D)  bt_H_ref  = b − z_draft                     (was: bt_H_ref = b)
+(D)  bt_H_ref  = b − z_draft   afloat                (was: bt_H_ref = b)
+              = 0              where GROUNDED  (no water column at all)
 (P)  p_ice_ref = (rho_ref*GRAVITY) * z_draft
 (I)  rho_ref*g*z_draft + (bt_H_ref − b)*rho_ref*g  ==  0     <=>   (D)
+     on every WET column
 ```
 
 (I) is the **counted-once invariant**, asserted at configure
@@ -599,7 +601,70 @@ Rules for anything that joins this seam:
 - **Grounding goes through the wet mask, never through a thin film.**
   `b − z_draft < h_min_cavity` ⇒ the column is LAND via
   `seed_wet_mask_impl`, so the existing metric-zeroing land mask and the
-  finite land-state hold do the rest.
+  land-state contract below do the rest.
+- **A grounded column's datum is `0`, not a negative water column, and
+  the counted-once invariant is asserted over the WET columns only.**
+  `bt_H_ref` is the reference WATER-COLUMN thickness; a grounded column
+  has none, and `b − z_draft` there is negative by hundreds of metres.
+  `cavity_datum_impl` writes `0`; `cavity_datum_residual` skips those
+  columns. That is not a weakening of (I): (I) is a statement about the
+  BAROTROPIC MOMENTUM EQUATION, and a land column has none — every face
+  metric on it is zero, `−G·∇(η − η_forcing)` is multiplied by nothing,
+  and there is no load on it to count once or twice. Carrying the
+  negative value instead bought three things, all unwanted: a phantom
+  few-hundred-metre `bt_eta` on every grounded column (masked out of the
+  dynamics, visible in `eta` min/max and the `ssh` diagnostic); an ALE
+  target built by CANCELLING two draft-sized numbers to recover the land
+  column's `nz·H_VANISHED`, so its thickness jittered at `eps·z_draft`
+  instead of sitting bit-stably at `H_VANISHED`; and a grounded column
+  arithmetically distinguishable from the ordinary land it IS. Gate:
+  `test_ocean_cavity_grounded_budget`.
+
+### The land-state contract (`h = H_VANISHED`, `hTr = 0`)
+
+**A LAND T-cell holds `h_layer = H_VANISHED` exactly and `hTr = 0`
+exactly — at `t = 0` and at every step after, however it became land.**
+Filled by `ocean_state_seed_land_cells` (`state/rdb_ocean_state.F90`).
+
+`h` is pinned AT the D4 vanish marker, so a land layer is on the
+VANISHED side of every `h > H_VANISHED` gate in the tree. `hTr = 0` is
+the content those gates already give it — in particular the ALE remap's
+concentration step (`rdb_ocean_remap::ocean_remap_tracer_field`:
+`c = hTr/h` if `h > H_FLOOR` else `c = 0`), which writes `hTr = 0` on
+every land column at the first regrid.
+
+**The seed's job is to hand the budget latch the state every later step
+will have.** The console `Error` is `[(total(t) − total(0)) + out −
+src]/total(0)`, and `total(0)` integrates over land like everything
+else — `compute_total_h` / `compute_total_tracer` weight by `areaT`,
+which the land mask does NOT zero. So any land content the seed writes
+that the first regrid then discards is a step change in the residual
+between step 0 and step 1, un-budgeted by construction.
+
+This replaced a "recover `val = hTr/max(h_old, H_VANISHED)` and re-scale
+onto the floor" hold that was wrong twice. The `max(...)` divisor makes
+the re-scale an exact IDENTITY whenever `h_old ≤ H_VANISHED` —
+including `h_old < 0`, which is what an ice-shelf column GROUNDED by
+`h_min_cavity` has — so those columns kept a full-column, negative
+`hTr` beside a floored `h`, an implied concentration of order `−1e7`
+PSU; on `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`
+that was **61 % of the initial salt content** and −8 % of the heat, while
+mass closed at `−5e-14`. And even where the re-scale DID work (ordinary
+land, `h_old > H_VANISHED`), the `val·H_VANISHED` it left was discarded
+by the first regrid — a ~1e-7 relative step change in every land-bearing
+case, which is the same defect at a magnitude nobody had looked at.
+
+The `0*NaN` hazard the old hold existed to avoid is avoided the same
+way: `T = S = hTr/h = 0` is finite.
+
+**Land is provably isolated from wet cells**, and the gate says so
+bitwise rather than by argument: `test_ocean_cavity_grounded_budget`'s
+`grounded_matches_plain_land_in_every_wet_column` makes the same 64
+cells land two ways — grounded under a 600 m draft over a 400 m bed, and
+ordinary `b = 0` island bathymetry — and finds every WET column's `h`,
+`hS` and `hT` bit-for-bit equal after 20 steps, across land states that
+differ by `bt_H_ref` (`−200 m` vs `0`) and `p_top`
+(`ρ_ref·g·600` vs `0`).
 - **What is left at rest is the sigma-coordinate PGF truncation, and it
   has a formula.** Flat bed + `VCOORD_SIGMA` + a draft slope `s` gives
   `PFu(k) − ⟨PFu⟩_h = N²·D³·(3σ_k²−1)/(12·dx·H̄)` with `D = s·dx` —
