@@ -637,7 +637,8 @@ Canonical benchmark configs live under
 `seamount/`, `geostrophic_adjustment/`, `eady/`, `eddy_test/`,
 `double_gyre/`, `acc_channel/`, `neverworld2/`, `baroclinic_channel/`,
 `island_at_rest/`, `flow_past_island/`, `double_drake/`, `sea_ice/`,
-`tides/`, `sponge_demo/`, `ideal_age/`, `epbl_mld/`, and others. Each
+`tides/`, `sponge_demo/`, `ideal_age/`, `epbl_mld/`, `ice_shelf_cavity/`,
+`isomip_plus/`, and others. Each
 carries a README with expected behaviour, analytical scales (where
 applicable), and diagnostic interpretation of failure modes.
 
