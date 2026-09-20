@@ -50,6 +50,10 @@
 !!     through the public API: under a full lid with no wind, switching
 !!     `&ocean_tdrag_nml` on raises KPP's `kv` by orders of magnitude,
 !!     because the boundary layer now feels the ice.
+!!   * `melt_only_fallback_publishes_shelf_stress` — the OTHER filler:
+!!     with `&ocean_tdrag_nml` OFF and `&ocean_cavity_melt_nml` ON,
+!!     `engine_step_finalize` publishes `rho_0*u_*^2` from the melt
+!!     slot's own `u_*` instead, one outer step late.
 !!   * `epbl_p_top_*` — the EPBL in-situ pressure port
 !!     (`&ocean_psurf_nml in_eos`): the knob off is bit-identical even
 !!     under a loaded column; on, the pressure that reaches the EOS is
@@ -146,7 +150,8 @@ contains
                   new_unittest("epbl_p_top_sign_and_monotone", test_epbl_ptop_monotone), &
                   new_unittest("epbl_uniform_p_top_linear_eos_is_gauge_neutral", &
                                test_epbl_ptop_gauge), &
-                  new_unittest("epbl_p_top_moves_the_nonlinear_eos_only", test_epbl_ptop_wright) &
+                  new_unittest("epbl_p_top_moves_the_nonlinear_eos_only", test_epbl_ptop_wright), &
+                  new_unittest("melt_only_fallback_publishes_shelf_stress", test_melt_fallback) &
                   ]
    end subroutine collect_ocean_bl_under_ice_tests
 
@@ -1212,7 +1217,7 @@ contains
       end block checks
    end subroutine test_driver_publish
 
-   subroutine kv_max_under_lid(tdrag_on, kv_max, error)
+   subroutine kv_max_under_lid(tdrag_on, kv_max, error, melt_on, n_steps)
       !! One end-to-end run; returns the largest `kv` over the interior.
       !! Every read goes through `rdb_ocean_refresh_host` first — a getter
       !! alone never triggers a device->host copy, so skipping it would
@@ -1220,16 +1225,28 @@ contains
       logical, intent(in) :: tdrag_on
       real(wp), intent(out) :: kv_max
       type(error_type), allocatable, intent(inout) :: error
+      logical, intent(in), optional :: melt_on
+      integer, intent(in), optional :: n_steps
+         !! Steps to run.  The MELT fallback publishes at the END of a
+         !! step, so it needs at least two before the boundary-layer
+         !! schemes can have read it — that one-step lag is the documented
+         !! cost of the fallback path.
       type(c_ptr) :: handle, ptr
       real(wp), pointer :: kv(:, :, :)
       real(wp), allocatable :: ubuf(:, :, :)
       integer(c_int) :: status, nx, ny, nz, gen, nx_p, ny_p, nz_p, ng
       character(len=:), allocatable :: nml
-      integer :: ng_i
+      integer :: ng_i, n_run
 
       kv_max = 0.0_wp
       handle = c_null_ptr
-      nml = lid_namelist(tdrag_on)
+      n_run = 3
+      if (present(n_steps)) n_run = n_steps
+      if (present(melt_on)) then
+         nml = lid_namelist(tdrag_on, melt_on=melt_on)
+      else
+         nml = lid_namelist(tdrag_on)
+      end if
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       call check(error, status == OCEAN_STATUS_OK, &
                  "the end-to-end cavity + KPP namelist must configure")
@@ -1241,7 +1258,9 @@ contains
          status = rdb_ocean_set_u(handle, ubuf, nx_p, ny_p, nz_p)
          deallocate (ubuf)
       end if
-      if (status == OCEAN_STATUS_OK) status = rdb_ocean_step(handle, 3_c_int)
+      if (status == OCEAN_STATUS_OK) then
+         status = rdb_ocean_step(handle, int(n_run, c_int))
+      end if
       if (status == OCEAN_STATUS_OK) status = rdb_ocean_refresh_host(handle)
       if (status == OCEAN_STATUS_OK) then
          status = rdb_ocean_get_kv_ptr(handle, ptr, nx, ny, nz, gen)
@@ -1259,13 +1278,18 @@ contains
       status = rdb_ocean_destroy(handle)
    end subroutine kv_max_under_lid
 
-   function lid_namelist(tdrag_on) result(nml)
+   function lid_namelist(tdrag_on, melt_on) result(nml)
       !! A flat, fully covered ice shelf over a flat bed, with KPP and
       !! the split solver.  `ssp_rk2` because `pred_corr`'s v1 envelope
       !! is not the subject here and pinning the scheme keeps the two
       !! runs differing in ONE knob.
       logical, intent(in) :: tdrag_on
+      logical, intent(in), optional :: melt_on
+         !! Turn on `&ocean_cavity_melt_nml` instead of / as well as the
+         !! top drag.  Melt needs the PR-12 component set and the ISOMIP+
+         !! liquidus, both already in the base namelist.
       character(len=:), allocatable :: nml
+      logical :: melt
 
       nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
             "&grid_nml nx = 12, ny = 10, nghost = 2, dx = 5000.0, dy = 5000.0 /"// &
@@ -1287,7 +1311,53 @@ contains
       if (tdrag_on) then
          nml = nml//"&ocean_tdrag_nml enable = .true., cd = 2.5e-3 /"//new_line("a")
       end if
+      melt = .false.
+      if (present(melt_on)) melt = melt_on
+      if (melt) then
+         nml = nml//"&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
+               "&ocean_cavity_melt_nml enable = .true., cdrag_top = 2.5e-3, "// &
+               "u_tide = 0.0 /"//new_line("a")
+      end if
    end function lid_namelist
+
+   subroutine test_melt_fallback(error)
+      !! THE OTHER FILLER.  `&ocean_tdrag_nml` is OFF here and
+      !! `&ocean_cavity_melt_nml` is ON, so the stage drivers publish
+      !! nothing and `engine_step_finalize` fills `ss%stress_shelf` from
+      !! `rho_0*u_*^2` with the MELT slot's own `u_*` instead — the same
+      !! `C_d` under the one-drag-coefficient rule.  Without it a
+      !! melt-only cavity would mix its covered columns on `u_* = 0`,
+      !! which is the whole defect Phase 4b closes.
+      !!
+      !! That fill runs at the END of an outer step, so it reaches the
+      !! boundary-layer schemes ONE STEP LATE.  The test therefore runs
+      !! five steps, and asserts the same decisive separation the
+      !! top-drag gate uses: `kv` rises an order of magnitude past the
+      !! saturated PP81 interior ceiling.
+      !!
+      !! `u_tide = 0` so the melt `u_*` is exactly `sqrt(C_d)*|U_far|`,
+      !! the same number the top drag would have published.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: kv_plain, kv_melt
+      checks: block
+         call kv_max_under_lid(.false., kv_plain, error, melt_on=.false., n_steps=5)
+         if (allocated(error)) exit checks
+         call kv_max_under_lid(.false., kv_melt, error, melt_on=.true., n_steps=5)
+         if (allocated(error)) exit checks
+
+         call check(error, kv_plain <= 2.0e-2_wp, &
+                    "the no-cavity-forcing control must stay at the saturated "// &
+                    "PP81 interior ceiling")
+         if (allocated(error)) exit checks
+         call check(error, kv_melt > 1.0e-1_wp, &
+                    "with melt on and the top drag OFF, engine_step_finalize must "// &
+                    "still publish an under-ice u_* into ss%stress_shelf — KPP "// &
+                    "shows no boundary-layer overlay at all")
+         if (allocated(error)) exit checks
+         call check(error, kv_melt > 5.0_wp*max(kv_plain, tiny(1.0_wp)), &
+                    "the melt-fallback separation must be an order of magnitude")
+      end block checks
+   end subroutine test_melt_fallback
 
    ! ==================================================================
    ! The EPBL in-situ pressure port (`&ocean_psurf_nml in_eos`)
