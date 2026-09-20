@@ -40,7 +40,7 @@
 !!      uniform density, a SLOPING draft with `sum(h) = b - z_draft` and
 !!      `p_top = (rho_ref*GRAVITY)*z_draft` built with the same product as
 !!      the `pa` seed: the column is in discrete hydrostatic balance and
-!!      every face force is BIT-zero.  With the `+ p_top` line removed the
+!!      every face force is zero to the rounding of `p_top`.  With the `+ p_top` line removed the
 !!      residual is `g*grad(z_draft)` ~ 0.1 m/s^2 — the step-1 blow-up the
 !!      knob exists to prevent.
 !!   5. `knob_off_ignores_p_top` — a ramped, non-zero `p_top` with the knob
@@ -393,10 +393,11 @@ contains
       !! `p_top = (rho_ref*GRAVITY)*z_draft`.  Then
       !!
       !!   pa(nz+1) = (rho_ref*GRAVITY)*(-z_draft) + (rho_ref*GRAVITY)*z_draft
-      !!            = 0   bit-exactly (IEEE negation-symmetric multiply)
+      !!            = 0   when the product is rounded before the add; under
+      !!                FMA contraction, the rounding error of `p_top`
       !!
       !! and `dpa = (rho - rho_ref)*g*h = 0`, so the WHOLE `pa` stack is
-      !! identically zero and every face force is bit-zero.  Without the
+      !! zero to that rounding and every face force is at round-off.  Without the
       !! `+ p_top` term `pa(nz+1) = -rho_ref*g*z_draft` varies across the
       !! face and the PGF is `g*grad(z_draft)` ~ 1e-1 m/s^2.
       type(error_type), allocatable, intent(out) :: error
@@ -406,7 +407,10 @@ contains
       real(wp), allocatable :: b(:, :)
       real(wp), parameter :: BED = 1024.0_wp
       real(wp), parameter :: DRAFT0 = 256.0_wp, DRAFT_STEP = 0.5_wp
-      real(wp) :: z_draft, water, pgf_max
+      real(wp), parameter :: PGF_REST_TOL = 1.0e-13_wp
+         !! m/s^2.  ~1e12 below the `g*grad(z_draft)` ~ 1e-1 m/s^2 the
+         !! stack carries without the load term.
+      real(wp) :: z_draft, water, pgf_max, pa_tol
       integer :: i, j, k, nx, ny
 
       checks: block
@@ -437,12 +441,25 @@ contains
 
          pgf_max = max(maxval(abs(pgf%dpdx_face%data)), &
                        maxval(abs(pgf%dpdy_face%data)))
-         call check(error, pgf_max == 0.0_wp, &
-                    "isostatic rest under a sloping load must give a BIT-zero "// &
-                    "face force (the pa stack cancels identically)")
+         ! NOT `== 0`: the cancellation `(rho_ref*g)*(-z_draft) + p_top` is
+         ! bit-exact only when the product is ROUNDED before the add.  A
+         ! toolchain that contracts the kernel's `rho_ref*g*eta + p_top` into
+         ! a fused multiply-add (nvfortran on the device; any `-mfma` host
+         ! build) keeps the product exact, so what survives is the rounding
+         ! error of the HOST-built `p_top` itself: |pa| <= ulp(p_top)/2.
+         ! That is the honest bound -- ~2e-10 Pa on a 2.6e6 Pa load, a face
+         ! force ~1e-16 m/s^2 against the 1e-1 m/s^2 of the un-loaded stack
+         ! -- so assert THAT, on every toolchain, rather than a bit-zero only
+         ! some code generators can deliver.  (Verified: gfortran gives
+         ! exactly 0; the V100 build gives a non-zero value inside the bound.)
+         pa_tol = spacing(maxval(ms%p_top))
+         call check(error, maxval(abs(pgf%pa%data)) <= pa_tol, &
+                    "the whole pa stack must vanish to the rounding of p_top "// &
+                    "at isostatic rest")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(pgf%pa%data)) == 0.0_wp, &
-                    "the whole pa stack must be bit-zero at isostatic rest")
+         call check(error, pgf_max <= PGF_REST_TOL, &
+                    "isostatic rest under a sloping load must give a face "// &
+                    "force at round-off (the pa stack cancels)")
       end block checks
       call pgf%destroy(); call ms%destroy()
    end subroutine test_isostatic_rest
