@@ -369,7 +369,7 @@ Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref =
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (single-rank, split solver, fv_mom6 PGF, sigma/zstar only) |
-| `draft_config` | `"none"` |  | Analytic draft shape ('file' is deferred: the static-2-D reader lands in a later slice) |
+| `draft_config` | `"none"` |  | Draft source: analytic shape, or 'file' (static 2-D NetCDF on the model grid, single rank) |
 | `draft_source` | `"draft"` |  | Whether the formula gives the ice-base DEPTH or an ice THICKNESS ('in_situ' isostasy is deferred) |
 | `draft_depth` | `0.0000000000E+00` | m | Draft amplitude (ice thickness under draft_source='thickness') |
 | `draft_slope` | `0.0000000000E+00` |  | d(draft)/dx for draft_config='linear' (dimensionless; converted to grid units) |
@@ -377,6 +377,9 @@ Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref =
 | `draft_x1` | `0.1000000000E+31` | m | Eastern edge of the shelf box = the calving front (+/-1e30 => no limit) |
 | `draft_y0` | `-0.1000000000E+31` | m | Southern edge of the shelf box (+/-1e30 => no limit) |
 | `draft_y1` | `0.1000000000E+31` | m | Northern edge of the shelf box (+/-1e30 => no limit) |
+| `draft_file` | `""` |  | draft_config='file': NetCDF path (variable must be (x,y,t) Fortran order, on the model grid; record 1 read) |
+| `draft_var` | `"iceDraft"` |  | draft_config='file': 2-D variable name (ISOMIP+ ships 'iceDraft') |
+| `draft_sign` | `"depth"` |  | draft_config='file': sign convention of the file values (ISOMIP+ iceDraft is an ELEVATION) |
 | `h_min_cavity` | `0.1000000000E+02` | m | Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice) |
 | `grounded_max_frac` | `0.5000000000E+00` |  | Fail loud if more than this fraction of the interior columns ground |
 | `rho_ice` | `0.9180000000E+03` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |

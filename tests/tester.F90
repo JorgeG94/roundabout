@@ -86,6 +86,8 @@ program rdb_tests
    use test_ocean_zinit, only: ocean_zinit_collect => collect_ocean_zinit_tests
    use test_ocean_data_input, only: ocean_data_input_collect => collect_ocean_data_input_tests
    use test_ocean_data_forcing, only: ocean_data_forcing_collect => collect_ocean_data_forcing_tests
+   use test_ocean_cavity_draft_file, only: ocean_cavity_draft_file_collect => &
+                                           collect_ocean_cavity_draft_file_tests
 #endif
    use test_ocean_barotropic_substep, only: ocean_barotropic_substep_collect => collect_ocean_barotropic_substep_tests
    use test_ocean_cor_ref_seiche, only: ocean_cor_ref_seiche_collect => &
@@ -244,6 +246,7 @@ program rdb_tests
                 new_testsuite("ocean_status_returns", ocean_status_returns_collect), &
 #ifndef RDB_NO_NETCDF
                 new_testsuite("ocean_supergrid", ocean_supergrid_collect), &
+                new_testsuite("ocean_cavity_draft_file", ocean_cavity_draft_file_collect), &
                 new_testsuite("ocean_zinit", ocean_zinit_collect), &
                 new_testsuite("ocean_data_input", ocean_data_input_collect), &
                 new_testsuite("ocean_data_forcing", ocean_data_forcing_collect), &

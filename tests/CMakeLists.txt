@@ -15,6 +15,14 @@
 # `tests/tester.F90` (fpm)
 # --------------------------------------------------------------------------
 
+# Scratch directory for tests that write files (currently the NetCDF writers:
+# test_ocean_cavity_draft_file).  ctest runs each test with this directory as
+# its working directory, so a relative `tmp_local_artifacts/<name>.nc` lands
+# inside the build tree and never in /tmp -- the CLAUDE.md rule that all
+# throwaway artifacts go to `tmp_local_artifacts/`.  Created at configure time
+# because Fortran has no portable mkdir.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
+
 # Helper modules used by some unit tests (Ritter dam-break + Thacker bowl
 # analytical solutions). Built as a static lib and linked into every test.
 add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
@@ -118,6 +126,7 @@ set(RDB_TESTS
     "test_ocean_pgf_reconstruct|test_ocean_pgf_reconstruct|collect_ocean_pgf_reconstruct_tests|ocean_pgf_reconstruct|ocean"
     "test_ocean_pgf_p_top_bc|test_ocean_pgf_p_top_bc|collect_ocean_pgf_p_top_bc_tests|ocean_pgf_p_top_bc|ocean"
     "test_ocean_cavity_draft|test_ocean_cavity_draft|collect_ocean_cavity_draft_tests|ocean_cavity_draft|ocean"
+    "test_ocean_cavity_draft_file|test_ocean_cavity_draft_file|collect_ocean_cavity_draft_file_tests|ocean_cavity_draft_file|ocean"
     "test_ocean_cavity_equivalence|test_ocean_cavity_equivalence|collect_ocean_cavity_equivalence_tests|ocean_cavity_equivalence|ocean"
     "test_ocean_cavity_load|test_ocean_cavity_load|collect_ocean_cavity_load_tests|ocean_cavity_load|ocean"
     "test_ocean_cavity_flux|test_ocean_cavity_flux|collect_ocean_cavity_flux_tests|ocean_cavity_flux|ocean"
@@ -336,6 +345,7 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # built thread-safe (OMP_NUM_THREADS=1 prevents crashes when the OpenMP runtime
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
+    test_ocean_cavity_draft_file
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -353,6 +363,7 @@ set(NETCDF_TESTS
 # rdb_gauges, rdb_output, ...).  Skipped when -DRDB_ENABLE_NETCDF=OFF because
 # those modules aren't built.
 set(NETCDF_REQUIRED_TESTS
+    test_ocean_cavity_draft_file
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
