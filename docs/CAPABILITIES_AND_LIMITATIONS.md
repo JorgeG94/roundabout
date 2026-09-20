@@ -908,6 +908,52 @@ This is the regime that hits day 580 on the MOM6-ref double-gyre.
 Outside this envelope (lower `nu_h`, alternative drag form, alternative
 PGF on real bathymetry) needs case-by-case validation.
 
+#### Quiescent terrain-following runs over a slope need a CONSTANT viscosity floor
+
+A σ (or z*σ) column at rest over a sloping boundary, on an f-plane, with
+`ny ≥ 2` and no constant lateral viscosity, develops a **grid-scale
+2Δy computational mode in `u`** that grows exponentially and does not
+saturate. Measured on an ice-free 48 × 6 × 15 channel at 2 km, flat free
+surface, bed sloping linearly 226 → 709 m, linear EOS, T linear in z, no
+forcing, no drag, no mixing, `pred_corr`, `form="fv_mom6"`:
+
+| | plateau (d5–15) | day 45 | day 90 | fitted `σ_En` (d25–45) |
+|---|---|---|---|---|
+| default PCM density integral | 6.4e-10 | 1.6e-6 | 3.3e-5 | 0.31 /day |
+| `reconstruct_for_pressure=.true.` (exact PGF) | 1.0e-25 | 1.3e-20 | 1.7e-13 | 0.38 /day |
+
+Two facts follow, and they point in different directions:
+
+* **The pressure-gradient truncation error is only the SEED.** With the
+  in-layer reconstruction on, the static σ PGF error is at round-off
+  (see the FV-MOM6 reconstruction row of `docs/CLOSURE_MATRIX.md`) and the
+  plateau drops **15 decades**. That buys ~55 days of horizon on this
+  configuration and nothing more.
+* **The AMPLIFIER is a separate defect and is NOT in the pressure
+  gradient.** The fitted growth rate agrees to ~25 % with a round-off seed
+  and with a 1e-8 m/s² one, and it is unchanged (0.9 %) by the Coriolis
+  variant. It **requires rotation** (`f = 0` ⇒ no growth), it **gets faster
+  as `dy` is refined** (0.35 /day at `dy = 2 km`, 0.54 /day at 1 km — a
+  rate that rises without bound under refinement has no continuum limit),
+  and it **disappears when the per-step ALE remap onto the σ target is
+  switched off** (`vcoord_type="lagrangian"`, where the remap is an
+  early-return no-op: 0.05 /day, i.e. the same residual creep as `f = 0`).
+
+**Practical envelope.** Any long, quiescent, weakly-forced terrain-following
+run over a slope — a spin-up from rest, a sub-shelf cavity, a continental
+slope at rest — needs a **constant** `&ocean_hvisc_nml nu_h` or `nu_4`
+floor. Marginal values measured at 2 km on this family: `nu_h ≈ 50 m² s⁻¹`
+or `nu_4 ≈ 1e8 m⁴ s⁻¹`. The requirement grows as `dy` shrinks and is not
+yet measured as a function of resolution.
+
+**Flow-aware closures do NOT qualify.** Smagorinsky, Leith,
+Leith-biharmonic and Smagorinsky-AH all set their coefficient from the
+resolved deformation rate or vorticity gradient, which is zero in a fluid
+at rest: at onset the mode is a µm/s perturbation and these closures
+generate essentially no viscosity exactly when it is needed. A forced,
+energetic, viscous run sits decades above this floor and never notices; a
+quiescent one does not, and there the manufactured energy IS the signal.
+
 ### Headline ocean performance
 
 | Config | Wall time (single V100) |
