@@ -49,6 +49,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_stress.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_flux.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_geothermal.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_cavity_melt.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_vdiff.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_lateral_mix.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_isopycnal_slopes.F90

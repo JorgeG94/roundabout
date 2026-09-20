@@ -724,6 +724,36 @@ concrete need:
   SEAWATER's, so the new ice is too cold and too fresh relative to
   real (seawater-drawing) flooding — that closure is a materially
   larger, separate PR.
+- **Ice-shelf cavity basal melt** — would be `ocean_cavity_t`.  The
+  PHYSICS has landed as a slot-free leaf module,
+  `src/parameterizations/vertical/rdb_ocean_cavity_melt.F90`: scalar,
+  `pure`, `!$acc routine seq` three-equation interface thermodynamics
+  (Holland & Jenkins 1999; Jenkins et al. 2010; ISOMIP+ /
+  Asay-Davis et al. 2016; Yung et al. 2025), with a `Gamma·u*`
+  constant-coefficient law, the full H&J99 turbulent+molecular law and
+  the Yung et al. (2025) StratFeedback law behind one exchange-law
+  enum, insulating / H&J99 advective-diffusive ice conduction, the
+  closed-form (cancellation-safe) quadratic in `S_b`, and a
+  `CAVITY_MELT_*` status out of every solver instead of an
+  `error stop`.  It reads the liquidus off the shared `eos_t` handle
+  (`&ocean_eos_nml tfreeze_set`), so it carries no coefficients of its
+  own.  **KERNEL ONLY — nothing in the ocean step calls it yet**: no
+  namelist group, no state slot, no engine wiring, and therefore no
+  bit-identity risk.  Gated by `tests/test_ocean_cavity_melt.F90`
+  against a 48-case golden oracle (agreement ~1e-15 relative, asserted
+  at 1e-12).  The coupling PR is what needs the slot: per-cell
+  `u*` from the surface-layer velocity + `&ocean_ice_nml`-style drag,
+  the cavity mask + ice draft (which is also the `p_top` /
+  `eta_forcing` seam's customer), the far-field sampling depth in
+  METRES rather than layer `nz` (the dominant resolution artefact in
+  the literature), and the tracer-budget wiring for the melt heat/salt
+  fluxes the kernel already returns.  It should EXTEND the module's own
+  `cavity_melt_columns` (a `do concurrent` over columns, living beside
+  the scalar solver) rather than write a column loop in the engine: on
+  the GPU build nvlink cannot resolve a `!$acc routine seq` device
+  symbol out of `librdb_core.so` into a `do concurrent` compiled in a
+  different translation unit, so the loop and the routine it calls must
+  share an object.
 - **Biogeochemistry** — would be `ocean_bgc_t`. The shared
   `tracer_t` registry on `ocean_state%multilayer%tracers(:)` already
   takes BGC tracers as additional entries via

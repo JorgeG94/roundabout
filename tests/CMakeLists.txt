@@ -108,6 +108,7 @@ set(RDB_TESTS
     "test_ocean_linear_eos_knobs|test_ocean_linear_eos_knobs|collect_ocean_linear_eos_knobs_tests|ocean_linear_eos_knobs|ocean"
     "test_ocean_salinity_ic|test_ocean_salinity_ic|collect_ocean_salinity_ic_tests|ocean_salinity_ic|ocean"
     "test_ocean_freezing_point|test_ocean_freezing_point|collect_ocean_freezing_point_tests|ocean_freezing_point|ocean"
+    "test_ocean_cavity_melt|test_ocean_cavity_melt|collect_ocean_cavity_melt_tests|ocean_cavity_melt|ocean"
     "test_ocean_wright_eos|test_ocean_wright_eos|collect_ocean_wright_eos_tests|ocean_wright_eos|ocean"
     "test_ocean_pgf|test_ocean_pgf|collect_ocean_pgf_tests|ocean_pgf|ocean"
     "test_ocean_pgf_fv|test_ocean_pgf_fv|collect_ocean_pgf_fv_tests|ocean_pgf_fv|ocean"
