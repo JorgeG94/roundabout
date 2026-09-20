@@ -54,25 +54,39 @@ module test_ocean_cavity_equivalence
    !!
    !! ### Why it is not trivially at rest
    !!
-   !! Both runs carry a stratified water column and a two-gyre wind
-   !! stress, so the flow is O(mm/s) after six steps.  The suite asserts
-   !! that separately (non-vacuity), because a gate that passes on a
-   !! motionless ocean proves nothing.
+   !! Both runs carry a stratified water column and an identical INITIAL
+   !! zonal jet (`U_SEED`, written through `rdb_ocean_set_u`), so the
+   !! flow is O(mm/s) through the whole window — nine decades above the
+   !! tighter of the two bounds.  The suite asserts that separately
+   !! (non-vacuity), because a gate that passes on a motionless ocean
+   !! proves nothing.
+   !!
+   !! The stirrer used to be a two-gyre WIND stress and can no longer
+   !! be: P2c masks every atmospheric forcing term with
+   !! `1 - cover_frac`, a uniform flat lid covers the whole domain, and
+   !! so the cavity run correctly feels no wind while its uncovered twin
+   !! feels all of it.  See `U_SEED`.
    !!
    !! ### Measured, gfortran 15.1 Release, 2026-09-20
    !!
+   !! (Re-measured when the stirrer changed from the two-gyre wind to the
+   !! `U_SEED` initial jet — see below.  Same shape, same decade counts;
+   !! the LOADED margin tightened from 24x to 6x because a jet dropped
+   !! into an unbalanced stratified column excites the pressure stack
+   !! somewhat harder than a six-step wind spin-up did.)
+   !!
    !! ```
    !!                      UNLOADED (P5.1)        LOADED (P5.2)
-   !!   max|du|            3.125e-13 m/s          1.301e-18 m/s
-   !!   max|dv|            2.612e-13 m/s          4.608e-19 m/s
-   !!   max|dh|            8.527e-14 m            0 (exactly)
-   !!   max|deta|          5.400e-13 m            0 (exactly)
+   !!   max|du|            2.854e-13 m/s          4.987e-18 m/s
+   !!   max|dv|            2.645e-13 m/s          3.578e-18 m/s
+   !!   max|dh|            5.684e-14 m            0 (exactly)
+   !!   max|deta|          4.547e-13 m            0 (exactly)
    !!   bound              3.136e-11              3.09e-17
-   !!   margin                 100x                   24x
-   !!   max|u| (signal)    3.504e-03 m/s          (same run)
+   !!   margin                 110x                    6x
+   !!   max|u| (signal)    1.559e-03 m/s          (same run)
    !! ```
    !!
-   !! **The load buys 2.4e5x — 5.4 decades — on the velocity difference,
+   !! **The load buys 5.7e4x — 4.8 decades — on the velocity difference,
    !! and exact agreement on thickness and SSH.**  Inverting the bound's
    !! own algebra, the effective pressure-stack discrepancy falls from
    !! `7.2e-10 Pa` (= `eps * rho_ref*g*DRAFT`, i.e. exactly the offset's
@@ -93,7 +107,8 @@ module test_ocean_cavity_equivalence
                             rdb_ocean_destroy, rdb_ocean_refresh_host, &
                             rdb_ocean_get_h_layer_ptr, rdb_ocean_get_u_face_x_layer_ptr, &
                             rdb_ocean_get_v_face_y_layer_ptr, rdb_ocean_get_bt_eta_ptr, &
-                            rdb_ocean_set_bathymetry
+                            rdb_ocean_set_bathymetry, rdb_ocean_set_u, &
+                            rdb_ocean_get_grid_info
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    implicit none
    private
@@ -114,6 +129,27 @@ module test_ocean_cavity_equivalence
       !! Largest `|T - T_ref|` in the IC: T runs 4..12 degC about the
       !! default `T_ref = 10`.  S is uniform at `S_ref`, so the density
       !! anomaly is thermal only.
+   real(wp), parameter :: U_SEED = 1.0e-3_wp
+      !! Amplitude of the INITIAL zonal jet (m/s) both runs are seeded
+      !! with; the `1 - cos` profile peaks at `2*U_SEED`.
+      !!
+      !! This suite used to stir the basin with a `'2gyre'` wind stress.
+      !! It cannot any more, and the reason is the feature under test one
+      !! phase later: P2c masks every atmospheric forcing term with
+      !! `1 - cover_frac`, and a uniform flat lid covers the WHOLE
+      !! domain, so the cavity run correctly feels no wind at all while
+      !! its shallow twin feels the full stress.  The gate would then be
+      !! comparing two different experiments — and with the wind removed
+      !! from both it would compare two oceans at rest, which is the
+      !! vacuity the suite explicitly refuses to accept.
+      !!
+      !! An INITIAL velocity is the right stirrer for a datum-equivalence
+      !! gate: it is a prognostic, not a forcing, so no cover mask can
+      !! touch it; it is written through `rdb_ocean_set_u` with the SAME
+      !! array in both runs, so the two experiments still differ in
+      !! exactly the bed depth and the cavity group; and it excites the
+      !! same baroclinic pressure stack the wind used to, because the jet
+      !! is in no balance with the stratified column it is dropped into.
    real(wp), parameter :: P_SURF_SEAM = 2000.0_wp
       !! Atmospheric load (Pa) for the seam cases — ~20 hPa, i.e. a
       !! 0.197 m inverse-barometer elevation.  Small enough that the
@@ -190,8 +226,12 @@ contains
             new_line("a")// &
             "&nonhydrostatic_nml nz_layers = 6 /"//new_line("a")// &
             "&time_nml t_end = 100000.0, dt_fixed = 300.0 /"//new_line("a")// &
-            "&ocean_topo_nml max_depth = "//trim(adjustl(depth_s))//", "// &
-            "wind_config = '2gyre', taux_magnitude = 0.1 /"//new_line("a")// &
+            ! No wind: under a full-domain lid the P2c cover mask zeroes
+            ! it in the cavity run and not in the twin, which would make
+            ! the two runs different experiments.  The stirrer is the
+            ! `U_SEED` initial jet `run_case` writes into both — see
+            ! that parameter's docstring.
+            "&ocean_topo_nml max_depth = "//trim(adjustl(depth_s))//" /"//new_line("a")// &
             "&physics_nml coriolis_f = 1.0e-4 /"//new_line("a")// &
             ! Stratified: T from 4 degC at the bed to 12 degC at the
             ! surface, so every layer carries a different density and the
@@ -248,6 +288,15 @@ contains
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       if (status /= OCEAN_STATUS_OK) return
 
+      ! The stirrer: an identical initial zonal jet in BOTH runs, written
+      ! through the API (which narrow-pushes it to the device, so this is
+      ! correct on the GPU build too).  See `U_SEED`.
+      status = seed_initial_jet(handle)
+      if (status /= OCEAN_STATUS_OK) then
+         status = rdb_ocean_destroy(handle)
+         return
+      end if
+
       if (n_steps > 0) then
          status = rdb_ocean_step(handle, int(n_steps, c_int))
          if (status /= OCEAN_STATUS_OK) then
@@ -289,6 +338,43 @@ contains
       status = rdb_ocean_destroy(handle)
       ok = (status == OCEAN_STATUS_OK)
    end subroutine run_case
+
+   function seed_initial_jet(handle) result(status)
+      !! Write the `U_SEED` initial zonal jet into `u_face_x_layer` over
+      !! the physical interior, depth-uniform and meridionally shaped
+      !! like the two-gyre stress this suite used to blow:
+      !!
+      !!     u(i, j, k) = U_SEED * (1 - cos(2*pi*(j_phys - 0.5)/ny_phys))
+      !!
+      !! The profile is a pure function of the PHYSICAL index, so the
+      !! cavity run and its shallow twin (same `nx`/`ny`/`nz`, different
+      !! bed) receive bit-identical arrays — which is what
+      !! `cavity_flat_lid_seed_bit_identical` then asserts.
+      !!
+      !! `rdb_ocean_set_u` narrow-pushes with `!$acc update device`, so
+      !! the seed reaches the device under `mem:separate`; it does NOT
+      !! re-derive `hu_face_x_layer`, which the first step recomputes.
+      type(c_ptr), intent(in) :: handle
+      integer(c_int) :: status
+      integer(c_int) :: nx_p, ny_p, nz_p, ng
+      real(wp), allocatable :: ubuf(:, :, :)
+      real(wp), parameter :: TWO_PI = 8.0_wp*atan(1.0_wp)
+      integer :: i, j, k
+
+      status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
+      if (status /= OCEAN_STATUS_OK) return
+
+      allocate (ubuf(nx_p + 1, ny_p, nz_p))
+      do k = 1, nz_p
+         do j = 1, ny_p
+            do i = 1, nx_p + 1
+               ubuf(i, j, k) = U_SEED* &
+                               (1.0_wp - cos(TWO_PI*(real(j, wp) - 0.5_wp)/real(ny_p, wp)))
+            end do
+         end do
+      end do
+      status = rdb_ocean_set_u(handle, ubuf, nx_p, ny_p, nz_p)
+   end function seed_initial_jet
 
    pure function bound_accel_from(dp_scale) result(tol_u)
       !! Velocity-difference bound from a PRESSURE-difference scale.
@@ -409,8 +495,8 @@ contains
       ! 0 == 0 and the gate is worthless.
       signal = maxval(abs(u_a))
       call check(error, signal > 1.0e4_wp*tol_u, &
-                 "the wind-driven flow must be decades above the bound, else the "// &
-                 "equivalence gate is vacuous")
+                 "the seeded jet must keep the flow decades above the bound, else "// &
+                 "the equivalence gate is vacuous")
       if (allocated(error)) return
 
       call check(error, du <= tol_u, "u_face_x_layer must match the shallow twin to "// &
@@ -458,8 +544,8 @@ contains
 
       signal = maxval(abs(u_a))
       call check(error, signal > 1.0e4_wp*tol_u, &
-                 "the wind-driven flow must be decades above the bound, else the "// &
-                 "loaded equivalence gate is vacuous")
+                 "the seeded jet must keep the flow decades above the bound, else "// &
+                 "the loaded equivalence gate is vacuous")
       if (allocated(error)) return
 
       call check(error, du <= tol_u, "u_face_x_layer must match the shallow twin to "// &
