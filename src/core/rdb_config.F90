@@ -3819,7 +3819,8 @@ contains
       use rdb_ocean_horizontal_viscosity, only: aniso_mode_is_implemented
       use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent
       use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z, &
-                               H_VANISHED
+                               VCOORD_ZSIGMA, VCOORD_LAGRANGIAN, VCOORD_ZSTAR_SIGMA, &
+                               VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, H_VANISHED
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                           OBC_INVALID
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
@@ -5212,22 +5213,81 @@ contains
             has_error = .true.
          end if
          ! --- vertical-coordinate envelope ---
-         ! Every z-like family anchors its target interfaces at z = 0,
-         ! which is 500 m of ice ABOVE the column under a shelf; only
-         ! sigma (and zstar-lite, which shares its ocean branch) rescales
-         ! the live column and so follows the draft for free.
+         ! Only sigma (and zstar-lite, which shares its ocean branch)
+         ! rescales the live column and so follows the draft for free.
+         !
+         ! The refusal used to be a two-value whitelist whose message
+         ! enumerated SIX families and named neither `lagrangian` nor
+         ! `zstar_sigma` — both of which it refused.  A refusal that does
+         ! not name what it refused, or gives a reason that is not the
+         ! real one, sends the operator to fix the wrong thing.  So the
+         ! accept test stays a whitelist (nothing else has been validated
+         ! under a shelf) but the message now carries the offending
+         ! family's OWN reason, and the reasons are not all "anchors at
+         ! z = 0": three of the seven refused families are geometrically
+         ! datum-safe and are refused for want of validation, which is a
+         ! different, and recoverable, kind of no.  Measured per family in
+         ! `test_ocean_vcoord_interface_depths`.
          block
             integer :: cav_vcoord_code
+            character(len=:), allocatable :: cav_reason
             cav_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
                                                 default_code=VCOORD_EULERIAN_Z)
             if (.not. (cav_vcoord_code == VCOORD_SIGMA .or. &
                        cav_vcoord_code == VCOORD_ZSTAR)) then
-               call logger%error("&ocean_cavity_dyn_nml enable=.true. supports "// &
-                                 "vcoord_type='sigma' or 'zstar' (zstar-lite) only — "// &
-                                 "got '"//trim(cfg%vcoord_type)//"'.  Every z-like "// &
-                                 "family (zsigma, zstar_full, z_fixed, eulerian_z, "// &
-                                 "rho, hycom) anchors its target interfaces at z = 0, "// &
-                                 "which under a shelf is inside the ice.")
+               select case (cav_vcoord_code)
+               case (VCOORD_LAGRANGIAN)
+                  cav_reason = "'lagrangian' is geometrically datum-FREE (the target "// &
+                               "IS the live h_layer and the remap is a no-op), so the "// &
+                               "placement objection does not apply to it.  It is "// &
+                               "refused in v1 only because no cavity run has been "// &
+                               "validated on an isopycnal coordinate; it is the "// &
+                               "intended isopycnal control leg of the coordinate study"
+               case (VCOORD_EULERIAN_Z)
+                  cav_reason = "'eulerian_z' is a stretched SIGMA with the free "// &
+                               "surface DROPPED (it is not a geopotential coordinate "// &
+                               "despite the name), and the dropped eta — not a z "// &
+                               "anchor — is why it cannot carry an ice-base "// &
+                               "displacement"
+               case (VCOORD_ZSIGMA)
+                  cav_reason = "'zsigma' is refused on EVERY path, cavity or not: its "// &
+                               "deep branch reads z_ref_global as metres while the "// &
+                               "only writer fills it with the dimensionless k/nz"
+               case (VCOORD_ZSTAR_SIGMA)
+                  cav_reason = "'zstar_sigma' is a purely FRACTIONAL rescale of the "// &
+                               "global reference table, hence datum-invariant and "// &
+                               "geometrically safe under a draft.  It is refused in "// &
+                               "v1 only because it follows BOTH boundaries (so it "// &
+                               "solves nothing a cavity needs) and no cavity run has "// &
+                               "been validated on it"
+               case (VCOORD_ZSTAR_FULL)
+                  cav_reason = "'zstar_full' builds its per-column reference table "// &
+                               "from the TRUE bed while the target walk sees only the "// &
+                               "live thickness, so under a draft it keeps the table's "// &
+                               "SHALLOW entries: the fine near-surface band lands "// &
+                               "against the ice base and the deep water is carried by "// &
+                               "shallow-ocean spacing.  It does not merely anchor at "// &
+                               "z = 0, it inverts which half of the column is resolved"
+               case (VCOORD_Z_FIXED)
+                  cav_reason = "'z_fixed' hangs its nominal stack from the COLUMN TOP, "// &
+                               "which under a shelf is the ice base, so a '20 m "// &
+                               "z-level' lands 20 m below the ICE instead of 20 m "// &
+                               "below z = 0, and the leftover layers vanish at the BED "// &
+                               "instead of against the top"
+               case default
+                  cav_reason = "'"//trim(cfg%vcoord_type)//"' is a DENSITY-space "// &
+                               "coordinate with no geometric anchor, so the placement "// &
+                               "objection does not apply.  It is refused in v1 because "// &
+                               "cavity x isopycnal is unvalidated; note also that "// &
+                               "hycom's z* nominal-floor band accumulates from the "// &
+                               "column top, so under a shelf that band is "// &
+                               "draft-FOLLOWING and must not be quoted as z-like"
+               end select
+               call logger%error("&ocean_cavity_dyn_nml enable=.true. accepts "// &
+                                 "vcoord_type='sigma' or 'zstar' (zstar-lite) ONLY — "// &
+                                 "the two families that rescale the live column and so "// &
+                                 "follow the ice base for free.  Got '"// &
+                                 trim(cfg%vcoord_type)//"': "//cav_reason//".")
                has_error = .true.
             end if
          end block

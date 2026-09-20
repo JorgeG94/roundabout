@@ -807,7 +807,12 @@ contains
                                           "gfs_scale = 0.9 /"), "gfs_scale /= 1")
       if (allocated(error)) return
 
-      ! --- vertical-coordinate envelope (every z-like family) ---
+      ! --- vertical-coordinate envelope ---
+      ! EVERY family outside the {sigma, zstar} accept set, so no refusal
+      ! can go un-named again: the message used to enumerate six families
+      ! and refuse eight.  The rows below are the whole complement of the
+      ! whitelist; `parse_vcoord_type`'s own test pins that the list of
+      ! spellings is complete.
       call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
                                           "'zsigma' /"), "vcoord zsigma")
       if (allocated(error)) return
@@ -819,6 +824,33 @@ contains
       if (allocated(error)) return
       call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
                                           "'eulerian_z' /"), "vcoord eulerian_z")
+      if (allocated(error)) return
+      ! The two the old message refused WITHOUT naming them.  Both are
+      ! geometrically datum-safe — lagrangian has no target at all,
+      ! zstar_sigma is a purely fractional rescale — so both are refused
+      ! for want of VALIDATION, not for mis-placement, and the message now
+      ! says so.  If either is ever admitted, this row is the one to flip.
+      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                          "'lagrangian' /"), "vcoord lagrangian")
+      if (allocated(error)) return
+      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                          "'zstar_sigma' /"), "vcoord zstar_sigma")
+      if (allocated(error)) return
+      ! ... and the two density-space families, which the old message DID
+      ! name but under the wrong reason ("anchors at z = 0" — they have no
+      ! geometric anchor at all).
+      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                          "'rho' /"), "vcoord rho")
+      if (allocated(error)) return
+      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                          "'hycom' /"), "vcoord hycom")
+      if (allocated(error)) return
+      ! The accept set itself, so the whitelist cannot silently narrow.
+      call expect_valid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                        "'sigma' /"), "vcoord sigma (accepted)")
+      if (allocated(error)) return
+      call expect_valid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                        "'zstar' /"), "vcoord zstar-lite (accepted)")
       if (allocated(error)) return
       call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
                                           "'sigma', thickness_config = 'uniform_z' /"), &
