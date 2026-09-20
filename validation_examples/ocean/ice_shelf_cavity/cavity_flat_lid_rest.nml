@@ -1,0 +1,168 @@
+! Resting cavity under a FLAT ice shelf — the exact-rest control.
+!
+! WHAT THIS IS.  The same stratified, motionless, undissipated cavity as
+! `cavity_sloping_lid_rest.nml`, with ONE thing changed: the ice base is
+! FLAT (`draft_config = "flat"`, 300 m over the whole domain, no calving
+! front).  A flat lid over a flat bed makes every interface gap between
+! two neighbouring columns identically zero, `De(K) = 0`, so every
+! trapezoid error `G(K)` in the FV-MOM6 pressure stack is structurally
+! zero — not small, ABSENT.  The correct answer is therefore
+! IDENTICALLY ZERO MOTION FOREVER, and that is what the case asserts.
+!
+! WHAT IT ISOLATES.  Three things at once, each of which would show up
+! here as a non-zero En and nowhere else this cheaply:
+!
+!   * the LOAD BOOKKEEPING.  `pa(nz+1) = rho_ref*g*eta_geo + p_top` with
+!     `p_top = p_ice_ref = rho_ref*GRAVITY*z_draft` and `eta_geo =
+!     -z_draft` at rest: the two terms are the SAME product with opposite
+!     signs, so the surface BC cancels to bit-zero.  Build `p_ice_ref`
+!     with a different rounding and this case stops being zero.
+!   * the DATUM.  `bt_H_ref = b - z_draft` makes `bt_eta = 0` at rest, so
+!     the barotropic substep feels `-G*grad(eta - eta_forcing) = 0`.  Put
+!     the draft in eta instead and this case sees a 300 m free-surface
+!     anomaly.
+!   * the GEOPOTENTIAL IC.  `&ocean_zinit_nml source = "linear"` measures
+!     each layer centre's depth from `z = 0`, so the column top sits at
+!     `z = -300 m`.  Measure it from the COLUMN TOP instead (what the
+!     overlay did before P5.3) and the T/S profile lands 300 m too
+!     shallow — which, since the lid is flat, is still HORIZONTALLY
+!     uniform and so STILL at rest.  That is the point of having the
+!     sloping twin: this case cannot see that bug, and the sloping one
+!     can.
+!
+! MEASURED (gfortran 15.1 Release, single rank, 30 days, 4320 steps):
+!
+!     split_scheme = "pred_corr" (default)   En = 0.000E+00 at every
+!     split_scheme = "ssp_rk2"   (twin)      En = 0.000E+00   daily sample
+!
+! Exactly zero, both schemes, every sample — so the gate is the
+! "must be bit-zero" bar `REST_1UM_S`, not a tolerance.
+!
+! Geometry: 48 x 6 x 15 @ dx = dy = 2 km; flat bed 720 m; flat ice base
+! 300 m => a 420 m water column everywhere.  ISOMIP+ COLD stratification
+! and linear EOS exactly as in the sloping twin (see its header for the
+! coefficient conversion and the provenance).
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_flat_lid_rest.nml
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 6
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 720.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "flat"       ! UNIFORM: no box bounds => no calving front
+   draft_depth  = 300.0
+   h_min_cavity = 40.0
+/
+
+&ocean_pgf_nml
+   form        = "fv_mom6"
+   p_top_in_bc = .true.        ! a uniform load is provably inert here, but
+                               ! the case is the control for the SLOPING one
+                               ! and must run the identical PGF path
+   maxvel      = 2.0
+/
+
+&ocean_eos_nml
+   eos = "linear"
+/
+
+&ocean_ic_nml
+   alpha_T = 3.8356948e-2      ! rho_0 * 3.733e-5 /degC   (ISOMIP+)
+   beta_S  = 8.0587609e-1      ! rho_0 * 7.843e-4 /PSU    (ISOMIP+)
+   T_ref   = -1.0
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"
+   lin_t_ref = -1.9
+   lin_dt_dz = 0.0
+   lin_s_ref = 33.8
+   lin_ds_dz = -1.0416667e-3   ! (33.8 - 34.55)/720, z positive UP
+/
+
+&tracer_nml
+   initial_temperature = -1.9
+   initial_salinity    = 34.175
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h = 0.0                  ! nothing to damp: the answer is exact zero
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "cavity_flat_lid_rest"
+   dt_out   = 86400.0
+/
+
+&output_nml
+   output_dir     = "./out_cavity_flat_lid_rest"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/

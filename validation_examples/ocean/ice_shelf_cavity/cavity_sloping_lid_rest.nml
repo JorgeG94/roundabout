@@ -1,0 +1,312 @@
+! Resting cavity under a SLOPING ice shelf — the Phase-5 physics gate and
+! the Phase-6 baseline.
+!
+! WHAT THIS IS.  A stratified ice-shelf cavity, initialised at rest, with
+! nothing that can move it: flat bed, no wind, no surface flux, no bottom
+! drag, no vertical mixing closure, NO lateral viscosity, no melt.  The ice
+! base slopes linearly from the grounding line to a calving front, beyond
+! which the domain is open ocean.  The only thing left that can generate a
+! velocity is the PRESSURE-GRADIENT DISCRETISATION, which is exactly what
+! the case is here to measure.
+!
+! The load partition under test (`&ocean_cavity_dyn_nml` + `p_top_in_bc`):
+!
+!     bt_H_ref  = b - z_draft                   the barotropic DATUM
+!     p_ice_ref = rho_ref*GRAVITY*z_draft       the Boussinesq-isostatic load
+!     ms%p_top  = p_ice_ref + sf%p_surf         the PGF/EOS surface BC
+!     pa(nz+1)  = rho_ref*g*eta_geo + p_top     -> 0 at rest, bit-exactly
+!
+! so the barotropic mode sees `bt_eta = 0` and a seam of zero, and the
+! baroclinic residual is the FV-MOM6 truncation error alone.
+!
+! WHY THE INITIAL CONDITION USES `&ocean_zinit_nml source = "linear"`.
+! Under `VCOORD_SIGMA` the layer interfaces TILT with the ice base.  The
+! `&tracer_nml T_init_surface` / `S_init_*` family lays a profile out
+! linearly in LAYER INDEX, i.e. along the tilted coordinate — which tilts
+! the isopycnals with the lid and is NOT a state of rest, so the run would
+! measure a real baroclinic adjustment rather than a numerical error.  The
+! zinit "linear" source evaluates T(z)/S(z) at each layer centre's TRUE
+! GEOPOTENTIAL depth (column top at `z = -z_draft`), so the isopycnals are
+! flat in z on every column, sloping lid included.
+!
+! GEOMETRY (2-D in x; the y direction is 6 cells of the same column).
+!   * 48 x 6 x 15 @ dx = dy = 2 km  ->  96 km x 12 km, flat bed at 720 m.
+!   * Ice base: z_draft = 570 - 6.9e-3*(x + 10 km), so 494 m at the first
+!     interior column and 11 m at the last shelf column; the shelf box ends
+!     at x = 72 km (the CALVING FRONT) and the remaining 24 km is open
+!     ocean (z_draft = 0).  The anchor x0 = -10 km puts the ghost columns
+!     INSIDE the box so they carry the analytic continuation of the draft
+!     rather than a step to zero at the wall.
+!   * Per-face draft step: 13.8 m in the shelf interior, 11.1 m at the
+!     calving front — the front is deliberately NOT the biggest step in the
+!     domain.  The residual is CUBIC in that step (below), so a 100 m
+!     ISOMIP+-style calving cliff would dominate the run and the case would
+!     stop measuring the sloping lid.  That regime is real and belongs to
+!     the correction work: Yung et al. (2026) §3.4.2 record that MOM6-LAYER
+!     suppresses its calving criterion near the ice front "to minimise
+!     pressure gradient errors", and MPAS-Ocean caps the coordinate's Haney
+!     number at 5 for the same reason.  This file is not the place to hide
+!     it, and not the place to be dominated by it either.
+!   * Water column 226 m at the grounding end, 709 m at the front — every
+!     column far above `h_min_cavity = 40 m` (MOM6-LAYER's ISOMIP+ minimum,
+!     Yung et al. 2026 §3.4.2), so nothing is grounded and, under sigma, no
+!     layer can vanish.  Configure reports 0 of 288 columns grounded.
+!
+! STRATIFICATION — ISOMIP+ COLD, as printed (Asay-Davis et al. 2016,
+! Eq. 23 + Tables 4-5), converted to roundabout's DIMENSIONAL linear EOS:
+!   T = -1.9 degC everywhere (T0 = T_bot);  S = 33.8 -> 34.55 over 720 m.
+!   alpha_lin = 3.733e-5 /degC, beta_lin = 7.843e-4 /PSU, rho_ref = 1027.51
+!     =>  alpha_T = rho_0*alpha_lin = 3.8356948e-2 kg/m3/degC
+!         beta_S  = rho_0*beta_lin  = 8.0587609e-1 kg/m3/PSU
+!   (feeding the FRACTIONAL coefficients straight in under-states the
+!   density response ~1000x and looks like a plausible weak run).
+!   N^2 = -(g/rho_0)*beta_S*dS/dz = 8.01e-6 s^-2.
+!   f-plane at 75 S: f = -2*Omega*sin(75 deg) = -1.409e-4 s^-1.
+!
+! WHAT TO EXPECT, derived.  Flat bed + sigma makes the interface gap
+! between two columns `De(K) = sigma_K*D`, with `D` the draft step across
+! the face, and the FV-MOM6 Pass-3 numerator telescopes into a trapezoid
+! error `G(K) = -(De(K)^3/12)*rho_0*N^2`.  What survives the split solver's
+! depth-mean replacement is
+!
+!     PFu(k) - <PFu>_h = N^2 * D^3 * (3*sigma_k^2 - 1) / (12*dx*Hbar)
+!
+! — SECOND order in dx, CUBIC in the draft slope, independent of nz,
+! peaking at the ice base (sigma = 1) at `a_peak = N^2*D^3/(6*dx*Hbar)`.
+! With N^2 = 8.01e-6, D = 13.8 m, dx = 2000 m, Hbar = 470 m:
+!
+!     a_peak = 3.73e-9 m/s^2
+!     geostrophic scale U = a_peak/|f| = 2.65e-5 m/s  ->  En ~ 3.5e-10
+!
+! MEASURED, gfortran 15.1 Release, single rank, 2026-09-20.  En is the
+! domain-mean specific KE from the daily [stats] line.
+!
+!   pred_corr (the DEFAULT, and the base case):
+!     day  1   1.030E-09      day 22   2.290E-09      day 40   7.133E-07
+!     day  5   1.346E-09      day 25   5.275E-09      day 50   2.770E-06
+!     day 10   1.626E-09      day 30   3.043E-08      day 60   3.894E-06
+!     day 20   2.070E-09      day 35   1.901E-07
+!
+!   ssp_rk2 (the automatic __ssp_rk2 twin):
+!     day 10   1.660E-09      day 15   4.617E-06      day 30   1.652E-04
+!     day 11   1.981E-09      day 20   4.217E-05
+!
+! Cross-toolchain: the GPU build (nvfortran 26.5, -stdpar=gpu, cc70, one
+! Tesla V100-DGXS, 4320 steps in 74.6 s) reads 3.043E-08 at day 30 — every
+! printed digit of the gfortran answer, on a different compiler and a
+! different execution model.  The measurement is the algorithm, not an FMA
+! accident.
+!
+! READ IT IN TWO PARTS.
+!
+! (a) THE PLATEAU, days 1-20, is the measurement.  En sits at 1.0-2.1E-09,
+!     i.e. |u|_rms = 4.5-6.5e-05 m/s, against the derived 3.5E-10 / 2.6e-05
+!     m/s.  Two to three times a peak-acceleration estimate compared against
+!     a domain rms is as close as that formula can be asked to come, and it
+!     is the number the sloping-surface PGF corrections have to beat.  Two
+!     controls pin it down: with a FLAT lid (`cavity_flat_lid_rest.nml`,
+!     every De(K) = 0) En is EXACTLY 0.000E+00 for 30 days, and with the
+!     stratification removed (`cavity_uniform_rho_rest.nml`, every G(K) = 0)
+!     it is 1.34E-20.  The residual is the `rho_0*N^2*De^3` term and nothing
+!     else.
+!
+! (b) THE GROWTH, from day ~22, is the FINDING, and it is why this file is
+!     a Phase-6 baseline rather than a passing gate.  En leaves the plateau
+!     on a ~3.2-day e-folding, then SATURATES: 3.9E-06 by day 60 (2.8 mm/s
+!     rms) with the rate clearly decaying, every budget residual still at
+!     4e-13 relative, no CFL truncation and no velocity clamping.  It is
+!     bounded, not runaway.  Characterised by substitution on this tree:
+!       * dt 600 -> 300 reproduces the curve (day 30: 3.069E-08 vs
+!         3.043E-08).  It is NOT an (omega*dt)^n outer-split mode.
+!       * ISOMIP+'s own Laplacian (Table 4, nu_h = 6.0 m2/s) only DELAYS it
+!         ~10 days: peak 1.13E-09 at day 2, minimum 9.6E-11 at day 20,
+!         9.65E-10 at day 30, 1.24E-06 at day 60.
+!       * a scale-selective biharmonic (nu_4 = 1.0e7, the dx^4-scaled
+!         equivalent of `resting_stratified_channel`'s 5e8 at 5 km) also
+!         only delays it: 3.58E-10 at day 30, 6.69E-07 at day 60.  So the
+!         mode is not purely grid-scale and no defensible dissipation
+!         removes it.
+!       * flat lid and uniform density are both bit-zero, so the mode is
+!         entirely downstream of the sloping-lid PGF error: remove the
+!         source and it does not exist.
+!     ssp_rk2 then amplifies the same wave field catastrophically from day
+!     12 (1.65E-04 at day 30, 5400x the default) — which is what
+!     EXPERIMENTAL on that scheme means, stated as a number, exactly as in
+!     `validation_examples/ocean/eady/resting_stratified_channel.nml`.
+!
+! THE GATE.  `tests/regression/stability_manifest.py` runs this at
+! `en_rest_max = REST_1MM_S` (0.5e-06 m2/s2, 1 mm/s), the bar the sloped
+! resting family already uses and the velocity a resting sub-shelf cavity
+! has no excuse to exceed; the measured day-30 peak of 3.043E-08 clears it
+! by 16x in energy, 4x in velocity.  It is carried as a SCOPED XFAIL on
+! `energy:rest-settles` only, because (b) means the final sample is the
+! peak at every horizon short of saturation.  It does NOT clear the tighter
+! `REST_100UM_S` (0.5e-08) the Phase-5 design proposed — day 30 is 6x over
+! it — and that is recorded here deliberately rather than legislated away:
+! restoring it is the Phase-6 acceptance criterion.  Do not close either by
+! widening the bar, by shortening the run, or by putting viscosity into
+! this file.
+!
+! AGAINST THE LITERATURE.  Yung, Hallberg, Adcroft & Morrison (2026),
+! "Assessment of a Finite Volume Discretization of the Horizontal Pressure
+! Gradient Force Beneath Sloping Ice Shelves", JAMES 18, e2025MS005645,
+! doi:10.1029/2025MS005645, is the paper that fixes this class of error.
+! Their abstract: "spurious velocities reduced to order 10^-9 m s^-1 or
+! smaller in quiet, linear stratification test cases"; their sigma-
+! coordinate icemount goes "from order 10^-7 m s^-1 in the linear surface
+! pressure construction (Figure 7c) to 10^-12 m s^-1 (Figure 7d)" (§5.1.2),
+! and their 2-D idealised ice shelf "from order 10^-2 m s^-1 (not shown) to
+! ... order 10^-9 m s^-1 or less" (§5.2).  This build implements NONE of
+! their three corrections (nonlinear surface pressure reconstruction §3.1,
+! interior reference interface §3.2, MWIPG §3.3.2), so at their own 10-day
+! horizon it sits at |u|_rms = 5.7e-05 m/s.  Read that comparison with the
+! two configuration differences in front of you: their runs carry a
+! Laplacian viscosity (1000 m2/s for the icemount) plus top and bottom drag
+! (c_D = 0.002, U_bg = 0.05 m/s, ~1-day spin-down), and this file carries
+! NO dissipation at all by design, so it integrates the spurious force
+! instead of arresting it.  With ISOMIP+'s nu_h = 6.0 m2/s this file reads
+! 3.73E-10 (|u|_rms = 2.7e-05 m/s) at day 10 — still above their
+! uncorrected sigma figure.  The gap is the work, not the measurement.
+!
+! Run:
+!   ./build/rdb validation_examples/ocean/ice_shelf_cavity/cavity_sloping_lid_rest.nml
+!
+! NOTE the configure-time WARNING about `&ocean_psurf_nml in_eos`: the
+! in-situ EOS ignores the 5.26 MPa ice load.  With the LINEAR equation of
+! state selected here there is no pressure dependence at all, so the load
+! in the EOS is literally inert and the warning is informational.  It
+! matters for the nonlinear/ISOMIP+ thermodynamic cases, not for this one.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 6
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "sigma"       ! terrain-following: follows the ice base
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 720.0      ! ISOMIP+ z_b,deep
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "linear"
+   draft_depth  = 570.0        ! draft AT draft_x0
+   draft_slope  = -6.9e-3      ! shallows toward the calving front
+   draft_x0     = -10000.0     ! anchor OUTSIDE the domain so ghosts are iced
+   draft_x1     = 72000.0      ! the CALVING FRONT; open ocean beyond
+   h_min_cavity = 40.0         ! MOM6-LAYER's ISOMIP+ minimum column
+/
+
+&ocean_pgf_nml
+   form          = "fv_mom6"   ! the only form with an injectable top BC
+   p_top_in_bc   = .true.      ! REQUIRED for a varying draft
+   maxvel        = 2.0
+/
+
+&ocean_eos_nml
+   eos = "linear"
+/
+
+&ocean_ic_nml
+   alpha_T = 3.8356948e-2      ! rho_0 * 3.733e-5 /degC   (ISOMIP+)
+   beta_S  = 8.0587609e-1      ! rho_0 * 7.843e-4 /PSU    (ISOMIP+)
+   T_ref   = -1.0              ! ISOMIP+ Table 4
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"        ! analytic T(z)/S(z) at the TRUE geopotential
+                               ! depth -- flat isopycnals under a tilted lid
+   lin_t_ref = -1.9            ! ISOMIP+ COLD: T0 = T_bot, no thermal gradient
+   lin_dt_dz = 0.0
+   lin_s_ref = 33.8            ! S at z = 0
+   lin_ds_dz = -1.0416667e-3   ! (33.8 - 34.55)/720, z positive UP
+/
+
+&tracer_nml
+   ! Overwritten by the zinit overlay on the interior AND the ghosts; kept
+   ! consistent so a reader is not misled about the state being seeded.
+   initial_temperature = -1.9
+   initial_salinity    = 34.175
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   ! Zero, deliberately: viscosity damps the spurious flow's LEVEL without
+   ! removing what produces it (measured above: nu_h = 6 and nu_4 = 1e7 each
+   ! delay the growth ~10 days and change nothing else), so leaving any in
+   ! would let a PGF regression hide behind it.  There is no real flow here
+   ! to control.
+   nu_h = 0.0
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   ! No drag: the measurement must not be flattered by dissipation.
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.       ! pure dyn-core: no mixing anywhere
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+   ! split_scheme is DELIBERATELY not pinned: the default (pred_corr) is the
+   ! base case and the stability suite builds the __ssp_rk2 twin from the
+   ! same file.  Pinning either would delete that comparison.
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "cavity_sloping_lid_rest"
+   dt_out   = 86400.0          ! daily
+/
+
+&output_nml
+   output_dir     = "./out_cavity_sloping_lid_rest"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/
