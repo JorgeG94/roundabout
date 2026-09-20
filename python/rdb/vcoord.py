@@ -19,7 +19,16 @@ class Sigma:
 
 class ZSigma:
     """``ZSigma(remap="ppm")`` -> `"zsigma"`. Smoothstep sigma->z
-    blend."""
+    blend.
+
+    REFUSED by `validate_config` today. The deep branch reads
+    `z_ref_global` as absolute depths in metres, but the only writer of
+    that table is the dimensionless `k/nz` init, so every z-level
+    interval is `1/nz` metres and the whole column collapses into the
+    bed layer (with `sum(target_h) == H + eta` still exact, which is why
+    it looked healthy). Kept on the schema because it returns once the
+    table is filled in metres; use `ZStarSigma` for a sigma/z* blend
+    meanwhile."""
 
     def __init__(self, remap="ppm"):
         self.remap = remap
@@ -69,6 +78,15 @@ class ZStarFull:
 
     CAVEAT: intertidal domains leak 1-2% salt/cycle under this
     coordinate; prefer `Sigma`/`ZStar` there.
+
+    CAVEAT: `h_min` must stay at or below `H_VANISHED = 1.5e-4` m. On
+    this family it is the anti-zero thickness of filler layers that are
+    MEANT to read as vanished downstream, so a larger value promotes them
+    to dynamically live (EOS / PGF / remap-drain / vdiff) while the
+    coordinate still treats them as throwaway. `validate_config` refuses
+    it. For a genuinely live minimum layer thickness use
+    `&ocean_isopycnal_nml angstrom_h`; the `Isopycnal` / `Hycom`
+    coordinates carry the opposite (keep-alive) contract on the same knob.
     """
 
     def __init__(self, h_surf_target=0.0, h_min=1e-4, remap="ppm"):

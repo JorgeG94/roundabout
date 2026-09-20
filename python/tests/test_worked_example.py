@@ -106,7 +106,12 @@ def test_worked_example_runs():
                                      pv_advection=WENO(order=5)),
         buoyancy=Wright1997(),
         pressure=FiniteVolumeMOM6(gfs_scale=0.98, mass_weight=True),
-        vcoord=ZStarFull(h_surf_target=2.0, h_min=1.0e-3, remap="ppm"),
+        # h_min must stay <= H_VANISHED (1.5e-4): on ZSTAR_FULL the knob
+        # is the anti-zero thickness of filler layers that are MEANT to
+        # read as vanished downstream, and validate_config refuses a
+        # larger value.  The sketch's 1.0e-3 was in that band while the
+        # check was only a warning.
+        vcoord=ZStarFull(h_surf_target=2.0, h_min=1.0e-4, remap="ppm"),
         closures=[
             PacanowskiPhilander(nu0=1e-2, nu_bg=1e-4, kappa_bg=1e-5),
             KPP(ri_crit=0.3, shortwave_method="mxl_sw"),

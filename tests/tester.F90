@@ -138,6 +138,8 @@ program rdb_tests
    use test_ocean_vcoord_hycom, only: ocean_vcoord_hycom_collect => collect_ocean_vcoord_hycom_tests
    use test_ocean_vcoord_interface_depths, only: ocean_vcoord_interface_depths_collect => &
                                                  collect_ocean_vcoord_interface_depths_tests
+   use test_ocean_vcoord_hygiene, only: ocean_vcoord_hygiene_collect => &
+                                        collect_ocean_vcoord_hygiene_tests
    use test_ocean_remap, only: ocean_remap_collect => collect_ocean_remap_tests
    use test_ocean_regrid_refine, only: ocean_regrid_refine_collect => collect_ocean_regrid_refine_tests
    use test_ocean_remap_e2e, only: ocean_remap_e2e_collect => collect_ocean_remap_e2e_tests
@@ -304,6 +306,7 @@ program rdb_tests
                 new_testsuite("ocean_vcoord_hycom", ocean_vcoord_hycom_collect), &
                 new_testsuite("ocean_vcoord_interface_depths", &
                               ocean_vcoord_interface_depths_collect), &
+                new_testsuite("ocean_vcoord_hygiene", ocean_vcoord_hygiene_collect), &
                 new_testsuite("ocean_remap", ocean_remap_collect), &
                 new_testsuite("ocean_regrid_refine", ocean_regrid_refine_collect), &
                 new_testsuite("ocean_remap_e2e", ocean_remap_e2e_collect), &

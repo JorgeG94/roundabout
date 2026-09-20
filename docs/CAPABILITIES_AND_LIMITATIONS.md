@@ -697,6 +697,57 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `(H, η)` form the two target formulas are the same expression.
   `RHO` is validation-grade alone (weakly-stratified columns collapse);
   `HYCOM` is the production hybrid.
+- **Per-family status under a DISPLACED COLUMN TOP** (a rigid lid — an ice
+  shelf — at `z = −z_top` instead of `z = 0`). The target builder is handed a
+  column *thickness* and nothing else
+  (`ocean_apply_ale_remap_centres`, `src/ALE/rdb_ocean_remap.F90`), so it cannot
+  know where the column starts. Measured interface-by-interface by
+  `tests/test_ocean_vcoord_interface_depths.F90` on a 500 m live column under a
+  lid at `z = −500` over a 1000 m bed:
+
+  | Family | Under a displaced top | Gate |
+  |---|---|---|
+  | `LAGRANGIAN` | **Correct** — no geometric target at all (the remap is a no-op); datum-free | `lagrangian_builds_no_target` |
+  | `EULERIAN_Z` | **Correct** — a stretched sigma with η dropped, *not* a geopotential coordinate despite the name; divides the live column proportionally | `eulerian_z_under_a_lid_divides_live_column` |
+  | `SIGMA` / `ZSTAR` (lite) | **Correct** — terrain-following at both ends; the live column divided proportionally. The only families the cavity accepts today, and the control leg of the coordinate study | `sigma_under_a_lid_divides_live_column`, `zstar_lite_depths_match_sigma` |
+  | `ZSTAR_SIGMA` | **Correct** — a purely fractional rescale of the global table, so datum-invariant. Safe, and useless for a cavity: it follows *both* boundaries | `zstar_sigma_under_a_lid_divides_live_column` |
+  | `ZSIGMA` | **Refused on the ocean path** — see the `z_ref_global` limitation below | `documents_zsigma_dimensionless_zref_collapse` |
+  | `Z_FIXED` | **WRONG** — the nominal stack hangs from the column top wherever that top is, so the fillers land on the **bed** and the live stack under the lid. A z-like coordinate wants the mirror image (fillers under the top, live layers at their open-ocean depths); the per-index error reaches **500 m** at `e(5)` (measured `−1000.0` m, analytic `−500.0` m) | `documents_z_fixed_anchored_at_column_top` |
+  | `ZSTAR_FULL` | **WRONG, and worse** — the reference table is built from the TRUE bed while the walk is handed the live thickness, so `eta_loc < 0` on every covered column and the table's SHALLOW entries are kept. It does not merely anchor at `z = 0`, it INVERTS which half of the column is resolved: measured with a 20 m fine band, the band lands at `z = −500 … −560` (hard against the lid, 500 m too deep) and the deep water is carried by 134 m coarse layers, with the fillers on the bed | `documents_zstar_full_band_anchored_at_z0` |
+  | `RHO` / `HYCOM` | Density-space: no geometric anchor, so draft-agnostic. HYCOM's z\* nominal-floor band accumulates from the column top, so under a lid that band is draft-following — defensible, but it is **not** a z-like band and should not be quoted as one | `test_ocean_vcoord_rho`, `test_ocean_vcoord_hycom` |
+
+  The `documents_*` rows assert the CURRENT placement on purpose: the suite is
+  green and the defect is pinned. The rigid-top slice must flip them.
+- **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =
+  'zsigma'`), on the ocean path, with or without a cavity. Its deep branch reads
+  `z_ref_global` as a table of absolute reference depths **in metres**
+  (`z_top_k = min(z_ref_global(nz-k), column_total)`), but the only writer of
+  that array anywhere in `src/` is the **dimensionless** `z_ref_global(k) = k/nz`
+  init in `ocean_vcoord_init` — nothing on the namelist path, the Python path or
+  the benchmark path ever replaces it. So every z-level interval is `1/nz`
+  *metres*: on a 1000 m column with `nz = 10`, nine layers of 0.1 m stack in the
+  top 90 cm and the remaining 999.1 m is dumped into the **bed** layer by the
+  deficit line. `Σ target_h = H + η` stays exact throughout, which is exactly why
+  no conservation test ever caught it and why the family shipped looking healthy;
+  the collapse is measured interface-by-interface in
+  `test_ocean_vcoord_interface_depths :: documents_zsigma_dimensionless_zref_collapse`.
+  No shipped namelist selects it. **Follow-up:** fill `z_ref_global` in metres —
+  ZSIGMA is the natural seat for a sigma-near-the-top / z-below hybrid — then
+  delete the refusal and the `documents_*` case with it. `VCOORD_ZSTAR_SIGMA`
+  consumes the same table *fractionally* (rescaled by `z_ref_global(nz)`) and is
+  therefore unaffected by the units and stays accepted — but note that with a
+  uniform table its "z\*-lite in deep water" branch is numerically
+  indistinguishable from `SIGMA`, so the 21 shipped namelists that select it are
+  running sigma.
+- **`&vcoord_nml zstar_h_min > H_VANISHED` is REFUSED** on the geometric
+  (INERT-role) families `ZSTAR_FULL` / `Z_FIXED` — promoted from a warning. On
+  those families the knob is the anti-zero thickness of filler layers that are
+  *meant* to read as vanished downstream; above the D4 skip/merge marker they
+  become dynamically live (EOS, PGF, remap drain, vdiff) while the coordinate
+  still treats them as throwaway. The boundary is a strict `>`: the five shipped
+  namelists that set exactly `1.5e-4` are legal and unaffected. The density
+  families (`RHO` / `HYCOM`) carry the opposite, keep-alive contract on the same
+  knob (`max(zstar_h_min, 2·H_VANISHED)`) and are not policed by this rule.
 - **OBC dispatch wired end-to-end** (2026-06-10, `&ocean_bc_nml` →
   per-edge tags → driver → kernels). Shipped types: WALL (default),
   OPEN (Flather + per-layer zero-gradient baroclinic anomaly), TIDAL
