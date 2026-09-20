@@ -119,6 +119,7 @@ module rdb_ocean_engine
                               configure_ocean_wave_drag, configure_ocean_porous, &
                               configure_ocean_cavity, &
                               configure_ocean_cavity_melt, &
+                              configure_ocean_top_drag, &
                               configure_ocean_wetdry, &
                               configure_ocean_sponge
    use rdb_ocean_stability_audit, only: ocean_stability_audit
@@ -763,6 +764,14 @@ contains
       call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
+      ! Ice-shelf TOP drag (Phase 4a): coefficients + the static FACE
+      ! cover masks projected from `metrics%cover_frac`.  AFTER the
+      ! cover_frac halo exchange and after configure_ocean_cavity_melt
+      ! (it owns the one-C_d rule against the melt slot's cdrag_top),
+      ! BEFORE enter_data (the face masks are host-filled and reach the
+      ! device on the slot's `copyin` map).
+      call configure_ocean_top_drag(cfg, engine%state, engine%grid, rank)
+
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
       ! warm restart (the restart read already replaced the IC).
@@ -1071,7 +1080,8 @@ contains
                                    redi=engine%state%redi, meke=engine%state%meke, &
                                    vmix_tidal=engine%state%vmix_tidal, &
                                    tides=engine%state%tides, &
-                                   psurf=engine%state%p_surf)
+                                   psurf=engine%state%p_surf, &
+                                   td=engine%state%tdrag)
       else
          call profiler_start("ocean_dyn_step")
          call ocean_dyn_step(engine%grid, engine%state%metrics, engine%state%dyn, engine%state%eos, &
@@ -1086,7 +1096,7 @@ contains
                              epbl=engine%state%epbl, kshear=engine%state%kshear, &
                              slopes=engine%state%slopes, &
                              vmix_tidal=engine%state%vmix_tidal, &
-                             bc=engine%state%bc, t=t)
+                             bc=engine%state%bc, t=t, td=engine%state%tdrag)
          call profiler_stop("ocean_dyn_step")
       end if
    end subroutine engine_step

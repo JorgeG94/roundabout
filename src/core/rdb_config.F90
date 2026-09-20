@@ -59,6 +59,7 @@ module rdb_config
              ocean_tracers_config_t, &
              ocean_bt_config_t, ocean_pgf_config_t, ocean_eos_config_t, &
              ocean_bdrag_config_t, &
+             ocean_tdrag_config_t, &
              ocean_hdiff_config_t, &
              ocean_hvisc_config_t, ocean_vmix_config_t, &
              ocean_vdiff_config_t, &
@@ -980,6 +981,53 @@ module rdb_config
          !! forward-Euler (bit-identical) but unstable on thin shelf layers.
          !! Recommend `.true.` for shallow-shelf runs.
    end type ocean_bdrag_config_t
+
+   type :: ocean_tdrag_config_t
+      !! `&ocean_tdrag_nml` — ICE-SHELF TOP drag, the mirror of
+      !! `&ocean_bdrag_nml` at `k = nz`.  Requires
+      !! `&ocean_cavity_dyn_nml enable` (without a draft there is no ice
+      !! base and `cover_frac` is identically zero, so the kernel would
+      !! be a no-op with a cost).  Default `enable = .false.` ⇒ the slot
+      !! is a placeholder, no kernel runs, every path is bit-identical.
+      logical :: enable = .false.
+         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`.
+      character(len=16) :: form = "quadratic"
+         !! Top-drag variant: "quadratic" (default, `du/dt =
+         !! -C_d*|U|*u/h`, the ISOMIP+ prescription) or "linear"
+         !! (Rayleigh `du/dt = -r*u`).  Enum mirrors
+         !! `parse_tdrag_variant` in `rdb_ocean_top_drag`.
+      real(wp) :: cd = 0.0_wp
+         !! Quadratic drag coefficient (dimensionless).  ISOMIP+ value
+         !! 2.5e-3 (Asay-Davis et al. 2016 Table 4).  Zero disables the
+         !! quadratic branch.  When `&ocean_cavity_melt_nml enable`, this
+         !! is THE `C_d` for both momentum and the melt friction
+         !! velocity — see the `cdrag_top` agreement rule in
+         !! `validate_config`.
+      real(wp) :: r = 0.0_wp
+         !! Linear Rayleigh coefficient (1/s).  Active when
+         !! `form = "linear"`.
+      real(wp) :: htbl = 0.0_wp
+         !! Top-boundary-layer thickness (m) the stress is distributed
+         !! over (the mirror of `&ocean_bdrag_nml hbbl`).  Zero (default)
+         !! = layer-`nz`-only.  Positive values keep the explicit drag
+         !! rate finite where a sigma coordinate thins the top layer near
+         !! a grounding line.
+      real(wp) :: bg_vel = 0.0_wp
+         !! Background velocity floor (m/s) in the quadratic speed.
+         !! Zero (default) ⇒ the layer-only quadratic branch is the exact
+         !! algebraic mirror of the bottom drag's.
+      real(wp) :: tbl_thick_min = 0.0_wp
+         !! Minimum effective TBL thickness (m) in the `stress/h_tbl`
+         !! denominator.  Zero (default) falls back to the kernel's
+         !! `h_min` (1e-3 m), matching the bottom drag.
+      logical :: implicit = .false.
+         !! Backward-Euler top drag inside the drag kernel:
+         !! `u^{n+1} = u/(1 + dt*lambda)`, unconditionally stable for any
+         !! top-layer thickness.  Default `.false.` = explicit forward
+         !! Euler (bit-identical to the pre-knob path, but conditionally
+         !! unstable when `lambda*dt > 1`).  Mutually exclusive with
+         !! `&ocean_vdiff_nml implicit_top_drag`.
+   end type ocean_tdrag_config_t
 
    type :: ocean_hdiff_config_t
       !! `&ocean_hdiff_nml` — along-coordinate tracer Laplacian
@@ -2720,6 +2768,9 @@ module rdb_config
       type(ocean_pgf_config_t)        :: pgf
       type(ocean_eos_config_t)        :: eos
       type(ocean_bdrag_config_t)      :: bdrag
+      type(ocean_tdrag_config_t)      :: tdrag
+         !! Ice-shelf TOP drag (`&ocean_tdrag_nml`).  Default off ⇒
+         !! bit-identical.
       type(ocean_hdiff_config_t)      :: hdiff
          !! Along-coordinate tracer Laplacian (`&ocean_hdiff_nml`).
          !! Default `kappa_h = 0.0` ⇒ bit-identical.
@@ -3569,6 +3620,8 @@ contains
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 bkgnd_henyey_conflicts_profile
       use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID
+      use rdb_ocean_top_drag, only: parse_tdrag_variant, tdrag_variant_is_implemented, &
+                                    TDRAG_LINEAR, TDRAG_QUADRATIC
       use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
                                        CAVITY_LAW_INVALID, CAVITY_LAW_CONST_GAMMA, &
                                        CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25, &
@@ -5119,6 +5172,83 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- Ice-shelf TOP drag (&ocean_tdrag_nml, Phase 4a) ----
+      ! Default off ⇒ this whole block is skipped and every path is
+      ! bit-identical.  Every restriction below fails loud: a top drag
+      ! that is silently inert (no cover, no coefficient) is worse than
+      ! no top drag, because a cavity circulation would then be
+      ! frictionless at the ice and LOOK like it was damped.
+      if (cfg%ocean%tdrag%enable) then
+         if (.not. cfg%ocean%cavity_dyn%enable) then
+            call logger%error("&ocean_tdrag_nml enable=.true. requires "// &
+                              "&ocean_cavity_dyn_nml enable=.true.  The top drag "// &
+                              "stands on that group's geometry: without a draft "// &
+                              "there is no ice base, cover_frac is identically zero, "// &
+                              "and every face mask would be zero — an inert kernel "// &
+                              "with a cost.  An OPEN surface's momentum boundary "// &
+                              "condition is the wind stress (&ocean_topo_nml "// &
+                              "wind_config), not a drag.")
+            has_error = .true.
+         end if
+         block
+            integer :: tdrag_code
+            tdrag_code = parse_tdrag_variant(cfg%ocean%tdrag%form)
+            if (.not. tdrag_variant_is_implemented(tdrag_code)) then
+               call logger%error("&ocean_tdrag_nml form = '"// &
+                                 trim(adjustl(cfg%ocean%tdrag%form))// &
+                                 "' is not recognised (quadratic|linear).  The two "// &
+                                 "forms take coefficients of DIFFERENT dimensions "// &
+                                 "(cd dimensionless, r in 1/s), so a typo cannot be "// &
+                                 "defaulted.")
+               has_error = .true.
+            else if (tdrag_code == TDRAG_QUADRATIC .and. cfg%ocean%tdrag%cd <= 0.0_wp) then
+               call logger%error("&ocean_tdrag_nml form='quadratic' requires cd > 0 "// &
+                                 "(ISOMIP+ prescribes 2.5e-3).  cd = 0 is an "// &
+                                 "identically zero drag, which is what enable=.false. "// &
+                                 "is for.")
+               has_error = .true.
+            else if (tdrag_code == TDRAG_LINEAR .and. cfg%ocean%tdrag%r <= 0.0_wp) then
+               call logger%error("&ocean_tdrag_nml form='linear' requires r > 0 "// &
+                                 "(1/s).  r = 0 is an identically zero drag, which "// &
+                                 "is what enable=.false. is for.")
+               has_error = .true.
+            end if
+            ! ---- ONE drag coefficient for momentum and melt ----
+            ! MOM6 carries two independent top-drag coefficients (one in
+            ! the momentum BC, one in the melt u*); we deliberately do
+            ! not.  A cavity in which the ice base takes momentum out of
+            ! the flow at one C_d and reports a friction velocity built
+            ! on another is not a closure, it is two closures sharing a
+            ! boundary.  So: when both groups are on, the melt slot TAKES
+            ! its C_d from this group (`configure_ocean_cavity_melt`), and
+            ! a user who set both to DIFFERENT values is told rather than
+            ! silently overridden.
+            if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_QUADRATIC) then
+               if (cfg%ocean%cavity_melt%cdrag_top /= cfg%ocean%tdrag%cd) then
+                  call logger%error("&ocean_tdrag_nml cd = "// &
+                                    to_string(cfg%ocean%tdrag%cd)//" and "// &
+                                    "&ocean_cavity_melt_nml cdrag_top = "// &
+                                    to_string(cfg%ocean%cavity_melt%cdrag_top)// &
+                                    " disagree.  There is ONE ice-base drag "// &
+                                    "coefficient in this model: the same C_d sets "// &
+                                    "the momentum sink and the melt friction "// &
+                                    "velocity u* = sqrt(C_d*(U^2 + u_tide^2)).  Set "// &
+                                    "them equal (or leave cdrag_top at its default "// &
+                                    "and set &ocean_tdrag_nml cd alone).")
+                  has_error = .true.
+               end if
+            end if
+            if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_LINEAR) then
+               call logger%warning("&ocean_tdrag_nml form='linear' with "// &
+                                   "&ocean_cavity_melt_nml enable=.true.: the melt "// &
+                                   "friction velocity is quadratic by construction "// &
+                                   "(u* = sqrt(C_d*(U^2 + u_tide^2))), so it keeps "// &
+                                   "its own cdrag_top and the momentum sink uses r. "// &
+                                   "The two boundary conditions are then NOT the "// &
+                                   "same closure — intended for analytic work only.")
+            end if
+         end block
+      end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its
       ! validated envelope is the coastal ZSTAR_FULL salt-leak foot-gun class.
@@ -6350,6 +6480,7 @@ contains
       call register_ocean_pgf(cfg, schema)
       call register_ocean_eos(cfg, schema)
       call register_ocean_bdrag(cfg, schema)
+      call register_ocean_tdrag(cfg, schema)
       call register_ocean_hdiff(cfg, schema)
       call register_ocean_hvisc(cfg, schema)
       call register_ocean_vmix(cfg, schema)
@@ -8469,6 +8600,52 @@ contains
                              "Backward-Euler implicit drag (stable for thin bottom layers)"))
       call schema%add_group(g)
    end subroutine register_ocean_bdrag
+
+   subroutine register_ocean_tdrag(cfg, schema)
+      !! `&ocean_tdrag_nml`: ice-shelf TOP-drag selector + coefficients.
+      !! `form` enum mirrors `parse_tdrag_variant` in rdb_ocean_top_drag.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+      logical, pointer :: pl
+
+      g%name = "ocean_tdrag"
+      g%doc = "Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."
+      pl => cfg%ocean%tdrag%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Enable the ice-shelf top drag (requires "// &
+                             "&ocean_cavity_dyn_nml enable)"))
+      ps => cfg%ocean%tdrag%form
+      call g%add(nml_enum("form", ps, "Top-drag variant", &
+                          allowed=[character(len=9) :: "quadratic", "linear"]))
+      pr => cfg%ocean%tdrag%cd
+      call g%add(nml_real("cd", pr, &
+                          "Quadratic top-drag coefficient (0 disables); must equal "// &
+                          "&ocean_cavity_melt_nml cdrag_top when melt is on", &
+                          min=0.0_wp))
+      pr => cfg%ocean%tdrag%r
+      call g%add(nml_real("r", pr, "Linear Rayleigh top-drag coefficient (0 disables)", &
+                          units="1/s", min=0.0_wp))
+      pr => cfg%ocean%tdrag%htbl
+      call g%add(nml_real("htbl", pr, &
+                          "Top-boundary-layer thickness for distributed drag "// &
+                          "(0 = layer-nz only)", units="m", min=0.0_wp))
+      pr => cfg%ocean%tdrag%bg_vel
+      call g%add(nml_real("bg_vel", pr, &
+                          "Background velocity floor in the quadratic top-drag speed", &
+                          units="m/s", min=0.0_wp))
+      pr => cfg%ocean%tdrag%tbl_thick_min
+      call g%add(nml_real("tbl_thick_min", pr, &
+                          "Minimum effective TBL thickness (0 = fall back to h_min)", &
+                          units="m", min=0.0_wp))
+      pl => cfg%ocean%tdrag%implicit
+      call g%add(nml_logical("implicit", pl, &
+                             "Backward-Euler top drag inside the drag kernel "// &
+                             "(stable for thin top layers)"))
+      call schema%add_group(g)
+   end subroutine register_ocean_tdrag
 
    subroutine register_ocean_hdiff(cfg, schema)
       !! `&ocean_hdiff_nml`: along-coordinate tracer Laplacian

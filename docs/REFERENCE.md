@@ -440,9 +440,27 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   THIRD consumer, after the FV-MOM6 top BC and the in-situ EOS.
   Requires `&ocean_cavity_dyn_nml`, `tfreeze_set="isomip"` and the
   surface-flux component set; refused with atmospheric forcing (no
-  cover mask yet). No top drag, and KPP/EPBL do not see the shelf
-  `u*`. See
+  cover mask yet). KPP/EPBL still do not see the shelf `u*`; the
+  ice-base MOMENTUM sink is the separate `&ocean_tdrag_nml` below. See
   [`CAPABILITIES_AND_LIMITATIONS.md`](CAPABILITIES_AND_LIMITATIONS.md).
+- **Ice-shelf top drag** (`&ocean_tdrag_nml`, default off ⇒
+  bit-identical) — a quadratic (ISOMIP+ `C_d = 2.5e-3`) or linear
+  (`form="linear"`, rate `r`) momentum sink at `k = nz` on ice-covered
+  faces: the mirror of `&ocean_bdrag_nml` about the middle of the
+  column. `htbl > 0` distributes the stress over the top boundary
+  layer exactly as `hbbl` does at the bed; `implicit = .true.` makes
+  the kernel backward-Euler (`u/(1 + dt·λ)`), unconditionally stable
+  on the thin top layers a sigma coordinate leaves near a grounding
+  line. A face is under ice if **either** abutting cell is
+  (`cover_u = max(cover(i−1,j), cover(i,j))`), so the calving-front
+  face feels the drag — the conservative choice, documented in
+  `rdb_ocean_top_drag`. Requires `&ocean_cavity_dyn_nml enable`. With
+  `&ocean_cavity_melt_nml` on there is **one** ice-base drag
+  coefficient: the melt `u*` takes `&ocean_tdrag_nml cd`, and a
+  disagreeing `cdrag_top` is refused at configure. The tendency
+  reaches the barotropic mode through `F_slow`, like the bottom
+  drag's. The slot publishes `stress_top` (cell-centred `|τ_top|`,
+  N/m²) for a later `ustar_shelf` consumer; nothing reads it yet.
 - **Interior land masking** (static free-slip walls via metric-zeroing)
   and **dynamic wet/dry** (`&ocean_wetdry_nml`; sigma / z*-lite,
   single-rank, positive-definite outflow limiter).

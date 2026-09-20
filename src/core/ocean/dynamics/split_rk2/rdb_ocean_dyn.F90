@@ -33,6 +33,7 @@ module rdb_ocean_dyn
    use rdb_barotropic_coupling, only: derive_bt_from_layers, &
                                       compute_h_face_upstream, &
                                       sum_slow_tendencies_into_F_slow, &
+                                      add_top_drag_into_F_slow, &
                                       subtract_fast_cor_ref, &
                                       set_cor_ref_velocity, &
                                       face_depth_mean_u, face_depth_mean_v, &
@@ -82,6 +83,9 @@ module rdb_ocean_dyn
    use rdb_ocean_varmix, only: ocean_varmix_t, varmix_compute
    use rdb_ocean_meke, only: ocean_meke_t, meke_step, meke_backscatter_apply
    use rdb_ocean_wave_speed, only: ocean_wave_speed_t, wavespeed_compute
+   use rdb_ocean_top_drag, only: ocean_top_drag_t, &
+                                 ocean_top_drag_compute_tendencies, &
+                                 ocean_top_drag_apply_tendencies
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t, &
                                     ocean_bottom_drag_compute_tendencies, &
                                     ocean_bottom_drag_apply_tendencies, &
@@ -822,7 +826,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_barotropic
 
-   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t)
+   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t, td)
       !! Multilayer extension of `ocean_dyn_step_barotropic`.  One
       !! SSP-RK2 outer step that orchestrates the full per-layer
       !! dynamical core:
@@ -860,6 +864,12 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -913,12 +923,12 @@ contains
       ! ---- Stage 1: tendencies at u^n, FE step -> u^(1) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 1, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td)
 
       ! ---- Stage 2: tendencies at u^(1), FE step -> u^(1) + dt*L(u^(1)) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 2, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td)
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
       call rk2_average(ms)
@@ -974,7 +984,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step
 
-   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal)
+   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, td)
       !! One FE stage of the multilayer step.  Order of operations:
       !!
       !!   1. EOS: rho_layer <- linear(T, S)
@@ -1006,6 +1016,12 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -1058,6 +1074,10 @@ contains
       call ocean_horizontal_viscosity_compute_ke_diss(hv, ms)
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
+      ! Ice-shelf top drag (`&ocean_tdrag_nml`).  Sits with the other slow
+      ! velocity-tendency computes; the kernel returns immediately when the
+      ! slot is disabled, so an ordinary run pays one host branch.
+      if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)
 
       ! Horizontal step + tracer chain.  Continuity-tracer is
@@ -1109,6 +1129,15 @@ contains
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
+      ! Top drag: same double-count guard as the bed.  `implicit_fold`
+      ! (`&ocean_vdiff_nml implicit_top_drag`) folds the rate into the
+      ! vdiff `k = nz` diagonal instead, so the explicit apply is skipped
+      ! there.
+      if (present(td)) then
+         if (.not. td%implicit_fold) then
+            call ocean_top_drag_apply_tendencies(td, ms, dt, no_wait=.true.)
+         end if
+      end if
       if (.not. vd%implicit_stress) then
          call ocean_surface_stress_apply_tendencies(ss, ms, dt, no_wait=.true.)
       end if
@@ -2229,7 +2258,7 @@ contains
    subroutine ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, dt, n_inner, sf, geo, vcoord, bc, sp, t, &
                                    lateral_mix, epbl, kshear, mle, slopes, gm, varmix, wavespeed, &
-                                   redi, meke, vmix_tidal, tides, psurf)
+                                   redi, meke, vmix_tidal, tides, psurf, td)
       !! Split-explicit SSP-RK2 outer step on the multilayer state.
       !! Parallel to `ocean_dyn_step` (the unsplit driver
       !! still ships for tests + reference).  Phase 4b-MVP scope:
@@ -2277,6 +2306,12 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -2717,20 +2752,20 @@ contains
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=psurf%eta_seam)
+                                 eta_forcing=psurf%eta_seam, td=td)
          else if (tide_on) then
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=tides%eta_forcing)
+                                 eta_forcing=tides%eta_forcing, td=td)
          else
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
-                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke)
+                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, td=td)
          end if
          ! pred_corr between-stage reset (SPEC §2): the predictor's
          ! provisional up/vp/hp are discarded — only u_av/v_av/h_av carry
@@ -3454,7 +3489,7 @@ contains
    subroutine run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                               va, hd, vd, vmix, ms, dt, n_inner, sf, geo, stage, vcoord, bc, sp, t, &
                               lateral_mix, epbl, kshear, mle, gm, redi, varmix, vmix_tidal, meke, &
-                              eta_forcing)
+                              eta_forcing, td)
       !! One FE stage of the split-explicit step.  See the
       !! `ocean_dyn_step_split` header for the design.
       type(hgrid_t), intent(in) :: grid
@@ -3468,6 +3503,12 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -3797,6 +3838,8 @@ contains
       call profiler_start("ocean_bdrag")
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
+      ! Ice-shelf top drag (`&ocean_tdrag_nml`) — see `run_stage`.
+      if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
       call profiler_stop("ocean_bdrag")
       call profiler_start("ocean_surfstress")
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)
@@ -3859,6 +3902,13 @@ contains
          call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
       end if
       call sum_slow_tendencies_into_F_slow(dyn%bt_work, pgf, cor, hv, bd, ss, ms)
+      ! The top drag MUST reach the barotropic mode the same way the
+      ! bottom drag does — through the depth mean of `F_slow`, which the
+      ! substep integrates and `apply_bt_correction` then subtracts back
+      ! out.  See `add_top_drag_into_F_slow`'s docstring for why a
+      ! tendency left out of this sum is both invisible to the fast loop
+      ! and mis-corrected on the layers.
+      if (present(td)) call add_top_drag_into_F_slow(dyn%bt_work, td, ms)
       ! MOM6 wt_u parity (`&ocean_bt_nml forcing_visc_rem`): weight the
       ! forcing depth-mean by h·visc_rem so layers the implicit friction
       ! will immediately damp (grounded stacks under the vdiff BBL glue)
@@ -4117,6 +4167,12 @@ contains
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)
+      ! Top drag: same double-count guard as the bed (see `run_stage`).
+      if (present(td)) then
+         if (.not. td%implicit_fold) then
+            call ocean_top_drag_apply_tendencies(td, ms, dt_vel, no_wait=.true.)
+         end if
+      end if
       if (.not. vd%implicit_stress) then
          call ocean_surface_stress_apply_tendencies(ss, ms, dt_vel, no_wait=.true.)
       end if

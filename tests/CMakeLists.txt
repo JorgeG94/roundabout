@@ -265,6 +265,7 @@ set(RDB_TESTS
     "test_ocean_baroclinic_stommel|test_ocean_baroclinic_longrun|collect_ocean_baroclinic_stommel_tests|ocean_baroclinic_stommel|ocean"
     "test_ocean_baroclinic_budget|test_ocean_baroclinic_longrun|collect_ocean_baroclinic_budget_tests|ocean_baroclinic_budget|ocean"
     "test_ocean_bottom_drag|test_ocean_bottom_drag|collect_ocean_bottom_drag_tests|ocean_bottom_drag|ocean"
+    "test_ocean_top_drag|test_ocean_top_drag|collect_ocean_top_drag_tests|ocean_top_drag|ocean"
     "test_ppm_limit_pos|test_ppm_limit_pos|collect_ppm_limit_pos_tests|ppm_limit_pos|ocean"
     "test_ocean_bt_corrector_bc_pgf|test_ocean_bt_corrector_bc_pgf|collect_bt_corrector_bc_pgf_tests|ocean_bt_corrector_bc_pgf|ocean"
     "test_ocean_bt_substep_drag|test_ocean_bt_substep_drag|collect_bt_substep_drag_tests|ocean_bt_substep_drag|ocean"
