@@ -244,18 +244,61 @@ Listed rather than worked around. The first is decisive on its own.
    this directory is tuned to a melt rate, deliberately.
 4. **No-slip walls are NOT AVAILABLE** (Sect. 3.1.4). The static land mask
    is free-slip. The paper anticipates this and asks that it be noted.
-5. **The sloping-lid resting-state growth mode is under investigation.**
+5. **DECISIVE — the σ pressure-gradient truncation over the ISOMIP+ BED
+   kills the run at day 3.2.** `ocean0_idealised_draft.nml` runs cleanly
+   for one simulated day (all the stability suite used to exercise), and
+   then aborts between day 3 and 4 on the melt driver's non-finite guard.
+   **The melt solver is the detector, not the site.**
+
+   The ISOMIP+ channel-wall term (their Eq. 4, `d_c = 500 m`,
+   `f_c = 4 km`) has a maximum bed slope of `d_c/(4 f_c) = 62.5 m km⁻¹`,
+   i.e. **122 m per 2 km cell**. At the trough sidewall a 23.1 m water
+   column therefore sits beside a 145.5 m one across a single face —
+   stiffness `rx0 = |ΔH|/(H_a+H_b) = 0.726`, **3.6× the classical
+   Beckmann & Haidvogel (1993) σ bound of 0.2**, with 168 wet-wet faces
+   over it. Under σ both columns get the same 36 layers, so their `K`-th
+   interfaces are offset by up to `Δe = 122 m`, and the derived
+   truncation `a_peak = N²Δe³/(6·dx·H̄)` (see
+   `../ice_shelf_cavity/README.md`) reads **`1.48E-05 m s⁻²`** there —
+   **3 958×** the sloping-lid case's `3.73E-09`, and `U = a/|f| = 10.5 cm
+   s⁻¹` of spurious geostrophic flow. That spins the sidewall row up on a
+   ~1-day e-folding, hits `&ocean_pgf_nml maxvel` at step 907, drives
+   `bt_eta` to **−36.8 m in a ≤ 23 m column** at step 909, and produces a
+   **negative `h_layer` (−0.710 m)** at step 910.
+
+   It is **not** melt, the freshwater form, the explicit top/bottom drag,
+   the sponge, the calving front, convective adjustment, `Γ_T`, the
+   barotropic substep count or the outer split — each was substituted and
+   each is inert (melt off merely moves the failure to day 3.6). It IS the
+   stratified σ PGF error and nothing else: with **uniform density** the
+   identical geometry holds `En = 8.5E-22` — machine zero — for 7 days,
+   `nz = 12/18/36/72` all fail within 0.2 day of each other (the
+   truncation is `nz`-independent, as derived), and a **flat lid** over the
+   same bed still fails, so the dominant tilted boundary is the BED, not
+   the ice base.
+
+   **No protocol-compatible knob fixes it, and the palliatives are worse
+   than the crash.** `h_min_cavity` 25/30/50 m → day 7.6/11.2/19.8;
+   `nu_h` 20/60 → day 14.2/25.2. Only `nu_h = 600` (100× Table 4, so not
+   ISOMIP+ any more) and `dt = 75 s` reach 30 days, and both do it by
+   letting the spurious mode SATURATE — at `En = 1.4E-04` and `9.4E-04`
+   respectively, i.e. 1.7 and 4.3 cm s⁻¹ rms against a real cavity
+   circulation of a few cm s⁻¹. **These namelists are therefore left
+   unchanged**: converting a loud crash into a quiet wrong answer is not
+   a fix. The fix is Phase 6 (the sloping-coordinate PGF corrections).
+   `ocean_stability_audit` now WARNS at configure with the computed `rx0`.
+   Full write-up: `design/cavity_rest_growth_diagnosis.md`
+   §"ISOMIP+ Ocean0 idealised: day-3 blow-up" in the prototypes repo.
+6. **The sloping-lid resting-state growth mode.**
    See `../ice_shelf_cavity/README.md`: a resting stratified cavity under a
    sloping lid holds the derived PGF-truncation plateau for ~20 days and
-   then leaves it on a ~3.2-day e-folding before saturating. ISOMIP+'s own
-   `ν_H = 6.0` only delays it ~10 days. It is bounded and diagnosed (it is
-   entirely downstream of the sloping-lid PGF error), but it is a spurious
-   energy source sitting under every run in this directory, and a 20-year
-   Ocean1/Ocean2 integrates it for a long time.
-6. **No-slip walls (4), the untuned `Γ_T` (3) and the sloping-lid mode (5)
-   are the remaining blockers.** The grounded-cavity budget defect that used
-   to be listed here is FIXED — see the next section — and so is the
-   virtual-meltwater blocker (1).
+   then leaves it on a ~3.2-day e-folding before saturating. Same term as
+   (5), 4 000× weaker because the flat-bed case's only tilted boundary is
+   the 13.8 m lid step. It is bounded there; here it is not.
+7. **No-slip walls (4), the untuned `Γ_T` (3) and the σ PGF truncation
+   (5, 6) are the remaining blockers, and (5) is decisive.** The
+   grounded-cavity budget defect that used to be listed here is FIXED —
+   see the next section — and so is the virtual-meltwater blocker (1).
 
 These namelists are registered in
 `tests/regression/stability_manifest.py` as
