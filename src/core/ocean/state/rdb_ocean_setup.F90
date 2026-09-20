@@ -35,7 +35,9 @@ module rdb_ocean_setup
                                     LMIX_LEITH, LMIX_SMAGORINSKY, &
                                     LMIX_BIHARMONIC, LMIX_LEITH_BIHARM
    use rdb_ocean_horizontal_viscosity, only: ocean_hvisc_set_aniso_direction
-   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_derived
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_derived, &
+                                       ocean_surface_stress_apply_cover
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_apply_cover_const
    use rdb_coriolis_adv, only: parse_pv_variant, PV_VARIANT_SADOURNY_HK, &
                                CORNER_H_CELL_MEAN, CORNER_H_MOM6_AREA, &
                                parse_pv_adv_scheme
@@ -3142,6 +3144,35 @@ contains
             return
          end if
       end if
+
+      ! ---- Cover mask on the atmospheric forcing (P2c) ----
+      ! There is no atmosphere under an ice shelf.  Two static forcing
+      ! fields are masked ONCE, here, because this is the first point at
+      ! which `cover_frac` exists AND the forcing has been seeded
+      ! (`configure_ocean_forcing` runs much earlier, before the cavity
+      ! geometry):
+      !
+      !   * the wind-stress PAIR, masked on every face touching a covered
+      !     cell and followed by the `stress_mag` refresh in the same
+      !     call — see `ocean_surface_stress_apply_cover`.  Masking the
+      !     source rather than the derived views is what also silences
+      !     the implicit vdiff stress fold and the MLE front sampler,
+      !     which read `ss%tau_x` raw;
+      !   * the SCALAR `&ocean_thermo_nml q_heat` / `q_salt` fill, but
+      !     ONLY when the component set is off.  With components on those
+      !     two are assembler outputs and the mask belongs in
+      !     `ocean_surface_flux_assemble` (a second writer here would
+      !     break the fill contract); the call below no-ops itself in
+      !     that case.
+      !
+      ! Both are host-side and both run BEFORE `ocean_state_enter_data`,
+      ! so the masked values are what the device map captures.  Both are
+      ! idempotent.  The time-varying twin of the wind mask lives in
+      ! `ocean_seam_refresh_surface_stress` (per data-forcing bracket).
+      call ocean_surface_stress_apply_cover(ocean_state%surface_stress, &
+                                            ocean_state%metrics%cover_frac)
+      call ocean_surface_flux_apply_cover_const(ocean_state%surface_flux, &
+                                                ocean_state%metrics%cover_frac)
 
       if (compute_rank == 0) then
          call logger%info("Ice-shelf cavity: isostatic load p_ice_ref = "// &
