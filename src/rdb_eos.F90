@@ -272,12 +272,45 @@ module rdb_eos
          !! Haline contraction coeff (linear EOS), kg/m^3 per PSU.
          !! See `alpha_T` for the rationale on this small default.
       real(wp) :: p_ref = 0.0_wp
-         !! Reference pressure for the Wright EOS evaluation (Pa).
-         !! Phase Tier-1 evaluates ρ at p_ref = 0 (surface) — gives
-         !! the nonlinear-in-(T, S) ρ that cabbeling and densification
-         !! tests need.  The FV-PGF integration path uses the in-situ
-         !! hydrostatic pressure at each layer centre (its own column
-         !! scratch on the PGF state, not an EOS field).
+         !! Reference pressure (Pa) at which `eos_compute_arrays` evaluates
+         !! `ms%rho_layer` — i.e. the pressure the model's POTENTIAL
+         !! density is referenced to.  Set from `&ocean_eos_nml p_ref`
+         !! (default 0 ⇒ surface/potential density, bit-identical to every
+         !! run before the knob existed).  The Wright and Roquet branches
+         !! read it; the linear branch has no pressure dependence and
+         !! ignores it.
+         !!
+         !! **It is a SCALAR on purpose and must stay horizontally
+         !! uniform.** `rho_layer` is differenced ALONG a layer (the
+         !! Montgomery PGF, the FV-lite / FV-MOM6-PCM integrands) and
+         !! VERTICALLY (the vmix N² builders); a reference pressure that
+         !! varied with `(i,j)` would make two columns of identical water
+         !! at the same geopotential depth differ by `∂ρ/∂p · Δp_ref` and
+         !! manufacture an along-layer density gradient out of nothing.
+         !! A surface load therefore belongs in the IN-SITU pressure
+         !! builders (`&ocean_psurf_nml in_eos` →
+         !! `multilayer_state_t%p_top`), never here.
+         !!
+         !! What raising it DOES buy: the thermobaric state at which the
+         !! effective α/β are evaluated.  Near the freezing point at
+         !! cavity pressures the sign and magnitude of thermal expansion
+         !! move appreciably, so a cavity or deep-ocean study is better
+         !! referenced to a representative depth (2e7 Pa ≈ 2000 dbar) than
+         !! to the surface — the usual σ₂ choice.
+         !!
+         !! Distinct from `&vcoord_nml rho_ref_pressure`, which references
+         !! the RHO / HYCOM target-density COORDINATE and the density-space
+         !! diagnostic remap.  They are independent knobs; for a
+         !! density-coordinate run they should normally be set to the SAME
+         !! value, so the coordinate and the dynamics agree on what
+         !! "density" means (they are deliberately not tied together —
+         !! a diagnostic remap to σ₂ under a σ₀ dynamics is a legitimate,
+         !! if unusual, request).
+         !!
+         !! Flat POD: read BY VALUE into `eos_compute_arrays`' `_impl`
+         !! calls, so a host assignment at configure needs no
+         !! `!$acc update device` under `mem:separate` (same contract as
+         !! `rho0`).
       integer :: ts_convention = TS_POT_PRAC
          !! Tracer T/S convention this EOS expects (TS_POT_PRAC /
          !! TS_CONS_ABS).  Identity for linear + Wright.  This type is
@@ -363,9 +396,24 @@ contains
       !! `rdb_ocean_eos_compute`), which forwards the multilayer state's
       !! registry arrays here.  Kept free of state-type dependencies so
       !! the dispatch stays callable from a bare array context.  All impls
-      !! evaluate at the fixed reference pressure `eos%p_ref` (default 0
-      !! ⇒ surface/potential density) with the `H_VANISHED` vanishing-
-      !! layer fallback to `eos%rho0`.
+      !! evaluate at the SINGLE, HORIZONTALLY UNIFORM reference pressure
+      !! `eos%p_ref` (`&ocean_eos_nml p_ref`, default 0 ⇒ surface/potential
+      !! density) with the `H_VANISHED` vanishing-layer fallback to
+      !! `eos%rho0`.
+      !!
+      !! **`rho_layer` is a POTENTIAL density and its reference pressure
+      !! MUST stay horizontally uniform.**  Its consumers difference it
+      !! ALONG a layer (the Montgomery PGF's `rho_layer(i) −
+      !! rho_layer(i−1)`, the FV-lite / FV-MOM6-PCM integrands) and
+      !! VERTICALLY (the vmix N² builders).  A reference pressure that
+      !! varied with `(i,j)` — e.g. one carrying a sloping ice-shelf load —
+      !! would give two columns of IDENTICAL water at the same geopotential
+      !! depth densities differing by `∂ρ/∂p · Δp_top` (≈ 4.5e-7 × 5e6 ≈
+      !! 2 kg/m³ across a calving front), i.e. a large, entirely spurious
+      !! along-layer density gradient and therefore a spurious PGF.  The
+      !! surface load belongs in the IN-SITU pressure builders instead
+      !! (`&ocean_psurf_nml in_eos` → `multilayer_state_t%p_top`, consumed
+      !! by `eos_wright_pgf_column_sweep_impl`), never here.
       type(eos_t), intent(in) :: eos
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
@@ -450,9 +498,10 @@ contains
    pure subroutine eos_wright_impl(h_layer, hS_layer, hT_layer, rho_layer, &
                                    rho_0, p_ref, nx, ny, nz)
       !! Wright (1997) rational EOS evaluated at a single reference
-      !! pressure `p_ref`.  Same outer-shim signature as
-      !! `eos_linear_impl` — bare 3D arrays, vanishing-layer
-      !! fallback to `rho_0`.
+      !! pressure `p_ref`, which is a SCALAR by design — see the
+      !! horizontal-uniformity contract in `eos_compute_arrays`.  Same
+      !! outer-shim signature as `eos_linear_impl` — bare 3D arrays,
+      !! vanishing-layer fallback to `rho_0`.
       !!
       !!   α_0(T, S) = a0 + a1*T + a2*S
       !!   p_0(T, S) = b0 + b1*T + b2*T^2 + b3*T^3 + b4*S + b5*S*T
@@ -502,9 +551,11 @@ contains
    pure subroutine eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
                                        rho_0, p_ref, nx, ny, nz)
       !! Roquet et al. (2015) SpV EOS evaluated at a single reference
-      !! pressure `p_ref`.  Same outer-shim signature as
-      !! `eos_linear_impl`/`eos_wright_impl` — bare 3D arrays, model
-      !! (PT, SP) tracers, vanishing-layer fallback to `rho_0`.
+      !! pressure `p_ref` (a SCALAR by design — see the
+      !! horizontal-uniformity contract in `eos_compute_arrays`).  Same
+      !! outer-shim signature as `eos_linear_impl`/`eos_wright_impl` —
+      !! bare 3D arrays, model (PT, SP) tracers, vanishing-layer fallback
+      !! to `rho_0`.
       !!
       !! Density = 1 / SV(CT(SR,PT), SR, p_ref) with SR = SP·(35.16504/35)
       !! and CT = ct_from_pt(SR, PT) — the conversions live inside the
@@ -539,7 +590,7 @@ contains
    end subroutine eos_roquet_spv_impl
 
    pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, hS_layer, hT_layer, &
-                                                    rho_layer_seed, p_edge_out, &
+                                                    rho_layer_seed, p_top, p_edge_out, &
                                                     rho_insitu_out, gravity, rho_0, &
                                                     nx, ny, nz)
       !! FV-Wright PGF column sweep.  Top-down per-column traversal
@@ -550,15 +601,42 @@ contains
       !! For each layer k from the surface (k=nz) down to the bed
       !! (k=1) we use a single Picard step:
       !!
-      !!   1. Seed the half-layer pressure with the surface-evaluated
-      !!      density `rho_layer_seed` (= ms%rho_layer, the EOS output
-      !!      at p_ref=0):
-      !!         p_centre_seed = p_above + 0.5 * g * rho_seed * h
+      !!   1. Seed the half-layer pressure with the potential density
+      !!      `rho_layer_seed` (= ms%rho_layer, the EOS output at the
+      !!      uniform `eos%p_ref`):
+      !!         p_centre_seed = p_top + p_above + 0.5 * g * rho_seed * h
       !!   2. Re-evaluate Wright at the seed pressure:
       !!         rho_insitu(k) = ρ(T_k, S_k, p_centre_seed)
       !!   3. Accumulate the bottom edge of layer k using the in-situ
       !!      density:
       !!         p_edge(k) = p_above + g * rho_insitu(k) * h
+      !!
+      !! This is the ONE genuinely IN-SITU pressure the EOS core builds:
+      !! `p_centre_seed` is a true per-layer hydrostatic pressure, so a
+      !! per-column `p_top(i,j)` belongs in it (`&ocean_psurf_nml in_eos`).
+      !! It is NOT the potential-density trap that keeps `eos%p_ref` a
+      !! scalar: `rho_insitu` is consumed only (a) as the integrand of
+      !! THIS column's `p_edge` stack and (b) as `rho_face`, the
+      !! two-point AVERAGE coefficient multiplying `Δz_centre` in the
+      !! PGF's z-correction (`ocean_pressure_force_compute` Pass 2/3).
+      !! Neither differences it along a layer, so a horizontally varying
+      !! `p_top` cannot manufacture an along-layer density gradient here —
+      !! and the density really IS higher under a thicker draft, so the
+      !! `rho_face` coefficient becomes MORE correct, not less.
+      !!
+      !! **`p_top` reaches the EOS ARGUMENT only.**  `p_edge_out` stays an
+      !! anomaly stack seeded at `p_edge_out(nz+1) = 0` exactly as before,
+      !! so the PGF top boundary condition is untouched.  Consequence,
+      !! stated plainly: under a SLOPING load the along-layer difference
+      !! `p_centre(i) − p_centre(i−1)` omits `Δp_top`.  That term is
+      !! depth-uniform and is already carried by the barotropic
+      !! `eta_forcing` seam as `−(1/ρ₀)∇p_surf`, so the momentum is not
+      !! missing it — adding it here as well would DOUBLE-COUNT.  What
+      !! moves in this kernel is the COMPRESSIBILITY: `rho_insitu` is
+      !! evaluated at the pressure the water actually sits at, which is
+      !! the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.
+      !! Bit-identical when `p_top` is the zero array it ships as
+      !! (`p_top + p_above` is `p_above` exactly under IEEE-754).
       !!
       !! This is one Picard iteration of the implicit
       !!   p_centre(k) = p_above + 0.5*g*ρ(T, S, p_centre(k))*h.
@@ -567,9 +645,12 @@ contains
       !!
       !! `rho_layer_seed` must be `ms%rho_layer` from
       !! `ocean_eos_compute` with `EOS_VARIANT_WRIGHT_97` —
-      !! the seed is the *full* nonlinear ρ at p_ref=0, not a Boussinesq
-      !! constant; this avoids a second Picard iteration in 99% of
-      !! cases.
+      !! the seed is the *full* nonlinear ρ at `eos%p_ref`, not a
+      !! Boussinesq constant; this avoids a second Picard iteration in
+      !! 99% of cases.  The seed enters only a HALF-LAYER increment, so
+      !! a seed offset `Δρ` costs `0.5·g·Δρ·h` of pressure (≈ 5 kPa out
+      !! of 1e7 Pa for `Δρ = 5`, i.e. ~5e-4 relative); referencing
+      !! `p_ref` near the working pressure makes the seed better still.
       !!
       !! Vanishing-layer fallback: if `h_layer(k) <= 0` the Wright eval
       !! is skipped and `rho_insitu(k) = rho_0` — matches the existing
@@ -583,19 +664,23 @@ contains
       real(wp), intent(in) :: hS_layer(nx, ny, nz)
       real(wp), intent(in) :: hT_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_layer_seed(nx, ny, nz)
+      real(wp), intent(in) :: p_top(nx, ny)
+         !! Top-of-column pressure (Pa, `>= 0`) the EOS argument is
+         !! measured down from.  Does NOT enter `p_edge_out`.
       real(wp), intent(out) :: p_edge_out(nx, ny, nz + 1)
       real(wp), intent(out) :: rho_insitu_out(nx, ny, nz)
       real(wp), intent(in) :: gravity, rho_0
 
       integer :: i, j, k
-      real(wp) :: p_above, p_centre_seed, inv_h, S_k, T_k, T_sq, T_cu
+      real(wp) :: p_above, p_centre_seed, p_top_ij, inv_h, S_k, T_k, T_sq, T_cu
       real(wp) :: alpha_0, p_0, lambda, p_plus_p0, denom, rho_k
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, p_above, p_centre_seed, inv_h, S_k, T_k, T_sq, T_cu, &
+         local(k, p_above, p_centre_seed, p_top_ij, inv_h, S_k, T_k, T_sq, T_cu, &
                alpha_0, p_0, lambda, p_plus_p0, denom, rho_k)
          p_edge_out(i, j, nz + 1) = 0.0_wp
          p_above = 0.0_wp
+         p_top_ij = p_top(i, j)
          do k = nz, 1, -1
             if (h_layer(i, j, k) > H_VANISHED) then
                inv_h = 1.0_wp/h_layer(i, j, k)
@@ -604,7 +689,8 @@ contains
                T_sq = T_k*T_k
                T_cu = T_sq*T_k
 
-               p_centre_seed = p_above + 0.5_wp*gravity*rho_layer_seed(i, j, k)*h_layer(i, j, k)
+               p_centre_seed = p_top_ij + p_above + &
+                               0.5_wp*gravity*rho_layer_seed(i, j, k)*h_layer(i, j, k)
 
                alpha_0 = WRIGHT_A0 + WRIGHT_A1*T_k + WRIGHT_A2*S_k
                p_0 = WRIGHT_B0 + WRIGHT_B1*T_k + WRIGHT_B2*T_sq + WRIGHT_B3*T_cu + &

@@ -448,6 +448,17 @@ contains
          cfg%ocean%thermo%q_heat, cfg%ocean%thermo%q_salt)
       call engine%state%surface_flux%set_p_surf_const( &
          cfg%ocean%psurf%p_surf_const)
+      ! E3 top-of-column IN-SITU EOS pressure: seed `ms%p_top` from the
+      ! assembled `sf%p_surf` HERE, on the host and before `enter_data`, so
+      ! the very first PGF of the run already sees the load.  The
+      ! outer-step driver refreshes it every step from the same source,
+      ! which is what keeps it live once the ice mass-loading PR makes
+      ! `p_surf` dynamic.  Gated: with `in_eos = .false.` `p_top` stays the
+      ! zero array it was allocated as and every EOS evaluation is
+      ! bit-identical.
+      if (cfg%ocean%psurf%in_eos .and. allocated(engine%state%surface_flux%p_surf)) then
+         engine%state%multilayer%p_top = engine%state%surface_flux%p_surf
+      end if
       call engine%state%surface_flux%set_sw_penetration( &
          cfg%ocean%thermo%sw_pen_frac, cfg%ocean%thermo%sw_band_ratio, &
          cfg%ocean%thermo%sw_zeta1, cfg%ocean%thermo%sw_zeta2, &

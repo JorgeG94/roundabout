@@ -31,10 +31,20 @@ contains
       !!   EOS_VARIANT_LINEAR    — `eos_linear_impl`
       !!   EOS_VARIANT_WRIGHT_97 — `eos_wright_impl` at `eos%p_ref`
       !!
+      !! `ms%rho_layer` is a POTENTIAL density at the single, horizontally
+      !! uniform `eos%p_ref` (`&ocean_eos_nml p_ref`).  It is deliberately
+      !! NOT offset by the surface load `ms%p_top`: its consumers
+      !! difference it along a layer and vertically, so a per-column
+      !! reference pressure would manufacture a spurious along-layer
+      !! density gradient — see the contract on `eos_compute_arrays`.
+      !! The N² builders in `rdb_ocean_vmix` inherit that uniform
+      !! reference and stay consistent with it.
+      !!
       !! The in-situ-pressure Wright branch lives in the FV-PGF
       !! column sweep (`eos_wright_pgf_column_sweep_impl`), which
       !! owns its own pressure/density column scratch on the PGF
-      !! state — not an EOS field.
+      !! state — not an EOS field.  THAT is where `ms%p_top` lands,
+      !! because there the pressure is a true per-layer hydrostatic one.
       !!
       !! Optional `active` lets the dyn-step driver call this
       !! unconditionally — when present and false (thermodynamics

@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.1% of total for derived types.</p>Including implementation: 4 statements,  0.1% of total for derived types.">4 statements</a>
+                 title="<p> 0.2% of total for derived types.</p>Including implementation: 5 statements,  0.1% of total for derived types.">5 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,7 +134,8 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../type/ocean_psurf_config_t.html#variable-enable~19">enable</a>
+            <a class="list-group-item" href="../type/ocean_psurf_config_t.html#variable-enable~28">enable</a>
+            <a class="list-group-item" href="../type/ocean_psurf_config_t.html#variable-in_eos~2">in_eos</a>
             <a class="list-group-item" href="../type/ocean_psurf_config_t.html#variable-p_surf_const">p_surf_const</a>
         </div>
       </div>
@@ -321,7 +322,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-enable~19"></span>
+              <span class="anchor" id="variable-enable~28"></span>
               logical,
             </td>
               <td>public</td>
@@ -334,6 +335,49 @@ large graphs.</div>
                 <td>.false.</td>
             <td>
                 <p>Master switch (default off =&gt; bit-identical).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-in_eos~2"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>in_eos</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>Include the surface load in the EOS&rsquo;s <strong>IN-SITU</strong> pressure
+arguments, as the top-of-column pressure <code>p_top</code>
+(<code>multilayer_state_t%p_top</code>): a hydrostatic pressure that used
+to start at 0 Pa at the free surface starts at <code>p_top(i,j)</code>
+instead.  Default <code>.false.</code> =&gt; <code>p_top</code> stays the zero array and
+every EOS evaluation is bit-identical.  This is the E3 seam for
+ice-shelf cavities, where 1e6-2e7 Pa of ice load makes the p=0
+assumption a systematic ~4-5 kg/m^3 density error under a
+nonlinear EOS.</p>
+<p>IN-SITU ONLY.  It deliberately does NOT touch <code>ms%rho_layer</code>,
+which is a POTENTIAL density at the horizontally uniform
+<code>&amp;ocean_eos_nml p_ref</code> — offsetting a potential-density
+reference per column would manufacture an along-layer density
+gradient (see that knob&rsquo;s docstring).  The N² builders inherit
+<code>rho_layer</code> and are therefore unaffected and self-consistent.</p>
+<p>v1 reaches exactly ONE consumer: the FV_WRIGHT Picard column
+sweep (<code>&amp;ocean_pgf_nml form="fv_wright"</code>), the only in-situ EOS
+pressure in the dyn core today.  With any other PGF form and
+none of the closures below enabled the knob is INERT — a
+rank-0 warning says so rather than leaving it silent.  The
+closures that build their OWN surface-relative hydrostatic
+pressure have NOT been ported, so <code>validate_config</code> REFUSES
+<code>in_eos = .true.</code> together with any of them (EPBL,
+kappa-shear, tidal mixing, Redi, isopycnal slopes, sea ice,
+and the PGF in-layer reconstruction) rather than run a
+silently inconsistent pressure.  Requires <code>enable = .true.</code>
+(the load itself comes from <code>sf%p_surf</code>).</p>
             </td>
         </tr>
         <tr>
@@ -385,6 +429,36 @@ machinery.</p>
 <span class="w">      </span><span class="c">!! it is taken from `ocean_state%eos%rho0` (the single ρ₀ of record).</span>
 <span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
 <span class="w">         </span><span class="c">!! Master switch (default off =&gt; bit-identical).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">in_eos</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! Include the surface load in the EOS's **IN-SITU** pressure</span>
+<span class="w">         </span><span class="c">!! arguments, as the top-of-column pressure `p_top`</span>
+<span class="w">         </span><span class="c">!! (`multilayer_state_t%p_top`): a hydrostatic pressure that used</span>
+<span class="w">         </span><span class="c">!! to start at 0 Pa at the free surface starts at `p_top(i,j)`</span>
+<span class="w">         </span><span class="c">!! instead.  Default `.false.` =&gt; `p_top` stays the zero array and</span>
+<span class="w">         </span><span class="c">!! every EOS evaluation is bit-identical.  This is the E3 seam for</span>
+<span class="w">         </span><span class="c">!! ice-shelf cavities, where 1e6-2e7 Pa of ice load makes the p=0</span>
+<span class="w">         </span><span class="c">!! assumption a systematic ~4-5 kg/m^3 density error under a</span>
+<span class="w">         </span><span class="c">!! nonlinear EOS.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! IN-SITU ONLY.  It deliberately does NOT touch `ms%rho_layer`,</span>
+<span class="w">         </span><span class="c">!! which is a POTENTIAL density at the horizontally uniform</span>
+<span class="w">         </span><span class="c">!! `&amp;ocean_eos_nml p_ref` — offsetting a potential-density</span>
+<span class="w">         </span><span class="c">!! reference per column would manufacture an along-layer density</span>
+<span class="w">         </span><span class="c">!! gradient (see that knob's docstring).  The N² builders inherit</span>
+<span class="w">         </span><span class="c">!! `rho_layer` and are therefore unaffected and self-consistent.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! v1 reaches exactly ONE consumer: the FV_WRIGHT Picard column</span>
+<span class="w">         </span><span class="c">!! sweep (`&amp;ocean_pgf_nml form="fv_wright"`), the only in-situ EOS</span>
+<span class="w">         </span><span class="c">!! pressure in the dyn core today.  With any other PGF form and</span>
+<span class="w">         </span><span class="c">!! none of the closures below enabled the knob is INERT — a</span>
+<span class="w">         </span><span class="c">!! rank-0 warning says so rather than leaving it silent.  The</span>
+<span class="w">         </span><span class="c">!! closures that build their OWN surface-relative hydrostatic</span>
+<span class="w">         </span><span class="c">!! pressure have NOT been ported, so `validate_config` REFUSES</span>
+<span class="w">         </span><span class="c">!! `in_eos = .true.` together with any of them (EPBL,</span>
+<span class="w">         </span><span class="c">!! kappa-shear, tidal mixing, Redi, isopycnal slopes, sea ice,</span>
+<span class="w">         </span><span class="c">!! and the PGF in-layer reconstruction) rather than run a</span>
+<span class="w">         </span><span class="c">!! silently inconsistent pressure.  Requires `enable = .true.`</span>
+<span class="w">         </span><span class="c">!! (the load itself comes from `sf%p_surf`).</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_surf_const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
 <span class="w">         </span><span class="c">!! Uniform atmospheric surface pressure (Pa) seeded into</span>
 <span class="w">         </span><span class="c">!! `sf%p_surf_atm` at configure.  A UNIFORM load is provably inert</span>
@@ -419,7 +493,7 @@ machinery.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 04:35 +0000             </p>
+ on 2026-09-20 05:27 +0000             </p>
           </div>
         </div>
         <br>

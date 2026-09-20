@@ -168,9 +168,23 @@
 <code>rdb_ocean_eos_compute</code>), which forwards the multilayer state&rsquo;s
 registry arrays here.  Kept free of state-type dependencies so
 the dispatch stays callable from a bare array context.  All impls
-evaluate at the fixed reference pressure <code>eos%p_ref</code> (default 0
-⇒ surface/potential density) with the <code>H_VANISHED</code> vanishing-
-layer fallback to <code>eos%rho0</code>.</p>
+evaluate at the SINGLE, HORIZONTALLY UNIFORM reference pressure
+<code>eos%p_ref</code> (<code>&amp;ocean_eos_nml p_ref</code>, default 0 ⇒ surface/potential
+density) with the <code>H_VANISHED</code> vanishing-layer fallback to
+<code>eos%rho0</code>.</p>
+<p><strong><code>rho_layer</code> is a POTENTIAL density and its reference pressure
+MUST stay horizontally uniform.</strong>  Its consumers difference it
+ALONG a layer (the Montgomery PGF&rsquo;s <code>rho_layer(i) −
+rho_layer(i−1)</code>, the FV-lite / FV-MOM6-PCM integrands) and
+VERTICALLY (the vmix N² builders).  A reference pressure that
+varied with <code>(i,j)</code> — e.g. one carrying a sloping ice-shelf load —
+would give two columns of IDENTICAL water at the same geopotential
+depth densities differing by <code>∂ρ/∂p · Δp_top</code> (≈ 4.5e-7 × 5e6 ≈
+2 kg/m³ across a calving front), i.e. a large, entirely spurious
+along-layer density gradient and therefore a spurious PGF.  The
+surface load belongs in the IN-SITU pressure builders instead
+(<code>&amp;ocean_psurf_nml in_eos</code> → <code>multilayer_state_t%p_top</code>, consumed
+by <code>eos_wright_pgf_column_sweep_impl</code>), never here.</p>
 
 
     <h3>Arguments</h3>
@@ -186,7 +200,7 @@ layer fallback to <code>eos%rho0</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~5"></span>
+              <span class="anchor" id="variable-eos~20"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -201,7 +215,7 @@ layer fallback to <code>eos%rho0</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~9"></span>
+              <span class="anchor" id="variable-h_layer~53"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -246,7 +260,7 @@ layer fallback to <code>eos%rho0</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_layer~2"></span>
+              <span class="anchor" id="variable-rho_layer~6"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -261,7 +275,7 @@ layer fallback to <code>eos%rho0</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~42"></span>
+              <span class="anchor" id="variable-nx~250"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -276,7 +290,7 @@ layer fallback to <code>eos%rho0</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~42"></span>
+              <span class="anchor" id="variable-ny~250"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -291,7 +305,7 @@ layer fallback to <code>eos%rho0</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~28"></span>
+              <span class="anchor" id="variable-nz~201"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -783,9 +797,24 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! `rdb_ocean_eos_compute`), which forwards the multilayer state's</span>
 <span class="w">      </span><span class="c">!! registry arrays here.  Kept free of state-type dependencies so</span>
 <span class="w">      </span><span class="c">!! the dispatch stays callable from a bare array context.  All impls</span>
-<span class="w">      </span><span class="c">!! evaluate at the fixed reference pressure `eos%p_ref` (default 0</span>
-<span class="w">      </span><span class="c">!! ⇒ surface/potential density) with the `H_VANISHED` vanishing-</span>
-<span class="w">      </span><span class="c">!! layer fallback to `eos%rho0`.</span>
+<span class="w">      </span><span class="c">!! evaluate at the SINGLE, HORIZONTALLY UNIFORM reference pressure</span>
+<span class="w">      </span><span class="c">!! `eos%p_ref` (`&amp;ocean_eos_nml p_ref`, default 0 ⇒ surface/potential</span>
+<span class="w">      </span><span class="c">!! density) with the `H_VANISHED` vanishing-layer fallback to</span>
+<span class="w">      </span><span class="c">!! `eos%rho0`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **`rho_layer` is a POTENTIAL density and its reference pressure</span>
+<span class="w">      </span><span class="c">!! MUST stay horizontally uniform.**  Its consumers difference it</span>
+<span class="w">      </span><span class="c">!! ALONG a layer (the Montgomery PGF's `rho_layer(i) −</span>
+<span class="w">      </span><span class="c">!! rho_layer(i−1)`, the FV-lite / FV-MOM6-PCM integrands) and</span>
+<span class="w">      </span><span class="c">!! VERTICALLY (the vmix N² builders).  A reference pressure that</span>
+<span class="w">      </span><span class="c">!! varied with `(i,j)` — e.g. one carrying a sloping ice-shelf load —</span>
+<span class="w">      </span><span class="c">!! would give two columns of IDENTICAL water at the same geopotential</span>
+<span class="w">      </span><span class="c">!! depth densities differing by `∂ρ/∂p · Δp_top` (≈ 4.5e-7 × 5e6 ≈</span>
+<span class="w">      </span><span class="c">!! 2 kg/m³ across a calving front), i.e. a large, entirely spurious</span>
+<span class="w">      </span><span class="c">!! along-layer density gradient and therefore a spurious PGF.  The</span>
+<span class="w">      </span><span class="c">!! surface load belongs in the IN-SITU pressure builders instead</span>
+<span class="w">      </span><span class="c">!! (`&amp;ocean_psurf_nml in_eos` → `multilayer_state_t%p_top`, consumed</span>
+<span class="w">      </span><span class="c">!! by `eos_wright_pgf_column_sweep_impl`), never here.</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
@@ -834,7 +863,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 04:35 +0000             </p>
+ on 2026-09-20 05:27 +0000             </p>
           </div>
         </div>
         <br>

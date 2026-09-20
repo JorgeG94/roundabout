@@ -134,9 +134,9 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-nx~223">nx</a>
-            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-ny~223">ny</a>
-            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-nz~210">nz</a>
+            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-nx~432">nx</a>
+            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-ny~432">ny</a>
+            <a class="list-group-item" href="../proc/ocean_eos_compute.html#variable-nz~367">nz</a>
         </div>
       </div>
     </div>
@@ -183,10 +183,19 @@ to a flat-impl chosen by <code>eos%variant</code>.</p>
 <p>Supported variants:
   EOS_VARIANT_LINEAR    — <code>eos_linear_impl</code>
   EOS_VARIANT_WRIGHT_97 — <code>eos_wright_impl</code> at <code>eos%p_ref</code></p>
+<p><code>ms%rho_layer</code> is a POTENTIAL density at the single, horizontally
+uniform <code>eos%p_ref</code> (<code>&amp;ocean_eos_nml p_ref</code>).  It is deliberately
+NOT offset by the surface load <code>ms%p_top</code>: its consumers
+difference it along a layer and vertically, so a per-column
+reference pressure would manufacture a spurious along-layer
+density gradient — see the contract on <code>eos_compute_arrays</code>.
+The N² builders in <code>rdb_ocean_vmix</code> inherit that uniform
+reference and stay consistent with it.</p>
 <p>The in-situ-pressure Wright branch lives in the FV-PGF
 column sweep (<code>eos_wright_pgf_column_sweep_impl</code>), which
 owns its own pressure/density column scratch on the PGF
-state — not an EOS field.</p>
+state — not an EOS field.  THAT is where <code>ms%p_top</code> lands,
+because there the pressure is a true per-layer hydrostatic one.</p>
 <p>Optional <code>active</code> lets the dyn-step driver call this
 unconditionally — when present and false (thermodynamics
 disabled or non-thermo substep) the kernel is a no-op.</p>
@@ -205,7 +214,7 @@ disabled or non-thermo substep) the kernel is a no-op.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~16"></span>
+              <span class="anchor" id="variable-eos~36"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -220,7 +229,7 @@ disabled or non-thermo substep) the kernel is a no-op.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~80"></span>
+              <span class="anchor" id="variable-ms~138"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -235,7 +244,7 @@ disabled or non-thermo substep) the kernel is a no-op.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-active~12"></span>
+              <span class="anchor" id="variable-active~16"></span>
               logical,
             </td>
 <td>intent(in),</td>
@@ -738,7 +747,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~223"></span>
+              <span class="anchor" id="variable-nx~432"></span>
               integer,
             </td>
               <td>private</td>
@@ -755,7 +764,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~223"></span>
+              <span class="anchor" id="variable-ny~432"></span>
               integer,
             </td>
               <td>private</td>
@@ -772,7 +781,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~210"></span>
+              <span class="anchor" id="variable-nz~367"></span>
               integer,
             </td>
               <td>private</td>
@@ -813,10 +822,20 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!   EOS_VARIANT_LINEAR    — `eos_linear_impl`</span>
 <span class="w">      </span><span class="c">!!   EOS_VARIANT_WRIGHT_97 — `eos_wright_impl` at `eos%p_ref`</span>
 <span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `ms%rho_layer` is a POTENTIAL density at the single, horizontally</span>
+<span class="w">      </span><span class="c">!! uniform `eos%p_ref` (`&amp;ocean_eos_nml p_ref`).  It is deliberately</span>
+<span class="w">      </span><span class="c">!! NOT offset by the surface load `ms%p_top`: its consumers</span>
+<span class="w">      </span><span class="c">!! difference it along a layer and vertically, so a per-column</span>
+<span class="w">      </span><span class="c">!! reference pressure would manufacture a spurious along-layer</span>
+<span class="w">      </span><span class="c">!! density gradient — see the contract on `eos_compute_arrays`.</span>
+<span class="w">      </span><span class="c">!! The N² builders in `rdb_ocean_vmix` inherit that uniform</span>
+<span class="w">      </span><span class="c">!! reference and stay consistent with it.</span>
+<span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! The in-situ-pressure Wright branch lives in the FV-PGF</span>
 <span class="w">      </span><span class="c">!! column sweep (`eos_wright_pgf_column_sweep_impl`), which</span>
 <span class="w">      </span><span class="c">!! owns its own pressure/density column scratch on the PGF</span>
-<span class="w">      </span><span class="c">!! state — not an EOS field.</span>
+<span class="w">      </span><span class="c">!! state — not an EOS field.  THAT is where `ms%p_top` lands,</span>
+<span class="w">      </span><span class="c">!! because there the pressure is a true per-layer hydrostatic one.</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! Optional `active` lets the dyn-step driver call this</span>
 <span class="w">      </span><span class="c">!! unconditionally — when present and false (thermodynamics</span>
@@ -865,7 +884,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 04:35 +0000             </p>
+ on 2026-09-20 05:27 +0000             </p>
           </div>
         </div>
         <br>

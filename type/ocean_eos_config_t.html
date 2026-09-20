@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.1% of total for derived types.</p>Including implementation: 3 statements,  0.0% of total for derived types.">3 statements</a>
+                 title="<p> 0.1% of total for derived types.</p>Including implementation: 4 statements,  0.1% of total for derived types.">4 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,7 +134,8 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-eos~2">eos</a>
+            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-eos~10">eos</a>
+            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-p_ref">p_ref</a>
         </div>
       </div>
     </div>
@@ -312,7 +313,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~2"></span>
+              <span class="anchor" id="variable-eos~10"></span>
               character(len=16),
             </td>
               <td>public</td>
@@ -328,6 +329,48 @@ large graphs.</div>
 &ldquo;wright&rdquo; (Wright 1997 rational), &ldquo;roquet_spv&rdquo; (Roquet et al.
 2015 specific-volume polynomial).  &ldquo;roquet_spv&rdquo; is incompatible
 with the &ldquo;fv_wright&rdquo; PGF (fails loud at configure).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_ref"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_ref</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+                <p>Reference pressure (Pa, <code>&gt;= 0</code>) at which the model&rsquo;s POTENTIAL
+density <code>ms%rho_layer</code> is evaluated.  Default 0 (surface
+density, σ₀) ⇒ bit-identical to every run before this knob
+existed.  Read by the &ldquo;wright&rdquo; and &ldquo;roquet_spv&rdquo; variants;
+&ldquo;linear&rdquo; has no pressure dependence and ignores it.</p>
+<p>HORIZONTALLY UNIFORM BY DESIGN — it is a scalar and must stay
+one.  <code>rho_layer</code> is differenced ALONG a layer (the Montgomery
+PGF, the FV-lite / FV-MOM6-PCM integrands) and VERTICALLY (the
+vmix N² builders), so a reference pressure varying with (i,j)
+would give two columns of identical water at the same depth
+densities differing by <code>∂ρ/∂p·Δp</code> — a spurious along-layer
+gradient and hence a spurious pressure gradient force.  A
+spatially varying surface load goes to the IN-SITU builders via
+<code>&amp;ocean_psurf_nml in_eos</code>, never here.</p>
+<p>What it buys: the thermobaric state at which the effective
+α/β are evaluated.  Near the freezing point at ice-shelf-cavity
+pressures that matters, so a cavity or abyssal study is better
+referenced to a representative depth (2.0e7 Pa ≈ 2000 dbar, the
+usual σ₂ choice) than to the surface.</p>
+<p>Distinct from <code>&amp;vcoord_nml rho_ref_pressure</code>, which references
+the RHO / HYCOM target-density COORDINATE and the density-space
+diagnostic remap.  For a density-coordinate run the two should
+normally be set to the SAME value so coordinate and dynamics
+agree on what &ldquo;density&rdquo; means; they are kept independent
+because a diagnostic remap to a different reference is a
+legitimate request.</p>
             </td>
         </tr>
     </tbody>
@@ -347,6 +390,36 @@ with the &ldquo;fv_wright&rdquo; PGF (fails loud at configure).</p>
 <span class="w">         </span><span class="c">!! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.</span>
 <span class="w">         </span><span class="c">!! 2015 specific-volume polynomial).  "roquet_spv" is incompatible</span>
 <span class="w">         </span><span class="c">!! with the "fv_wright" PGF (fails loud at configure).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="c">!! Reference pressure (Pa, `&gt;= 0`) at which the model's POTENTIAL</span>
+<span class="w">         </span><span class="c">!! density `ms%rho_layer` is evaluated.  Default 0 (surface</span>
+<span class="w">         </span><span class="c">!! density, σ₀) ⇒ bit-identical to every run before this knob</span>
+<span class="w">         </span><span class="c">!! existed.  Read by the "wright" and "roquet_spv" variants;</span>
+<span class="w">         </span><span class="c">!! "linear" has no pressure dependence and ignores it.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! HORIZONTALLY UNIFORM BY DESIGN — it is a scalar and must stay</span>
+<span class="w">         </span><span class="c">!! one.  `rho_layer` is differenced ALONG a layer (the Montgomery</span>
+<span class="w">         </span><span class="c">!! PGF, the FV-lite / FV-MOM6-PCM integrands) and VERTICALLY (the</span>
+<span class="w">         </span><span class="c">!! vmix N² builders), so a reference pressure varying with (i,j)</span>
+<span class="w">         </span><span class="c">!! would give two columns of identical water at the same depth</span>
+<span class="w">         </span><span class="c">!! densities differing by `∂ρ/∂p·Δp` — a spurious along-layer</span>
+<span class="w">         </span><span class="c">!! gradient and hence a spurious pressure gradient force.  A</span>
+<span class="w">         </span><span class="c">!! spatially varying surface load goes to the IN-SITU builders via</span>
+<span class="w">         </span><span class="c">!! `&amp;ocean_psurf_nml in_eos`, never here.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! What it buys: the thermobaric state at which the effective</span>
+<span class="w">         </span><span class="c">!! α/β are evaluated.  Near the freezing point at ice-shelf-cavity</span>
+<span class="w">         </span><span class="c">!! pressures that matters, so a cavity or abyssal study is better</span>
+<span class="w">         </span><span class="c">!! referenced to a representative depth (2.0e7 Pa ≈ 2000 dbar, the</span>
+<span class="w">         </span><span class="c">!! usual σ₂ choice) than to the surface.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! Distinct from `&amp;vcoord_nml rho_ref_pressure`, which references</span>
+<span class="w">         </span><span class="c">!! the RHO / HYCOM target-density COORDINATE and the density-space</span>
+<span class="w">         </span><span class="c">!! diagnostic remap.  For a density-coordinate run the two should</span>
+<span class="w">         </span><span class="c">!! normally be set to the SAME value so coordinate and dynamics</span>
+<span class="w">         </span><span class="c">!! agree on what "density" means; they are kept independent</span>
+<span class="w">         </span><span class="c">!! because a diagnostic remap to a different reference is a</span>
+<span class="w">         </span><span class="c">!! legitimate request.</span>
 <span class="w">   </span><span class="k">end type </span><span class="n">ocean_eos_config_t</span>
 </pre></div>
 
@@ -370,7 +443,7 @@ with the &ldquo;fv_wright&rdquo; PGF (fails loud at configure).</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 04:35 +0000             </p>
+ on 2026-09-20 05:27 +0000             </p>
           </div>
         </div>
         <br>

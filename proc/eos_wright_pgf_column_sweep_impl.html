@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">38 statements</a>
+                 title=" 0.1% of total for procedures.">40 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -139,16 +139,17 @@
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-t_k~4">T_k</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-t_sq~2">T_sq</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-alpha_0~2">alpha_0</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-denom~2">denom</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-i~55">i</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-denom~23">denom</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-i~265">i</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-inv_h~4">inv_h</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-j~47">j</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-k~30">k</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-j~248">j</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-k~178">k</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-lambda~3">lambda</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_0~2">p_0</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_above">p_above</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_centre_seed">p_centre_seed</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_plus_p0~2">p_plus_p0</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_top_ij">p_top_ij</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-rho_k">rho_k</a>
         </div>
       </div>
@@ -185,7 +186,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, hS_layer, hT_layer, rho_layer_seed, p_edge_out, rho_insitu_out, gravity, rho_0, nx, ny, nz)  
+    <h2>public pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, hS_layer, hT_layer, rho_layer_seed, p_top, p_edge_out, rho_insitu_out, gravity, rho_0, nx, ny, nz)  
 </h2>
     
 
@@ -196,25 +197,53 @@ layer centre.</p>
 <p>For each layer k from the surface (k=nz) down to the bed
 (k=1) we use a single Picard step:</p>
 <ol>
-<li>Seed the half-layer pressure with the surface-evaluated
-     density <code>rho_layer_seed</code> (= ms%rho_layer, the EOS output
-     at p_ref=0):
-        p_centre_seed = p_above + 0.5 * g * rho_seed * h</li>
+<li>Seed the half-layer pressure with the potential density
+     <code>rho_layer_seed</code> (= ms%rho_layer, the EOS output at the
+     uniform <code>eos%p_ref</code>):
+        p_centre_seed = p_top + p_above + 0.5 * g * rho_seed * h</li>
 <li>Re-evaluate Wright at the seed pressure:
         rho_insitu(k) = ρ(T_k, S_k, p_centre_seed)</li>
 <li>Accumulate the bottom edge of layer k using the in-situ
      density:
         p_edge(k) = p_above + g * rho_insitu(k) * h</li>
 </ol>
+<p>This is the ONE genuinely IN-SITU pressure the EOS core builds:
+<code>p_centre_seed</code> is a true per-layer hydrostatic pressure, so a
+per-column <code>p_top(i,j)</code> belongs in it (<code>&amp;ocean_psurf_nml in_eos</code>).
+It is NOT the potential-density trap that keeps <code>eos%p_ref</code> a
+scalar: <code>rho_insitu</code> is consumed only (a) as the integrand of
+THIS column&rsquo;s <code>p_edge</code> stack and (b) as <code>rho_face</code>, the
+two-point AVERAGE coefficient multiplying <code>Δz_centre</code> in the
+PGF&rsquo;s z-correction (<code>ocean_pressure_force_compute</code> Pass 2/3).
+Neither differences it along a layer, so a horizontally varying
+<code>p_top</code> cannot manufacture an along-layer density gradient here —
+and the density really IS higher under a thicker draft, so the
+<code>rho_face</code> coefficient becomes MORE correct, not less.</p>
+<p><strong><code>p_top</code> reaches the EOS ARGUMENT only.</strong>  <code>p_edge_out</code> stays an
+anomaly stack seeded at <code>p_edge_out(nz+1) = 0</code> exactly as before,
+so the PGF top boundary condition is untouched.  Consequence,
+stated plainly: under a SLOPING load the along-layer difference
+<code>p_centre(i) − p_centre(i−1)</code> omits <code>Δp_top</code>.  That term is
+depth-uniform and is already carried by the barotropic
+<code>eta_forcing</code> seam as <code>−(1/ρ₀)∇p_surf</code>, so the momentum is not
+missing it — adding it here as well would DOUBLE-COUNT.  What
+moves in this kernel is the COMPRESSIBILITY: <code>rho_insitu</code> is
+evaluated at the pressure the water actually sits at, which is
+the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.
+Bit-identical when <code>p_top</code> is the zero array it ships as
+(<code>p_top + p_above</code> is <code>p_above</code> exactly under IEEE-754).</p>
 <p>This is one Picard iteration of the implicit
   p_centre(k) = p_above + 0.5<em>g</em>ρ(T, S, p_centre(k))*h.
 For ocean conditions (Δρ along path &lt;&lt; ρ_0) one iteration is
 within ~1e-5 of the converged value.</p>
 <p><code>rho_layer_seed</code> must be <code>ms%rho_layer</code> from
 <code>ocean_eos_compute</code> with <code>EOS_VARIANT_WRIGHT_97</code> —
-the seed is the <em>full</em> nonlinear ρ at p_ref=0, not a Boussinesq
-constant; this avoids a second Picard iteration in 99% of
-cases.</p>
+the seed is the <em>full</em> nonlinear ρ at <code>eos%p_ref</code>, not a
+Boussinesq constant; this avoids a second Picard iteration in
+99% of cases.  The seed enters only a HALF-LAYER increment, so
+a seed offset <code>Δρ</code> costs <code>0.5·g·Δρ·h</code> of pressure (≈ 5 kPa out
+of 1e7 Pa for <code>Δρ = 5</code>, i.e. ~5e-4 relative); referencing
+<code>p_ref</code> near the working pressure makes the seed better still.</p>
 <p>Vanishing-layer fallback: if <code>h_layer(k) &lt;= 0</code> the Wright eval
 is skipped and <code>rho_insitu(k) = rho_0</code> — matches the existing
 <code>eos_wright_impl</code> defensive branch.</p>
@@ -236,7 +265,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~13"></span>
+              <span class="anchor" id="variable-h_layer~57"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -292,6 +321,22 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
             <td><strong>rho_layer_seed</strong>(nx,ny,nz)</td>
             <td>
                 
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_top~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_top</strong>(nx,ny)</td>
+            <td>
+                <p>Top-of-column pressure (Pa, <code>&gt;= 0</code>) the EOS argument is
+measured down from.  Does NOT enter <code>p_edge_out</code>.</p>
             </td>
         </tr>
         <tr>
@@ -356,7 +401,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~46"></span>
+              <span class="anchor" id="variable-nx~254"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -371,7 +416,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~46"></span>
+              <span class="anchor" id="variable-ny~254"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -386,7 +431,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~32"></span>
+              <span class="anchor" id="variable-nz~205"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -857,7 +902,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-denom~2"></span>
+              <span class="anchor" id="variable-denom~23"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -874,7 +919,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~55"></span>
+              <span class="anchor" id="variable-i~265"></span>
               integer,
             </td>
               <td>private</td>
@@ -908,7 +953,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~47"></span>
+              <span class="anchor" id="variable-j~248"></span>
               integer,
             </td>
               <td>private</td>
@@ -925,7 +970,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~30"></span>
+              <span class="anchor" id="variable-k~178"></span>
               integer,
             </td>
               <td>private</td>
@@ -1027,6 +1072,23 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
+              <span class="anchor" id="variable-p_top_ij"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_top_ij</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
               <span class="anchor" id="variable-rho_k"></span>
               real(kind=wp),
             </td>
@@ -1059,7 +1121,7 @@ large graphs.</div>
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
     <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">eos_wright_pgf_column_sweep_impl</span><span class="p">(</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hS_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hT_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                                    </span><span class="n">rho_layer_seed</span><span class="p">,</span><span class="w"> </span><span class="n">p_edge_out</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                    </span><span class="n">rho_layer_seed</span><span class="p">,</span><span class="w"> </span><span class="n">p_top</span><span class="p">,</span><span class="w"> </span><span class="n">p_edge_out</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">                                                    </span><span class="n">rho_insitu_out</span><span class="p">,</span><span class="w"> </span><span class="n">gravity</span><span class="p">,</span><span class="w"> </span><span class="n">rho_0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">                                                    </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! FV-Wright PGF column sweep.  Top-down per-column traversal</span>
@@ -1070,15 +1132,42 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! For each layer k from the surface (k=nz) down to the bed</span>
 <span class="w">      </span><span class="c">!! (k=1) we use a single Picard step:</span>
 <span class="w">      </span><span class="c">!!</span>
-<span class="w">      </span><span class="c">!!   1. Seed the half-layer pressure with the surface-evaluated</span>
-<span class="w">      </span><span class="c">!!      density `rho_layer_seed` (= ms%rho_layer, the EOS output</span>
-<span class="w">      </span><span class="c">!!      at p_ref=0):</span>
-<span class="w">      </span><span class="c">!!         p_centre_seed = p_above + 0.5 * g * rho_seed * h</span>
+<span class="w">      </span><span class="c">!!   1. Seed the half-layer pressure with the potential density</span>
+<span class="w">      </span><span class="c">!!      `rho_layer_seed` (= ms%rho_layer, the EOS output at the</span>
+<span class="w">      </span><span class="c">!!      uniform `eos%p_ref`):</span>
+<span class="w">      </span><span class="c">!!         p_centre_seed = p_top + p_above + 0.5 * g * rho_seed * h</span>
 <span class="w">      </span><span class="c">!!   2. Re-evaluate Wright at the seed pressure:</span>
 <span class="w">      </span><span class="c">!!         rho_insitu(k) = ρ(T_k, S_k, p_centre_seed)</span>
 <span class="w">      </span><span class="c">!!   3. Accumulate the bottom edge of layer k using the in-situ</span>
 <span class="w">      </span><span class="c">!!      density:</span>
 <span class="w">      </span><span class="c">!!         p_edge(k) = p_above + g * rho_insitu(k) * h</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! This is the ONE genuinely IN-SITU pressure the EOS core builds:</span>
+<span class="w">      </span><span class="c">!! `p_centre_seed` is a true per-layer hydrostatic pressure, so a</span>
+<span class="w">      </span><span class="c">!! per-column `p_top(i,j)` belongs in it (`&amp;ocean_psurf_nml in_eos`).</span>
+<span class="w">      </span><span class="c">!! It is NOT the potential-density trap that keeps `eos%p_ref` a</span>
+<span class="w">      </span><span class="c">!! scalar: `rho_insitu` is consumed only (a) as the integrand of</span>
+<span class="w">      </span><span class="c">!! THIS column's `p_edge` stack and (b) as `rho_face`, the</span>
+<span class="w">      </span><span class="c">!! two-point AVERAGE coefficient multiplying `Δz_centre` in the</span>
+<span class="w">      </span><span class="c">!! PGF's z-correction (`ocean_pressure_force_compute` Pass 2/3).</span>
+<span class="w">      </span><span class="c">!! Neither differences it along a layer, so a horizontally varying</span>
+<span class="w">      </span><span class="c">!! `p_top` cannot manufacture an along-layer density gradient here —</span>
+<span class="w">      </span><span class="c">!! and the density really IS higher under a thicker draft, so the</span>
+<span class="w">      </span><span class="c">!! `rho_face` coefficient becomes MORE correct, not less.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **`p_top` reaches the EOS ARGUMENT only.**  `p_edge_out` stays an</span>
+<span class="w">      </span><span class="c">!! anomaly stack seeded at `p_edge_out(nz+1) = 0` exactly as before,</span>
+<span class="w">      </span><span class="c">!! so the PGF top boundary condition is untouched.  Consequence,</span>
+<span class="w">      </span><span class="c">!! stated plainly: under a SLOPING load the along-layer difference</span>
+<span class="w">      </span><span class="c">!! `p_centre(i) − p_centre(i−1)` omits `Δp_top`.  That term is</span>
+<span class="w">      </span><span class="c">!! depth-uniform and is already carried by the barotropic</span>
+<span class="w">      </span><span class="c">!! `eta_forcing` seam as `−(1/ρ₀)∇p_surf`, so the momentum is not</span>
+<span class="w">      </span><span class="c">!! missing it — adding it here as well would DOUBLE-COUNT.  What</span>
+<span class="w">      </span><span class="c">!! moves in this kernel is the COMPRESSIBILITY: `rho_insitu` is</span>
+<span class="w">      </span><span class="c">!! evaluated at the pressure the water actually sits at, which is</span>
+<span class="w">      </span><span class="c">!! the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.</span>
+<span class="w">      </span><span class="c">!! Bit-identical when `p_top` is the zero array it ships as</span>
+<span class="w">      </span><span class="c">!! (`p_top + p_above` is `p_above` exactly under IEEE-754).</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! This is one Picard iteration of the implicit</span>
 <span class="w">      </span><span class="c">!!   p_centre(k) = p_above + 0.5*g*ρ(T, S, p_centre(k))*h.</span>
@@ -1087,9 +1176,12 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! `rho_layer_seed` must be `ms%rho_layer` from</span>
 <span class="w">      </span><span class="c">!! `ocean_eos_compute` with `EOS_VARIANT_WRIGHT_97` —</span>
-<span class="w">      </span><span class="c">!! the seed is the *full* nonlinear ρ at p_ref=0, not a Boussinesq</span>
-<span class="w">      </span><span class="c">!! constant; this avoids a second Picard iteration in 99% of</span>
-<span class="w">      </span><span class="c">!! cases.</span>
+<span class="w">      </span><span class="c">!! the seed is the *full* nonlinear ρ at `eos%p_ref`, not a</span>
+<span class="w">      </span><span class="c">!! Boussinesq constant; this avoids a second Picard iteration in</span>
+<span class="w">      </span><span class="c">!! 99% of cases.  The seed enters only a HALF-LAYER increment, so</span>
+<span class="w">      </span><span class="c">!! a seed offset `Δρ` costs `0.5·g·Δρ·h` of pressure (≈ 5 kPa out</span>
+<span class="w">      </span><span class="c">!! of 1e7 Pa for `Δρ = 5`, i.e. ~5e-4 relative); referencing</span>
+<span class="w">      </span><span class="c">!! `p_ref` near the working pressure makes the seed better still.</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! Vanishing-layer fallback: if `h_layer(k) &lt;= 0` the Wright eval</span>
 <span class="w">      </span><span class="c">!! is skipped and `rho_insitu(k) = rho_0` — matches the existing</span>
@@ -1103,19 +1195,23 @@ large graphs.</div>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hS_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hT_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_layer_seed</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Top-of-column pressure (Pa, `&gt;= 0`) the EOS argument is</span>
+<span class="w">         </span><span class="c">!! measured down from.  Does NOT enter `p_edge_out`.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_edge_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_insitu_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gravity</span><span class="p">,</span><span class="w"> </span><span class="n">rho_0</span>
 
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
-<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_above</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_seed</span><span class="p">,</span><span class="w"> </span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_above</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_seed</span><span class="p">,</span><span class="w"> </span><span class="n">p_top_ij</span><span class="p">,</span><span class="w"> </span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">alpha_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_0</span><span class="p">,</span><span class="w"> </span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">p_plus_p0</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">rho_k</span>
 
 <span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">p_above</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_seed</span><span class="p">,</span><span class="w"> </span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">p_above</span><span class="p">,</span><span class="w"> </span><span class="n">p_centre_seed</span><span class="p">,</span><span class="w"> </span><span class="n">p_top_ij</span><span class="p">,</span><span class="w"> </span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">               </span><span class="n">alpha_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_0</span><span class="p">,</span><span class="w"> </span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">p_plus_p0</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">rho_k</span><span class="p">)</span>
 <span class="w">         </span><span class="n">p_edge_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
 <span class="w">         </span><span class="n">p_above</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">p_top_ij</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
 <span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
 <span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">               </span><span class="n">inv_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
@@ -1124,7 +1220,8 @@ large graphs.</div>
 <span class="w">               </span><span class="n">T_sq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_k</span><span class="o">*</span><span class="n">T_k</span>
 <span class="w">               </span><span class="n">T_cu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_sq</span><span class="o">*</span><span class="n">T_k</span>
 
-<span class="w">               </span><span class="n">p_centre_seed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_above</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">gravity</span><span class="o">*</span><span class="n">rho_layer_seed</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">p_centre_seed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_top_ij</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">p_above</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">gravity</span><span class="o">*</span><span class="n">rho_layer_seed</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
 
 <span class="w">               </span><span class="n">alpha_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WRIGHT_A0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_A1</span><span class="o">*</span><span class="n">T_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_A2</span><span class="o">*</span><span class="n">S_k</span>
 <span class="w">               </span><span class="n">p_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WRIGHT_B0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B1</span><span class="o">*</span><span class="n">T_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B2</span><span class="o">*</span><span class="n">T_sq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B3</span><span class="o">*</span><span class="n">T_cu</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
@@ -1167,7 +1264,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 04:35 +0000             </p>
+ on 2026-09-20 05:27 +0000             </p>
           </div>
         </div>
         <br>
