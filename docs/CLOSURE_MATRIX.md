@@ -214,7 +214,8 @@ MOM6 carries two independent coefficients, this model deliberately does not.
 | HTBL-distributed | `htbl` | spreads the stress over the top `htbl` m — the `hbbl` mode reflected; keeps the explicit rate finite where sigma thins the top layer near a grounding line (Killworth & Edwards 1999).  Distributed linear rate `r·htbl/h_nz` asserted in closed form |
 | Implicit (backward-Euler in the drag kernel) | `implicit` | tendency formed as `−λ·u/(1 + dt·λ)` so the ordinary apply gives `u/(1 + dt·λ)`; unconditionally stable for any top-layer thickness.  Test asserts it stays monotone and same-signed at `dt·λ = 2.5`, where the explicit form amplifies and flips sign |
 | Implicit (fold into the vdiff `k=nz` diagonal) | `&ocean_vdiff_nml implicit_top_drag` | the OTHER implicit form, and a different thing: `dt·λ_top` on the surface diagonal of the backward-Euler vertical-friction tridiagonal, so the drag is solved TOGETHER with the interior shear rather than ahead of it.  The wind stress already owns that row's RHS — a drag is a diagonal term and a stress is an RHS term, so they compose — and on a covered face the wind RHS is scaled by `(1 − cover)`: no atmosphere under a shelf.  The explicit apply is gated off.  Layer-`nz` only (`htbl > 0` refused, the mirror of the `implicit_drag`/HBBL restriction) and mutually exclusive with `implicit` above (double count).  Test: `test_ocean_top_drag` (`u/(1 + dt·λ)` at `dt·λ = 8` on a 5 cm pinched top layer; open face takes the full wind, covered face takes none) |
-| Top-drag stress magnitude | (always, when enabled) | `stress_top(nx,ny)` = cell-centred `\|τ_top\|` (N/m²), device-resident.  WRITTEN here, read by nothing yet — KPP/EPBL still take `u_*` from `stress_mag`; blending `ustar_shelf` in is a separate PR |
+| Top-drag stress magnitude | (always, when enabled) | `stress_top(nx,ny)` = cell-centred `\|τ_top\|` (N/m²), device-resident.  Copied INLINE by `run_stage` / `run_stage_split` into `surface_stress%stress_shelf` in the same stage that computes it, and read there by KPP and EPBL as `u_*² = (stress_mag + stress_shelf)/ρ₀` — the total upper-boundary momentum flux, with disjoint supports (`stress_mag ≡ 0` under cover, `stress_top ≡ 0` off it).  No lag.  Tests: `test_ocean_bl_under_ice` |
+| Under-ice `u_*` for the boundary-layer schemes | `&ocean_tdrag_nml enable`, else `&ocean_cavity_melt_nml enable` | KPP (`rdb_ocean_vmix`, two sites) and EPBL (`rdb_ocean_epbl`) take `u_* = √((stress_mag + stress_shelf)/ρ₀)`.  `stress_shelf` is ALWAYS allocated and zero without a cavity ⇒ one code path, no optional dummy, `x + 0.0 ≡ x` ⇒ bit-identical.  Preferred source is the top drag (in-stage); with the top drag OFF and melt ON, `engine_step_finalize` fills it from `ρ₀·u_*²` with the melt slot's own `u_*` — the SAME `C_d` under the one-coefficient rule, but at thermo cadence, so **that** path lags one outer step.  Tests: `test_ocean_bl_under_ice` |
 
 ## Porous barriers (subgrid topography; ocean only)
 
@@ -647,9 +648,10 @@ those is a fail-loud configure requirement. Default off ⇒ bit-identical.
 **v1 is VIRTUAL SALT, thermodynamics only.** The meltwater carries no mass, so
 it adds no volume and no direct buoyancy (Phase 3); the ice-base MOMENTUM
 sink is a separate opt-in (`&ocean_tdrag_nml`, above — off by default, and
-sharing this group's `C_d` when on); and KPP/EPBL still do not take their
-`u*` from `ustar_shelf` (Phase 4) — they take it from `stress_mag`, which the
-cover mask drives to EXACTLY zero under a shelf.  Wind stress, surface
+sharing this group's `C_d` when on).  KPP and EPBL DO now feel the ice
+(Phase 4b): their `u_*` is `√((stress_mag + stress_shelf)/ρ₀)`, where the
+cover mask drives `stress_mag` to EXACTLY zero under a shelf and
+`stress_shelf` carries the ice-ocean stress in its place.  Wind stress, surface
 restoring, shortwave penetration and the uniform `&ocean_thermo_nml
 q_heat/q_salt` are no longer refused: they are MASKED (see the cover-mask row
 below).  `&ocean_psurf_nml` composes freely: the liquidus reads the assembled
