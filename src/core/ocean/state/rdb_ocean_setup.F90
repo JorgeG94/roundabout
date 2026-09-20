@@ -56,6 +56,8 @@ module rdb_ocean_setup
                                 GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, &
                                 GRID_CONFIG_SUPERGRID, GRID_CONFIG_TRIPOLAR, &
                                 metrics_porous_alloc
+   use rdb_ocean_cavity, only: cavity_water_column_impl, cavity_fill_p_ice_ref, &
+                               cavity_datum_residual
    use rdb_ocean_porous, only: parse_porous_source, parse_porous_eta_interp, &
                                porous_fill_stats_resolved, &
                                porous_stats_are_ordered, &
@@ -106,6 +108,7 @@ module rdb_ocean_setup
    public :: configure_ocean_wave_drag
    public :: wave_drag_roughness_proxy
    public :: configure_ocean_porous
+   public :: configure_ocean_cavity
    public :: configure_ocean_wetdry
    public :: bt_auto_n_inner
    public :: metrics_bt_cfl_length
@@ -2933,12 +2936,122 @@ contains
          end block
       end if
 
-      ! Mode-split contract: bt_H_ref = seeded bathymetry (Σh_layer = b).
-      ! Unsplit (n_inner = 0) doesn't read this.
+      ! Mode-split contract: bt_H_ref is the reference WATER-COLUMN
+      ! thickness.  Without an ice shelf that is the seeded bathymetry
+      ! (Σh_layer = b); under one it is `b − z_draft`, which is what makes
+      ! `bt_eta = Σh_layer − bt_H_ref` the deviation from the LOADED
+      ! equilibrium (zero at rest) rather than a permanent −z_draft.  That
+      ! is Losch (2008) §2.1's own convention, and it is why every
+      ! consumer of `D = bt_H_ref + bt_eta` — the BT continuity face
+      ! thickness, the Chapman phase speed, the ALE `remap_h_ref` — needs
+      ! no cavity branch of its own.  Knob off ⇒ `z_draft ≡ 0` ⇒ the
+      ! literal `bt_H_ref = b` this always was.
+      !
+      ! The snapshot is taken from the UNWRAPPED `b`/`z_draft`; the engine
+      ! re-wraps + halo-exchanges `bt_H_ref` right after, alongside both
+      ! of its sources.
+      !
+      ! NOTE on `auto_n_inner` above: it derives the external gravity-wave
+      ! speed from `max(b)`, the BED depth, not from `max(b − z_draft)`.
+      ! Under a shelf that OVERESTIMATES `c_ext` and so buys more
+      ! barotropic substeps than the CFL needs — conservative, never
+      ! unstable, and at a calving front (where the draft is 0) it is
+      ! exactly right.  Left as-is deliberately: tightening it would
+      ! change `n_inner` for cavity runs only, which is a separate,
+      ! answer-changing decision.
       if (cfg%ocean%bt%n_inner >= 1) then
-         ocean_state%dyn%bt_work%bt_H_ref = ocean_state%barotropic%b
+         if (ocean_state%metrics%use_cavity) then
+            call cavity_water_column_impl(ocean_state%dyn%bt_work%bt_H_ref, &
+                                          ocean_state%barotropic%b, &
+                                          ocean_state%metrics%z_draft, &
+                                          size(ocean_state%barotropic%b, 1), &
+                                          size(ocean_state%barotropic%b, 2))
+         else
+            ocean_state%dyn%bt_work%bt_H_ref = ocean_state%barotropic%b
+         end if
       end if
    end subroutine configure_ocean_bt_split
+
+   subroutine configure_ocean_cavity(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Build the static ice-shelf cavity LOAD field
+      !! `metrics%p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) and assert
+      !! the counted-once datum invariant.
+      !!
+      !! The GEOMETRY (`z_draft`, `cover_frac`) is filled much earlier, in
+      !! `ocean_state_seed_from_cfg`, because the wet mask and the layer
+      !! split are seeded from `b − z_draft`.  What is left for configure
+      !! is the part that needs the PGF's reference density, which
+      !! `configure_ocean_pgf` / `configure_ocean_reference_density` only
+      !! settle later — hence this runs after them and before
+      !! `ocean_state_enter_data`, like every other static field the
+      !! device map has to capture.
+      !!
+      !! `rho_ref*GRAVITY` is formed as ONE product, the same one the
+      !! FV_MOM6 Pass-1 surface BC forms, so that
+      !! `pa(nz+1) = rho_ref*g*(−z_draft) + p_ice_ref` cancels to bit-zero
+      !! at rest once the load is wired to `ms%p_top` (the next slice).
+      !! Nothing consumes `p_ice_ref` yet — this slice is datum-only.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a cavity configuration conflict when present;
+         !! absent behaves as today (`error stop`).
+
+      integer :: nx, ny
+      real(wp) :: resid, datum_tol
+
+      if (.not. ocean_state%metrics%use_cavity) then
+         if (present(ierr)) ierr = OCEAN_STATUS_OK
+         return
+      end if
+
+      nx = size(ocean_state%metrics%z_draft, 1)
+      ny = size(ocean_state%metrics%z_draft, 2)
+
+      call cavity_fill_p_ice_ref(ocean_state%metrics%p_ice_ref, &
+                                 ocean_state%metrics%z_draft, &
+                                 ocean_state%pressure_force%rho_ref*GRAVITY, nx, ny)
+
+      ! The counted-once invariant (I), in metres of reference depth:
+      !     rho*g*z_draft + (bt_H_ref - b)*rho*g == 0   <=>   bt_H_ref == b - z_draft.
+      ! Asserted on the common positive factor divided out — scale-free,
+      ! and it does not fabricate a product the code never forms.  The
+      ! bound is a pure round-off allowance on the ONE subtraction
+      ! `b - z_draft`: both operands are O(max depth), so the result
+      ! carries at most a few ulp of it.  (It is NOT asserted as bit-zero:
+      ! the latch and this check evaluate the same difference in two
+      ! places, and an FMA-contracting build is free to round them
+      ! differently.)
+      if (cfg%ocean%bt%n_inner >= 1) then
+         datum_tol = 8.0_wp*epsilon(1.0_wp)* &
+                     max(maxval(abs(ocean_state%barotropic%b)), 1.0_wp)
+         resid = cavity_datum_residual(ocean_state%dyn%bt_work%bt_H_ref, &
+                                       ocean_state%barotropic%b, &
+                                       ocean_state%metrics%z_draft, nx, ny)
+         if (.not. (resid <= datum_tol)) then
+            call fail("&ocean_cavity_dyn_nml: the barotropic datum and the ice "// &
+                      "draft disagree (max |bt_H_ref - (b - z_draft)| = "// &
+                      to_string(resid)//" m > "//to_string(datum_tol)//" m).  The "// &
+                      "ice load would then be counted twice, or not at all — check "// &
+                      "that z_draft went through the same periodic/fold re-wrap and "// &
+                      "halo exchange as b.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf cavity: isostatic load p_ice_ref = "// &
+                          "rho_ref*g*z_draft, max = "// &
+                          to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                          " Pa (rho_ref = "// &
+                          to_string(ocean_state%pressure_force%rho_ref)//" kg/m^3)")
+         call logger%info("                  NOT yet applied: this build carries the "// &
+                          "cavity geometry + datum only (ms%p_top is untouched)")
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_cavity
 
    subroutine configure_ocean_wetdry(cfg, ocean_state, grid, compute_rank)
       !! Dynamic wetting/drying (docs/ocean_wetdry_plan.md): copy the

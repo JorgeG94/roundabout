@@ -70,6 +70,7 @@ module rdb_config
              ocean_tidal_mixing_config_t, ocean_conv_config_t, ocean_tides_config_t, &
              ocean_porous_config_t, &
              ocean_psurf_config_t, &
+             ocean_cavity_dyn_config_t, &
              ocean_continuity_config_t, ocean_isopycnal_config_t, &
              ocean_topo_config_t, &
              ocean_ic_config_t, ocean_zinit_config_t, &
@@ -698,7 +699,7 @@ module rdb_config
          !! exclusions (apply when bt_halo is set EXPLICITLY > 0; AUTO instead
          !! silently resolves to 0): wet/dry enable, use_cont_type,
          !! upstream_h_face, tides enable, psurf enable, porous enable,
-         !! supergrid/tripolar grid_config.  The set of record is
+         !! cavity_dyn enable, supergrid/tripolar grid_config.  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
    end type ocean_bt_config_t
@@ -1818,6 +1819,104 @@ module rdb_config
          !! file-driven load needs a `register_tag` entry, not new reader
          !! machinery.
    end type ocean_psurf_config_t
+   type :: ocean_cavity_dyn_config_t
+      !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,
+      !! Phase 5.1).  A prescribed, time-constant ice draft `z_draft(i,j)`
+      !! (m, positive DOWN — the depth of the ice base below `z = 0`) is
+      !! laid over the bed and absorbed into the barotropic DATUM:
+      !!
+      !!     bt_H_ref = b - z_draft      (was: bt_H_ref = b)
+      !!
+      !! so the column starts with `bt_eta = sum(h_layer) - bt_H_ref = 0`
+      !! under the shelf and every consumer of the water-column thickness
+      !! `D = bt_H_ref + bt_eta` is correct without its own cavity branch.
+      !! This is Losch (2008) §2.1's convention verbatim ("the
+      !! 'sea-surface height' eta is the deviation from the 'reference'
+      !! ice-shelf draft h"), not a divergence from it.
+      !!
+      !! THIS GROUP CARRIES THE GEOMETRY ONLY.  The isostatic load
+      !! `p_ice_ref = rho_ref*GRAVITY*z_draft` is built at configure and
+      !! stored, but nothing consumes it yet: wiring it into
+      !! `multilayer_state_t%p_top` (and thence the FV_MOM6 surface BC via
+      !! `&ocean_pgf_nml p_top_in_bc`, and the in-situ EOS via
+      !! `&ocean_psurf_nml in_eos`) is the next slice.  Until then a cavity
+      !! run is a DATUM-ONLY run: geometrically correct, dynamically
+      !! unloaded.
+      !!
+      !! `enable = .false.` (default) keeps `z_draft` at its `(1,1)`
+      !! placeholder, `bt_H_ref = b`, and every path bit-identical.
+      !! Knob table: `docs/generated_nml_knobs.md`.
+      logical :: enable = .false.
+         !! Master switch.  Requires the ocean multilayer path, the split
+         !! solver, `&ocean_pgf_nml form="fv_mom6"`, `vcoord_type` in
+         !! {sigma, zstar} and a single rank; mutually exclusive with
+         !! wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL
+         !! and `gfs_scale /= 1` (every one of those fails loud at
+         !! configure, naming the knob and the reason).
+      character(len=32) :: draft_config = "none"
+         !! Analytic draft shape.  `"none"` (default): `z_draft = 0`
+         !! everywhere — the identity, even with `enable = .true.`.
+         !! `"flat"`: uniform `draft_depth` inside the shelf box
+         !! `[draft_x0, draft_x1] x [draft_y0, draft_y1]`, 0 outside (the
+         !! open ocean beyond the calving front at `draft_x1`).
+         !! `"linear"`: `z_draft = draft_depth + draft_slope*(x - draft_x0)`
+         !! inside the same box, clipped at 0 below.  `"file"`: a static
+         !! 2-D NetCDF draft — NOT implemented (fails loud); the
+         !! MPI-correct static-2-D reader is a later slice, and it is the
+         !! only route to an ISOMIP+ draft, which has no analytic form
+         !! (Asay-Davis et al. 2016 §3.1.1).
+      character(len=32) :: draft_source = "draft"
+         !! What the draft is prescribed FROM.  `"draft"` (default): the
+         !! geometry above IS the ice-base depth.  `"thickness"`: the
+         !! formula gives an ice THICKNESS, converted by the
+         !! Boussinesq-isostatic (flotation) relation
+         !! `z_draft = rho_ice*h_ice/rho_0`.  `"in_situ"` (true isostasy,
+         !! `p_ice = g*integral(rho_hat)`) needs a per-column root find,
+         !! does not admit exact discrete rest, and is deliberately NOT
+         !! implemented (fails loud).
+      real(wp) :: draft_depth = 0.0_wp
+         !! Draft amplitude (m, positive down) — the uniform value for
+         !! `"flat"`, the value at `draft_x0` for `"linear"`.  Under
+         !! `draft_source = "thickness"` it is an ice THICKNESS instead.
+      real(wp) :: draft_slope = 0.0_wp
+         !! `"linear"` only: d(draft)/dx, dimensionless (m of draft per m
+         !! of x).  Positive deepens the ice base toward +x.  Converted
+         !! from metres to GRID units at the dispatch (metres on a
+         !! Cartesian grid, degrees on spherical/curvilinear), the same
+         !! way `&ocean_topo_nml slope_scale` is.
+      real(wp) :: draft_x0 = -1.0e30_wp
+         !! Western edge of the shelf box (m, GLOBAL physical coordinate),
+         !! and the ANCHOR of the `"linear"` profile (`draft_depth` is the
+         !! draft AT `draft_x0`), which is why `"linear"` requires a
+         !! finite value here.  The default +/-1e30 on all four bounds is
+         !! the "no limit on this side" sentinel: the shelf then covers
+         !! the whole domain INCLUDING the ghost band, which is what a
+         !! shelf that reaches a wall needs (a box stopping at x = 0 puts
+         !! a phantom calving front one cell outside the west wall).
+      real(wp) :: draft_x1 = 1.0e30_wp
+         !! Eastern edge of the shelf box = the CALVING FRONT (m): beyond
+         !! it the draft is 0 (open ocean).  Default: no eastern limit.
+      real(wp) :: draft_y0 = -1.0e30_wp
+         !! Southern edge of the shelf box (m).  Default: no limit.
+      real(wp) :: draft_y1 = 1.0e30_wp
+         !! Northern edge of the shelf box (m).  Default: no limit.
+      real(wp) :: h_min_cavity = 10.0_wp
+         !! GROUNDING cutoff (m): a column whose water thickness
+         !! `b - z_draft` is below this is LAND — it goes through the same
+         !! `seed_wet_mask_impl` the bathymetry uses, so the static
+         !! metric-zeroing land mask and the finite land-state hold for
+         !! free.  Never a thin film of water under grounded ice.
+         !! ISOMIP+ §3.1.5 leaves the choice to the modeller and notes
+         !! ~40 m (two cells) for z-level models; sigma is less
+         !! restricted, hence 10 m.
+      real(wp) :: grounded_max_frac = 0.5_wp
+         !! Sanity bound: if more than this fraction of the interior
+         !! columns ground, configure fails loud rather than silently
+         !! running a domain that is mostly land.
+      real(wp) :: rho_ice = 918.0_wp
+         !! Ice density (kg/m^3), consulted ONLY by
+         !! `draft_source = "thickness"`.
+   end type ocean_cavity_dyn_config_t
    type :: ocean_continuity_config_t
       real(wp) :: h_min = 1.0e-6_wp
          !! Floor used by the PPM positivity limiter (MOM6
@@ -2510,6 +2609,9 @@ module rdb_config
       type(ocean_ddiff_config_t)      :: ddiff
       type(ocean_tides_config_t)      :: tides
       type(ocean_psurf_config_t)      :: psurf
+      type(ocean_cavity_dyn_config_t) :: cavity_dyn
+         !! Static ice-shelf cavity geometry (`&ocean_cavity_dyn_nml`).
+         !! Default-OFF ⇒ bit-identical.
       type(ocean_continuity_config_t)  :: continuity
       type(ocean_isopycnal_config_t)   :: isopycnal
          !! Lagrangian grounding-stability controls (`&ocean_isopycnal_nml`).
@@ -4420,6 +4522,236 @@ contains
                                 "pa(nz+1) is unchanged.")
          end if
       end if
+      ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
+      ! The draft is absorbed into the barotropic DATUM (bt_H_ref =
+      ! b - z_draft), so every consumer of the water-column thickness
+      ! D = bt_H_ref + bt_eta is correct with no cavity branch of its own.
+      ! What that buys is paid for by a narrow envelope, and EVERY
+      ! restriction below fails loud naming the knob and the reason: a
+      ! cavity that silently runs outside it looks plausible and is wrong
+      ! (a coordinate anchored at z = 0 under 500 m of ice, a second
+      ! un-reconciled surface load, a wide-halo BT clone with no draft).
+      if (cfg%ocean%cavity_dyn%enable) then
+         if (trim(cfg%sim_type) /= "ocean") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "sim_type='ocean'")
+            has_error = .true.
+         end if
+         ! --- geometry source envelope ---
+         select case (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)))
+         case ("none", "flat", "linear")
+            continue
+         case ("file")
+            call logger%error("&ocean_cavity_dyn_nml draft_config='file' is not "// &
+                              "implemented: a file draft needs the MPI-correct "// &
+                              "static-2-D reader (the bathymetry loader validates "// &
+                              "against LOCAL nx/ny and applies no global offset, so "// &
+                              "it is single-rank only).  Use 'flat' or 'linear'.")
+            has_error = .true.
+         case default
+            call logger%error("&ocean_cavity_dyn_nml draft_config='"// &
+                              trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                              "' is not recognised (none|flat|linear|file)")
+            has_error = .true.
+         end select
+         select case (trim(adjustl(cfg%ocean%cavity_dyn%draft_source)))
+         case ("draft", "thickness")
+            continue
+         case ("in_situ")
+            call logger%error("&ocean_cavity_dyn_nml draft_source='in_situ' (true "// &
+                              "isostasy, p_ice = g*int(rho)) is not implemented: it "// &
+                              "needs a per-column root find and does NOT admit exact "// &
+                              "discrete rest in the split solver.  Use 'draft' "// &
+                              "(the Boussinesq-isostatic flotation load ISOMIP+ "// &
+                              "prescribes) or 'thickness'.")
+            has_error = .true.
+         case default
+            call logger%error("&ocean_cavity_dyn_nml draft_source='"// &
+                              trim(adjustl(cfg%ocean%cavity_dyn%draft_source))// &
+                              "' is not recognised (draft|thickness|in_situ)")
+            has_error = .true.
+         end select
+         ! `"linear"` measures its profile from `draft_x0`, so an
+         ! unbounded (sentinel) anchor would make `draft_depth` meaningless
+         ! and the whole shelf depth an artefact of 1e30*slope.
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "linear" .and. &
+             abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_config='linear' requires "// &
+                              "a finite draft_x0: it is the ANCHOR of the profile "// &
+                              "(draft_depth is the draft AT draft_x0), not just the "// &
+                              "western edge of the box.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%draft_depth < 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_depth must be >= 0 "// &
+                              "(it is a DEPTH below z = 0, positive down)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%h_min_cavity <= 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml h_min_cavity must be > 0 "// &
+                              "(the grounding cutoff; 0 would admit a zero-thickness "// &
+                              "water column under the ice)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%grounded_max_frac <= 0.0_wp .or. &
+             cfg%ocean%cavity_dyn%grounded_max_frac > 1.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml grounded_max_frac must be in "// &
+                              "(0, 1] (the fraction of interior columns allowed to "// &
+                              "ground)")
+            has_error = .true.
+         end if
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_source)) == "thickness" .and. &
+             cfg%ocean%cavity_dyn%rho_ice <= 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_source='thickness' "// &
+                              "requires rho_ice > 0")
+            has_error = .true.
+         end if
+         ! --- pressure-gradient envelope ---
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "&ocean_pgf_nml form='fv_mom6' (got '"// &
+                              trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
+                              "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
+                              "boundary condition the ice load is injected into; "// &
+                              "mont hard-zeroes M(nz) and fv_lite/fv_wright seed "// &
+                              "p_edge(nz+1)=0.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%pgf%gfs_scale /= 1.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "&ocean_pgf_nml gfs_scale=1: the datum "// &
+                              "(bt_H_ref, which the barotropic substep feels "// &
+                              "through g_bt = gfs_scale*GRAVITY) and the load "// &
+                              "(rho_ref*GRAVITY*z_draft, which the PGF feels "// &
+                              "through GRAVITY) would then sit on two different "// &
+                              "gravities and drift apart.")
+            has_error = .true.
+         end if
+         ! --- vertical-coordinate envelope ---
+         ! Every z-like family anchors its target interfaces at z = 0,
+         ! which is 500 m of ice ABOVE the column under a shelf; only
+         ! sigma (and zstar-lite, which shares its ocean branch) rescales
+         ! the live column and so follows the draft for free.
+         block
+            integer :: cav_vcoord_code
+            cav_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
+                                                default_code=VCOORD_EULERIAN_Z)
+            if (.not. (cav_vcoord_code == VCOORD_SIGMA .or. &
+                       cav_vcoord_code == VCOORD_ZSTAR)) then
+               call logger%error("&ocean_cavity_dyn_nml enable=.true. supports "// &
+                                 "vcoord_type='sigma' or 'zstar' (zstar-lite) only — "// &
+                                 "got '"//trim(cfg%vcoord_type)//"'.  Every z-like "// &
+                                 "family (zsigma, zstar_full, z_fixed, eulerian_z, "// &
+                                 "rho, hycom) anchors its target interfaces at z = 0, "// &
+                                 "which under a shelf is inside the ice.")
+               has_error = .true.
+            end if
+         end block
+         if (trim(cfg%thickness_config) == "uniform_z") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with thickness_config='uniform_z': that "// &
+                              "seed lays uniform z interfaces from z = 0 down, so "// &
+                              "under a draft it would fill the ice with water.  Use "// &
+                              "the default sigma-style split.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%zinit%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_zinit_nml enable: the z-level "// &
+                              "T/S overlay measures depth from the COLUMN TOP, which "// &
+                              "under a draft is z_draft metres below z = 0, so the "// &
+                              "profile would land systematically too shallow.  The "// &
+                              "draft-offset z_ctr is a later slice.")
+            has_error = .true.
+         end if
+         ! --- solver envelope ---
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires the "// &
+                              "SPLIT solver (&ocean_bt_nml n_inner >= 1, or "// &
+                              "auto_n_inner): the unsplit driver has neither the "// &
+                              "barotropic correction nor the eta_forcing seam, so it "// &
+                              "carries no barotropic response to a surface load and "// &
+                              "the cavity is unvalidated there.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_bt_nml bt_halo > 0: the "// &
+                              "wide-halo BT clone rebuilds its own metrics from the "// &
+                              "grid formula and carries no z_draft, so its reference "// &
+                              "depth would be the bed and its solve would ignore the "// &
+                              "ice.")
+            has_error = .true.
+         end if
+         if (cfg%px*cfg%py > 1) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is single-rank in "// &
+                              "v1 (px*py = "//to_string(cfg%px*cfg%py)//").  The "// &
+                              "draft halo itself is two lines, but the grounding "// &
+                              "statistics are global reductions the v1 configure does "// &
+                              "not take, and draft_config='file' inherits the "// &
+                              "local-nx reader.  Lifting the fence is its own PR.")
+            has_error = .true.
+         end if
+         ! --- mutually exclusive capabilities ---
+         if (cfg%ocean%wetdry%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_wetdry_nml enable: both decide "// &
+                              "whether a column can carry water, from different "// &
+                              "thresholds, and wet/dry also forces split_scheme="// &
+                              "'ssp_rk2'.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%porous%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_porous_nml enable: both narrow "// &
+                              "the same faces from static geometry and the "// &
+                              "combination is unvalidated.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_ice_nml enable: sea ice is a "// &
+                              "SECOND surface load on the same column, and the two "// &
+                              "are not reconciled in v1.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tides%enable .and. cfg%ocean%tides%use_sal) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_tides_nml use_sal: the scalar "// &
+                              "SAL elevation is beta_sal*bt_eta, and under the cavity "// &
+                              "datum bt_eta is the departure from the LOADED "// &
+                              "equilibrium, not the sea-surface elevation the SAL "// &
+                              "response is defined on.  The body tide itself "// &
+                              "(enable alone) is datum-independent and allowed.")
+            has_error = .true.
+         end if
+         ! --- honest-inertness warnings (the house rule: warn, do not refuse) ---
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "none") then
+            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with "// &
+                                "draft_config='none': z_draft is identically zero, so "// &
+                                "bt_H_ref = b and the run is bit-identical to a "// &
+                                "cavity-free one.")
+         end if
+         if (.not. cfg%ocean%psurf%in_eos) then
+            call logger%warning("&ocean_cavity_dyn_nml enable=.true. without "// &
+                                "&ocean_psurf_nml in_eos=.true.: the in-situ EOS "// &
+                                "pressure still starts at 0 Pa at the ice base, so a "// &
+                                "nonlinear EOS ignores up to ~5e6 Pa of ice load "// &
+                                "(wrong thermobaricity).  Harmless for the rest and "// &
+                                "equivalence gates; not for a production cavity.")
+         end if
+         ! v1 SCOPE: this slice ships the GEOMETRY and the DATUM.  The
+         ! isostatic load p_ice_ref = rho_ref*GRAVITY*z_draft is built at
+         ! configure and stored on the metrics slot, but no consumer reads
+         ! it yet — wiring it into ms%p_top is the next slice.  Say so, so
+         ! nobody reads a datum-only cavity run as a loaded one.
+         call logger%warning("&ocean_cavity_dyn_nml: this build carries the cavity "// &
+                             "GEOMETRY and DATUM only — the isostatic load "// &
+                             "rho_ref*g*z_draft is computed but not yet applied to "// &
+                             "ms%p_top, so a sloping draft is NOT in hydrostatic "// &
+                             "balance.  Use it for datum/geometry work (and the flat-"// &
+                             "lid equivalence gate), not for cavity physics.")
+      end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its
       ! validated envelope is the coastal ZSTAR_FULL salt-leak foot-gun class.
@@ -5100,6 +5432,19 @@ contains
                               "BT solve would silently transport on un-narrowed widths)")
             has_error = .true.
          end if
+         if (cfg%ocean%cavity_dyn%enable) then
+            ! Same failure mode as porous, one level up: `metrics_w` is
+            ! re-filled from the grid formula and carries no `z_draft`, so
+            ! the wide fast loop would take the BED as its reference depth
+            ! and solve a column that is twice as deep as the cavity's.
+            ! (The cavity block above refuses this from its own side too —
+            ! the knob that is "wrong" depends on which one the user meant.)
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with &ocean_cavity_dyn_nml enable (the wide-halo "// &
+                              "metrics shadow carries no ice draft, so the BT solve "// &
+                              "would reference the bed instead of the ice base)")
+            has_error = .true.
+         end if
          if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
              trim(cfg%ocean%grid%grid_config) == "tripolar") then
             call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
@@ -5477,6 +5822,15 @@ contains
          reason = "psurf enable"
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
+      else if (cfg%ocean%cavity_dyn%enable) then
+         ! The wide BT clone rebuilds `metrics_w` from the grid formula and
+         ! carries no `z_draft`, so its reference depth would be the BED —
+         ! it would solve a 1000 m ocean where the cavity has 500 m of
+         ! water under 500 m of ice.  `validate_config` refuses an EXPLICIT
+         ! `bt_halo > 0`; AUTO must resolve to 0 here or a multi-rank
+         ! cavity run manufactures a width the user never asked for and
+         ! then trips that abort.
+         reason = "cavity_dyn enable"
       else if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
                trim(cfg%ocean%grid%grid_config) == "tripolar") then
          reason = "grid_config='"//trim(cfg%ocean%grid%grid_config)//"'"
@@ -5607,6 +5961,7 @@ contains
       call register_ddiff(cfg, schema)
       call register_ocean_tides(cfg, schema)
       call register_ocean_psurf(cfg, schema)
+      call register_ocean_cavity_dyn(cfg, schema)
       call register_epbl(cfg, schema)
       call register_wavespeed(cfg, schema)
       call register_foxkemper(cfg, schema)
@@ -6351,6 +6706,76 @@ contains
 
       call schema%add_group(g)
    end subroutine register_ocean_psurf
+
+   subroutine register_ocean_cavity_dyn(cfg, schema)
+      !! `&ocean_cavity_dyn` (P5.1 static ice-shelf cavity geometry: the
+      !! prescribed draft + the barotropic datum that absorbs it).
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+
+      g%name = "ocean_cavity_dyn"
+      g%doc = "Static ice-shelf cavity geometry: prescribed draft + "// &
+              "barotropic datum bt_H_ref = b - z_draft."
+
+      pl => cfg%ocean%cavity_dyn%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (single-rank, split solver, "// &
+                             "fv_mom6 PGF, sigma/zstar only)"))
+      ps => cfg%ocean%cavity_dyn%draft_config
+      call g%add(nml_enum("draft_config", ps, &
+                          "Analytic draft shape ('file' is deferred: the "// &
+                          "static-2-D reader lands in a later slice)", &
+                          allowed=[character(len=15) :: "none", "flat", &
+                                   "linear", "file"]))
+      ps => cfg%ocean%cavity_dyn%draft_source
+      call g%add(nml_enum("draft_source", ps, &
+                          "Whether the formula gives the ice-base DEPTH or "// &
+                          "an ice THICKNESS ('in_situ' isostasy is deferred)", &
+                          allowed=[character(len=15) :: "draft", "thickness", &
+                                   "in_situ"]))
+      pr => cfg%ocean%cavity_dyn%draft_depth
+      call g%add(nml_real("draft_depth", pr, &
+                          "Draft amplitude (ice thickness under "// &
+                          "draft_source='thickness')", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_slope
+      call g%add(nml_real("draft_slope", pr, &
+                          "d(draft)/dx for draft_config='linear' "// &
+                          "(dimensionless; converted to grid units)"))
+      pr => cfg%ocean%cavity_dyn%draft_x0
+      call g%add(nml_real("draft_x0", pr, &
+                          "Western edge of the shelf box, and the anchor of "// &
+                          "the 'linear' profile (+/-1e30 => no limit)", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_x1
+      call g%add(nml_real("draft_x1", pr, &
+                          "Eastern edge of the shelf box = the calving front "// &
+                          "(+/-1e30 => no limit)", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_y0
+      call g%add(nml_real("draft_y0", pr, &
+                          "Southern edge of the shelf box (+/-1e30 => no limit)", &
+                          units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_y1
+      call g%add(nml_real("draft_y1", pr, &
+                          "Northern edge of the shelf box (+/-1e30 => no limit)", &
+                          units="m"))
+      pr => cfg%ocean%cavity_dyn%h_min_cavity
+      call g%add(nml_real("h_min_cavity", pr, &
+                          "Grounding cutoff: b - z_draft below this is LAND "// &
+                          "(never a thin film under grounded ice)", units="m"))
+      pr => cfg%ocean%cavity_dyn%grounded_max_frac
+      call g%add(nml_real("grounded_max_frac", pr, &
+                          "Fail loud if more than this fraction of the "// &
+                          "interior columns ground"))
+      pr => cfg%ocean%cavity_dyn%rho_ice
+      call g%add(nml_real("rho_ice", pr, &
+                          "Ice density, consulted only by "// &
+                          "draft_source='thickness'", units="kg/m^3"))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_cavity_dyn
 
    subroutine register_epbl(cfg, schema)
       !! `&ocean_epbl` (Reichl & Hallberg 2018 energetics-based PBL).

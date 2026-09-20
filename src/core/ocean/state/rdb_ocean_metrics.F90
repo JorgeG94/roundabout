@@ -172,6 +172,43 @@ module rdb_ocean_metrics
          !! v-face twin, `(nx,ny+1,nz)` when `use_porous`, `(1,1,1)`
          !! otherwise.
 
+      ! ---- Static ice-shelf cavity geometry (P5.1; see rdb_ocean_cavity) ----
+      logical :: use_cavity = .false.
+         !! Master switch (`&ocean_cavity_dyn_nml enable`), latched in
+         !! `ocean_state_init_from_config` BEFORE `init` so the allocation
+         !! gate below can read it.  OFF ⇒ `z_draft` / `cover_frac` /
+         !! `p_ice_ref` stay at their `(1,1)` placeholder size, `bt_H_ref`
+         !! latches the bed as it always did, and every path is
+         !! byte-identical to a build without cavities.
+      real(wp), allocatable :: z_draft(:, :)
+         !! Prescribed STATIC ice-base depth (m, positive DOWN, `>= 0`),
+         !! `(nx_total, ny_total)` INCLUDING ghosts when `use_cavity`,
+         !! `(1,1)` otherwise.  Filled by the formula setters in
+         !! `rdb_ocean_cavity` immediately after the bathymetry, then
+         !! carried through the SAME periodic/fold re-wrap + halo sequence
+         !! `barotropic%b` gets (ordering is load-bearing: the draft must
+         !! exist before the wet mask is seeded from `b - z_draft`).
+         !! `z_draft = 0` is open ocean — including beyond the calving
+         !! front.
+      real(wp), allocatable :: cover_frac(:, :)
+         !! Ice-covered area fraction (nondimensional, `[0,1]`), same
+         !! shape + gating as `z_draft`.  v1 is BINARY, `merge(1, 0,
+         !! z_draft > 0)`; an area-blended calving front belongs to the
+         !! melt work.  Allocated alongside `z_draft` so the thermodynamic
+         !! slice does not have to re-open this lifecycle.
+      real(wp), allocatable :: p_ice_ref(:, :)
+         !! Boussinesq-isostatic (flotation) ice load `rho_ref*GRAVITY*
+         !! z_draft` (Pa, `>= 0`), same shape + gating as `z_draft`.  Built
+         !! ONCE at configure from the SAME product the FV_MOM6 surface BC
+         !! forms (`rho_ref*GRAVITY`), which is what makes
+         !! `pa(nz+1) = rho_ref*g*eta_geo + p_ice_ref` cancel to bit-zero
+         !! at rest.  Stored rather than recomputed so `GRAVITY`/`rho_ref`
+         !! cannot drift between the two users.  NOTE: in THIS slice
+         !! nothing reads it — the datum carries the whole dynamical effect
+         !! of a static load (the split solver discards the
+         !! column-integrated PGF); wiring it into
+         !! `multilayer_state_t%p_top` is the next slice.
+
       ! ---- Static land masks (real 0/1; derived in metrics_apply_land_mask) ----
       real(wp), allocatable :: wet_T(:, :)
          !! T-cell wet (1) / land (0) mask, `(nx,ny)` — the HALO-VALID
@@ -320,6 +357,21 @@ contains
       allocate (this%por_davg_v(1, 1), source=0.0_wp)
       allocate (this%por_face_area_u(1, 1, 1), source=1.0_wp)
       allocate (this%por_face_area_v(1, 1, 1), source=1.0_wp)
+      ! Ice-shelf cavity statics.  Unlike the porous arrays (grown at
+      ! configure), these are sized HERE off the `use_cavity` flag that
+      ! `init_from_config` latches before `init` — the draft has to exist
+      ! before `ocean_state_seed_from_cfg` seeds the wet mask and the
+      ! layer thicknesses from `b - z_draft`, which is well before any
+      ! `configure_ocean_*` runs.  Knob off ⇒ three `(1,1)` placeholders.
+      if (this%use_cavity) then
+         allocate (this%z_draft(nx, ny), source=0.0_wp)
+         allocate (this%cover_frac(nx, ny), source=0.0_wp)
+         allocate (this%p_ice_ref(nx, ny), source=0.0_wp)
+      else
+         allocate (this%z_draft(1, 1), source=0.0_wp)
+         allocate (this%cover_frac(1, 1), source=0.0_wp)
+         allocate (this%p_ice_ref(1, 1), source=0.0_wp)
+      end if
       ! Land masks default ALL-WET (1.0): if metrics_apply_land_mask is
       ! never called (no land), the masks stay inert (×1) and the 6 face
       ! metrics are never altered — bit-identical to a no-mask build.
@@ -385,6 +437,9 @@ contains
       if (allocated(this%por_davg_v)) deallocate (this%por_davg_v)
       if (allocated(this%por_face_area_u)) deallocate (this%por_face_area_u)
       if (allocated(this%por_face_area_v)) deallocate (this%por_face_area_v)
+      if (allocated(this%z_draft)) deallocate (this%z_draft)
+      if (allocated(this%cover_frac)) deallocate (this%cover_frac)
+      if (allocated(this%p_ice_ref)) deallocate (this%p_ice_ref)
       if (allocated(this%wet_T)) deallocate (this%wet_T)
       if (allocated(this%wet_u)) deallocate (this%wet_u)
       if (allocated(this%wet_v)) deallocate (this%wet_v)
@@ -478,6 +533,7 @@ contains
       !$acc enter data copyin(this%por_dmin_u, this%por_dmax_u, this%por_davg_u)
       !$acc enter data copyin(this%por_dmin_v, this%por_dmax_v, this%por_davg_v)
       !$acc enter data copyin(this%por_face_area_u, this%por_face_area_v)
+      !$acc enter data copyin(this%z_draft, this%cover_frac, this%p_ice_ref)
       !$acc enter data copyin(this%wet_T, this%wet_u, this%wet_v, this%wet_q)
       !$acc enter data copyin(this%areaT, this%areaCu, this%areaCv, this%areaBu)
       !$acc enter data copyin(this%idxT, this%idyT, this%idxCu, this%idyCu)
@@ -506,6 +562,7 @@ contains
       !$acc exit data delete(this%idxT, this%idyT, this%idxCu, this%idyCu)
       !$acc exit data delete(this%areaT, this%areaCu, this%areaCv, this%areaBu)
       !$acc exit data delete(this%wet_T, this%wet_u, this%wet_v, this%wet_q)
+      !$acc exit data delete(this%z_draft, this%cover_frac, this%p_ice_ref)
       !$acc exit data delete(this%por_face_area_u, this%por_face_area_v)
       !$acc exit data delete(this%por_dmin_v, this%por_dmax_v, this%por_davg_v)
       !$acc exit data delete(this%por_dmin_u, this%por_dmax_u, this%por_davg_u)
@@ -1883,6 +1940,9 @@ contains
                + arr_bytes(this%por_davg_v) &
                + arr_bytes(this%por_face_area_u) &
                + arr_bytes(this%por_face_area_v) &
+               + arr_bytes(this%z_draft) &
+               + arr_bytes(this%cover_frac) &
+               + arr_bytes(this%p_ice_ref) &
                + arr_bytes(this%wet_T) &
                + arr_bytes(this%wet_u) &
                + arr_bytes(this%wet_v) &

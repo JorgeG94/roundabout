@@ -90,6 +90,12 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_bipolar.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_metrics.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_porous.F90
+    # P5.1 static ice-shelf cavity geometry: the prescribed draft setters, the
+    # grounding/cross-validation helpers and the isostatic load fill. Leaf
+    # module (rdb_constants + rdb_grid only) — deliberately free of rdb_config
+    # so the formula dispatch, which needs the namelist, stays in the state
+    # builder next to the bathymetry dispatch it mirrors.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_cavity.F90
     # P2.5 pre-create geometry injection (Python runtime API plan): sign
     # normalisation/validation + ghost fill for an in-memory bathymetry array.
     # Deliberately NetCDF-free (unlike rdb_bathymetry, which requires

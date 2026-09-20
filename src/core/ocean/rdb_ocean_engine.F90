@@ -116,6 +116,7 @@ module rdb_ocean_engine
                               configure_ocean_bt_split, configure_ocean_bc, &
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
+                              configure_ocean_cavity, &
                               configure_ocean_wetdry, &
                               configure_ocean_sponge
    use rdb_ocean_stability_audit, only: ocean_stability_audit
@@ -661,6 +662,30 @@ contains
          call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
          call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b)
          call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         ! The ice draft is bathymetry-class static geometry, so it takes
+         ! the bathymetry's ghost treatment VERBATIM: the analytic setter
+         ! already filled the ghosts, and the wrap/fold then overwrites
+         ! them with the seam-correct values on a periodic or folded edge.
+         ! `bt_H_ref = b - z_draft` was latched from the UNWRAPPED pair,
+         ! which is exactly why all three are re-wrapped here (and why
+         ! they must be re-wrapped TOGETHER — a draft whose seam disagreed
+         ! with the datum's would count the ice load twice at that face).
+         if (engine%state%metrics%use_cavity) then
+            call ocean_periodic_wrap_centre_2d( &
+               engine%state%metrics%z_draft, &
+               engine%grid%nx_total, engine%grid%ny_total, &
+               engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
+               engine%state%bc%periodic_x, engine%state%bc%periodic_y)
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%z_draft)
+            call ocean_periodic_wrap_centre_2d( &
+               engine%state%metrics%cover_frac, &
+               engine%grid%nx_total, engine%grid%ny_total, &
+               engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
+               engine%state%bc%periodic_x, engine%state%bc%periodic_y)
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%cover_frac)
+         end if
          ! bt_H_ref was snapshotted from the UNWRAPPED b inside
          ! configure_ocean_bt_split (above) — re-wrap it too.
          if (cfg%ocean%bt%n_inner >= 1) then
@@ -687,6 +712,10 @@ contains
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank
       ! non-periodic ⇒ no-op, periodic ⇒ local wrap.
       call ocean_halo_centre(engine%state%barotropic%b, device_resident=.false.)
+      if (engine%state%metrics%use_cavity) then
+         call ocean_halo_centre(engine%state%metrics%z_draft, device_resident=.false.)
+         call ocean_halo_centre(engine%state%metrics%cover_frac, device_resident=.false.)
+      end if
       call ocean_halo_exchange_ml_state(engine%state%multilayer, device_resident=.false.)
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
@@ -714,6 +743,14 @@ contains
       ! Porous barriers: grow + fill the static along-face subgrid
       ! statistics. Same ordering constraints as wave drag.
       call configure_ocean_porous(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
+
+      ! Ice-shelf cavity: build the static isostatic load from the draft
+      ! the IC seed already laid down, and assert the counted-once datum
+      ! invariant. AFTER configure_ocean_pgf (it needs the PGF reference
+      ! density) and configure_ocean_bt_split (it checks that latch),
+      ! BEFORE enter_data.
+      call configure_ocean_cavity(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER

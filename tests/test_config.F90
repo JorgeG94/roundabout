@@ -292,6 +292,22 @@ contains
       if (allocated(error)) return
       cfg%ocean%porous%enable = .false.
 
+      ! Ice-shelf cavity: `bt_wide`'s own `metrics_w` is re-filled from the
+      ! grid formula and carries no `z_draft`, so the wide fast loop would
+      ! take the BED as its reference depth — a 1000 m ocean where the
+      ! cavity has 500 m of water under 500 m of ice.  AUTO must resolve
+      ! to 0 rather than manufacture a width that then trips the explicit
+      ! abort the user never asked for.
+      cfg%ocean%cavity_dyn%enable = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "cavity_dyn enable not detected as exclusion")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded) == 0, &
+                 "cavity + auto bt_halo on 4 ranks must resolve to 0, not the "// &
+                 "wide-halo march-in")
+      if (allocated(error)) return
+      cfg%ocean%cavity_dyn%enable = .false.
+
       cfg%ocean%grid%grid_config = "tripolar"
       call bt_halo_auto_exclusion(cfg, excluded, reason)
       call check(error, excluded, "tripolar grid_config not detected as exclusion")
