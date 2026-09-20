@@ -105,6 +105,7 @@ module rdb_ocean_engine
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
@@ -1301,12 +1302,6 @@ contains
          !! `driver_run_ocean`'s post-advance `t_current`.
       integer, intent(out), optional :: ierr
 
-      integer :: i_ss, j_ss, nx_ss, ny_ss
-         !! Loop/extent locals for the inline melt-only `stress_shelf` fill.
-      real(wp) :: rho0_ss
-         !! Reference density (kg/m^3) turning the melt slot's `u_*` back
-         !! into a stress; the single rho0 of record via the stress slot.
-
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
       ! Ice-shelf basal melt (P2b): solve the three-equation interface on
@@ -1342,18 +1337,35 @@ contains
       ! published field keeps `stress_shelf`'s "zero off the cover"
       ! invariant.
       !
-      ! Inline `do concurrent` (never a call handing `stress_shelf` to an
-      ! external subroutine — CLAUDE.md's escaping-actual rule), and
-      ! gated so no placeholder-sized array is ever indexed: both slots
-      ! allocate full size only when enabled.
+      ! A CALL, not an inline `do concurrent`, and the reason is a GPU
+      ! rule rather than a style preference.  A `do concurrent` written
+      ! here would reference `engine%state%surface_stress%stress_shelf`,
+      ! i.e. it would walk the ENGINE, and `ocean_engine_t` is not a
+      ! mapped object -- only `engine%state` is.  nvfortran then emits a
+      ! data clause for the whole `engine` and aborts at run time with
+      ! "variable in data clause is partially present on the device:
+      ! name=engine".  Measured, cc70, 2026-09-20: it did exactly that.
+      ! Host-dereferencing the two component arrays AT the call site and
+      ! handing them to a flat explicit-shape kernel is the fix -- the
+      ! outer-shim + flat-impl pattern.
+      !
+      ! CLAUDE.md's "write a host-gated pass INLINE" rule does not apply:
+      ! that rule exists because an escaping state array pessimises the
+      ! OTHER `do concurrent` loops in the calling routine, and
+      ! `engine_step_finalize` has none -- it is a four-call orchestrator.
+      !
+      ! Placeholder safety is STRUCTURAL, not a runtime branch: the gate
+      ! is `cavity_flux%enable`, and the melt slot allocates `ustar` at
+      ! `(nx, ny)` exactly when that is set (`(1,1)` otherwise), while
+      ! `stress_shelf` is always full size.  So the explicit-shape dummies
+      ! below can only ever be reached with matching, full-size actuals.
       if (engine%state%cavity_flux%enable .and. .not. engine%state%tdrag%enable) then
-         nx_ss = size(engine%state%surface_stress%stress_shelf, 1)
-         ny_ss = size(engine%state%surface_stress%stress_shelf, 2)
-         rho0_ss = engine%state%surface_stress%rho0
-         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
-            engine%state%surface_stress%stress_shelf(i_ss, j_ss) = &
-               rho0_ss*engine%state%cavity_flux%ustar(i_ss, j_ss)**2
-         end do
+         call ocean_surface_stress_set_shelf_from_ustar( &
+            engine%state%surface_stress%stress_shelf, &
+            engine%state%cavity_flux%ustar, &
+            engine%state%surface_stress%rho0, &
+            size(engine%state%surface_stress%stress_shelf, 1), &
+            size(engine%state%surface_stress%stress_shelf, 2))
       end if
 
       ! Ice-shelf cover: the assembler is where the atmospheric bands and
