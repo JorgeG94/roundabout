@@ -139,8 +139,31 @@ as the assertions the rigid-top slice must flip.
   column total; ZSTAR_FULL trims the surface).
 - **Bottom-up ROMS ordering** (`k=1` bed, `k=nz` surface). Builders that
   construct z-levels top-down must *reverse* into that order — don't flip.
-- **Vanishing layers.** ZSTAR_FULL and Z_FIXED clip bed-side layers to
-  `zstar_h_min`; operators that divide by `h_layer` gate on `H_VANISHED`
+- **The column top is NOT always `z = 0`.** A family that measures absolute
+  depth must take it from `ocean_vcoord_t%z_top(i,j)` — the geopotential depth
+  of the top of the WATER column, `metrics%z_draft` under an ice-shelf cavity
+  and `0` everywhere else, filled once at configure by
+  `configure_ocean_cavity`. It is allocated UNCONDITIONALLY at
+  `(nx_total, ny_total)` with `source = 0.0_wp`, precisely so a kernel can take
+  it as an explicit-shape dummy without ever meeting `metrics%z_draft`'s
+  `(1,1)` placeholder. `z_top ≡ 0` must reproduce the pre-cavity arithmetic
+  BIT-for-bit — write the branch so that is true by construction (subtracting
+  an exact zero is bit-identical in IEEE round-to-nearest, and stays so under
+  FMA contraction), and pin it with an `==` assertion. `VCOORD_Z_FIXED` is the
+  worked example: `ocean_vcoord_z_fixed_target`, gated by
+  `test_ocean_vcoord_interface_depths` (the per-family interface-DEPTH
+  table, which asserts `e(K) = -max((nz-K)*h_nominal, z_top)` under a lid)
+  and `test_ocean_vcoord_zfixed_cavity` (the partial cell, the sliver
+  merge and the `==` bit-identity). Until your family does this,
+  leave it in `validate_config`'s cavity refusal list with a reason.
+- **Vanishing layers, at BOTH ends.** ZSTAR_FULL and Z_FIXED clip bed-side
+  layers to `zstar_h_min`; under a rigid top Z_FIXED also clips TOP-side
+  layers to the same filler and cuts the first live layer into a partial cell.
+  A partial cell needs a minimum thickness or it ships slivers: the bed's
+  threshold is `zstar_h_min` and the top's is `0.1*h_nominal`
+  (`Z_FIXED_TOP_PARTIAL_FRAC`, MITgcm's `hFacMin` / Losch 2008 §2.1), with a
+  sub-threshold cut MERGED into the neighbour away from the boundary. Operators
+  that divide by `h_layer` gate on `H_VANISHED`
   (dynamic vanish — skip/merge) or `H_DIV_EPS` (pure 1/0 armour), which have
   documented, distinct roles in `rdb_constants`. Pick the right one. A negative
   interface NaNs the CFL — defend degenerate columns.
