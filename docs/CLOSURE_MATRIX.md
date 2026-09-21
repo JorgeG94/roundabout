@@ -369,6 +369,41 @@ i.e. with the knob on, the mode's growth rate falls to the no-remap floor.
 Gate: `test_remap_boundary_extrap` (four exactness cases FAIL with the
 default closure, by construction).
 
+#### Non-uniform-grid weights (`remap_nonuniform_weights`) — also orthogonal
+
+The boundary closure above buys linear exactness only for a **uniform**
+source column. PLM's `0.5·minmod(Δq_l, Δq_r)` slope and PPM's
+`(7/12, −1/12)` edge estimate are the **equal-thickness specialisations** of
+Colella & Woodward (1984) eqs (1.6)–(1.8), so on a **stretched** source
+column — which is what every geometric family but σ-on-a-flat-bed hands the
+remap — they carry an O(Δh/h) error through the whole **interior**, not just
+at the two boundary cells. `"ppm_h4"` and `"pqm"` already carry
+thickness-weighted stencils and are unaffected.
+
+| Knob | Default | Effect |
+|---|---|---|
+| `&vcoord_nml remap_nonuniform_weights` | `.false.` (bit-identical) | `.true.` ⇒ PPM takes the CW84 (1.6) edge value on the true stencil thicknesses (with the unlimited (1.7) jump, so it reduces **exactly** to `(7/12, −1/12)` on a uniform column), and PLM takes the CW84 (1.7)+(1.8) h-weighted slope (MOM6 `PLM_slope_cw`). Inert for `"pcm"`; reaches `"ppm_h4"`/`"pqm"` only through their small-`nz` fallbacks. |
+
+Measured on random stretched columns (`nz = 12`, `h` uniform on [0.5, 6.5] m,
+`dq/dz = 0.25`, `remap_boundary_extrap = .true.`), max |q_new − q_exact| on a
+profile linear in z:
+
+| method | knob off | knob on |
+|---|---|---|
+| `plm` | 1.5E-01 | 2.8E-14 |
+| `ppm` | 1.7E-01 | 4.3E-14 |
+| `ppm_h4` | 5.0E-14 | 5.0E-14 (already exact) |
+| `pqm` | 5.2E-14 | 5.2E-14 (already exact) |
+
+**One caveat worth reading before turning it on.** PPM reduces exactly on a
+uniform column, PLM does **not**: CW84 (1.7) there is the *centred*
+difference under the (1.8) bound, where the shipped kernel uses the strictly
+more diffusive minmod. So the knob swaps PLM's limiter as well as its
+weighting and moves the `plm` answer even with no stretching — still
+monotone, still conservative, now linear-exact. Gate:
+`test_remap_nonuniform` (`uniform_source_plm_swaps_limiter` pins exactly
+that, and `knob_off_is_first_order` pins the defect the knob removes).
+
 ## Tracer advection & reconstruction schemes
 
 Tracer transport has three distinct reconstruction jobs — horizontal tracer
