@@ -21,6 +21,53 @@
 ! problem and is owned elsewhere; read this case's energy against that
 ! baseline, not against zero.
 !
+!
+! ================ MEASURED, 30 days, melt ON =====================
+!
+! nvfortran 25.5 `-stdpar=gpu` cc70, one V100: 30 days in 164 s
+! (5.5 s / simulated day).  gfortran 15.1 Release agrees to every
+! printed digit at every daily checkpoint it was carried to.
+! Zero `[nan-catch]` lines, zero CFL truncations, `MaxCFL <= 0.0662`.
+! `melt` columns: 2584 covered, the same count `configure_ocean_k_top`
+! reports as carrying top-side fillers.
+!
+!  day | En (m2/s2) | MaxCFL | max|u| | melt mean / max / min (m/yr) | Mass Err | Salt Err | Heat Err
+!  ----|------------|--------|--------|------------------------------|----------|----------|---------
+!    1 |  7.442E-08 | 0.0016 | 2.2e-3 |   3.77 /   8.66 /  +1.01     | -1.9E-14 |  2.1E-14 | -1.6E-14
+!    5 |  2.999E-06 | 0.0115 | 5.6e-2 |   4.99 /  27.61 /  +0.84     | -9.7E-14 |  1.0E-13 | -1.2E-13
+!   10 |  2.628E-05 | 0.0285 | 1.7e-1 |   5.67 /  29.72 /  +0.69     | -1.9E-13 |  2.1E-13 | -3.3E-13
+!   20 |  1.433E-04 | 0.0513 | 2.9e-1 |   6.08 /  35.64 /  -1.01     | -3.9E-13 | -4.3E-09 |  6.0E-09
+!   30 |  3.302E-04 | 0.0621 | 2.4e-1 |   7.83 /  65.92 /  -0.70     | -5.8E-13 | -5.5E-08 |  8.0E-08
+!
+! (melt statistics are over the COVERED columns only — every cavity
+! diagnostic is NaN outside the cover — and are sampled at the half-day
+! the daily diagnostic fires.  A NEGATIVE melt rate is refreezing; it
+! first appears on day 13.)
+!
+! READ THE BUDGETS HONESTLY.  Through day 15 all three residuals grow
+! LINEARLY with step count at ~2E-14/day, which is round-off
+! accumulation and nothing else.  At day 16 the salt and heat residuals
+! JUMP four decades and change sign, reaching 5.5E-08 / 8.0E-08 relative
+! by day 30 — still only 2E-05 of the tracked melt source, and nothing
+! like the per-step leak of the WHOLE deposit that the pre-k_top
+! refusal named, but NOT round-off.  It was not isolated.  The leading
+! suspect is the BED side, which Phase 6 scoped out on purpose: `k_bot`
+! was deliberately not shipped, the partial BOTTOM cell absorbs eta plus
+! the bed fillers' debt and the closed-faces census measured the
+! thinnest live layer on this geometry at 1.8 mm, so once the flow is
+! energetic enough to move it through `H_VANISHED` the ALE remap drain
+! empties it un-budgeted.  Do not quote this case's budgets as closed
+! past day 15.
+!
+! The ENERGY is the melt-driven circulation, not a spurious mode: the
+! melt-OFF twin of this configuration sits at En = 1.3E-06 at day 30
+! (`cavity_rest_growth_diagnosis.md` section Y.1) and this run is 250x
+! that, with max|u| ~ 25 cm/s plume velocities in the right places.
+! The sigma twin of THIS case (same namelist, `vcoord_type = "sigma"`,
+! `h_min_cavity = 20`) does not survive: it blows the barotropic loop up
+! on day 3 and `validate_config`'s melt solver fails loud on 1413
+! non-finite columns.  That contrast is the point of the coordinate.
+!
 ! The IDEALISED draft (analytic, no external data) is the same one
 ! `ocean0_idealised_draft.nml` uses; its derivation follows.
 !
