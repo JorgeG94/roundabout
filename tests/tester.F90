@@ -144,6 +144,8 @@ program rdb_tests
                                               collect_ocean_vcoord_zfixed_cavity_tests
    use test_ocean_zfixed_closed_faces, only: ocean_zfixed_closed_faces_collect => &
                                              collect_ocean_zfixed_closed_faces_tests
+   use test_ocean_zfixed_bt_seiche, only: ocean_zfixed_bt_seiche_collect => &
+                                          collect_ocean_zfixed_bt_seiche_tests
    use test_ocean_remap, only: ocean_remap_collect => collect_ocean_remap_tests
    use test_ocean_regrid_refine, only: ocean_regrid_refine_collect => collect_ocean_regrid_refine_tests
    use test_ocean_remap_e2e, only: ocean_remap_e2e_collect => collect_ocean_remap_e2e_tests
@@ -313,6 +315,7 @@ program rdb_tests
                 new_testsuite("ocean_vcoord_hygiene", ocean_vcoord_hygiene_collect), &
                 new_testsuite("ocean_vcoord_zfixed_cavity", ocean_vcoord_zfixed_cavity_collect), &
                 new_testsuite("ocean_zfixed_closed_faces", ocean_zfixed_closed_faces_collect), &
+                new_testsuite("ocean_zfixed_bt_seiche", ocean_zfixed_bt_seiche_collect), &
                 new_testsuite("ocean_remap", ocean_remap_collect), &
                 new_testsuite("ocean_regrid_refine", ocean_regrid_refine_collect), &
                 new_testsuite("ocean_remap_e2e", ocean_remap_e2e_collect), &

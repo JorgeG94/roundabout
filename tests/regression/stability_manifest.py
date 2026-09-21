@@ -796,11 +796,14 @@ STABILITY_CASES = [
                "or tracer flux, free-slip -- and leaving it OPEN lets the FV "
                "pressure gradient integrate across a staircase step of up to "
                "h_nominal = 20 m. MEASURED (gfortran 15.1 Release, "
-               "pred_corr, 2 days): knob ON En 8.063E-08 (d 0.25) / "
-               "8.636E-07 (d 1) / 2.700E-06 (d 2), MaxCFL <= 0.0041, Mass "
-               "Error 4.4E-14; knob OFF 2.833E-05 / 1.786E-04 / 5.629E-04, "
-               "MaxCFL to 0.086 -- 208x the energy at day 2 and still "
-               "climbing. Note the throwaway spike reported NaN by day 0.25 "
+               "pred_corr, 2 days): knob ON En 1.005E-08 at day 2 and "
+               "SATURATED (1.001E-08 at day 1.75), MaxCFL <= 0.0008, Mass "
+               "Error 3.9E-14; knob OFF 5.629E-04 at day 2 and still "
+               "climbing, MaxCFL to 0.086 -- 56000x. With the face mask but "
+               "WITHOUT the open-column barotropic weighting the same leg "
+               "sat at 2.700E-06 and had not settled, which is what the "
+               "barotropic-consistency slice bought. Note the throwaway "
+               "spike reported NaN by day 0.25 "
                "for its own cavity-off variant of ocean0_idealised_draft; "
                "THIS namelist does not go non-finite in 2 days, so the bar "
                "here is the ENERGY, not survival. nu_h = 6 and kappa_h = 1 "
@@ -810,11 +813,10 @@ STABILITY_CASES = [
                "lateral tracer flux. split_scheme is not pinned, so the "
                "ssp_rk2 twin is built from the same file.",
           known_failure={
-              "assertions": ["conserve:Salt", "conserve:Heat",
-                             "energy:rest-settles"],
+              "assertions": ["conserve:Salt", "conserve:Heat"],
               "reason":
-                  "OPEN, scoped, and NEITHER of the two is caused by the "
-                  "closed-face mask.  (1) conserve:Salt/Heat sit at a FIXED "
+                  "OPEN, scoped, and NOT caused by the closed-face mask.  "
+                  "conserve:Salt/Heat sit at a FIXED "
                   "-1.524E-06 / -2.030E-06 that appears IN FULL at the first "
                   "report (day 0.25) and is then flat to 6 digits for the "
                   "rest of the run -- a one-time offset, not a leak.  It is "
@@ -830,12 +832,12 @@ STABILITY_CASES = [
                   "thickness_config='uniform_z' was tried and moves it by "
                   "less than 1 %.  The fix is a z_fixed-aware initial "
                   "thickness for the cavity-OFF path, a separate slice.  "
-                  "(2) energy:rest-settles: the run is still at its peak at "
-                  "the end because the classical partial-step PGF error at "
-                  "an OPEN face between a PARTIAL and a FULL cell survives "
-                  "the closure and grows slowly -- Yung et al. (2026) 3.2, "
-                  "the one remaining item.  energy:rest (the AMPLITUDE bar) "
-                  "passes, and that is what this case gates.",
+                  "energy:rest AND energy:rest-settles both PASS: with the "
+                  "barotropic mode weighted by the OPEN column the run "
+                  "saturates at En = 1.005E-08 by day 2 (1.001E-08 at day "
+                  "1.75), 56000x below the knob-off leg.  Before the "
+                  "barotropic slice it sat at 2.700E-06 and was still "
+                  "climbing, and rest-settles was scoped here too.",
               "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
           },
           tags=["isomip_plus", "vcoord_z_fixed", "closed_faces",
@@ -1117,15 +1119,14 @@ SCHEME_AXIS_PHYSICS = {}
 # other gate it has.
 SCHEME_AXIS_KNOWN_FAILURE = {
     "isomip_plus_ice_free_zfixed": {
-        "assertions": ["conserve:Salt", "conserve:Heat",
-                       "energy:rest-settles"],
+        "assertions": ["conserve:Salt", "conserve:Heat"],
         "reason":
-            "The same two scoped items as the pred_corr base case, and for "
-            "the same two reasons: the one-time IC-relamp offset in "
-            "Salt/Heat (Mass still closes at round-off) and the surviving "
-            "partial-step PGF error, which has not equilibrated in 2 days.  "
-            "Neither depends on the outer split -- the twin exists to prove "
-            "the MASK does not either.",
+            "The same scoped item as the pred_corr base case, for the same "
+            "reason: the one-time IC-relamp offset in Salt/Heat, which "
+            "appears in full at the first report and is flat thereafter "
+            "(Mass still closes at round-off, and is the discriminator).  "
+            "It does not depend on the outer split -- the twin exists to "
+            "prove the MASK does not either.",
         "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
     },
 

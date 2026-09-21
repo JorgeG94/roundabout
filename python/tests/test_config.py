@@ -18,12 +18,12 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 60 groups / 670 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 60 groups / 673 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
     # bump: &vcoord_nml zfixed_closed_faces, the partial-step z-level
     # face closure).
     assert N_GROUPS == 60
-    assert N_KNOBS == 670
+    assert N_KNOBS == 673
     assert "ocean_bc" in ALL_GROUPS
 
 
