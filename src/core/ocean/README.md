@@ -170,6 +170,20 @@ deposits into whatever layer it is handed.
    (outer-shim + flat-impl) and restores I1. A column with no
    sub-threshold layer is a textual no-op, so every sigma / z*-lite /
    `eulerian_z` configuration is bit-identical.
+
+   **It is unconditional, and it costs.** Measured on
+   `benchmarks/bench_ocean` with
+   `validation_examples/ocean/bench_scaling/double_gyre_big.nml`
+   (600×600×50, 288 steps, two tracers), nvfortran 26.5 `-stdpar=gpu`
+   cc70, one V100: **67.06 / 67.08 s with the sweep, 65.84 / 65.71 s with
+   the call NOPed — +1.9 %.** That is the price of the invariant and it
+   is deliberately not bought back by a "does this coordinate vanish
+   layers?" gate: land columns are seeded at exactly `H_VANISHED` on
+   EVERY family (`seed_land_h_floor_impl`), so no family is exempt and a
+   family gate would be wrong as well as conditional. The honest
+   optimisation, when someone wants the 1.9 % back, is to FUSE the merge
+   into the last per-column tracer kernel of the step — which already
+   reads `h` and `hTr` — rather than to make the guarantee optional.
    The ALE remap additionally applies the rule on **both** sides of its
    own `c = hTr/h` ↔ `hTr = c·h` round trip, because the reconstruction
    between them must never see a concentration recovered from a near-zero
