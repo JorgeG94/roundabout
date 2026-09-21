@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 1.6% of total for modules and submodules.">872 statements</a>
+                 title=" 1.8% of total for modules and submodules.">987 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,7 +134,7 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_min_frac~2">H_MIN_FRAC</a>
-            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_neglect~5">H_NEGLECT</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_neglect~4">H_NEGLECT</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#variable-h_ratio_floor">H_RATIO_FLOOR</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#variable-pqm_min_frac">PQM_MIN_FRAC</a>
         </div>
@@ -150,7 +150,18 @@
   
   
   
-  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_preconditions_ok">remap_column_preconditions_ok</a>
+        </div>
+      </div>
+    </div>
+
       <div class="card mb-4">
       <a data-bs-toggle="collapse" href="#subs-0"
          aria-expanded="false" aria-controls="subs-0">
@@ -165,6 +176,10 @@
             <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_ppm_h4">remap_column_ppm_h4</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#proc-remap_column_pqm">remap_column_pqm</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#proc-boundary_half_jump">boundary_half_jump</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-plm_slope_nonuniform">plm_slope_nonuniform</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-ppm_edge_nonuniform">ppm_edge_nonuniform</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-ppm_edge_two_cell">ppm_edge_two_cell</a>
+            <a class="list-group-item" href="../module/rdb_remap_column.html#proc-ppm_jump_nonuniform">ppm_jump_nonuniform</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#proc-pqm_end_value_h4">pqm_end_value_h4</a>
             <a class="list-group-item" href="../module/rdb_remap_column.html#proc-pqm_solve_diag_dominant">pqm_solve_diag_dominant</a>
         </div>
@@ -207,6 +222,20 @@ selects <code>boundary_half_jump</code> instead: the linear-exact one-sided
 edge pair, which makes the whole column exact for a profile linear
 in z. It is the remap-side twin of
 <code>rdb_ocean_pgf_reconstruct :: boundary_edges_linear</code>. Default
+<code>.false.</code> everywhere ⇒ bit-identical.</p>
+<p><strong>Non-uniform-grid weights.</strong> PLM&rsquo;s slope and PPM&rsquo;s edge estimate are
+both written for a UNIFORM source column — the minmod half-difference
+<code>0.5·minmod(Δq_l, Δq_r)</code> and the <code>(7/12, -1/12)</code> four-cell average are
+the equal-thickness specialisations of Colella &amp; Woodward (1984)
+eqs (1.6)-(1.8).  On a STRETCHED source column they are only
+first-order-consistent, so a profile linear in <code>z</code> is NOT reproduced —
+the same defect the boundary closure above fixes at <code>k=1</code>/<code>k=nz</code>, but
+in the interior and driven by the thickness RATIO rather than by the
+missing stencil.  The optional <code>nonunif</code> argument selects the proper
+thickness-weighted forms (MOM6 <code>PLM_slope_cw</code> / CW84 (1.6)-(1.8)),
+which reduce to the shipped formulae exactly on a uniform column.
+PPM_H4 and PQM already carry thickness-weighted stencils and are
+unaffected except through their small-<code>nz</code> fallbacks.  Default
 <code>.false.</code> everywhere ⇒ bit-identical.</p>
 <br>          <div class="card mb-4">
       <h3 class="card-header card-title bg-light">Uses</h3>
@@ -738,7 +767,7 @@ thickness pair sums to ~0.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_neglect~5"></span>
+              <span class="anchor" id="variable-h_neglect~4"></span>
               real(kind=wp),
             </td>
               <td>private,</td>
@@ -800,11 +829,108 @@ parameter
 
 
 
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_preconditions_ok"></span> <h3>public pure function <a href='../proc/remap_column_preconditions_ok.html'>remap_column_preconditions_ok</a>(nz, dz_old, dz_new, rel_tol) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Precondition test for one remap column, as a <code>pure</code> predicate so the
+caller decides what to do about a violation (audit findings V5, V6).</p><a href="../proc/remap_column_preconditions_ok.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~205"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Source-column thicknesses.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>Target-column thicknesses.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rel_tol~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rel_tol</strong></td>
+            <td>
+<p>Relative tolerance on the column-total match, applied against
+the larger of the two totals (so a land column of zero total
+passes trivially).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    <p><code>.true.</code> when both preconditions hold.</p>
+
+    </div>
+  </div>
+
+        </section>
+        <br>
 
         <section>
           <h2>Subroutines</h2>
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-remap_column"></span> <h3>public pure subroutine <a href='../proc/remap_column.html'>remap_column</a>(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column"></span> <h3>public pure subroutine <a href='../proc/remap_column.html'>remap_column</a>(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
 </h3></div>
     <div class="card-body">
           
@@ -823,7 +949,7 @@ parameter
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~9"></span>
+              <span class="anchor" id="variable-method~12"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -838,7 +964,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~372"></span>
+              <span class="anchor" id="variable-nz~206"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -853,7 +979,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old"></span>
+              <span class="anchor" id="variable-dz_old~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -868,7 +994,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new"></span>
+              <span class="anchor" id="variable-dz_new~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -883,7 +1009,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_old"></span>
+              <span class="anchor" id="variable-q_old~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -898,7 +1024,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_new"></span>
+              <span class="anchor" id="variable-q_new~3"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -930,6 +1056,29 @@ and <code>k=nz</code> reconstruct as PCM, which is first-order there.
 closure.  Ignored by PCM (no reconstruction to close).</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~6"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+<p>Non-uniform-grid reconstruction weights
+(<code>&amp;vcoord_nml remap_nonuniform_weights</code>).  Absent or <code>.false.</code>
+(the default) ⇒ PLM&rsquo;s slope and PPM&rsquo;s edge estimate use their
+equal-thickness specialisations, which are linear-exact only on
+a uniform SOURCE column.  <code>.true.</code> ⇒ the Colella &amp; Woodward
+(1984) (1.6)-(1.8) thickness-weighted forms, linear-exact on any
+source column.  Inert for PCM; reaches PPM_H4/PQM only through
+their small-<code>nz</code> fallbacks, their own stencils already being
+thickness-weighted.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -957,7 +1106,7 @@ closure.  Ignored by PCM (no reconstruction to close).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~373"></span>
+              <span class="anchor" id="variable-nz~207"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -972,7 +1121,7 @@ closure.  Ignored by PCM (no reconstruction to close).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old~2"></span>
+              <span class="anchor" id="variable-dz_old~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -987,233 +1136,7 @@ closure.  Ignored by PCM (no reconstruction to close).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new~2"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dz_new</strong>(nz)</td>
-            <td>
-<p>New layer thicknesses</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-q_old~2"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>q_old</strong>(nz)</td>
-            <td>
-<p>Old cell-average scalar values</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-q_new~2"></span>
-              real(kind=wp),
-            </td>
-<td>intent(out)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>q_new</strong>(nz)</td>
-            <td>
-<p>New cell-average scalar values (conservative)</p>
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_plm"></span> <h3>public pure subroutine <a href='../proc/remap_column_plm.html'>remap_column_plm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
-Per old layer k: q_hat(xi) = q(k) + slope(k)<em>(2</em>xi - 1), xi in [0,1],
-slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
-<code>bnd_extrap</code> (absent/.false. = default) closes the boundary cells
-with <code>boundary_half_jump</code> instead of the PCM flatten — see
-<code>remap_column</code>.</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~374"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dz_old~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dz_old</strong>(nz)</td>
-            <td>
-<p>Old layer thicknesses</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dz_new~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dz_new</strong>(nz)</td>
-            <td>
-<p>New layer thicknesses</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-q_old~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>q_old</strong>(nz)</td>
-            <td>
-<p>Old cell-average scalar values</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-q_new~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(out)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>q_new</strong>(nz)</td>
-            <td>
-<p>New cell-average scalar values (conservative)</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-bnd_extrap~7"></span>
-              logical,
-            </td>
-<td>intent(in),</td>
-              <td>optional</td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>bnd_extrap</strong></td>
-            <td>
-<p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm.html'>remap_column_ppm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Piecewise-parabolic (Colella &amp; Woodward 1984) remap.
-Per old layer k, xi in [0,1]:
-  q_hat(xi) = q_L + xi<em>(q_R - q_L + q6</em>(1 - xi)), q6 = 6<em>q_bar - 3</em>(q_L+q_R)
-Edge values: 4th-order interp + CW monotonicity limiting; boundary
-layers fall back to PLM-quality edges, or — under <code>bnd_extrap</code> —
-to the linear-exact one-sided pair (<code>boundary_half_jump</code>), which
-zeroes <code>q6</code> there so the boundary cell carries a straight line.</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~375"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dz_old~4"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dz_old</strong>(nz)</td>
-            <td>
-<p>Old layer thicknesses</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dz_new~4"></span>
+              <span class="anchor" id="variable-dz_new~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1256,21 +1179,6 @@ zeroes <code>q6</code> there so the boundary cell carries a straight line.</p>
 <p>New cell-average scalar values (conservative)</p>
             </td>
         </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-bnd_extrap~8"></span>
-              logical,
-            </td>
-<td>intent(in),</td>
-              <td>optional</td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>bnd_extrap</strong></td>
-            <td>
-<p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
-            </td>
-        </tr>
     </tbody>
   </table>
 
@@ -1279,19 +1187,19 @@ zeroes <code>q6</code> there so the boundary cell carries a straight line.</p>
   </div>
 
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm_h4"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm_h4.html'>remap_column_ppm_h4</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_plm"></span> <h3>public pure subroutine <a href='../proc/remap_column_plm.html'>remap_column_plm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
 </h3></div>
     <div class="card-body">
           
-  <p>PPM with non-uniform 4th-order (H4) edge values (White &amp; Adcroft 2008).
-As <code>remap_column_ppm</code> but the interior edge estimate is the
-thickness-weighted exactly-4th-order stencil (reduces to PPM&rsquo;s
-(7/12,-1/12) on uniform layers), cutting spurious diapycnal mixing per
-remap (Ilicak et al. 2012). Limiter/reconstruction/integration are
-identical to PPM. H4 edge algebra is inlined (helper extraction costs
-4-6% on this hot kernel). Boundary edges: outermost = PCM,
-second-from-boundary = non-uniform 3-cell (H3) quadratic; CW limiter
-clamps all edges to local monotone bounds.</p>
+  <p>Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
+Per old layer k: q_hat(xi) = q(k) + slope(k)<em>(2</em>xi - 1), xi in [0,1],
+slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
+<code>bnd_extrap</code> (absent/.false. = default) closes the boundary cells
+with <code>boundary_half_jump</code> instead of the PCM flatten — see
+<code>remap_column</code>.  <code>nonunif</code> (absent/.false. = default) replaces the
+minmod half-difference — which assumes EQUAL source thicknesses —
+with the thickness-weighted CW84 (1.7)/(1.8) slope; see
+<code>plm_slope_nonuniform</code>.</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1306,7 +1214,7 @@ clamps all edges to local monotone bounds.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~376"></span>
+              <span class="anchor" id="variable-nz~208"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1321,7 +1229,7 @@ clamps all edges to local monotone bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old~5"></span>
+              <span class="anchor" id="variable-dz_old~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1336,7 +1244,7 @@ clamps all edges to local monotone bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new~5"></span>
+              <span class="anchor" id="variable-dz_new~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1381,7 +1289,7 @@ clamps all edges to local monotone bounds.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bnd_extrap~9"></span>
+              <span class="anchor" id="variable-bnd_extrap~7"></span>
               logical,
             </td>
 <td>intent(in),</td>
@@ -1394,6 +1302,21 @@ clamps all edges to local monotone bounds.</p>
 <p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~7"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+<p>Non-uniform-grid slope weights (CW84 1.7/1.8).</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -1402,19 +1325,21 @@ clamps all edges to local monotone bounds.</p>
   </div>
 
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_pqm"></span> <h3>public pure subroutine <a href='../proc/remap_column_pqm.html'>remap_column_pqm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm.html'>remap_column_ppm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
 </h3></div>
     <div class="card-body">
           
-  <p>Piecewise-quartic (PQM_IH4IH3) conservative remap (White &amp; Adcroft 2008).
-Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
-diagonally-dominant tridiagonal solve with one-sided 4-cell boundary
-closure), per-cell quartic, W&amp;A monotonicity limiter, conservative
-quartic overlap integral. Cuts diapycnal mixing per remap vs PPM/PPM_H4
-(Ilicak et al. 2012).
-Per cell k, xi in [0,1]: q_hat(xi) = a + b<em>xi + c</em>xi^2 + d<em>xi^3 + e</em>xi^4.
-Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
-(W&amp;A boundary closure needs &gt;= 4 cells).</p>
+  <p>Piecewise-parabolic (Colella &amp; Woodward 1984) remap.
+Per old layer k, xi in [0,1]:
+  q_hat(xi) = q_L + xi<em>(q_R - q_L + q6</em>(1 - xi)), q6 = 6<em>q_bar - 3</em>(q_L+q_R)
+Edge values: 4th-order interp + CW monotonicity limiting; boundary
+layers fall back to PLM-quality edges, or — under <code>bnd_extrap</code> —
+to the linear-exact one-sided pair (<code>boundary_half_jump</code>), which
+zeroes <code>q6</code> there so the boundary cell carries a straight line.
+<code>nonunif</code> swaps the <code>(7/12, -1/12)</code> edge estimate — an EQUAL-
+thickness specialisation — for CW84 (1.6) on the true stencil
+thicknesses, and the <code>1|2</code> / <code>(nz-1)|nz</code> edges for the
+thickness-weighted two-cell value; see <code>ppm_edge_nonuniform</code>.</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1429,7 +1354,7 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~377"></span>
+              <span class="anchor" id="variable-nz~209"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1444,7 +1369,7 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old~6"></span>
+              <span class="anchor" id="variable-dz_old~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1454,12 +1379,12 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
             <td>::</td>
             <td><strong>dz_old</strong>(nz)</td>
             <td>
-<p>Old layer thicknesses (must sum to same total as dz_new)</p>
+<p>Old layer thicknesses</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new~6"></span>
+              <span class="anchor" id="variable-dz_new~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1504,6 +1429,284 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
         </tr>
         <tr>
             <td>
+              <span class="anchor" id="variable-bnd_extrap~8"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bnd_extrap</strong></td>
+            <td>
+<p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~8"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+<p>Non-uniform-grid edge weights (CW84 1.6-1.8).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_ppm_h4"></span> <h3>public pure subroutine <a href='../proc/remap_column_ppm_h4.html'>remap_column_ppm_h4</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>PPM with non-uniform 4th-order (H4) edge values (White &amp; Adcroft 2008).
+As <code>remap_column_ppm</code> but the interior edge estimate is the
+thickness-weighted exactly-4th-order stencil (reduces to PPM&rsquo;s
+(7/12,-1/12) on uniform layers), cutting spurious diapycnal mixing per
+remap (Ilicak et al. 2012). Limiter/reconstruction/integration are
+identical to PPM. H4 edge algebra is inlined (helper extraction costs
+4-6% on this hot kernel). Boundary edges: outermost = PCM,
+second-from-boundary = non-uniform 3-cell (H3) quadratic; CW limiter
+clamps all edges to local monotone bounds.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~210"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bnd_extrap~9"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bnd_extrap</strong></td>
+            <td>
+<p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~9"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+<p>Non-uniform-grid weights.  The H4/H3 stencils below are ALREADY
+thickness-weighted, so this only reaches the <code>nz == 2</code> PLM
+fallback; passed through for consistency.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_column_pqm"></span> <h3>public pure subroutine <a href='../proc/remap_column_pqm.html'>remap_column_pqm</a>(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Piecewise-quartic (PQM_IH4IH3) conservative remap (White &amp; Adcroft 2008).
+Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
+diagonally-dominant tridiagonal solve with one-sided 4-cell boundary
+closure), per-cell quartic, W&amp;A monotonicity limiter, conservative
+quartic overlap integral. Cuts diapycnal mixing per remap vs PPM/PPM_H4
+(Ilicak et al. 2012).
+Per cell k, xi in [0,1]: q_hat(xi) = a + b<em>xi + c</em>xi^2 + d<em>xi^3 + e</em>xi^4.
+Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
+(W&amp;A boundary closure needs &gt;= 4 cells).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~211"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+<p>Old layer thicknesses (must sum to same total as dz_new)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+<p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+<p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+<p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
               <span class="anchor" id="variable-bnd_extrap~10"></span>
               logical,
             </td>
@@ -1515,6 +1718,23 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
             <td><strong>bnd_extrap</strong></td>
             <td>
 <p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~10"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+<p>Non-uniform-grid weights.  The implicit-h4/h3 stencils below are
+ALREADY thickness-weighted, so this only reaches the <code>nz &lt; 5</code>
+PPM fallback; passed through for consistency.</p>
             </td>
         </tr>
     </tbody>
@@ -1560,7 +1780,7 @@ where a centred stencil has no second neighbour.</p><a href="../proc/boundary_ha
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_nbr~3"></span>
+              <span class="anchor" id="variable-h_nbr~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1591,7 +1811,7 @@ the surface cell, self -&gt; neighbour at the bed cell).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-d~28"></span>
+              <span class="anchor" id="variable-d~14"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1602,6 +1822,531 @@ the surface cell, self -&gt; neighbour at the bed cell).</p>
             <td><strong>d</strong></td>
             <td>
 <p>Half-jump across the boundary cell; edges are <code>q ± d</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-plm_slope_nonuniform"></span> <h3>private pure subroutine <a href='../proc/plm_slope_nonuniform.html'>plm_slope_nonuniform</a>(h_l, h_c, h_r, q_l, q_c, q_r, slope)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Thickness-weighted PLM slope — Colella &amp; Woodward (1984) eq (1.7)
+with the (1.8) bound, the form MOM6 ships as <code>PLM_slope_cw</code>.</p><a href="../proc/plm_slope_nonuniform.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_l~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_l</strong></td>
+            <td>
+<p>Thickness of the cell below (toward the bed).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_c~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_c</strong></td>
+            <td>
+<p>Thickness of the cell being reconstructed.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_r~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_r</strong></td>
+            <td>
+<p>Thickness of the cell above (toward the surface).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_l</strong></td>
+            <td>
+<p>Cell mean below.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_c"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_c</strong></td>
+            <td>
+<p>Cell mean here.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_r</strong></td>
+            <td>
+<p>Cell mean above.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope</strong></td>
+            <td>
+<p>Limited half-jump across the cell.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ppm_edge_nonuniform"></span> <h3>private pure subroutine <a href='../proc/ppm_edge_nonuniform.html'>ppm_edge_nonuniform</a>(h0, h1, h2, h3, q1, q2, dq1, dq2, edge)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Colella &amp; Woodward (1984) eq (1.6): the fourth-order interface value
+between cells 1 and 2 on a NON-UNIFORM stencil <code>h0,h1,h2,h3</code>.</p><a href="../proc/ppm_edge_nonuniform.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h0~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h0</strong></td>
+            <td>
+<p>Thickness two cells below the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h1~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h1</strong></td>
+            <td>
+<p>Thickness of the cell just below the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2</strong></td>
+            <td>
+<p>Thickness of the cell just above the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h3~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h3</strong></td>
+            <td>
+<p>Thickness two cells above the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q1~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q1</strong></td>
+            <td>
+<p>Cell mean just below the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q2~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q2</strong></td>
+            <td>
+<p>Cell mean just above the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq1"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq1</strong></td>
+            <td>
+<p>Limited CW84 (1.7) jump of the cell below.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq2</strong></td>
+            <td>
+<p>Limited CW84 (1.7) jump of the cell above.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-edge~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>edge</strong></td>
+            <td>
+<p>Interface value.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ppm_edge_two_cell"></span> <h3>private pure subroutine <a href='../proc/ppm_edge_two_cell.html'>ppm_edge_two_cell</a>(h_l, h_r, q_l, q_r, edge)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Thickness-weighted two-cell interface value — the non-uniform
+generalisation of <code>0.5*(q_l + q_r)</code>.</p><a href="../proc/ppm_edge_two_cell.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_l~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_l</strong></td>
+            <td>
+<p>Thickness of the cell below the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_r~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_r</strong></td>
+            <td>
+<p>Thickness of the cell above the interface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_l~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_l</strong></td>
+            <td>
+<p>Cell mean below.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_r~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_r</strong></td>
+            <td>
+<p>Cell mean above.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-edge~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>edge</strong></td>
+            <td>
+<p>Interface value.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ppm_jump_nonuniform"></span> <h3>private pure subroutine <a href='../proc/ppm_jump_nonuniform.html'>ppm_jump_nonuniform</a>(h_l, h_c, h_r, q_l, q_c, q_r, dq)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Colella &amp; Woodward (1984) eq (1.7) — the thickness-weighted
+second-order jump <code>delta a</code> across the cell, which eq (1.6)
+consumes.  Returned UNLIMITED, deliberately.</p><a href="../proc/ppm_jump_nonuniform.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_l~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_l</strong></td>
+            <td>
+<p>Thickness of the cell below.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_c~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_c</strong></td>
+            <td>
+<p>Thickness of this cell.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_r~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_r</strong></td>
+            <td>
+<p>Thickness of the cell above.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_l~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_l</strong></td>
+            <td>
+<p>Cell mean below.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_c~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_c</strong></td>
+            <td>
+<p>Cell mean here.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_r~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_r</strong></td>
+            <td>
+<p>Cell mean above.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq</strong></td>
+            <td>
+<p>Full jump across the cell.</p>
             </td>
         </tr>
     </tbody>
@@ -1635,7 +2380,7 @@ the boundary interface and <code>csys(2)</code> is the edge SLOPE there.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz~8"></span>
+              <span class="anchor" id="variable-dz~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1650,7 +2395,7 @@ the boundary interface and <code>csys(2)</code> is the edge SLOPE there.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-u~33"></span>
+              <span class="anchor" id="variable-u~19"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1707,7 +2452,7 @@ zero for positive-definite ac, al, au (White &amp; Adcroft 2008).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-n~40"></span>
+              <span class="anchor" id="variable-n~37"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1767,7 +2512,7 @@ zero for positive-definite ac, al, au (White &amp; Adcroft 2008).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-r~23"></span>
+              <span class="anchor" id="variable-r~24"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1782,7 +2527,7 @@ zero for positive-definite ac, al, au (White &amp; Adcroft 2008).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-x~24"></span>
+              <span class="anchor" id="variable-x~19"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1825,7 +2570,7 @@ zero for positive-definite ac, al, au (White &amp; Adcroft 2008).</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-21 21:16 +0000             </p>
+ on 2026-09-21 21:38 +0000             </p>
           </div>
         </div>
         <br>

@@ -9,9 +9,9 @@ module rdb_ocean_remap
    !! Per-column conservation: sum_k(c_old·h_old) = sum_k(c_new·h_new) to machine
    !! precision (modulo the c = hTr/h step, which a vanishing-layer guard protects).
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, REMAP_PPM, H_VANISHED
+   use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PPM, H_VANISHED
+   use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #endif
    use rdb_grid, only: hgrid_t
    use rdb_remap_column, only: remap_column
@@ -34,7 +34,17 @@ module rdb_ocean_remap
    ! `rdb_vcoord :: vcoord_h_min_role`).
    real(wp), parameter :: H_FLOOR = H_VANISHED
 
+   real(wp), parameter, public :: OCEAN_REMAP_PRECOND_RTOL = 1.0e-9_wp
+      !! Relative tolerance on `sum(h_old) == sum(target_h)` for the
+      !! precondition assertion.  The target builders reach the sum by a
+      !! different arithmetic route than the continuity update does, so a
+      !! few ulp of drift per layer is expected and is not the failure mode
+      !! being hunted: the violations that matter (a degenerate column that
+      !! manufactures `nz*h_min` of water, a short target that deletes its
+      !! tail) are percent-level, decades above this.
+
    public :: ocean_apply_ale_remap_centres
+   public :: ocean_remap_scan_preconditions
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
@@ -152,15 +162,17 @@ contains
             case (TRACER_BUDGET_HEAT)
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap, budget=ms%heat_budget_remap)
+                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
+                  budget=ms%heat_budget_remap)
             case (TRACER_BUDGET_SALT)
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap, budget=ms%salt_budget_remap)
+                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
+                  budget=ms%salt_budget_remap)
             case default
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap)
+                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights)
             end select
          end do
       end if
@@ -182,7 +194,7 @@ contains
    end subroutine ocean_apply_ale_remap_centres
 
    pure subroutine ocean_remap_tracer_field(nx, ny, nz, h_old, h_new, hTr, method, &
-                                            bnd_extrap, budget)
+                                            bnd_extrap, nonunif, budget)
       !! Flat-impl tracer remap. Per (i,j) column: c = hTr/h (vanishing-layer-
       !! guarded) → per-column remap kernel → hTr_new = c_new·h_new. Conservative.
       !! `budget` (optional): when present, the per-cell hTr_new−hTr_old increment
@@ -196,6 +208,10 @@ contains
          !! Linear-exact boundary-cell reconstruction in the column kernel
          !! (`&vcoord_nml remap_boundary_extrap`); `.false.` ⇒ the PCM
          !! flatten, i.e. bit-identical to the pre-knob behaviour.
+      logical, intent(in) :: nonunif
+         !! Non-uniform-grid PLM/PPM reconstruction weights in the column
+         !! kernel (`&vcoord_nml remap_nonuniform_weights`); `.false.` ⇒ the
+         !! equal-thickness specialisations, i.e. bit-identical.
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
@@ -220,7 +236,7 @@ contains
          end do
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
-                           c_old_col(1:nz), c_new_col(1:nz), bnd_extrap)
+                           c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
          if (present(budget)) then
             do k = 1, nz
                hTr_new = c_new_col(k)*h_new_col(k)
@@ -236,7 +252,7 @@ contains
    end subroutine ocean_remap_tracer_field
 
    subroutine ocean_apply_ale_remap_faces(grid, h_old, h_new, u_face_x, v_face_y, method, &
-                                          conserve_ke, bnd_extrap)
+                                          conserve_ke, bnd_extrap, nonunif)
       !! Face-velocity pass of the ALE remap. Remaps u_face_x_layer and
       !! v_face_y_layer h_old→h_new using arithmetic-mean face thicknesses and
       !! the per-column kernel. Public only for the unit-test suite.
@@ -258,25 +274,30 @@ contains
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction (default `.false.`
          !! ⇒ the PCM flatten, bit-identical).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid PLM/PPM weights (default `.false.` ⇒ the
+         !! equal-thickness specialisations, bit-identical).
 
       integer :: m, nx, ny, nz
-      logical :: ke, be
+      logical :: ke, be, nu
       m = REMAP_PPM
       if (present(method)) m = method
       ke = .false.
       if (present(conserve_ke)) ke = conserve_ke
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
       nx = grid%nx_total
       ny = grid%ny_total
       nz = size(u_face_x, 3)
 
-      call remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, m, ke, be)
-      call remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, m, ke, be)
+      call remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, m, ke, be, nu)
+      call remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, m, ke, be, nu)
    end subroutine ocean_apply_ale_remap_faces
 
    pure subroutine remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, method, &
-                                         conserve_ke, bnd_extrap)
+                                         conserve_ke, bnd_extrap, nonunif)
       !! Flat-impl x-face remap. East faces at i+1/2; u_face_x(1..nx+1) covers
       !! west wall (I=1), interior (I=2..nx), east wall (I=nx+1).
       !! `conserve_ke` (default .false.): rescale the baroclinic anomaly so column
@@ -289,6 +310,8 @@ contains
       logical, intent(in) :: conserve_ke
       logical, intent(in) :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction in the column kernel.
+      logical, intent(in) :: nonunif
+         !! Non-uniform-grid PLM/PPM weights in the column kernel.
       integer :: I, j, k
       real(wp) :: h_old_face(NZ_STACK_MAX), h_new_face(NZ_STACK_MAX)
       real(wp) :: u_old_col(NZ_STACK_MAX), u_new_col(NZ_STACK_MAX)
@@ -310,7 +333,7 @@ contains
          end do
          call remap_column(method, nz, &
                            h_old_face(1:nz), h_new_face(1:nz), &
-                           u_old_col(1:nz), u_new_col(1:nz), bnd_extrap)
+                           u_old_col(1:nz), u_new_col(1:nz), bnd_extrap, nonunif)
          if (conserve_ke) then
             call rescale_anomaly_ke(nz, h_old_face, h_new_face, u_old_col, u_new_col)
          end if
@@ -321,15 +344,17 @@ contains
    end subroutine remap_x_face_velocity
 
    pure subroutine remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, method, &
-                                         conserve_ke, bnd_extrap)
+                                         conserve_ke, bnd_extrap, nonunif)
       !! Flat-impl y-face remap, mirror of `remap_x_face_velocity`.  See
-      !! that routine for the `conserve_ke` / `bnd_extrap` semantics.
+      !! that routine for the `conserve_ke` / `bnd_extrap` / `nonunif`
+      !! semantics.
       integer, intent(in) :: nx, ny, nz, method
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
       real(wp), intent(inout) :: v_face_y(nx, ny + 1, nz)
       logical, intent(in) :: conserve_ke
       logical, intent(in) :: bnd_extrap
+      logical, intent(in) :: nonunif
       integer :: i, J, k
       real(wp) :: h_old_face(NZ_STACK_MAX), h_new_face(NZ_STACK_MAX)
       real(wp) :: v_old_col(NZ_STACK_MAX), v_new_col(NZ_STACK_MAX)
@@ -351,7 +376,7 @@ contains
          end do
          call remap_column(method, nz, &
                            h_old_face(1:nz), h_new_face(1:nz), &
-                           v_old_col(1:nz), v_new_col(1:nz), bnd_extrap)
+                           v_old_col(1:nz), v_new_col(1:nz), bnd_extrap, nonunif)
          if (conserve_ke) then
             call rescale_anomaly_ke(nz, h_old_face, h_new_face, v_old_col, v_new_col)
          end if
@@ -431,7 +456,7 @@ contains
 
       integer :: t, m, nx, ny, nz, i, j, k
       real(wp) :: wtd
-      logical :: do_tfilter, conserve_ke, bnd_extrap
+      logical :: do_tfilter, conserve_ke, bnd_extrap, nonunif
 
       ! Eulerian-z and Lagrangian/isopycnal both skip remap: the former
       ! holds h at H·dsig via vert-advection cancellation, the latter
@@ -444,6 +469,7 @@ contains
       m = REMAP_PPM
       if (present(method)) m = method
       bnd_extrap = vcoord%remap_boundary_extrap
+      nonunif = vcoord%remap_nonuniform_weights
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
@@ -498,6 +524,12 @@ contains
          end do
       end if
 
+      ! `vcoord%remap_h_old` and `vcoord%target_h` are the exact pair every
+      ! column kernel below consumes, and neither is overwritten by steps 4-7
+      ! — so `ocean_remap_scan_preconditions` can assert them from the
+      ! (impure) driver AFTER this call.  See `&vcoord_nml
+      ! remap_check_preconditions` and `rdb_ocean_dyn :: ocean_dyn_step_split`.
+
       ! 4. Tracer remap (centre cells)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
@@ -506,15 +538,15 @@ contains
             case (TRACER_BUDGET_HEAT)
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap, budget=ms%heat_budget_remap)
+                  bnd_extrap, nonunif, budget=ms%heat_budget_remap)
             case (TRACER_BUDGET_SALT)
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap, budget=ms%salt_budget_remap)
+                  bnd_extrap, nonunif, budget=ms%salt_budget_remap)
             case default
                call ocean_remap_tracer_field( &
                   nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap)
+                  bnd_extrap, nonunif)
             end select
          end do
       end if
@@ -524,9 +556,9 @@ contains
       conserve_ke = vcoord%remap_vel_conserve_ke
       if (allocated(ms%u_face_x_layer) .and. allocated(ms%v_face_y_layer)) then
          call remap_x_face_velocity(nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, &
-                                    ms%u_face_x_layer, m, conserve_ke, bnd_extrap)
+                                    ms%u_face_x_layer, m, conserve_ke, bnd_extrap, nonunif)
          call remap_y_face_velocity(nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, &
-                                    ms%v_face_y_layer, m, conserve_ke, bnd_extrap)
+                                    ms%v_face_y_layer, m, conserve_ke, bnd_extrap, nonunif)
       end if
 
       ! 6. h_layer = target_h; capture mass-budget delta
@@ -544,6 +576,59 @@ contains
          end do
       end do
    end subroutine ocean_apply_ale_remap_step
+
+   pure subroutine ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, rel_tol, &
+                                                  n_bad, worst_rel, worst_neg)
+      !! Scan every column for the two remap preconditions and report how
+      !! badly they are missed — the domain-wide counterpart of
+      !! `rdb_remap_column :: remap_column_preconditions_ok`.
+      !!
+      !! `pure` and flat-arg so the caller owns the fail-loud decision and
+      !! the reduction can run on-device; three scalars come back rather than
+      !! a per-column field, so a thermo-cadence call costs one pass plus a
+      !! tiny D→H.  Public for the unit-test suite.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_old(nx, ny, nz)
+         !! Source thicknesses (the pre-remap `h_layer` snapshot).
+      real(wp), intent(in) :: h_new(nx, ny, nz)
+         !! Target thicknesses (`vcoord%target_h`, after any time filter).
+      real(wp), intent(in) :: rel_tol
+         !! Relative tolerance on the column-total match.
+      integer, intent(out) :: n_bad
+         !! Number of columns violating either precondition.
+      real(wp), intent(out) :: worst_rel
+         !! Largest relative column-total mismatch over the domain.
+      real(wp), intent(out) :: worst_neg
+         !! Most negative thickness found (0 when there is none).
+
+      integer :: i, j, k
+      real(wp) :: s_old, s_new, rel, hmin
+
+      n_bad = 0
+      worst_rel = 0.0_wp
+      worst_neg = 0.0_wp
+      !$acc parallel loop collapse(2) present(h_old, h_new) &
+      !$acc   reduction(+:n_bad) reduction(max:worst_rel) reduction(min:worst_neg) &
+      !$acc   private(k, s_old, s_new, rel, hmin)
+      do j = 1, ny
+         do i = 1, nx
+            s_old = 0.0_wp
+            s_new = 0.0_wp
+            hmin = 0.0_wp
+            do k = 1, nz
+               s_old = s_old + h_old(i, j, k)
+               s_new = s_new + h_new(i, j, k)
+               hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
+            end do
+            ! Relative to the LARGER total, so a land column (both zero)
+            ! scores 0 rather than tripping on a 0/0.
+            rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
+            worst_rel = max(worst_rel, rel)
+            worst_neg = min(worst_neg, hmin)
+            if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
+         end do
+      end do
+   end subroutine ocean_remap_scan_preconditions
 
    pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
       !! Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer

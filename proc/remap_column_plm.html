@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">66 statements</a>
+                 title=" 0.2% of total for procedures.">76 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -137,11 +137,12 @@
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-dq_l~2">dq_l</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-dq_r~2">dq_r</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-integral~2">integral</a>
-            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-k~329">k</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-k~163">k</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-ko~2">ko</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-ko_start~2">ko_start</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-nu~6">nu</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-overlap~2">overlap</a>
-            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-slope~4">slope</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-slope~6">slope</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-xi_hi">xi_hi</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-xi_lo">xi_lo</a>
             <a class="list-group-item" href="../proc/remap_column_plm.html#variable-z_hi~2">z_hi</a>
@@ -183,7 +184,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)  
+    <h2>public pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
 </h2>
     
 
@@ -192,7 +193,10 @@ Per old layer k: q_hat(xi) = q(k) + slope(k)<em>(2</em>xi - 1), xi in [0,1],
 slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
 <code>bnd_extrap</code> (absent/.false. = default) closes the boundary cells
 with <code>boundary_half_jump</code> instead of the PCM flatten — see
-<code>remap_column</code>.</p>
+<code>remap_column</code>.  <code>nonunif</code> (absent/.false. = default) replaces the
+minmod half-difference — which assumes EQUAL source thicknesses —
+with the thickness-weighted CW84 (1.7)/(1.8) slope; see
+<code>plm_slope_nonuniform</code>.</p>
 
 
     <h3>Arguments</h3>
@@ -208,7 +212,7 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~374"></span>
+              <span class="anchor" id="variable-nz~208"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -223,7 +227,7 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old~3"></span>
+              <span class="anchor" id="variable-dz_old~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -238,7 +242,7 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new~3"></span>
+              <span class="anchor" id="variable-dz_new~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -253,7 +257,7 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_old~3"></span>
+              <span class="anchor" id="variable-q_old~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -268,7 +272,7 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_new~3"></span>
+              <span class="anchor" id="variable-q_new~5"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -296,6 +300,21 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
                 <p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~7"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+                <p>Non-uniform-grid slope weights (CW84 1.7/1.8).</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -311,31 +330,46 @@ with <code>boundary_half_jump</code> instead of the PCM flatten — see
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: proc~~remap_column_plm~~CallsGraph Pages: 1 -->
-<svg id="procremap_column_plmCallsGraph" width="283pt" height="32pt"
- viewBox="0.00 0.00 283.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="proc~~remap_column_plm~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<svg id="procremap_column_plmCallsGraph" width="296pt" height="74pt"
+ viewBox="0.00 0.00 296.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_column_plm~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
 <title>proc~~remap_column_plm~~CallsGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 279,-28 279,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 292,-70 292,4 -4,4"/>
 <!-- proc~remap_column_plm -->
 <g id="proc~~remap_column_plm~~CallsGraph_node1" class="node">
 <title>proc~remap_column_plm</title>
-<polygon fill="none" stroke="black" points="118,-24 0,-24 0,0 118,0 118,-24"/>
-<text text-anchor="middle" x="59" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_column_plm</text>
+<polygon fill="none" stroke="black" points="118,-45 0,-45 0,-21 118,-21 118,-45"/>
+<text text-anchor="middle" x="59" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_column_plm</text>
 </g>
 <!-- proc~boundary_half_jump -->
 <g id="proc~~remap_column_plm~~CallsGraph_node2" class="node">
 <title>proc~boundary_half_jump</title>
 <g id="a_proc~~remap_column_plm~~CallsGraph_node2"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
-<polygon fill="#d9534f" stroke="#d9534f" points="275,-24 154,-24 154,0 275,0 275,-24"/>
-<text text-anchor="middle" x="214.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+<polygon fill="#d9534f" stroke="#d9534f" points="281.5,-66 160.5,-66 160.5,-42 281.5,-42 281.5,-66"/>
+<text text-anchor="middle" x="221" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
 <g id="proc~~remap_column_plm~~CallsGraph_edge1" class="edge">
 <title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
-<path fill="none" stroke="#ff0000" d="M118.03,-12C126.45,-12 135.19,-12 143.82,-12"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="143.85,-15.5 153.85,-12 143.85,-8.5 143.85,-15.5"/>
+<path fill="none" stroke="#ff0000" d="M118.22,-40.64C128.64,-42.01 139.61,-43.45 150.32,-44.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="150.11,-48.36 160.48,-46.19 151.02,-41.42 150.11,-48.36"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~remap_column_plm~~CallsGraph_node3" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~remap_column_plm~~CallsGraph_node3"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="288,-24 154,-24 154,0 288,0 288,-24"/>
+<text text-anchor="middle" x="221" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~remap_column_plm~~CallsGraph_edge2" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#ff0000" d="M118.22,-25.36C126.57,-24.26 135.26,-23.12 143.89,-21.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.51,-25.44 153.97,-20.67 143.6,-18.5 144.51,-25.44"/>
 </g>
 </g>
 </svg>
@@ -1020,7 +1054,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~329"></span>
+              <span class="anchor" id="variable-k~163"></span>
               integer,
             </td>
               <td>private</td>
@@ -1071,6 +1105,23 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
+              <span class="anchor" id="variable-nu~6"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
               <span class="anchor" id="variable-overlap~2"></span>
               real(kind=wp),
             </td>
@@ -1088,7 +1139,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-slope~4"></span>
+              <span class="anchor" id="variable-slope~6"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1221,14 +1272,17 @@ large graphs.</div>
     
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
-    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_column_plm</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">)</span>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_column_plm</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">,</span><span class="w"> </span><span class="n">nonunif</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!$acc routine seq</span>
 <span class="w">      </span><span class="c">!! Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).</span>
 <span class="w">      </span><span class="c">!! Per old layer k: q_hat(xi) = q(k) + slope(k)*(2*xi - 1), xi in [0,1],</span>
 <span class="w">      </span><span class="c">!! slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).</span>
 <span class="w">      </span><span class="c">!! `bnd_extrap` (absent/.false. = default) closes the boundary cells</span>
 <span class="w">      </span><span class="c">!! with `boundary_half_jump` instead of the PCM flatten — see</span>
-<span class="w">      </span><span class="c">!! `remap_column`.</span>
+<span class="w">      </span><span class="c">!! `remap_column`.  `nonunif` (absent/.false. = default) replaces the</span>
+<span class="w">      </span><span class="c">!! minmod half-difference — which assumes EQUAL source thicknesses —</span>
+<span class="w">      </span><span class="c">!! with the thickness-weighted CW84 (1.7)/(1.8) slope; see</span>
+<span class="w">      </span><span class="c">!! `plm_slope_nonuniform`.</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
 <span class="w">         </span><span class="c">!! Old layer thicknesses</span>
@@ -1240,12 +1294,18 @@ large graphs.</div>
 <span class="w">         </span><span class="c">!! New cell-average scalar values (conservative)</span>
 <span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bnd_extrap</span>
 <span class="w">         </span><span class="c">!! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nonunif</span>
+<span class="w">         </span><span class="c">!! Non-uniform-grid slope weights (CW84 1.7/1.8).</span>
 
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">z_new</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_lo</span><span class="p">,</span><span class="w"> </span><span class="n">z_hi</span><span class="p">,</span><span class="w"> </span><span class="n">overlap</span><span class="p">,</span><span class="w"> </span><span class="n">integral</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xi_lo</span><span class="p">,</span><span class="w"> </span><span class="n">xi_hi</span><span class="p">,</span><span class="w"> </span><span class="n">dq_l</span><span class="p">,</span><span class="w"> </span><span class="n">dq_r</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nu</span>
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="p">,</span><span class="w"> </span><span class="n">ko_start</span>
+
+<span class="w">      </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nonunif</span><span class="p">))</span><span class="w"> </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nonunif</span>
 
 <span class="w">      </span><span class="c">! Single-layer case: identity remap</span>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
@@ -1264,15 +1324,22 @@ large graphs.</div>
 <span class="w">      </span><span class="c">! Compute minmod-limited slopes</span>
 <span class="w">      </span><span class="c">! slope(k) = half the limited difference across the layer</span>
 <span class="w">      </span><span class="n">slope</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
-<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
-<span class="w">         </span><span class="n">dq_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
-<span class="w">         </span><span class="n">dq_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dq_l</span><span class="o">*</span><span class="n">dq_r</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
-<span class="k">            </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="nb">sign</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_l</span><span class="p">),</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_r</span><span class="p">)),</span><span class="w"> </span><span class="n">dq_l</span><span class="p">)</span>
-<span class="w">         </span><span class="k">else</span>
-<span class="k">            </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
-<span class="w">         </span><span class="k">end if</span>
-<span class="k">      end do</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nu</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">call </span><span class="n">plm_slope_nonuniform</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      else</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">dq_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dq_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dq_l</span><span class="o">*</span><span class="n">dq_r</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="nb">sign</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_l</span><span class="p">),</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_r</span><span class="p">)),</span><span class="w"> </span><span class="n">dq_l</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
 <span class="k">      </span><span class="n">slope</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
 <span class="w">      </span><span class="c">! Boundary cells: PCM flatten by default; the linear-exact one-sided</span>
 <span class="w">      </span><span class="c">! half-jump when boundary extrapolation is requested.</span>
@@ -1346,7 +1413,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-21 21:16 +0000             </p>
+ on 2026-09-21 21:38 +0000             </p>
           </div>
         </div>
         <br>

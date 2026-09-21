@@ -2700,6 +2700,20 @@ module rdb_config
          !! boundary cells (MOM6 `BOUNDARY_EXTRAPOLATION`) instead of the
          !! PCM flatten, which leaves PLM/PPM/PPM_H4/PQM first-order at
          !! `k=1` and `k=nz`.  .false. (default) = bit-identical.
+      logical :: remap_nonuniform_weights = .false.
+         !! Non-uniform-grid reconstruction weights in the ALE remap's PLM
+         !! slope and PPM edge estimate (Colella & Woodward 1984 eqs
+         !! 1.6-1.8) instead of their equal-thickness specialisations, which
+         !! are linear-exact only on a UNIFORM source column.  PPM_H4 and
+         !! PQM already carry thickness-weighted stencils and are unchanged.
+         !! .false. (default) = bit-identical.
+      logical :: remap_check_preconditions = .false.
+         !! Assert, once per ALE remap (thermo cadence), that every column
+         !! satisfies what the overlap sweep has always assumed: non-negative
+         !! source AND target thicknesses, and matching column totals.  Both
+         !! are caller obligations and neither was ever checked; a violation
+         !! silently CREATES or DELETES tracer mass.  Diagnostic knob —
+         !! .false. (default) = the check never runs = bit-identical.
 
       ! Logging parameters
       character(len=16) :: log_level = "info"
@@ -5588,6 +5602,16 @@ contains
       call g%add(nml_logical("remap_boundary_extrap", pl, &
                              "ALE remap: linear-exact one-sided reconstruction in the "// &
                              "k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION)"))
+      pl => cfg%remap_nonuniform_weights
+      call g%add(nml_logical("remap_nonuniform_weights", pl, &
+                             "ALE remap: non-uniform-grid PLM slope + PPM edge weights "// &
+                             "(Colella-Woodward 1984 eqs 1.6-1.8) instead of the "// &
+                             "equal-thickness specialisations"))
+      pl => cfg%remap_check_preconditions
+      call g%add(nml_logical("remap_check_preconditions", pl, &
+                             "ALE remap: fail loud when a column violates the overlap "// &
+                             "sweep's preconditions (non-negative thicknesses, "// &
+                             "matching column totals)"))
       call schema%add_group(g)
    end subroutine register_vcoord
 

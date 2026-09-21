@@ -1143,6 +1143,8 @@ contains
       ocean_state%vcoord%regrid_time_scale = cfg%regrid_time_scale
       ocean_state%vcoord%remap_vel_conserve_ke = cfg%remap_vel_conserve_ke
       ocean_state%vcoord%remap_boundary_extrap = cfg%remap_boundary_extrap
+      ocean_state%vcoord%remap_nonuniform_weights = cfg%remap_nonuniform_weights
+      ocean_state%vcoord%remap_check_preconditions = cfg%remap_check_preconditions
       if (compute_rank == 0) then
          if (ocean_state%vcoord%coord_type == VCOORD_EULERIAN_Z) then
             call logger%info("Vertical coord:  "//trim(cfg%vcoord_type)// &
