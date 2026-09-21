@@ -27,15 +27,19 @@ module rdb_ocean_remap
    implicit none
    private
 
-   ! Vanishing-layer guard for the `c = hTr / h` step — the D4 skip/merge
-   ! marker, NOT a positivity floor: below it the layer's concentration is
-   ! taken as 0 rather than recovered from a near-zero divisor.  Aliased to
-   ! `H_VANISHED` (same value) so there is ONE definition of "vanished" in
-   ! the tree; it used to be a bare `1.5e-4_wp` literal here, which is a
-   ! third definition waiting to drift from the constant of record.  Every
-   ! test of it is a STRICT `>`: a layer sitting exactly ON the marker reads
-   ! as vanished, which is what the geometric vcoord families rely on (see
-   ! `rdb_vcoord :: vcoord_h_min_role`).
+   ! Degenerate-COLUMN guard for `rescale_anomaly_ke` — a face column whose
+   ! whole depth is at or below the vanish marker has no barotropic mean to
+   ! rescale about.  Aliased to `H_VANISHED` (same value) so there is ONE
+   ! definition of "vanished" in the tree; it used to be a bare `1.5e-4_wp`
+   ! literal here, which is a third definition waiting to drift from the
+   ! constant of record.
+   !
+   ! The per-LAYER tests it used to serve — `c = hTr/h` and the I1 merge —
+   ! now go through `rdb_vl_conc` / `rdb_vl_merge_content`, the included
+   ! single definition (`src/shared_module_utilities/rdb_vanished_layer.inc`).
+   ! Every test of the marker is a STRICT `>`: a layer sitting exactly ON it
+   ! reads as vanished, which is what the geometric vcoord families rely on
+   ! (see `rdb_vcoord :: vcoord_h_min_role`).
    real(wp), parameter :: H_FLOOR = H_VANISHED
 
    real(wp), parameter, public :: OCEAN_REMAP_PRECOND_RTOL = 1.0e-9_wp
@@ -52,7 +56,7 @@ module rdb_ocean_remap
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
-   public :: remap_merge_vanished_content   ! exposed for unit tests
+   public :: ocean_remap_merge_vanished_content   ! exposed for unit tests
 
 #ifdef LFORTRAN_PASSING
    integer, parameter :: NZ_STACK_MAX = 64
@@ -62,64 +66,6 @@ module rdb_ocean_remap
 #endif
 
 contains
-
-   pure subroutine remap_merge_vanished_content(nz, h_col, q_col)
-      !$acc routine seq
-      !! Establish invariant **I1** on one column: `h <= H_VANISHED ⇒ q = 0`,
-      !! with the column sum `Σ q` preserved to round-off.
-      !!
-      !! `q_col` is CONTENT (`hTr = h·c`, or any extensive per-layer quantity).
-      !! Content held by a sub-threshold ("vanished" / inert-filler) layer is
-      !! handed to the NEAREST LIVE layer — the next live layer above, or, for
-      !! a run of fillers that reaches the top of the column, the topmost live
-      !! layer below them — and the filler is zeroed. It is a D4 skip/MERGE,
-      !! not a clamp: nothing is created, nothing is destroyed, nothing leaves
-      !! the column, so a budget accumulator fed `q_new - q_old` still
-      !! telescopes to zero per column and remains a valid leak detector.
-      !!
-      !! This is the ONE definition of the vanished-layer content rule for the
-      !! ALE remap; both the read side (`c_old = hTr/h_old`) and the write side
-      !! (`hTr_new = c_new·h_new`) of `ocean_remap_tracer_field` call it, which
-      !! is what makes the guard two-sided. See `src/core/ocean/README.md`
-      !! ("The vanished-layer content rule").
-      !!
-      !! **Bit-identity:** every mutation sits behind `orphan /= 0` or the
-      !! sub-threshold branch, so a column with no layer at or below
-      !! `H_VANISHED` leaves `q_col` textually untouched.
-      !!
-      !! **Column with no live layer at all** (land / fully grounded): every
-      !! layer is a filler, the content is zero by construction (nothing may
-      !! deposit into a dead column), and `q_col` is zeroed — which is the same
-      !! answer the un-merged code gave, now stated rather than incidental.
-      integer, intent(in) :: nz
-      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
-      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
-      integer :: k
-      real(wp) :: orphan
-
-      orphan = 0.0_wp
-      do k = 1, nz
-         if (h_col(k) > H_FLOOR) then
-            if (orphan /= 0.0_wp) then
-               q_col(k) = q_col(k) + orphan
-               orphan = 0.0_wp
-            end if
-         else
-            orphan = orphan + q_col(k)
-            q_col(k) = 0.0_wp
-         end if
-      end do
-      if (orphan /= 0.0_wp) then
-         ! Fillers above the last live layer: give it back downward.
-         do k = nz, 1, -1
-            if (h_col(k) > H_FLOOR) then
-               q_col(k) = q_col(k) + orphan
-               orphan = 0.0_wp
-               exit
-            end if
-         end do
-      end if
-   end subroutine remap_merge_vanished_content
 
    pure subroutine ocean_apply_ale_remap_centres(grid, vcoord, ms, bt_eta, bt_H_ref, method, eos, dt)
       !! Orchestrate the centre-cell pass of the ALE remap step (h_layer +
@@ -306,13 +252,9 @@ contains
          ! Read side. `hTr_col` is a LOCAL copy — the budget below still
          ! differences against the original `hTr` array, so the merge is
          ! invisible to the leak detector.
-         call remap_merge_vanished_content(nz, h_old_col, hTr_col)
+         call rdb_vl_merge_content(nz, h_old_col, hTr_col)
          do k = 1, nz
-            if (h_old_col(k) > H_FLOOR) then
-               c_old_col(k) = hTr_col(k)/h_old_col(k)
-            else
-               c_old_col(k) = 0.0_wp
-            end if
+            c_old_col(k) = rdb_vl_conc(hTr_col(k), h_old_col(k))
          end do
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
@@ -321,7 +263,7 @@ contains
          do k = 1, nz
             hTr_new_col(k) = c_new_col(k)*h_new_col(k)
          end do
-         call remap_merge_vanished_content(nz, h_new_col, hTr_new_col)
+         call rdb_vl_merge_content(nz, h_new_col, hTr_new_col)
          if (present(budget)) then
             do k = 1, nz
                budget(i, j, k) = budget(i, j, k) + (hTr_new_col(k) - hTr(i, j, k))
@@ -820,13 +762,8 @@ contains
       real(wp), intent(out) :: conc_s(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         if (h_old(i, j, k) > H_VANISHED) then
-            conc_t(i, j, k) = hTr_T(i, j, k)/h_old(i, j, k)
-            conc_s(i, j, k) = hTr_S(i, j, k)/h_old(i, j, k)
-         else
-            conc_t(i, j, k) = 0.0_wp
-            conc_s(i, j, k) = 0.0_wp
-         end if
+         conc_t(i, j, k) = rdb_vl_conc(hTr_T(i, j, k), h_old(i, j, k))
+         conc_s(i, j, k) = rdb_vl_conc(hTr_S(i, j, k), h_old(i, j, k))
       end do
    end subroutine build_ts_concentration
 
@@ -848,22 +785,33 @@ contains
          h_new_col(k) = h_new(k)
          hTr_col(k) = hTr_inout(k)
       end do
-      call remap_merge_vanished_content(nz, h_old_col, hTr_col)
+      call rdb_vl_merge_content(nz, h_old_col, hTr_col)
       do k = 1, nz
-         if (h_old(k) > H_FLOOR) then
-            c_old(k) = hTr_col(k)/h_old(k)
-         else
-            c_old(k) = 0.0_wp
-         end if
+         c_old(k) = rdb_vl_conc(hTr_col(k), h_old(k))
       end do
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
       do k = 1, nz
          hTr_col(k) = c_new(k)*h_new(k)
       end do
-      call remap_merge_vanished_content(nz, h_new_col, hTr_col)
+      call rdb_vl_merge_content(nz, h_new_col, hTr_col)
       do k = 1, nz
          hTr_inout(k) = hTr_col(k)
       end do
    end subroutine ocean_remap_tracer_column
+
+   pure subroutine ocean_remap_merge_vanished_content(nz, h_col, q_col)
+      !! Public test shim over the included `rdb_vl_merge_content` — the ONE
+      !! definition of the vanished-layer content rule
+      !! (`src/shared_module_utilities/rdb_vanished_layer.inc`).  Production
+      !! code calls the included copy directly; this exists so
+      !! `tests/test_ocean_remap_vanished.F90` can assert the rule's own
+      !! properties without a second transcription of it.
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
+      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
+      call rdb_vl_merge_content(nz, h_col, q_col)
+   end subroutine ocean_remap_merge_vanished_content
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_remap

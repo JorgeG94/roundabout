@@ -70,6 +70,7 @@ Vertical-coordinate + ALE-remap controls.
 | `remap_boundary_extrap` | `.false.` |  | ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION) |
 | `remap_nonuniform_weights` | `.false.` |  | ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations |
 | `remap_check_preconditions` | `.false.` |  | ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals) |
+| `check_vanished_content` | `.false.` |  | I1 tripwire: fail loud if any layer at or below H_VANISHED holds tracer content (debug/validation) |
 | `zfixed_closed_faces` | `.false.` |  | z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip) |
 
 ### &physics_nml

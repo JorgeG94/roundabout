@@ -29,7 +29,8 @@ add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
                                   ocean_test_metrics.F90 lcg_deterministic.F90)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
-target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules")
+target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                                  "${RDB_SHARED_INCLUDE_DIR}")
 # `ocean_test_metrics` uses `rdb_ocean_metrics`, whose own `use` chain reaches
 # `rdb_io_netcdf` — so the compiler must open `netcdf.mod` while walking the
 # .mod tree, even though nothing here calls NetCDF. Every test target picks the
@@ -512,8 +513,9 @@ foreach(row ${RDB_TESTS})
     ${test_name} PROPERTIES Fortran_MODULE_DIRECTORY
                             "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
   target_include_directories(
-    ${test_name} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
-                         "${CMAKE_BINARY_DIR}/modules")
+    ${test_name}
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
+            "${CMAKE_BINARY_DIR}/modules" "${RDB_SHARED_INCLUDE_DIR}")
   # Core selection: the SHARED core is the default fast link; only tests in the
   # RDB_STATIC_CORE_TESTS authority list (device code in their own source) fall
   # back to the static core. When the shared core wasn't built
@@ -581,7 +583,8 @@ if(RDB_ENABLE_MPI)
   set(MPI_NETCDF_TESTS)
   foreach(test ${MPI_TESTS})
     add_executable(${test} mpi/${test}.F90)
-    target_include_directories(${test} PRIVATE "${CMAKE_BINARY_DIR}/modules")
+    target_include_directories(${test} PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                               "${RDB_SHARED_INCLUDE_DIR}")
     target_link_libraries(${test} PRIVATE ${main_lib} test-drive::test-drive)
     add_test(NAME rdb_${test}
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG}

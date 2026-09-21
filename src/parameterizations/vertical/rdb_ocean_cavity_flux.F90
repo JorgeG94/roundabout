@@ -722,6 +722,9 @@ contains
             do k = nz, 1, -1
                if (remain <= 0.0_wp) exit
                h = h_layer(i, j, k)
+               ! vanished-ok: the far-field sampler SKIPS a vanished layer entirely (it carries
+               ! no water to melt against) rather than weighting a substituted
+               ! concentration into the average.
                if (h <= H_VANISHED) cycle
                w = min(h, remain)
                inv_h = 1.0_wp/h

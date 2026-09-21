@@ -78,6 +78,17 @@ set_target_properties(${core_objs} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(${core_objs} PUBLIC ${RDB_COMPILE_DEFS})
 target_include_directories(${core_objs} PUBLIC ${CMAKE_BINARY_DIR}/modules)
 
+# Shared include bodies (`src/shared_module_utilities/*.inc`) — small `pure` +
+# `!$acc routine seq` helpers `#include`d into the `contains` section of each
+# consuming module so NVHPC gets a module-LOCAL copy it can inline into a `do
+# concurrent` kernel, with ONE source of truth.  See that directory's README.
+# PUBLIC here so it propagates to every core consumer; tests and benchmarks that
+# link the STATIC core do NOT inherit include dirs from an OBJECT library
+# through the archive, so they add it themselves.
+set(RDB_SHARED_INCLUDE_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/shared_module_utilities)
+target_include_directories(${core_objs} PUBLIC ${RDB_SHARED_INCLUDE_DIR})
+
 set(libraries_to_link)
 
 # Source directories (populate the OBJECT library)
@@ -172,20 +183,23 @@ endif()
 # portability testing.
 if(RDB_ENABLE_NETCDF)
   add_executable(${exe_name} ${PROJECT_SOURCE_DIR}/app/main.F90)
-  target_include_directories(${exe_name} PRIVATE "${CMAKE_BINARY_DIR}/modules")
+  target_include_directories(${exe_name} PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                                 "${RDB_SHARED_INCLUDE_DIR}")
   target_link_libraries(${exe_name} PRIVATE ${core_dist})
 endif()
 
 # Namelist knob-reference generator (host-only). Walks the strict schema and
 # renders every knob: `./rdb_nml_doc docs/generated_nml_knobs.md`.
 add_executable(rdb_nml_doc ${PROJECT_SOURCE_DIR}/app/nml_doc.F90)
-target_include_directories(rdb_nml_doc PRIVATE "${CMAKE_BINARY_DIR}/modules")
+target_include_directories(rdb_nml_doc PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                               "${RDB_SHARED_INCLUDE_DIR}")
 target_link_libraries(rdb_nml_doc PRIVATE ${core_dist})
 
 # Same schema walk, JSON sink. Feeds tools/gen_python_config.py, which generates
 # the checked-in python/rdb/_config_generated.py: `./rdb_nml_json <out.json>`.
 add_executable(rdb_nml_json ${PROJECT_SOURCE_DIR}/app/nml_json.F90)
-target_include_directories(rdb_nml_json PRIVATE "${CMAKE_BINARY_DIR}/modules")
+target_include_directories(rdb_nml_json PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                                "${RDB_SHARED_INCLUDE_DIR}")
 target_link_libraries(rdb_nml_json PRIVATE ${core_dist})
 
 if(RDB_ENABLE_TESTING)
