@@ -26,15 +26,28 @@
 !! column divided proportionally", and the families meet it.  For a
 !! **z-like** family the analytic expectation is that layers whose nominal
 !! range lies ABOVE `−z_top` vanish against the TOP while the live layers
-!! keep their open-ocean geopotential depths — and **no family in this
-!! tree does that today**: the target builder is handed a column
-!! *thickness* and nothing else (`rdb_ocean_remap :: ocean_apply_ale_remap_centres`),
-!! so it cannot know where the column starts.  The z-like case-3 rows are
-!! therefore carried as `documents_*` cases: they assert the CURRENT,
-!! wrong placement, print the measured depth beside the analytic one in
-!! the failure message, and are flagged in-line as the assertions that
-!! **P6.2 must flip** when the per-column top depth reaches the builder.
-!! The suite is green; the defect is pinned and loud.
+!! keep their open-ocean geopotential depths:
+!!
+!!     e(K) = −max((NZ − K)·h_nominal, z_top)
+!!
+!! — geopotential depth, clipped at the rigid top.
+!!
+!! **`VCOORD_Z_FIXED` now meets that (P6.2).**  The slot carries a
+!! per-column top depth `ocean_vcoord_t%z_top` (`metrics%z_draft` under a
+!! cavity, `0` otherwise), so the builder finally knows where the column
+!! starts, and `z_fixed_under_a_lid_vanishes_against_the_top` asserts the
+!! table above — it is the flipped twin of what was a `documents_*` case
+!! pinning the old, wrong placement.  Its companion
+!! `z_fixed_z_top_zero_reproduces_the_old_placement` keeps the other half
+!! of the contract: at `z_top = 0` every target thickness is reproduced
+!! BIT-for-bit, so the family's pre-cavity answers cannot move.
+!!
+!! `VCOORD_ZSTAR_FULL` is still carried as a `documents_*` case: its
+!! per-column reference table is built from the TRUE bed and has not been
+!! taught the draft (that is P6.11).  It asserts the CURRENT, wrong
+!! placement, prints the measured depth beside the analytic one in the
+!! failure message, and is flagged in-line.  The suite is green; the
+!! remaining defect is pinned and loud.
 !!
 !! Families covered — every branch of `ocean_vcoord_compute_target_h`:
 !! LAGRANGIAN (no target), EULERIAN_Z, SIGMA, ZSTAR (shares the SIGMA
@@ -102,7 +115,10 @@ contains
                   new_unittest("zstar_full_open_ocean_depths", test_zstar_full_open), &
                   new_unittest("documents_zstar_full_band_anchored_at_z0", test_zstar_full_lid), &
                   new_unittest("z_fixed_open_ocean_depths", test_z_fixed_open), &
-                  new_unittest("documents_z_fixed_anchored_at_column_top", test_z_fixed_lid), &
+                  new_unittest("z_fixed_under_a_lid_vanishes_against_the_top", &
+                               test_z_fixed_lid), &
+                  new_unittest("z_fixed_z_top_zero_reproduces_the_old_placement", &
+                               test_z_fixed_z_top_zero), &
                   new_unittest("inert_fillers_stay_at_or_below_h_vanished", test_filler_contract) &
                   ]
    end subroutine collect_ocean_vcoord_interface_depths_tests
@@ -161,6 +177,49 @@ contains
          e_want(k) = -bed_depth
       end do
    end subroutine z_fixed_depths_from_column_top
+
+   pure subroutine z_fixed_depths_under_rigid_top(bed_depth, z_top, e_want)
+      !! Analytic interfaces of `VCOORD_Z_FIXED` under a RIGID TOP (P6.2):
+      !! the nominal stack is GEOPOTENTIAL and is clipped at the top,
+      !!
+      !!   e(K) = -max((NZ - K)*h_nominal, z_top)
+      !!
+      !! so every interface deeper than the lid keeps its open-ocean depth
+      !! and every one that would sit inside the ice collapses onto the
+      !! lid.  The fillers stacked under the lid displace the topmost
+      !! interfaces by at most `NZ*zstar_h_min = 1e-3 m`, which is why
+      !! this table is checked at `TOL_FILLER`.
+      real(wp), intent(in) :: bed_depth, z_top
+      real(wp), intent(out) :: e_want(0:NZ)
+      integer :: k
+      do k = 0, NZ
+         e_want(k) = -max(real(NZ - k, wp)*H_NOMINAL, z_top)
+      end do
+      ! The bed is the bed whatever the lid does.
+      e_want(0) = -bed_depth
+   end subroutine z_fixed_depths_under_rigid_top
+
+   pure subroutine z_fixed_reference_pre_cavity(column_total, target_col)
+      !! Verbatim transcription of the `VCOORD_Z_FIXED` target walk as it
+      !! stood BEFORE the rigid top existed.  Used by the `z_top = 0`
+      !! twin to assert bit-for-bit reproduction with `==`; an analytic
+      !! depth table cannot make that statement.
+      real(wp), intent(in) :: column_total
+      real(wp), intent(out) :: target_col(NZ)
+      integer :: k
+      real(wp) :: z_below_loc, z_above_nominal_loc
+      z_below_loc = column_total
+      do k = 1, NZ
+         z_above_nominal_loc = real(NZ - k, wp)*H_NOMINAL
+         if (z_above_nominal_loc > z_below_loc - 1.0e-4_wp) then
+            target_col(k) = 1.0e-4_wp
+            z_below_loc = z_below_loc - 1.0e-4_wp
+         else
+            target_col(k) = z_below_loc - z_above_nominal_loc
+            z_below_loc = z_above_nominal_loc
+         end if
+      end do
+   end subroutine z_fixed_reference_pre_cavity
 
    subroutine check_depths(error, family, e_got, e_want, tol)
       !! Compare a measured interface-depth column against its analytic
@@ -732,26 +791,38 @@ contains
    end subroutine test_z_fixed_open
 
    subroutine test_z_fixed_lid(error)
-      !! `documents_*` — this asserts BROKEN placement on purpose.
+      !! Case 3, FLIPPED by P6.2.  This assertion used to be a
+      !! `documents_*` case pinning the broken placement: handed a 500 m
+      !! column under a lid at `z = -500`, `VCOORD_Z_FIXED` hung five
+      !! 100 m layers from the LID and put five inert fillers on the BED,
+      !! a 500 m per-index error at `e(5)`.
       !!
-      !! Case 3.  `z_below_loc` starts at the column THICKNESS, so the
-      !! nominal stack hangs from the column top wherever that top is:
-      !! handed a 500 m column under a lid at `z = −500`, Z_FIXED puts
-      !! five 100 m layers at `−500 … −1000` and five inert fillers on the
-      !! BED.  The analytic z-like expectation is the mirror image —
-      !! layers whose nominal range lies above `−500` vanish against the
-      !! TOP, the live layers keep their open-ocean depths — so the
-      !! per-index error runs to **500 m** at `e(5)`:
+      !! It now asserts the intended table.  The slot carries the
+      !! column-top depth (`vc%z_top`), the nominal interface depths stay
+      !! GEOPOTENTIAL, the five layers whose nominal range lies inside
+      !! the ice vanish against the TOP and the five live ones keep their
+      !! open-ocean depths:
       !!
-      !!   interface     today        P6.2 analytic
-      !!     e(5)       −1000.0 m      −500.0 m
-      !!     e(4)       −1000.0 m      −600.0 m
-      !!     e(1)       −1000.0 m      −900.0 m
+      !!   interface     before P6.2    now (= the analytic table)
+      !!     e(0)         -1000.0 m       -1000.0 m   (the bed)
+      !!     e(1)         -1000.0 m        -900.0 m
+      !!     e(2)         -1000.0 m        -800.0 m
+      !!     e(3)         -1000.0 m        -700.0 m
+      !!     e(4)         -1000.0 m        -600.0 m
+      !!     e(5)         -1000.0 m        -500.0 m   (the ice base)
+      !!     e(6..10)      -900 .. -500    -500.0 m   (the filler stack)
       !!
-      !! The two stacks span the same interval here only because the lid
-      !! depth is a whole multiple of `h_nominal`; the LAYER each interface
+      !! The two stacks span the same interval only because the lid depth
+      !! is a whole multiple of `h_nominal`; the LAYER each interface
       !! belongs to is reversed, which is what every `k`-indexed consumer
-      !! sees.  P6.2 must flip these assertions.
+      !! sees, and reversing it is the point of the slice.
+      !!
+      !! Here the lid falls exactly on a nominal level, so `k = 5` is a
+      !! FULL 100 m layer rather than a partial cut; it is still debited
+      !! the five fillers' `h_min`, which is the `5e-4 m` that keeps
+      !! `Sum target_h` at exactly the 500 m water column.  The partial
+      !! cut, its minimum thickness and the sliver merge are gated in
+      !! `test_ocean_vcoord_zfixed_cavity`.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_vcoord_t) :: vc
       type(hgrid_t) :: grid
@@ -760,34 +831,85 @@ contains
       integer :: k, n_top_fill
       checks: block
          call make_slot(vc, grid, VCOORD_Z_FIXED)
+         vc%z_top = Z_TOP_LID
          total_h = B_FLAT - Z_TOP_LID
          eta = 0.0_wp
          call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
                                   eta(1:grid%nx_total, 1:grid%ny_total))
          call column_depths(vc%target_h(2, 2, :), B_FLAT, e_got)
-         call z_fixed_depths_from_column_top(B_FLAT, B_FLAT - Z_TOP_LID, e_want)
-         call check_depths(error, "Z_FIXED under a lid (documented defect)", &
-                           e_got, e_want, TOL_FILLER)
+         call z_fixed_depths_under_rigid_top(B_FLAT, Z_TOP_LID, e_want)
+         call check_depths(error, "Z_FIXED under a lid", e_got, e_want, TOL_FILLER)
          if (allocated(error)) exit checks
-         ! The defect, stated as the thing P6.2 inverts: the fillers are on
-         ! the BED and the live stack hangs from the lid, where a z-like
-         ! coordinate wants the fillers under the TOP and the live stack
-         ! anchored to z = 0.
-         n_top_fill = nint(Z_TOP_LID/H_NOMINAL)
-         do k = 1, n_top_fill
+         ! The inversion, stated as the thing that had to change: the
+         ! fillers are now under the TOP and the live stack is anchored to
+         ! z = 0, not to the lid.
+         n_top_fill = NZ - nint((B_FLAT - Z_TOP_LID)/H_NOMINAL)
+         do k = NZ - n_top_fill + 1, NZ
             call check(error, vc%target_h(2, 2, k) <= H_VANISHED, &
-                       "Z_FIXED under a lid (documented defect): bed-side "// &
-                       "layers still vanish before P6.2")
+                       "Z_FIXED under a lid: the layers that outcrop into the "// &
+                       "ice must be inert fillers")
             if (allocated(error)) exit checks
          end do
-         call check(error, abs(e_got(n_top_fill) + B_FLAT) < TOL_FILLER, &
-                    "Z_FIXED under a lid (documented defect): e(5) still sits "// &
-                    "at the BED (-1000 m); P6.2 must move it to -500 m")
+         do k = 1, NZ - n_top_fill
+            call check(error, vc%target_h(2, 2, k) > H_VANISHED, &
+                       "Z_FIXED under a lid: every layer below the ice base "// &
+                       "must be LIVE")
+            if (allocated(error)) exit checks
+         end do
+         call check(error, abs(e_got(NZ - n_top_fill) + Z_TOP_LID) < TOL_FILLER, &
+                    "Z_FIXED under a lid: e(5) must sit at the ICE BASE (-500 m), "// &
+                    "not at the bed")
+         if (allocated(error)) exit checks
+         call check(error, abs(e_got(1) + (B_FLAT - H_NOMINAL)) < TOL_EXACT, &
+                    "Z_FIXED under a lid: e(1) must keep its open-ocean "// &
+                    "geopotential depth (-900 m)")
          if (allocated(error)) exit checks
          call check_column_sum(error, "Z_FIXED", vc%target_h(2, 2, :), B_FLAT - Z_TOP_LID)
       end block checks
       call vc%destroy()
    end subroutine test_z_fixed_lid
+
+   subroutine test_z_fixed_z_top_zero(error)
+      !! The other half of the P6.2 contract: with NO rigid top the
+      !! family's pre-cavity answers must not move.  Same 500 m column,
+      !! `z_top` left at its init-time zero — the target must reproduce
+      !! the old walk BIT-for-bit (asserted with `==`, against a verbatim
+      !! transcription held in this file), and the old analytic placement
+      !! with it: the stack hangs from the column top at `z = -500` and
+      !! the fillers sit on the BED.
+      !!
+      !! That is not a contradiction with the case above.  `z_top = 0` IS
+      !! the open ocean, where "the column top" and "z = 0" are the same
+      !! place, and a stack hung from the column top is then a
+      !! geopotential stack.  The lid case is the only one that can tell
+      !! the two readings apart, which is why it is the one that flipped.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_vcoord_t) :: vc
+      type(hgrid_t) :: grid
+      real(wp) :: total_h(NX + 2, NY + 2), eta(NX + 2, NY + 2)
+      real(wp) :: e_got(0:NZ), e_want(0:NZ), want_h(NZ)
+      integer :: k
+      checks: block
+         call make_slot(vc, grid, VCOORD_Z_FIXED)
+         total_h = B_FLAT - Z_TOP_LID
+         eta = 0.0_wp
+         call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
+                                  eta(1:grid%nx_total, 1:grid%ny_total))
+         call z_fixed_reference_pre_cavity(B_FLAT - Z_TOP_LID, want_h)
+         do k = 1, NZ
+            call check(error, vc%target_h(2, 2, k) == want_h(k), &
+                       "Z_FIXED at z_top = 0 must be BIT-identical to the "// &
+                       "pre-cavity target")
+            if (allocated(error)) exit checks
+         end do
+         call column_depths(vc%target_h(2, 2, :), B_FLAT, e_got)
+         call z_fixed_depths_from_column_top(B_FLAT, B_FLAT - Z_TOP_LID, e_want)
+         call check_depths(error, "Z_FIXED at z_top = 0", e_got, e_want, TOL_FILLER)
+         if (allocated(error)) exit checks
+         call check_column_sum(error, "Z_FIXED", vc%target_h(2, 2, :), B_FLAT - Z_TOP_LID)
+      end block checks
+      call vc%destroy()
+   end subroutine test_z_fixed_z_top_zero
 
    ! ------------------------------------------------------------------
    ! The inert-filler contract

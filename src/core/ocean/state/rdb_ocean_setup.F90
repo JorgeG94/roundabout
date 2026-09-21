@@ -3160,6 +3160,36 @@ contains
          end do
       end if
 
+      ! ---- The vertical coordinate's rigid-top seam (P6.2) ----
+      ! `vcoord%z_top(i,j)` is the geopotential depth of the top of the
+      ! WATER column — the ice base under a shelf, `z = 0` elsewhere.
+      ! The draft is static, so this is a configure-time copy and the
+      ! vcoord slot stays self-contained at run time: the ALE remap
+      ! driver never sees `metrics` and the target builder's signature is
+      ! unchanged.  Same pattern (and the same reason) as the sponge's
+      ! `sp%z_top` in `configure_ocean_sponge`.
+      !
+      ! Consumed by the `VCOORD_Z_FIXED` branch of `compute_target_h`.
+      ! Without a cavity this routine has already returned, so `z_top`
+      ! keeps its init-time zero fill and every geometric family
+      ! reproduces its pre-cavity arithmetic bit-for-bit.  BEFORE
+      ! `ocean_state_enter_data` maps it.
+      if (allocated(ocean_state%vcoord%z_top)) then
+         if (size(ocean_state%vcoord%z_top, 1) == nx .and. &
+             size(ocean_state%vcoord%z_top, 2) == ny) then
+            do j = 1, ny
+               do i = 1, nx
+                  ocean_state%vcoord%z_top(i, j) = ocean_state%metrics%z_draft(i, j)
+               end do
+            end do
+         else
+            call fail("configure_ocean_cavity: vcoord%z_top and metrics%z_draft "// &
+                      "have different shapes — the vertical coordinate cannot see "// &
+                      "the ice base.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
       ! The counted-once invariant (I), in metres of reference depth, over
       ! the WET columns:
       !     rho*g*z_draft + (bt_H_ref - b)*rho*g == 0   <=>   bt_H_ref == b - z_draft.
