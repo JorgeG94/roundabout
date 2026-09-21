@@ -161,6 +161,49 @@ module rdb_multilayer_state
       ! (nx, ny, nz_ml+1) with k=1 the bed (0) and k=nz_ml+1 the surface.
       real(wp), allocatable :: w_interface(:, :, :)
 
+      ! ---- First LIVE layer, counting down from the top ----
+      ! `k_top(i,j)` is the index of the shallowest layer that carries
+      ! mass — the largest `k` with `h_layer(i,j,k) > H_VANISHED` — with
+      ! a fallback of `nz_ml` when the column has no live layer at all
+      ! (land, or a fully collapsed column).  It exists because under a
+      ! quasi-geopotential coordinate beneath an ice shelf
+      ! (`vcoord_type = "z_fixed"`, `vcoord%z_top > 0`) the layers whose
+      ! nominal geopotential range lies INSIDE the ice are inert fillers
+      ! at `zstar_h_min`, so on an ice-covered column `k = nz_ml` is NOT
+      ! the ice-adjacent layer.  Every top-side consumer that used to
+      ! spell `nz` literally reads this instead.
+      !
+      ! **Fallback `nz_ml` is what makes the indirection free.**  On
+      ! sigma, z*-lite, and every other family shipped today no wet
+      ! column ever vanishes its top layer, so `k_top ≡ nz_ml`, every
+      ! rewritten consumer reads the same memory with the same
+      ! arithmetic, and the answer is bit-identical.  A land column also
+      ! reads `nz_ml` (all its layers sit AT the marker under the
+      ! land-state contract), matching what those consumers do today.
+      !
+      ! **Static, and deliberately so.**  It is filled ONCE at configure
+      ! (`configure_ocean_k_top`) from the `z_fixed` target at `eta = 0`
+      ! — the same kernel and the same input the closed-face mask uses,
+      ! so there is exactly one definition of "live".  Under `z_fixed`
+      ! `eta` is absorbed by the first LIVE layer (the partial cell) and
+      ! a filler's target is `zstar_h_min` whatever `eta` does, so the
+      ! live/filler pattern does not move and there is nothing to
+      ! recompute per stage.  `tests/test_ocean_ktop.F90` pins the
+      ! static claim against the mask builder's own live pattern.
+      integer, allocatable :: k_top(:, :)
+         !! Shallowest live layer at cell centres, shape (nx, ny).
+      integer, allocatable :: k_top_u(:, :)
+         !! u-face twin, shape (nx+1, ny).  `min` of the two bounding
+         !! columns, NOT `max`: a velocity face carries water in layer
+         !! `k` only where BOTH abutting columns are live there — that is
+         !! the same statement `metrics%open_u` makes — so the shallowest
+         !! layer the FACE has is the DEEPER of the two column tops, i.e.
+         !! the smaller index.  Taking `max` would put the ice-ocean drag
+         !! and the implicit stress fold on a row that is a filler on one
+         !! side.
+      integer, allocatable :: k_top_v(:, :)
+         !! v-face twin, shape (nx, ny+1).  Same `min` rule.
+
       ! ---- Land / ocean mask (surface-forcing mask) ----
       ! 2D wet-cell indicator at cell centres: 1.0 = ocean, 0.0 = land.
       ! Populated at IC time from the bathymetry threshold; consumed by
@@ -366,6 +409,14 @@ contains
       ! overwrite this in `ocean_state_seed_from_cfg` after the bathy load.
       allocate (this%wet_mask(nx, ny), source=1.0_wp)
 
+      ! First-live-layer indices.  Seeded at the fallback `nz_ml`
+      ! everywhere, which IS the answer on every coordinate family that
+      ! does not vanish a layer against the top — `configure_ocean_k_top`
+      ! overwrites them only under `z_fixed` with a rigid top.
+      allocate (this%k_top(nx, ny), source=nz_ml)
+      allocate (this%k_top_u(nx + 1, ny), source=nz_ml)
+      allocate (this%k_top_v(nx, ny + 1), source=nz_ml)
+
       ! Tracer registry: salinity at index 1, temperature at index 2,
       ! ideal-age at index 3 (optional).
       ntracers = 2
@@ -447,6 +498,9 @@ contains
       if (allocated(this%heat_budget_remap)) deallocate (this%heat_budget_remap)
       if (allocated(this%salt_budget_remap)) deallocate (this%salt_budget_remap)
       if (allocated(this%wet_mask)) deallocate (this%wet_mask)
+      if (allocated(this%k_top)) deallocate (this%k_top)
+      if (allocated(this%k_top_u)) deallocate (this%k_top_u)
+      if (allocated(this%k_top_v)) deallocate (this%k_top_v)
    end subroutine multilayer_state_destroy
 
    pure function multilayer_state_bytes(this) result(nbytes)
@@ -469,6 +523,8 @@ contains
                + arr_bytes(this%flux_h_layer) + arr_bytes(this%rho_layer) &
                + arr_bytes(this%p_top) &
                + arr_bytes(this%w_interface) + arr_bytes(this%wet_mask) &
+               + arr_bytes(this%k_top) + arr_bytes(this%k_top_u) &
+               + arr_bytes(this%k_top_v) &
                + arr_bytes(this%mass_budget_continuity) &
                + arr_bytes(this%heat_budget_surface) + arr_bytes(this%salt_budget_surface) &
                + arr_bytes(this%heat_budget_geothermal) &
@@ -590,6 +646,10 @@ contains
       !$acc&                  this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
       !$acc&                  this%mass_budget_remap, this%heat_budget_remap, &
       !$acc&                  this%salt_budget_remap, this%wet_mask)
+      ! `copyin`, not `create`: the first-live-layer indices are filled
+      ! on the HOST at configure (before this map) and never recomputed
+      ! on device, so the seeded value has to travel with the map.
+      !$acc enter data copyin(this%k_top, this%k_top_u, this%k_top_v)
 
       if (allocated(this%tracers)) then
          !$acc enter data copyin(this%tracers)
@@ -649,6 +709,7 @@ contains
       !$acc&                 this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
       !$acc&                 this%mass_budget_remap, this%heat_budget_remap, &
       !$acc&                 this%salt_budget_remap, this%wet_mask)
+      !$acc exit data delete(this%k_top, this%k_top_u, this%k_top_v)
    end subroutine multilayer_state_exit_data_impl
 
 end module rdb_multilayer_state

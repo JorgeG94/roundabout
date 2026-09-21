@@ -30,6 +30,7 @@ module rdb_ocean_setup
                                VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN, &
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
                                ocean_vcoord_closed_face_masks, &
+                               ocean_vcoord_k_top_from_target, &
                                ocean_vcoord_count_ledges
    use rdb_vcoord, only: parse_remap_method
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
@@ -120,6 +121,7 @@ module rdb_ocean_setup
    public :: wave_drag_roughness_proxy
    public :: configure_ocean_porous
    public :: configure_ocean_closed_faces
+   public :: configure_ocean_k_top
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
    public :: configure_ocean_top_drag
@@ -2234,6 +2236,80 @@ contains
       end associate
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
+
+   subroutine configure_ocean_k_top(cfg, ocean_state, grid, compute_rank)
+      !! Fill `ms%k_top` / `k_top_u` / `k_top_v` — the shared index of
+      !! the first LIVE layer counting down from the top, and the field
+      !! every top-side consumer reads instead of spelling `nz`.
+      !!
+      !! Under a quasi-geopotential coordinate beneath an ice shelf
+      !! (`vcoord_type = "z_fixed"` with `vcoord%z_top > 0`) the layers
+      !! whose nominal geopotential range lies INSIDE the ice are inert
+      !! fillers at `zstar_h_min`, so on an ice-covered column
+      !! `k = nz` is NOT the ice-adjacent layer.  This is the only
+      !! producer of that index.
+      !!
+      !! **Static.** The pattern is read ONCE, from
+      !! `ocean_vcoord_z_fixed_target` at `eta = 0` — the same kernel,
+      !! the same `bt_H_ref` and the same `z_top` the closed-face mask
+      !! is built from, so there is exactly ONE definition of "live" in
+      !! the tree and `test_ocean_ktop` can assert the two agree.  Under
+      !! `z_fixed` `eta` is absorbed by the first live layer (the partial
+      !! top cell) and a filler's target is `zstar_h_min` whatever `eta`
+      !! does, so the live/filler pattern does not move and there is
+      !! nothing to recompute per stage.
+      !!
+      !! **Every other coordinate is a literal no-op**: the arrays were
+      !! allocated at `source = nz_ml` in `multilayer_state_init`, which
+      !! IS the answer wherever nothing vanishes against the top, so the
+      !! whole phase is bit-identical off `z_fixed`.
+      !!
+      !! **Ordering.** Same as `configure_ocean_closed_faces` — AFTER
+      !! `configure_ocean_cavity` (`vcoord%z_top`), AFTER
+      !! `configure_ocean_bt_split` (`bt_H_ref`), AFTER the periodic-wrap
+      !! / halo pass, and BEFORE `ocean_state_enter_data` (the host fill
+      !! is what the `copyin` captures).
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+
+      integer :: nx, ny, nz, n_filler
+      real(wp) :: h_nominal, h_min
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+
+      if (.not. ocean_state%multilayer%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) return
+      if (.not. ocean_state%dyn%bt_work%is_init) return
+      if (.not. cfg%ocean%cavity_dyn%enable) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+      h_min = ocean_state%vcoord%zstar_h_min
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, h_min)
+      call ocean_vcoord_k_top_from_target(ocean_state%multilayer%k_top, &
+                                          ocean_state%multilayer%k_top_u, &
+                                          ocean_state%multilayer%k_top_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+      n_filler = count(ocean_state%multilayer%k_top < nz)
+      deallocate (tgt, eta0)
+
+      if (compute_rank == 0) then
+         call logger%info("z_fixed k_top: "//to_string(n_filler)//"/"// &
+                          to_string(nx*ny)//" columns carry top-side "// &
+                          "fillers (k_top < nz); min k_top = "// &
+                          to_string(minval(ocean_state%multilayer%k_top))// &
+                          ", nz = "//to_string(nz))
+      end if
+   end subroutine configure_ocean_k_top
 
    subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)
       !! Build the static partial-step z-level FACE-CLOSURE mask

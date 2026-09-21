@@ -119,6 +119,7 @@ module rdb_ocean_engine
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
                               configure_ocean_closed_faces, &
+                              configure_ocean_k_top, &
                               configure_ocean_cavity, &
                               configure_ocean_cavity_melt, &
                               configure_ocean_top_drag, &
@@ -794,6 +795,17 @@ contains
       ! seam correctness of those two inputs.  Knob off => literal no-op.
       call configure_ocean_closed_faces(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! The shared FIRST-LIVE-LAYER index `ms%k_top` (+ its two face
+      ! twins) — what every top-side consumer reads instead of spelling
+      ! `nz`, so that a `z_fixed` column whose top layers are inert
+      ! fillers inside the ice draft is forced on the ice-adjacent LIVE
+      ! layer and not on the filler.  Same inputs and same ordering
+      ! constraints as the closed-face mask above (it is built from the
+      ! same `z_fixed` target at eta = 0), still before enter_data.
+      ! Literal no-op on every coordinate but `z_fixed` under a cavity:
+      ! the arrays already hold the `nz` fallback.
+      call configure_ocean_k_top(cfg, engine%state, engine%grid, rank)
 
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
