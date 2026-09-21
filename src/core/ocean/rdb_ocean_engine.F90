@@ -118,6 +118,7 @@ module rdb_ocean_engine
                               configure_ocean_bt_split, configure_ocean_bc, &
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
+                              configure_ocean_closed_faces, &
                               configure_ocean_cavity, &
                               configure_ocean_cavity_melt, &
                               configure_ocean_top_drag, &
@@ -782,6 +783,17 @@ contains
       ! BEFORE enter_data (the face masks are host-filled and reach the
       ! device on the slot's `copyin` map).
       call configure_ocean_top_drag(cfg, engine%state, engine%grid, rank)
+
+      ! Partial-step z-level face closure (&vcoord_nml
+      ! zfixed_closed_faces).  LAST of the static-geometry builders and
+      ! still BEFORE enter_data: it needs `vcoord%z_top` (configure_ocean
+      ! _cavity), `bt_work%bt_H_ref` (configure_ocean_bt_split), the
+      ! land-masked `dy_cu`/`dx_cv` (configure_ocean_land_mask) and the
+      ! periodic-wrap + halo pass above — the mask is built from the
+      ! z_fixed target at eta = 0, and its ghost-band correctness IS the
+      ! seam correctness of those two inputs.  Knob off => literal no-op.
+      call configure_ocean_closed_faces(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
 
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a

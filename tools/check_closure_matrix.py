@@ -68,6 +68,17 @@ CURATED_KEYS = [
     # plausible Kd) and because it is a no-op under eos="linear" but a
     # factor-of-several change in an ice-shelf cavity under Wright.
     "buoyancy_coeffs",
+    #
+    # `zfixed_closed_faces` decides whether a `z_fixed` face whose layer is
+    # an inert filler on one side is a thin passage or a z-LEVEL WALL.  It
+    # is listed because it is invisible in the output (both settings
+    # produce a plausible field), because it changes SEVEN kernels at once
+    # (continuity, the BT renormaliser, transport Coriolis, the layer
+    # velocity mask, kappa_h, the harmonic viscosity's slip condition and
+    # the momentum vdiff coupling) and because its fail-loud exclusion
+    # list -- GM / Redi / MLE / biharmonic / stress_tensor / wet-dry /
+    # bt_halo -- is exactly the kind of scoping prose forgets.
+    "zfixed_closed_faces",
 ]
 
 # Named sea-ice selector knobs (&ocean_ice_nml).  The shipped subsystem —

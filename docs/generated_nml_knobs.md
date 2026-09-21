@@ -67,9 +67,7 @@ Vertical-coordinate + ALE-remap controls.
 | `rho_target_dense` | `0.1030000000E+04` | kg/m^3 | rho-coord: densest (bed) target density |
 | `regrid_time_scale` | `0.0000000000E+00` | s | ALE regrid grid time-filter timescale (0 = jump to target) |
 | `remap_vel_conserve_ke` | `.false.` |  | ALE velocity remap: KE-conserving baroclinic-anomaly rescale |
-| `remap_boundary_extrap` | `.false.` |  | ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION) |
-| `remap_nonuniform_weights` | `.false.` |  | ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations |
-| `remap_check_preconditions` | `.false.` |  | ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals) |
+| `zfixed_closed_faces` | `.false.` |  | z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip) |
 
 ### &physics_nml
 
