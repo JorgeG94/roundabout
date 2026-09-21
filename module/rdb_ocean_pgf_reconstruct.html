@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.3% of total for modules and submodules.">178 statements</a>
+                 title=" 0.4% of total for modules and submodules.">214 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -157,9 +157,11 @@
       </a>
       <div id="subs-0" class="collapse">
         <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_pgf_reconstruct.html#proc-boole_dpa_face">boole_dpa_face</a>
             <a class="list-group-item" href="../module/rdb_ocean_pgf_reconstruct.html#proc-boole_dpa_intz_layer">boole_dpa_intz_layer</a>
             <a class="list-group-item" href="../module/rdb_ocean_pgf_reconstruct.html#proc-plm_edges_column">plm_edges_column</a>
             <a class="list-group-item" href="../module/rdb_ocean_pgf_reconstruct.html#proc-ppm_edges_column">ppm_edges_column</a>
+            <a class="list-group-item" href="../module/rdb_ocean_pgf_reconstruct.html#proc-boundary_edges_linear">boundary_edges_linear</a>
         </div>
       </div>
     </div>
@@ -200,9 +202,12 @@ within a layer the <code>_t</code> (top) edge is SHALLOWER (toward k+1), the
 <code>_b</code> (bottom) edge is DEEPER (toward k).  z is surface-relative and
 negative below the surface; the Boussinesq hydrostatic pressure
 estimate at a sub-point is <code>p = -g*rho0*z = g*rho0*depth</code>.</p>
-<p>Boundary layers (k=1, k=nz) fall back to PCM edges
-(<code>Q_t = Q_b = Q</code>) — no boundary extrapolation, matching the
-conservative default.</p>
+<p>Boundary layers (k=1, k=nz) take a LINEAR-EXACT one-sided edge pair
+from the single interior neighbour (<code>boundary_edges_linear</code>), not a
+PCM flatten.  That matters: under a terrain-following coordinate the
+layers adjacent to the tilted boundary are exactly where the
+sigma pressure-gradient truncation error lives, and flattening them
+to PCM left the FULL error there while the interior was corrected.</p>
 <br>          <div class="card mb-4">
       <h3 class="card-header card-title bg-light">Uses</h3>
       <div class="card-body">
@@ -865,6 +870,351 @@ parameter
         <section>
           <h2>Subroutines</h2>
               <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-boole_dpa_face"></span> <h3>public pure subroutine <a href='../proc/boole_dpa_face.html'>boole_dpa_face</a>(eos, rho0, rho_ref, e_top_l, e_top_r, dz_l, dz_r, t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, parabolic, dpa_face)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>HORIZONTAL (cross-face) Boole quadrature of the layer pressure
+increment <code>dpa = g * int rho' dz</code> — the face integral the FV
+pressure-gradient contour needs (Adcroft, Hallberg &amp; Harrison
+2008 §3; Yung, Hallberg, Adcroft &amp; Morrison 2026 §2.4).</p><a href="../proc/boole_dpa_face.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~2"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+<p>Boussinesq reference density used in the pressure estimate.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_ref~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_ref</strong></td>
+            <td>
+<p>Anomaly reference subtracted from the EOS density.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_top_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_top_l</strong></td>
+            <td>
+<p>Shallower-interface heights of the layer in the LEFT and
+RIGHT columns (m, surface-relative, &lt;= 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_top_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_top_r</strong></td>
+            <td>
+<p>Shallower-interface heights of the layer in the LEFT and
+RIGHT columns (m, surface-relative, &lt;= 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_l</strong></td>
+            <td>
+<p>Layer thicknesses in the left / right columns (m, &gt;= 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_r</strong></td>
+            <td>
+<p>Layer thicknesses in the left / right columns (m, &gt;= 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_t_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_t_l</strong></td>
+            <td>
+<p>Left column temperature: top edge, bottom edge, layer mean.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_b_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_b_l</strong></td>
+            <td>
+<p>Left column temperature: top edge, bottom edge, layer mean.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_m_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_m_l</strong></td>
+            <td>
+<p>Left column temperature: top edge, bottom edge, layer mean.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_t_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_t_r</strong></td>
+            <td>
+<p>Right column temperature triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_b_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_b_r</strong></td>
+            <td>
+<p>Right column temperature triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_m_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_m_r</strong></td>
+            <td>
+<p>Right column temperature triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_t_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_t_l</strong></td>
+            <td>
+<p>Left column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_b_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_b_l</strong></td>
+            <td>
+<p>Left column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_m_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_m_l</strong></td>
+            <td>
+<p>Left column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_t_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_t_r</strong></td>
+            <td>
+<p>Right column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_b_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_b_r</strong></td>
+            <td>
+<p>Right column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_m_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_m_r</strong></td>
+            <td>
+<p>Right column salinity triple.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-parabolic~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>parabolic</strong></td>
+            <td>
+<p>.true. -&gt; the sub-column profiles carry the PPM curvature.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dpa_face"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dpa_face</strong></td>
+            <td>
+<p>Along-face mean of <code>g * int rho' dz</code> over the layer (Pa).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
     <div class="card-header codesum"><span class="anchor" id="proc-boole_dpa_intz_layer"></span> <h3>public pure subroutine <a href='../proc/boole_dpa_intz_layer.html'>boole_dpa_intz_layer</a>(eos, rho0, rho_ref, e_top, dz, t_t, t_b, t_mean, s_t, s_b, s_mean, parabolic, dpa, intz_dpa)  
 </h3></div>
     <div class="card-body">
@@ -888,7 +1238,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~33"></span>
+              <span class="anchor" id="variable-eos"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -903,7 +1253,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho0~20"></span>
+              <span class="anchor" id="variable-rho0"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -918,7 +1268,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_ref~5"></span>
+              <span class="anchor" id="variable-rho_ref"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -948,7 +1298,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz~5"></span>
+              <span class="anchor" id="variable-dz"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1053,7 +1403,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-parabolic~2"></span>
+              <span class="anchor" id="variable-parabolic"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -1083,7 +1433,7 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-intz_dpa~4"></span>
+              <span class="anchor" id="variable-intz_dpa"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1112,7 +1462,8 @@ TOP edge inward) <code>intz_dpa = 0.5 * g * dz^2 * bracket</code>.</p><a href=".
 via a two-stage h-weighted van-Leer slope (White, Adcroft &amp;
 Hallberg 2009 §2). Returns the SHALLOWER edge in <code>q_t</code> (toward
 k+1) and the DEEPER edge in <code>q_b</code> (toward k-1), bottom-up.
-Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
+Boundary layers (k=1, k=nz) -&gt; <code>boundary_edges_linear</code>, the
+linear-exact one-sided pair.</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1127,7 +1478,7 @@ Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~277"></span>
+              <span class="anchor" id="variable-nz"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1142,7 +1493,7 @@ Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h~73"></span>
+              <span class="anchor" id="variable-h"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1157,7 +1508,7 @@ Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q~3"></span>
+              <span class="anchor" id="variable-q"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1172,7 +1523,7 @@ Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_t"></span>
+              <span class="anchor" id="variable-q_t~2"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1187,7 +1538,7 @@ Boundary layers (k=1, k=nz) -&gt; PCM edges (q_t=q_b=q).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_b"></span>
+              <span class="anchor" id="variable-q_b~2"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1233,7 +1584,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~278"></span>
+              <span class="anchor" id="variable-nz~2"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1248,7 +1599,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h~74"></span>
+              <span class="anchor" id="variable-h~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1263,7 +1614,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q~4"></span>
+              <span class="anchor" id="variable-q~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1278,7 +1629,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_t~2"></span>
+              <span class="anchor" id="variable-q_t~3"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1293,7 +1644,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_b~2"></span>
+              <span class="anchor" id="variable-q_b~3"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1304,6 +1655,123 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
             <td><strong>q_b</strong>(nz)</td>
             <td>
 
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-boundary_edges_linear"></span> <h3>private pure subroutine <a href='../proc/boundary_edges_linear.html'>boundary_edges_linear</a>(h_self, h_nbr, q_self, dq_up, q_t, q_b)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Linear-exact one-sided edge pair for a BOUNDARY layer (k=1 or
+k=nz), where a centred slope has no second neighbour.</p><a href="../proc/boundary_edges_linear.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_self"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_self</strong></td>
+            <td>
+<p>Thickness of the boundary layer itself (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_nbr"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_nbr</strong></td>
+            <td>
+<p>Thickness of its single interior neighbour (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_self"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_self</strong></td>
+            <td>
+<p>Layer mean of the boundary layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_up"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_up</strong></td>
+            <td>
+<p>Layer-mean increment toward the surface, neighbour -&gt; self at
+the surface layer, self -&gt; neighbour at the bed layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_t"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_t</strong></td>
+            <td>
+<p>Top (shallower) edge value.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_b"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_b</strong></td>
+            <td>
+<p>Bottom (deeper) edge value.</p>
             </td>
         </tr>
     </tbody>
@@ -1336,7 +1804,7 @@ to round-off).</p><a href="../proc/ppm_edges_column.html" class="pull-right"><em
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-21 16:43 +0000             </p>
+ on 2026-09-21 21:00 +0000             </p>
           </div>
         </div>
         <br>
