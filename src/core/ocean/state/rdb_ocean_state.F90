@@ -8,7 +8,7 @@ module rdb_ocean_state
    !! requires wiring it into both.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, LAND_DEPTH_THRESHOLD, GRAVITY, H_VANISHED, H_DIV_EPS, &
-                            DEG2RAD, TWO_PI
+                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED
    use rdb_grid, only: hgrid_t
    use pic_logger, only: logger => global_logger
    use rdb_error_ring, only: fail
@@ -63,7 +63,8 @@ module rdb_ocean_state
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
 #endif
    use rdb_decomp, only: decomp_t
-   use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type
+   use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
+                               ocean_vcoord_z_fixed_target
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_cavity, only: parse_cavity_draft_config, parse_cavity_draft_source, &
                                CAVITY_DRAFT_NONE, CAVITY_DRAFT_FLAT, CAVITY_DRAFT_LINEAR, &
@@ -1307,11 +1308,54 @@ contains
       ! horizontally-uniform density stack).  Validated as mutually exclusive
       ! with wet/dry, so the two branches never both need the emerged-column
       ! floor.  Default "sigma" ⇒ byte-identical to the pre-knob path.
+      !
+      ! THIRD BRANCH — `VCOORD_Z_FIXED` under a cavity.  The running
+      ! coordinate there is quasi-geopotential with inert fillers inside
+      ! the ice, so a sigma-style seed is NOT on the coordinate: the very
+      ! first ALE remap would relamp the whole column in one step, and a
+      ! T/S profile that `&ocean_zinit_nml source="linear"` made exactly
+      ! linear in geopotential z would come back through the PPM boundary
+      ! closure NOT exactly linear — column by column, because the draft
+      ! (and so the cut) differs column to column.  That difference IS a
+      ! horizontal density gradient, i.e. exactly the spurious rest
+      ! current this coordinate exists to remove.  So seed `h_layer`
+      ! directly FROM the target (`η = 0`, which is the cavity datum's
+      ! own resting state) and let the zinit overlay evaluate T/S at
+      ! those layer centres: exact by construction, first remap an
+      ! identity, no step-1 regrid shock.
+      !
+      ! Fenced to the cavity so every existing `z_fixed` namelist keeps
+      ! its sigma-style seed bit-for-bit; `z_fixed` × cavity is a
+      ! configuration `validate_config` refused outright until now.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
                                           water, nz_ml, &
                                           cfg%ocean%topo%max_depth, &
                                           cfg%ocean%isopycnal%angstrom_h)
+      else if (state%metrics%use_cavity .and. &
+               parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .and. &
+               cfg%ocean%topo%max_depth > 0.0_wp) then
+         block
+            real(wp) :: h_min_seed
+            real(wp), allocatable :: eta_rest(:, :)
+            allocate (eta_rest(nx, ny), source=0.0_wp)
+            ! `zstar_h_min` comes off the SLOT, not off `cfg`: there is
+            ! one source of truth for the filler thickness and it is the
+            ! one the running target builder will use.  `engine_setup`
+            ! copies both `zstar_*` knobs onto the slot immediately BEFORE
+            ! this seed (it has to — the seed's own tail calls
+            ! `vcoord%build_zref_full`, which reads them), so the value is
+            ! already the namelist's.  Fall back to `cfg` only for a
+            ! caller that seeds a state whose vcoord slot was never
+            ! initialised.
+            h_min_seed = cfg%zstar_h_min
+            if (state%vcoord%is_init) h_min_seed = state%vcoord%zstar_h_min
+            call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_rest, &
+                                             state%metrics%z_draft, nx, ny, nz_ml, &
+                                             cfg%ocean%topo%max_depth/real(nz_ml, wp), &
+                                             h_min_seed)
+            deallocate (eta_rest)
+         end block
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
                                         water, nz_ml, &
@@ -3168,6 +3212,28 @@ contains
          ! h_layer floor on land.
          call seed_land_h_floor_impl(ms%h_layer, ms%wet_mask, nz_ml)
 
+         ! The SAME contract, on a WET column, for the inert fillers a
+         ! rigid-top coordinate leaves inside the ice (and below the
+         ! bed).  `h = zstar_h_min <= H_VANISHED` puts them on the
+         ! vanished side of every gate, so the first ALE regrid writes
+         ! their `hTr` to zero — un-budgeted, because the latch was taken
+         ! with the seed's `c*h_min` still in them.  Measured on
+         ! `cavity_sloping_lid_rest_zfixed.nml` before this hold: a
+         ! step-1 salt residual of `-1.604E-06` relative (3.5e10 kg of
+         ! salt, all of it filler content), flat thereafter — the exact
+         ! shape commit `4d8ac2e0` recorded for the grounded columns.
+         ! Fenced to `z_fixed` x cavity, the only configuration that
+         ! vanishes a layer on a wet column today, so every existing
+         ! namelist is bit-identical.
+         if (state%metrics%use_cavity .and. state%vcoord%coord_type == VCOORD_Z_FIXED) then
+            if (allocated(ms%tracers)) then
+               do t = 1, size(ms%tracers)
+                  call seed_vanished_tracer_hold_impl(ms%tracers(t)%hTr, &
+                                                      ms%h_layer, nz_ml)
+               end do
+            end if
+         end if
+
          ! Zero layer face velocities at land faces.
          call seed_land_face_vel_impl(ms%u_face_x_layer, state%metrics%wet_u, nz_ml)
          call seed_land_face_vel_impl(ms%v_face_y_layer, state%metrics%wet_v, nz_ml)
@@ -3246,6 +3312,42 @@ contains
          end do
       end do
    end subroutine seed_land_tracer_hold_impl
+
+   pure subroutine seed_vanished_tracer_hold_impl(hTr, h_layer, nz)
+      !! Zero the extensive tracer content `hTr` on any layer the target
+      !! grid seeded as an INERT FILLER (`h_layer <= H_VANISHED`),
+      !! whether or not the column is wet.
+      !!
+      !! The vanished-layer twin of `seed_land_tracer_hold_impl`, and it
+      !! rests on the same argument: a filler is on the vanished side of
+      !! every `h > H_VANISHED` gate, so the ALE remap's concentration
+      !! step writes `c = 0` and therefore `hTr = 0` at the FIRST regrid.
+      !! Whatever the seed put there is content the regrid discards
+      !! silently and un-budgeted — a step change in the console `Error`
+      !! residual between step 0 and step 1.  The seed's job is to hand
+      !! the budget latch the state the running solver holds.
+      !!
+      !! This is the state, not a choice: the physically-valued filler
+      !! (option (i) — carry `c_live*h_min` in the prognostic state and
+      !! debit the donor) would need a wet-column analogue of the
+      !! land-state contract and would change the remap's conservation
+      !! bookkeeping.  The vanished-layer T/S that the PGF and the EOS
+      !! need is substituted at CONSUMPTION instead, which is a separate
+      !! slice.
+      integer, intent(in) :: nz
+      real(wp), intent(inout) :: hTr(:, :, :)
+      real(wp), intent(in) :: h_layer(:, :, :)
+      integer :: i, j, k, nx, ny
+      nx = size(hTr, 1)
+      ny = size(hTr, 2)
+      do k = 1, nz
+         do j = 1, ny
+            do i = 1, nx
+               if (h_layer(i, j, k) <= H_VANISHED) hTr(i, j, k) = 0.0_wp
+            end do
+         end do
+      end do
+   end subroutine seed_vanished_tracer_hold_impl
 
    pure subroutine seed_land_h_floor_impl(h_layer, wet_mask, nz)
       !! Floor land-cell layer thickness to `H_VANISHED` (never 0 ⇒ no
