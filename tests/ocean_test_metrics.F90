@@ -16,6 +16,7 @@ module ocean_test_metrics
    use rdb_ocean_metrics, only: ocean_metrics_t, metrics_fill_cartesian, &
                                 metrics_fill_spherical, metrics_fill_tripolar, &
                                 metrics_finalize, metrics_apply_land_mask, &
+                                metrics_closed_faces_alloc, &
                                 adcroft_recip
    implicit none
    private
@@ -28,9 +29,13 @@ module ocean_test_metrics
 
 contains
 
-   subroutine make_cartesian_metrics(metrics, grid, wet_mask)
+   subroutine make_cartesian_metrics(metrics, grid, wet_mask, nz_closed)
       !! Init + cartesian-fill + finalize [+ land-mask] + device-map a
       !! metrics slot.
+      !!
+      !! Both optionals exist for the same reason and are orthogonal: each
+      !! edits the slot BEFORE the device map, which is the only order that
+      !! is correct under `-gpu=...,mem:separate`.
       !!
       !! `wet_mask` (optional, T-cell wet=1 / land=0, `(nx_total,
       !! ny_total)`) is applied by `metrics_apply_land_mask` BEFORE the
@@ -42,13 +47,28 @@ contains
       !! the coast on the GPU while the host-side assertions, reading
       !! the masked host copy, look perfectly fine.  Taking the mask
       !! here makes that ordering unskippable.
+      !!
+      !! `nz_closed` (optional) grows the z-level closed-face masks
+      !! `open_u`/`open_v` from their `(1,1,1)` placeholder to full face
+      !! size BEFORE the device map.  A test that wants them must pass it
+      !! here and must NOT call `metrics_closed_faces_alloc` itself after
+      !! this routine: that deallocates the 8-byte placeholders while
+      !! they are still mapped, so the device table keeps two stale
+      !! entries pointing into freed host memory.  Whatever the host heap
+      !! hands out next then reads as "partially present" — a FATAL
+      !! runtime error on `-gpu=mem:separate`, at an unrelated array,
+      !! whose identity depends only on the allocation order.  The
+      !! `metrics_closed_faces_alloc` docstring states the rule; this is
+      !! how a test obeys it.
       type(ocean_metrics_t), intent(inout) :: metrics
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in), optional :: wet_mask(:, :)
          !! T-cell wet/land mask.  Absent ⇒ the masker is not called at
          !! all and the slot keeps its unmasked fill (`init` sources
          !! `wet_*` to 1), which is what every pre-existing caller gets.
+      integer, intent(in), optional :: nz_closed
       call metrics%init(grid)
+      if (present(nz_closed)) call metrics_closed_faces_alloc(metrics, grid, nz_closed)
       call metrics_fill_cartesian(metrics, grid, grid%dx, grid%dy)
       call metrics_finalize(metrics)
       if (present(wet_mask)) then

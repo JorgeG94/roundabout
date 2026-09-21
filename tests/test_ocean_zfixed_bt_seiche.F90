@@ -85,7 +85,7 @@
 module test_ocean_zfixed_bt_seiche
    use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
-   use rdb_ocean_metrics, only: ocean_metrics_t, metrics_closed_faces_alloc
+   use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_continuity, only: continuity_t
@@ -262,7 +262,10 @@ contains
       i0 = ig + 1; i1 = ig + NXP
       j0 = ig + 1; j1 = ig + NYP
 
-      call make_cartesian_metrics(metrics, grid)
+      ! `nz_closed` grows open_u/open_v BEFORE the device map — see the
+      ! helper's docstring: a `metrics_closed_faces_alloc` AFTER the map
+      ! leaves the 8-byte placeholders stale on the device.
+      call make_cartesian_metrics(metrics, grid, nz_closed=NZ)
 
       ! ---- the staircase bed, and the z_fixed target it implies ----
       allocate (tot_h(nx_t, ny_t), source=H_DEEP)
@@ -281,10 +284,16 @@ contains
       call ocean_vcoord_z_fixed_target(tgt, tot_h, eta0f, z_top, &
                                        nx_t, ny_t, NZ, H_NOM, H_MIN)
 
-      call metrics_closed_faces_alloc(metrics, grid, NZ)
       call ocean_vcoord_closed_face_masks(metrics%open_u, metrics%open_v, &
                                           tgt, nx_t, ny_t, NZ, H_VANISHED)
       metrics%use_closed_faces = .true.
+      ! `ocean_vcoord_closed_face_masks` is a `do concurrent` kernel and
+      ! the masks are now DEVICE-PRESENT (grown before the map, see
+      ! `make_cartesian_metrics`), so it wrote the device copy and the
+      ! host one is stale.  Pull it back for the census below.  Inert on
+      ! a host/multicore build; without it the host census reads the
+      ! seeded all-OPEN mask and declares the staircase vacuous.
+      !$acc update self(metrics%open_u, metrics%open_v)
 
       n_closed = 0
       do k = 1, NZ
@@ -581,13 +590,17 @@ contains
       ms%nz_ml = NZ
       call ms%init(grid)
       call dyn%init(grid, nz_ml=NZ)
-      call make_cartesian_metrics(metrics, grid)
-      call metrics_closed_faces_alloc(metrics, grid, NZ)
+      ! `nz_closed` grows open_u/open_v BEFORE the device map — see the
+      ! helper's docstring: a `metrics_closed_faces_alloc` AFTER the map
+      ! leaves the 8-byte placeholders stale on the device.
+      call make_cartesian_metrics(metrics, grid, nz_closed=NZ)
       metrics%open_u = 1.0_wp
       metrics%open_v = 1.0_wp
       metrics%open_u(:, :, 1) = 0.0_wp
       metrics%open_v(:, :, 1) = 0.0_wp
       metrics%use_closed_faces = .true.
+      ! Host fill after the map — see the twin in `run_seiche`.
+      !$acc update device(metrics%open_u, metrics%open_v)
 
       iface = ig + 5
       jface = ig + 2

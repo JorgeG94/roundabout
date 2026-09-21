@@ -1178,8 +1178,17 @@ contains
       real(wp), intent(in) :: h_vanished
          !! Inert-filler marker (`H_VANISHED`).  A layer is LIVE iff its
          !! thickness is strictly greater than this.
-      integer :: i, j, k
+      integer :: i, j, k, ia, ib, ka, kb
 
+      ! Each loop is SELF-CONTAINED — it reads `target_h` and writes ONE
+      ! output array, and no loop reads what another wrote.  That is
+      ! deliberate: under `-stdpar=gpu` with `mem:separate` each
+      ! `do concurrent` gets its OWN implicit data region for the host
+      ! arrays it touches, so a face loop that read the `k_top` a
+      ! previous loop had just written saw the array as write-only and
+      ! came back with the wrong indices on device while being correct on
+      ! the host.  Re-scanning the column costs two extra passes over
+      ! `target_h` ONCE, at configure.
       do concurrent(j=1:ny, i=1:nx) local(k)
          k_top(i, j) = nz
          do k = nz, 1, -1
@@ -1190,26 +1199,47 @@ contains
          end do
       end do
 
-      do concurrent(j=1:ny, i=1:nx + 1)
-         k_top_u(i, j) = nz
-      end do
-      do concurrent(j=1:ny, i=2:nx)
-         k_top_u(i, j) = min(k_top(i - 1, j), k_top(i, j))
-      end do
-      do concurrent(j=1:ny)
-         k_top_u(1, j) = k_top(1, j)
-         k_top_u(nx + 1, j) = k_top(nx, j)
+      ! `ia`/`ib` clamp to the one column an ARRAY-EDGE face has, so
+      ! `min(ka, kb)` degenerates to that column's own index there — the
+      ! mask builder leaves those faces fully open for the same reason.
+      do concurrent(j=1:ny, i=1:nx + 1) local(k, ia, ib, ka, kb)
+         ia = max(1, i - 1)
+         ib = min(nx, i)
+         ka = nz
+         do k = nz, 1, -1
+            if (target_h(ia, j, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = nz
+         do k = nz, 1, -1
+            if (target_h(ib, j, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_top_u(i, j) = min(ka, kb)
       end do
 
-      do concurrent(j=1:ny + 1, i=1:nx)
-         k_top_v(i, j) = nz
-      end do
-      do concurrent(j=2:ny, i=1:nx)
-         k_top_v(i, j) = min(k_top(i, j - 1), k_top(i, j))
-      end do
-      do concurrent(i=1:nx)
-         k_top_v(i, 1) = k_top(i, 1)
-         k_top_v(i, ny + 1) = k_top(i, ny)
+      do concurrent(j=1:ny + 1, i=1:nx) local(k, ia, ib, ka, kb)
+         ia = max(1, j - 1)
+         ib = min(ny, j)
+         ka = nz
+         do k = nz, 1, -1
+            if (target_h(i, ia, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = nz
+         do k = nz, 1, -1
+            if (target_h(i, ib, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_top_v(i, j) = min(ka, kb)
       end do
    end subroutine ocean_vcoord_k_top_from_target
 
