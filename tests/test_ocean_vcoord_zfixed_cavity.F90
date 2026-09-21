@@ -42,7 +42,9 @@ contains
                   new_unittest("sloping_lid_first_live_steps", test_sloping_lid), &
                   new_unittest("partial_top_cell_sliver_merges_below", test_sliver_merge), &
                   new_unittest("eta_lands_in_a_live_layer", test_eta_placement), &
-                  new_unittest("both_ends_vanish_sum_exact", test_both_ends_vanish) &
+                  new_unittest("both_ends_vanish_sum_exact", test_both_ends_vanish), &
+                  new_unittest("bed_partial_cell_clears_the_marker", test_bed_partial_min), &
+                  new_unittest("bed_sweep_never_lands_in_the_band", test_bed_band_sweep) &
                   ]
    end subroutine collect_ocean_vcoord_zfixed_cavity_tests
 
@@ -412,5 +414,87 @@ contains
                     "both ends vanishing must still conserve the column")
       end block checks
    end subroutine test_both_ends_vanish
+
+   ! ------------------------------------------------------------------
+   ! (7) THE BED MINIMUM-PARTIAL-CELL RULE.  `zstar_h_min <= H_VANISHED`
+   !     is the contract for this family, so flooring the bed partial
+   !     cell at `h_min` alone left the half-open band
+   !     `(h_min, H_VANISHED]` reachable — a thickness the COORDINATE
+   !     calls live and every CONSUMER (EOS, remap, k_top scans) calls
+   !     vanished.  `Z_FIXED_BED_PARTIAL_MIN` closes it: the bed partial
+   !     cell is either strictly above the marker or an inert filler at
+   !     exactly `h_min`.
+   ! ------------------------------------------------------------------
+   subroutine test_bed_partial_min(error)
+      !! A column engineered so the bed remainder lands INSIDE the band:
+      !! `total_h + eta = 19*h_nominal + 1.2e-4`, i.e. 0.12 mm of water
+      !! left over above the 950 m nominal interface.  Old rule: a live
+      !! 1.2e-4 m layer at `k = 1`.  New rule: an inert filler, and the
+      !! 0.02 mm surplus goes to the layer above.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_vcoord_t) :: vc
+      type(hgrid_t) :: grid
+      real(wp) :: col(NZ), column, tol
+      integer :: k
+      logical :: band_clear
+
+      column = 19.0_wp*H_NOM + 1.2e-4_wp
+      checks: block
+         tol = 4.0_wp*real(NZ, wp)*epsilon(1.0_wp)*H_REF
+         call build(vc, grid, 0.0_wp, column, 0.0_wp, col, NZ)
+         call vc%destroy()
+
+         call check(error, col(1) == H_MIN, &
+                    "a bed remainder inside the band must become an inert filler")
+         if (allocated(error)) exit checks
+         band_clear = .true.
+         do k = 1, NZ
+            if (col(k) > H_MIN .and. col(k) <= H_VANISHED) band_clear = .false.
+         end do
+         call check(error, band_clear, &
+                    "no LIVE target thickness may land in (h_min, H_VANISHED]")
+         if (allocated(error)) exit checks
+         call check(error, col(2) > H_NOM, &
+                    "the surplus goes to the layer above the collapsed sliver")
+         if (allocated(error)) exit checks
+         call check(error, abs(sum(col) - column) <= tol, &
+                    "the column total survives the collapse")
+      end block checks
+   end subroutine test_bed_partial_min
+
+   subroutine test_bed_band_sweep(error)
+      !! Sweep the column total across a nominal level in 0.01 mm steps —
+      !! the excursion an `eta` of a millimetre drives in a real run — and
+      !! assert the invariant over every resulting stack: every target
+      !! thickness is either `<= H_VANISHED` (an inert filler) or strictly
+      !! greater, never in between, and the column total is preserved.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_vcoord_t) :: vc
+      type(hgrid_t) :: grid
+      real(wp) :: col(NZ), column, tol, worst_sum
+      integer :: s, k
+      logical :: band_clear
+
+      band_clear = .true.
+      worst_sum = 0.0_wp
+      tol = 4.0_wp*real(NZ, wp)*epsilon(1.0_wp)*H_REF
+      do s = -40, 40
+         column = 19.0_wp*H_NOM + real(s, wp)*1.0e-5_wp
+         call build(vc, grid, 0.0_wp, column, 0.0_wp, col, NZ)
+         call vc%destroy()
+         do k = 1, NZ
+            if (col(k) > H_MIN .and. col(k) <= H_VANISHED) band_clear = .false.
+         end do
+         worst_sum = max(worst_sum, abs(sum(col) - column))
+      end do
+
+      checks: block
+         call check(error, band_clear, &
+                    "bed sweep: no live thickness in (h_min, H_VANISHED]")
+         if (allocated(error)) exit checks
+         call check(error, worst_sum <= tol, &
+                    "bed sweep: the column total is preserved at every step")
+      end block checks
+   end subroutine test_bed_band_sweep
 
 end module test_ocean_vcoord_zfixed_cavity
