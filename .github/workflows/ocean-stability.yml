@@ -4,6 +4,16 @@
 # NVHPC), 2-4 cores.  That constraint is the whole reason tier 2 exists --
 # see tests/regression/README.md "The two tiers".
 #
+# The toolchain comes from `fortran-lang/setup-fortran`, NOT from apt.  The
+# ocean kernels use F2018 `do concurrent` locality specifiers, which GCC
+# implements only from 15, and `cmake/toolchain_guards.cmake` fails loud
+# below that -- ubuntu-latest's default gfortran is older, so an apt install
+# dies at configure.  netcdf-fortran is built here for that exact compiler
+# (`tools/build_netcdf_fortran.sh`, ~30 s) because its `.mod` files are
+# compiler-specific; apt's libnetcdff is built against apt's gfortran and
+# cannot be consumed by GCC 15.  netcdf-c below it is C, so apt's is fine.
+# This mirrors portability.yml, which is where the pattern is documented.
+#
 # What it gates:
 #   1. the unit/analytical test suite (`ctest -R rdb`),
 #   2. the tier-2 stability sweep -- every shipped ocean namelist run as a
@@ -43,19 +53,33 @@ jobs:
         with:
           submodules: recursive
 
-      # NetCDF/HDF5 from apt -- a hosted runner has no module environment.
-      - name: Install toolchain and NetCDF
+      - name: Set up Fortran compiler
+        uses: fortran-lang/setup-fortran@v1.9.0
+        id: setup-fortran
+        with:
+          compiler: gcc
+          version: 15
+
+      - name: Install build tools and netcdf-c
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gfortran cmake ninja-build \
-            libnetcdf-dev libnetcdff-dev libhdf5-dev
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            cmake ninja-build libnetcdf-dev
+
+      # netcdf-fortran must be built by THIS compiler -- see the header.
+      - name: Build netcdf-fortran
+        run: |
+          tools/build_netcdf_fortran.sh \
+            --fc "${{ env.FC }}" \
+            --netcdf-c /usr \
+            --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
 
       - name: Report toolchain
         run: |
-          gfortran --version | head -1
+          echo "FC=${{ env.FC }}"
+          ${{ env.FC }} --version | head -1
           cmake --version | head -1
-          nf-config --version || true
           nproc
 
       # Cache the build tree so the sweep, not the compile, dominates the job.
@@ -63,14 +87,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build_ci
-          key: build_ci-${{ runner.os }}-gfortran-${{ hashFiles('CMakeLists.txt', 'src/**/*.F90', 'cmake/**') }}
+          key: build_ci-${{ runner.os }}-gcc15-${{ hashFiles('CMakeLists.txt', 'src/**/*.F90', 'cmake/**') }}
           restore-keys: |
-            build_ci-${{ runner.os }}-gfortran-
+            build_ci-${{ runner.os }}-gcc15-
 
       - name: Configure
         run: |
           cmake -B build_ci -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_Fortran_COMPILER="${{ env.FC }}" \
+            -DCMAKE_PREFIX_PATH="${{ env.RDB_NETCDFF }};/usr" \
+            -DRDB_ENABLE_NETCDF=ON \
             -DRDB_ENABLE_GPU=OFF \
             -DRDB_ENABLE_MPI=OFF \
             -DRDB_ENABLE_TESTING=ON
