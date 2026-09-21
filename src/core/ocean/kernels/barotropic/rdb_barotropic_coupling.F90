@@ -62,28 +62,38 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Present ⇒ the open-weighted branch is available.  Under
-         !! `&vcoord_nml zfixed_closed_faces` a CLOSED layer carries no
-         !! transport, so it must not dilute the face mean either: the
-         !! weight becomes `h_face·open` and `ubt` is the OPEN-column
-         !! depth mean.  That is not a refinement, it is a consistency
-         !! requirement: the barotropic substep transports on
-         !! `ubt·FA·dy_cu_bt` with `dy_cu_bt` narrowed by the open
-         !! fraction, so the `ubt` the fast loop integrates ALREADY means
-         !! "the open-column mean".  Deriving `ubt_at_n` from the full
-         !! column would make the fold's `Δu = ubt_end − ubt_at_n − dt·F_bt`
-         !! a difference between two different quantities — diluted by
-         !! `0.5·h_live` per one-sided-filler layer, which at a partial
-         !! face is not small.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED — and required on purpose.  Under `&vcoord_nml
+         !! zfixed_closed_faces` a CLOSED layer carries no transport, so
+         !! it must not dilute the face mean either: the weight becomes
+         !! `h_face·open` and `ubt` is the OPEN-column depth mean.  That
+         !! is not a refinement, it is a consistency requirement: the
+         !! barotropic substep transports on `ubt·FA·dy_cu_bt` with
+         !! `dy_cu_bt` narrowed by the open fraction, so the `ubt` the
+         !! fast loop integrates ALREADY means "the open-column mean".
+         !! Deriving `ubt_at_n` from the full column would make the
+         !! fold's `Δu = ubt_end − ubt_at_n − dt·F_bt` a difference
+         !! between two different quantities — diluted by `0.5·h_live`
+         !! per one-sided-filler layer, which at a partial face is not
+         !! small.
          !!
-         !! ABSENT, or the knob off, ⇒ the ORIGINAL loops run, textually
-         !! unchanged (byte-identical).  The open branch is written out in
-         !! full rather than folded into the original with a runtime `if`
-         !! so that the default-path kernel never NAMES `metrics` at all —
-         !! an absent optional referenced inside a `do concurrent`, even in
-         !! an untaken branch, is exactly the kind of thing that works on
-         !! the host and faults under `mem:separate`.
+         !! This dummy was OPTIONAL for one release and that is exactly
+         !! how the `pred_corr` Coriolis-reference defect shipped: one
+         !! call site in `set_cor_ref_velocity` omitted it, silently took
+         !! the full-column branch, and the un-cancelled `f·(1−φ)·v̄`
+         !! forced every barotropic substep.  An optional argument that
+         !! silently changes the physics is a defect CLASS, not a defect;
+         !! passing it is now mandatory so a new call site cannot quietly
+         !! take the wrong branch.
+         !!
+         !! `metrics%use_closed_faces = .false.` (the default) ⇒ the
+         !! ORIGINAL loops run, textually unchanged (byte-identical).  The
+         !! open branch is written out in full rather than folded into the
+         !! original with a runtime `if` so that the default-path kernel
+         !! never NAMES `open_u`/`open_v` at all — with the knob off those
+         !! are `(1,1,1)` placeholders, and a placeholder indexed inside a
+         !! `do concurrent` is exactly the kind of thing that works on the
+         !! host and faults under `mem:separate`.
 
       integer :: i, j, k, nx, ny, nz, nx_face, ny_face
       logical :: use_upstream, use_open
@@ -95,8 +105,7 @@ contains
       nx_face = size(ms%u_face_x_layer, 1)
       ny_face = size(ms%v_face_y_layer, 2)
       use_upstream = bt_work%use_upstream_h_face
-      use_open = .false.
-      if (present(metrics)) use_open = metrics%use_closed_faces
+      use_open = metrics%use_closed_faces
 
       do concurrent(j=1:ny, i=1:nx) local(k, total_h)
          total_h = 0.0_wp
@@ -597,7 +606,7 @@ contains
       end do
    end subroutine subtract_fast_cor_ref
 
-   pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av)
+   pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av, metrics)
       !! Fill `bt_work%cor_ref_u/v` — the barotropic velocity at which
       !! `subtract_fast_cor_ref` evaluates the Coriolis/advection
       !! reference it removes from the substep forcing (MOM6
@@ -627,11 +636,33 @@ contains
       !!   forcing_visc_rem`).  MOM6 does the same by construction:
       !!   `ubt_Cor = Σ_k wt_u·U_Cor` with `U_Cor = u_av`, the velocity
       !!   its `CorAdCalc` used.
+      !!
+      !! **Under `&vcoord_nml zfixed_closed_faces` "the same weights" is
+      !! load-bearing and was, for one release, wrong here.**  A closed
+      !! layer carries exactly zero velocity (`mask_layer_velocities`)
+      !! but a non-zero `h_face`, so with
+      !! `φ = Σ_k h_face·open / Σ_k h_face` a FULL-column mean of `u_av`
+      !! returns `φ·ū_open`, not `ū_open`.  The fast loop meanwhile
+      !! integrates its live `(ζ+f)·v̄ − ∇KE` on `bt_ubt = ū_open`, so
+      !! `subtract_fast_cor_ref` would remove `f·φ·v̄` where it must
+      !! remove `f·v̄`, leaving `Δa_u = +f·(1−φ)·v̄` forcing EVERY
+      !! barotropic substep *proportionally to the barotropic velocity* —
+      !! an amplifier, not a seed.  Measured on ISOMIP+ Ocean0 (melt off,
+      !! 30 d): `En` `1.295E-06 → 5.711E-08` and barotropic KE ×195
+      !! smaller once `metrics` is passed, matching the `ssp_rk2` twin
+      !! (whose `.false.` branch below is a plain copy of `bt_ubt`, and so
+      !! could never have the defect) to 2.7 %.  `φ` is O(0.5) on a
+      !! partial-step face, not O(1 − 1e-4).
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
       logical, intent(in) :: from_u_av
          !! `.true.` under `split_scheme = "pred_corr"`.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! The closed-face mask carrier, REQUIRED — see the paragraph
+         !! above, and `face_depth_mean_u`'s own `metrics` docstring.
+         !! Knob off ⇒ the depth means take their original branch and
+         !! this is byte-identical.
 
       integer :: i, j, nu, nv, nx, ny
       logical :: use_av
@@ -642,12 +673,14 @@ contains
       if (use_av) then
          if (bt_work%bt_forcing_visc_rem) then
             call face_depth_mean_rem_u(grid, ms%u_av_layer, ms%h_layer, &
-                                       bt_work%visc_rem_u, bt_work%cor_ref_u, ms%nz_ml)
+                                       bt_work%visc_rem_u, bt_work%cor_ref_u, ms%nz_ml, metrics)
             call face_depth_mean_rem_v(grid, ms%v_av_layer, ms%h_layer, &
-                                       bt_work%visc_rem_v, bt_work%cor_ref_v, ms%nz_ml)
+                                       bt_work%visc_rem_v, bt_work%cor_ref_v, ms%nz_ml, metrics)
          else
-            call face_depth_mean_u(grid, ms%u_av_layer, ms%h_layer, bt_work%cor_ref_u, ms%nz_ml)
-            call face_depth_mean_v(grid, ms%v_av_layer, ms%h_layer, bt_work%cor_ref_v, ms%nz_ml)
+            call face_depth_mean_u(grid, ms%u_av_layer, ms%h_layer, bt_work%cor_ref_u, &
+                                   ms%nz_ml, metrics)
+            call face_depth_mean_v(grid, ms%v_av_layer, ms%h_layer, bt_work%cor_ref_v, &
+                                   ms%nz_ml, metrics)
          end if
       else
          nu = size(bt_work%bt_ubt, 1)
@@ -677,15 +710,21 @@ contains
       real(wp), intent(in) :: h_layer(:, :, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Present ⇒ the open-weighted branch is available.  Under
-         !! `&vcoord_nml zfixed_closed_faces` the barotropic forcing mean
-         !! MUST use the same weights `derive_bt_from_layers` and
-         !! `apply_bt_correction` use — `h_face·open` — or the `dt·F_bt`
-         !! the fold subtracts back out is not the quantity the fast loop
-         !! integrated, and the difference survives as a permanent
-         !! per-face bias.  ABSENT, or the knob off, ⇒ the ORIGINAL loop
-         !! runs, textually unchanged (byte-identical).
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED.  Under `&vcoord_nml zfixed_closed_faces` every
+         !! depth mean in the split chain MUST use the same weights
+         !! `derive_bt_from_layers` and `apply_bt_correction` use —
+         !! `h_face·open` — or the `dt·F_bt` the fold subtracts back out
+         !! is not the quantity the fast loop integrated, and the
+         !! difference survives as a permanent per-face bias.
+         !!
+         !! Not optional, deliberately: this dummy WAS optional, and the
+         !! one call site that omitted it (`set_cor_ref_velocity`) turned
+         !! the `pred_corr` Coriolis reference into `φ·ū_open` and pumped
+         !! the ISOMIP+ Ocean0 barotropic mode by ×22.7 in energy over 30
+         !! days.  A caller that has no mask still has an
+         !! `ocean_metrics_t` to hand; `use_closed_faces = .false.` ⇒ the
+         !! ORIGINAL loop runs, textually unchanged (byte-identical).
       integer :: i, j, k, nu, ny, nx_cells
       real(wp) :: h_face, num, denom
       logical :: use_open
@@ -693,8 +732,7 @@ contains
       nu = size(F_3d, 1)
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
-      use_open = .false.
-      if (present(metrics)) use_open = metrics%use_closed_faces
+      use_open = metrics%use_closed_faces
 
       if (use_open) then
          do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
@@ -761,15 +799,15 @@ contains
       real(wp), intent(in) :: rem(:, :, :)      ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Present ⇒ the open-weighted branch is available: the weight
-         !! becomes `h_face·visc_rem·open`.  It must match
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED (see `face_depth_mean_u`): the weight becomes
+         !! `h_face·visc_rem·open`.  It must match
          !! `derive_bt_from_layers` and `apply_bt_correction` or the
          !! `dt·F_bt` the fold subtracts is not what the fast loop
          !! integrated.  Note a CLOSED layer's `visc_rem` is ~1, not 0 —
          !! the closed-face vdiff decoupling leaves it uncoupled, so
          !! `visc_rem` alone does NOT stand in for the mask here.
-         !! ABSENT, or the knob off, ⇒ the ORIGINAL loop, byte-identical.
+         !! Knob off ⇒ the ORIGINAL loop, byte-identical.
       integer :: i, j, k, nu, ny, nx_cells
       real(wp) :: h_face, wt, num, denom
       logical :: use_open
@@ -778,8 +816,7 @@ contains
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
 
-      use_open = .false.
-      if (present(metrics)) use_open = metrics%use_closed_faces
+      use_open = metrics%use_closed_faces
 
       if (use_open) then
          do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
@@ -838,15 +875,15 @@ contains
       real(wp), intent(in) :: rem(:, :, :)      ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Present ⇒ the open-weighted branch is available: the weight
-         !! becomes `h_face·visc_rem·open`.  It must match
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED (see `face_depth_mean_u`): the weight becomes
+         !! `h_face·visc_rem·open`.  It must match
          !! `derive_bt_from_layers` and `apply_bt_correction` or the
          !! `dt·F_bt` the fold subtracts is not what the fast loop
          !! integrated.  Note a CLOSED layer's `visc_rem` is ~1, not 0 —
          !! the closed-face vdiff decoupling leaves it uncoupled, so
          !! `visc_rem` alone does NOT stand in for the mask here.
-         !! ABSENT, or the knob off, ⇒ the ORIGINAL loop, byte-identical.
+         !! Knob off ⇒ the ORIGINAL loop, byte-identical.
       integer :: i, j, k, nx, nv, ny_cells
       real(wp) :: h_face, wt, num, denom
       logical :: use_open
@@ -855,8 +892,7 @@ contains
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
 
-      use_open = .false.
-      if (present(metrics)) use_open = metrics%use_closed_faces
+      use_open = metrics%use_closed_faces
 
       if (use_open) then
          do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
@@ -914,10 +950,10 @@ contains
       real(wp), intent(in) :: h_layer(:, :, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Present ⇒ the open-weighted branch is available.  See
-         !! `face_depth_mean_u` for the argument; ABSENT, or the knob off,
-         !! ⇒ the ORIGINAL loop, byte-identical.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED.  See `face_depth_mean_u` for the argument and for
+         !! why it is not optional; knob off ⇒ the ORIGINAL loop,
+         !! byte-identical.
       integer :: i, j, k, nx, nv, ny_cells
       real(wp) :: h_face, num, denom
       logical :: use_open
@@ -925,8 +961,7 @@ contains
       nx = size(F_3d, 1)
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
-      use_open = .false.
-      if (present(metrics)) use_open = metrics%use_closed_faces
+      use_open = metrics%use_closed_faces
 
       if (use_open) then
          do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)

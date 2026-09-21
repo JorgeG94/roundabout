@@ -232,16 +232,23 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
 
       call make_setup(grid, ms, bt_work, 2, &
                       [0.0_wp, 1000.0_wp], &        ! west h: bed=0, surf=1000
                       [30.0_wp, 1000.0_wp], &       ! east h: bed=30, surf=1000
                       [0.30_wp, 0.05_wp], &         ! u_face: bed, surf
                       enable_upstream=.true.)
+      ! `metrics` is a REQUIRED argument of `derive_bt_from_layers` — an
+      ! optional one is how the closed-face weighting got omitted at a
+      ! call site.  All-open metrics (`use_closed_faces = .false.`) ⇒ the
+      ! original full-column branch, which is what this test asserts.
+      call make_cartesian_metrics(metrics, grid)
       ! bt_H_ref doesn't affect bt_ubt; leave the default zeros.
-      call derive_bt_from_layers(grid, bt_work, ms)
+      call derive_bt_from_layers(grid, bt_work, ms, metrics)
       call check(error, abs(bt_work%bt_ubt(2, 1) - 0.05_wp) < 1.0e-10_wp, &
                  "upstream-h bt_ubt should suppress vanished-bed contribution")
+      call destroy_cartesian_metrics(metrics)
       call ms%destroy()
       call bt_work%destroy()
    end subroutine test_derive_bt_upstream
@@ -282,6 +289,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       real(wp), parameter :: expected = 54.5_wp/1015.0_wp
 
       call make_setup(grid, ms, bt_work, 2, &
@@ -289,9 +297,13 @@ contains
                       [30.0_wp, 1000.0_wp], &
                       [0.30_wp, 0.05_wp], &
                       enable_upstream=.false.)
-      call derive_bt_from_layers(grid, bt_work, ms)
+      ! All-open metrics ⇒ the original full-column branch (see
+      ! `test_derive_bt_upstream` for why `metrics` is not optional).
+      call make_cartesian_metrics(metrics, grid)
+      call derive_bt_from_layers(grid, bt_work, ms, metrics)
       call check(error, abs(bt_work%bt_ubt(2, 1) - expected) < 1.0e-12_wp, &
                  "centred-h bt_ubt drifted from analytic reference")
+      call destroy_cartesian_metrics(metrics)
       call ms%destroy()
       call bt_work%destroy()
    end subroutine test_derive_bt_off_matches_centred

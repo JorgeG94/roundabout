@@ -660,7 +660,13 @@ contains
       ! ...then the mask takes it back out of the closed ones...
       call mask_layer_velocities(grid, metrics, ms)
       ! ...and `ubt` is re-derived over the FULL column, as the spike did.
-      call derive_bt_from_layers(grid, dyn%bt_work, ms)
+      ! `metrics` is a REQUIRED argument now (an optional one is exactly
+      ! how the full-column branch got taken by accident in
+      ! `set_cor_ref_velocity`), so the spike's branch is reached by
+      ! clearing the LATCH rather than by omitting the argument.
+      metrics%use_closed_faces = .false.
+      call derive_bt_from_layers(grid, dyn%bt_work, ms, metrics)
+      metrics%use_closed_faces = .true.
       ubt_full = dyn%bt_work%bt_ubt(iface, jface)
 
       write (msg, '("the uniform fold should leave Du = ",es11.3," m/s in the ", &
