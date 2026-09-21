@@ -324,6 +324,14 @@ class Vcoord(Group):
         default=False,
     )
 
+    check_vanished_content = Bool(
+        'check_vanished_content',
+        doc='I1 tripwire: fail loud if any layer at or below H_VANISHED holds tracer content (debug/validation)',
+        units='',
+        required=False,
+        default=False,
+    )
+
     zfixed_closed_faces = Bool(
         'zfixed_closed_faces',
         doc='z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
@@ -6151,4 +6159,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 673
+N_KNOBS = 674

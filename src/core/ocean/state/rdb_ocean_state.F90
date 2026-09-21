@@ -3343,6 +3343,8 @@ contains
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
+               ! vanished-ok: this IS invariant I1, applied at seed time —
+               ! the state's own statement of the rule, not a copy of it.
                if (h_layer(i, j, k) <= H_VANISHED) hTr(i, j, k) = 0.0_wp
             end do
          end do

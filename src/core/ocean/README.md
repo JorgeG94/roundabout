@@ -124,6 +124,84 @@ These rules are how the handle scales: collaborators can implement a
 slot without reading the rest of the tree.  A future portability lint
 (`tools/ocean_state_lint.py`) will enforce them statically.
 
+### The vanished-layer content rule
+
+Tracers are stored as **CONTENT**, `hTr = h·c`, never as concentration.
+Several vertical coordinates (`z_fixed`, `zstar_full`, wet/dry) place
+**inert filler** layers — a layer whose thickness is the throwaway
+`zstar_h_min`, at or below the vanish marker `H_VANISHED = 1.5e-4 m`.
+There is one rule about them, and it is an invariant of the state, not a
+convention each kernel author has to remember:
+
+> **I1.** `h_layer(i,j,k) <= H_VANISHED` ⇒ `tracers(t)%hTr(i,j,k) == 0`,
+> for **every** registered tracer.
+>
+> Restoring I1 moves content **within** the column, to the nearest live
+> layer. Nothing leaves the column, so **no budget records it** —
+> a contributor that always sums to zero is noise in the one instrument
+> that detects real leaks.
+
+**Why it is an invariant and not advice.** The guard used to live only in
+the ALE remap, and only on the READ side: `h_old <= H_VANISHED ⇒
+c_old = 0`, while the write side put `c_new·h_new` into *every* target
+layer, filler included. The remap therefore parked content in a filler
+and deleted it one step later with no budget contributor — the day-16
+salt/heat break on
+`validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.nml`. Every
+other tracer writer in the tree (surface flux, melt, sponge, hdiff, vdiff,
+vertical advection, the OBC ghost fills, the windowed drain) simply
+deposits into whatever layer it is handed.
+
+**Three pieces hold it up.**
+
+1. **One definition** —
+   `src/shared_module_utilities/rdb_vanished_layer.inc`, `#include`d into
+   the `contains` of each consuming module so NVHPC gets a local copy it
+   can inline into a `do concurrent` kernel:
+   `rdb_vl_is_live(h)` (the predicate — a STRICT `>`, so a layer sitting
+   exactly ON the marker is vanished), `rdb_vl_conc(hTr, h)` (**the**
+   concentration of layer `k`: `hTr/h` live, `0` vanished), and
+   `rdb_vl_merge_content(nz, h_col, q_col)` (establish I1 on a column,
+   column sum preserved). See that directory's README.
+2. **One enforcement point** —
+   `multilayer_state_t%enforce_vanished_content(nx, ny)`, called once per
+   outer step at the tail of `ocean_dyn_step_split`, after every tracer
+   update and after the ALE remap. It walks the tracer registry
+   (outer-shim + flat-impl) and restores I1. A column with no
+   sub-threshold layer is a textual no-op, so every sigma / z*-lite /
+   `eulerian_z` configuration is bit-identical.
+   The ALE remap additionally applies the rule on **both** sides of its
+   own `c = hTr/h` ↔ `hTr = c·h` round trip, because the reconstruction
+   between them must never see a concentration recovered from a near-zero
+   divisor.
+3. **Two gates** — `&vcoord_nml check_vanished_content` (default off) is a
+   fail-loud tripwire: a pure device scan
+   (`multilayer_state_t%scan_vanished_content`) immediately after the
+   enforcement point, so a hit means the rule itself failed, or an array
+   is not device-present under `mem:separate`. It is ON in every shipped
+   namelist whose coordinate vanishes layers. And the `vanished-layer`
+   pre-commit hook (`tools/vanished_layer_lint.py`, diff-aware like
+   `dc-assumed-shape`) flags a NEW raw `hTr/h` divide or a NEW comparison
+   against `H_VANISHED` outside the sanctioned modules.
+
+**Substituting something other than zero is legal, and must be declared.**
+A vanished layer holds no content, so `0` is its honest concentration —
+but several consumers deliberately want something else, because they are
+answering a different question:
+
+| consumer | substitution on a vanished layer | why |
+|---|---|---|
+| `rdb_eos` (`eos_*_impl`) | reference `T_ref`/`S_ref` ⇒ `rho = rho_0` | a filler must not perturb the density column the PGF integrates |
+| `rdb_ocean_pressure_force` (T/S reconstruction) | `hS/H_VANISHED` (floored divide) | keeps the PLM/PPM edge stencil finite across a filler |
+| `rdb_ocean_sponge` (`snapshot_column_concentration`) | the nearest massive layer's concentration | the relaxation target must be a physical water mass |
+| `rdb_ocean_diag_fills` (`fill_tracer_impl`) | IEEE quiet NaN | a plot must show a gap, not a plausible zero |
+| `rdb_ocean_cavity_flux` (far-field sampler) | `cycle` — skipped entirely | a filler carries no water to melt against |
+| `rdb_ocean_kappa_shear` | `massless_*` merge onto a coarser column | the shear solve needs a well-conditioned grid, not a substituted value |
+
+Each of those is a considered, documented choice; none of them is I1, and
+none of them should be routed through `rdb_vl_conc`. If you add another,
+say so with a `! vanished-ok: <reason>` waiver where the lint sees it.
+
 ## Slot map
 
 | Slot | Type | File | Phase | Reads from | Writes to |

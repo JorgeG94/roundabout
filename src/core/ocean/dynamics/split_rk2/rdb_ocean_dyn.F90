@@ -3228,8 +3228,70 @@ contains
       ! reads them.  No-op for WALL/PERIODIC edges (bit-identical).
       if (present(bc)) call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
+      ! ---- Invariant I1: `h <= H_VANISHED ⇒ hTr = 0` ----------------------
+      ! THE enforcement point.  Every tracer writer above (surface flux, melt,
+      ! sponge, hdiff, vdiff, vertical advection, the OBC ghost fills, the
+      ! windowed drain) deposits content into whatever layer it was handed;
+      ! only the ALE remap checked `h` on the way in.  Rather than ask forty
+      ! kernel authors to remember the rule, establish it ONCE here, at the end
+      ! of the outer step, over the whole tracer registry.
+      !
+      ! Content is moved WITHIN the column (to the nearest live layer), so the
+      ! column integral is unchanged and NOTHING is recorded in any budget — a
+      ! contributor that always sums to zero is noise in the one instrument
+      ! that detects real leaks.
+      !
+      ! A column with no sub-threshold layer is a textual no-op, so every
+      ! sigma / z*-lite / eulerian_z configuration in the tree is bit-identical
+      ! and pays only the sweep.
+      call profiler_start("ocean_vanished_i1")
+      call ms%enforce_vanished_content(grid%nx_total, grid%ny_total)
+      call profiler_stop("ocean_vanished_i1")
+      call check_vanished_invariant_or_die(grid, vcoord, ms, dyn%outer_step_count + 1)
+
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_split
+
+   subroutine check_vanished_invariant_or_die(grid, vcoord, ms, outer_step)
+      !! Fail-loud TRIPWIRE for invariant I1 — `h_layer <= H_VANISHED ⇒
+      !! hTr = 0` for every registered tracer.  Gated on
+      !! `&vcoord_nml check_vanished_content` (default `.false.`), which is
+      !! the knob the stability suite turns on for the cases that actually
+      !! have vanishing layers.
+      !!
+      !! Pure scan + impure die, the `check_h_positive_or_die` pattern: the
+      !! scan (`ms%scan_vanished_content`) is a `pure` device reduction
+      !! returning two scalars, so the HEALTHY path costs two reductions per
+      !! tracer and no H←D copy; only a violation reaches the logger.
+      !!
+      !! Runs immediately AFTER `enforce_vanished_content`, so a hit means the
+      !! enforcement point itself failed to establish the invariant — a bug in
+      !! the rule or an unmapped array on the device, not a stray kernel.  That
+      !! is precisely what the tripwire is for: it guards the structural
+      !! guarantee rather than re-stating it.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_vcoord_t), intent(in), optional :: vcoord
+      type(multilayer_state_t), intent(in) :: ms
+      integer, intent(in) :: outer_step
+      integer :: n_bad
+      real(wp) :: worst
+      character(len=320) :: msg
+
+      if (.not. present(vcoord)) return
+      if (.not. vcoord%check_vanished_content) return
+      call ms%scan_vanished_content(grid%nx_total, grid%ny_total, n_bad, worst)
+      if (n_bad <= 0) return
+      write (msg, "(a,i0,a,i0,a,es12.5)") &
+         "[I1] vanished-layer invariant violated at outer step ", outer_step, &
+         ": ", n_bad, " cell(s) hold content in a layer at or below H_VANISHED; worst |hTr| = ", worst
+      call logger%error(trim(msg))
+      call logger%error( &
+         "[I1] `h <= H_VANISHED ⇒ hTr = 0`. The enforcement point "// &
+         "(multilayer_state_t%enforce_vanished_content) runs immediately before this "// &
+         "check, so a hit is a bug in the rule or an off-device array, not a stray "// &
+         "kernel write. See src/core/ocean/README.md, 'The vanished-layer content rule'.")
+      error stop "I1 violated (&vcoord_nml check_vanished_content)"
+   end subroutine check_vanished_invariant_or_die
 
    subroutine run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &

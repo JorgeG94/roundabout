@@ -17,5 +17,6 @@ endif()
 # path as the driver (rdb_ocean_setup), but NetCDF-free, so it builds with
 # -DRDB_ENABLE_NETCDF=OFF for Intel/AMD portability + profiling.
 add_executable(bench_ocean bench_ocean.F90)
-target_include_directories(bench_ocean PRIVATE "${CMAKE_BINARY_DIR}/modules")
+target_include_directories(bench_ocean PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                               "${RDB_SHARED_INCLUDE_DIR}")
 target_link_libraries(bench_ocean PRIVATE ${bench_core})

@@ -1184,6 +1184,7 @@ contains
       ocean_state%vcoord%remap_boundary_extrap = cfg%remap_boundary_extrap
       ocean_state%vcoord%remap_nonuniform_weights = cfg%remap_nonuniform_weights
       ocean_state%vcoord%remap_check_preconditions = cfg%remap_check_preconditions
+      ocean_state%vcoord%check_vanished_content = cfg%check_vanished_content
       if (compute_rank == 0) then
          if (ocean_state%vcoord%coord_type == VCOORD_EULERIAN_Z) then
             call logger%info("Vertical coord:  "//trim(cfg%vcoord_type)// &

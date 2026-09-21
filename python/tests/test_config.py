@@ -23,7 +23,7 @@ def test_group_and_knob_counts():
     # bump: &vcoord_nml zfixed_closed_faces, the partial-step z-level
     # face closure).
     assert N_GROUPS == 60
-    assert N_KNOBS == 673
+    assert N_KNOBS == 674
     assert "ocean_bc" in ALL_GROUPS
 
 
