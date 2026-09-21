@@ -52,7 +52,7 @@ module rdb_barotropic_coupling
 
 contains
 
-   pure subroutine derive_bt_from_layers(grid, bt_work, ms)
+   pure subroutine derive_bt_from_layers(grid, bt_work, ms, metrics)
       !! Populate `bt_eta`, `bt_ubt`, `bt_vbt` from the current multilayer
       !! state. `bt_H_ref` must already be set.
       !!   bt_eta = Σ_k h_layer − H_ref;  bt_ubt = Σ_k(u·h_face)/Σ_k h_face.
@@ -62,9 +62,31 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in), optional :: metrics
+         !! Present ⇒ the open-weighted branch is available.  Under
+         !! `&vcoord_nml zfixed_closed_faces` a CLOSED layer carries no
+         !! transport, so it must not dilute the face mean either: the
+         !! weight becomes `h_face·open` and `ubt` is the OPEN-column
+         !! depth mean.  That is not a refinement, it is a consistency
+         !! requirement: the barotropic substep transports on
+         !! `ubt·FA·dy_cu_bt` with `dy_cu_bt` narrowed by the open
+         !! fraction, so the `ubt` the fast loop integrates ALREADY means
+         !! "the open-column mean".  Deriving `ubt_at_n` from the full
+         !! column would make the fold's `Δu = ubt_end − ubt_at_n − dt·F_bt`
+         !! a difference between two different quantities — diluted by
+         !! `0.5·h_live` per one-sided-filler layer, which at a partial
+         !! face is not small.
+         !!
+         !! ABSENT, or the knob off, ⇒ the ORIGINAL loops run, textually
+         !! unchanged (byte-identical).  The open branch is written out in
+         !! full rather than folded into the original with a runtime `if`
+         !! so that the default-path kernel never NAMES `metrics` at all —
+         !! an absent optional referenced inside a `do concurrent`, even in
+         !! an untaken branch, is exactly the kind of thing that works on
+         !! the host and faults under `mem:separate`.
 
       integer :: i, j, k, nx, ny, nz, nx_face, ny_face
-      logical :: use_upstream
+      logical :: use_upstream, use_open
       real(wp) :: total_h, hu_sum, h_face_sum, h_face, hv_sum
 
       nx = grid%nx_total
@@ -73,6 +95,8 @@ contains
       nx_face = size(ms%u_face_x_layer, 1)
       ny_face = size(ms%v_face_y_layer, 2)
       use_upstream = bt_work%use_upstream_h_face
+      use_open = .false.
+      if (present(metrics)) use_open = metrics%use_closed_faces
 
       do concurrent(j=1:ny, i=1:nx) local(k, total_h)
          total_h = 0.0_wp
@@ -82,61 +106,123 @@ contains
          bt_work%bt_eta(i, j) = total_h - bt_work%bt_H_ref(i, j)
       end do
 
-      do concurrent(j=1:ny, i=1:nx_face) &
-         local(k, hu_sum, h_face_sum, h_face)
-         hu_sum = 0.0_wp
-         h_face_sum = 0.0_wp
-         do k = 1, nz
-            if (i == 1) then
-               h_face = ms%h_layer(1, j, k)
-            else if (i == nx_face) then
-               h_face = ms%h_layer(nx, j, k)
-            else if (use_upstream) then
-               if (ms%u_face_x_layer(i, j, k) >= 0.0_wp) then
-                  h_face = ms%h_layer(i - 1, j, k)
+      if (use_open) then
+         do concurrent(j=1:ny, i=1:nx_face) &
+            local(k, hu_sum, h_face_sum, h_face)
+            hu_sum = 0.0_wp
+            h_face_sum = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = ms%h_layer(1, j, k)
+               else if (i == nx_face) then
+                  h_face = ms%h_layer(nx, j, k)
+               else if (use_upstream) then
+                  if (ms%u_face_x_layer(i, j, k) >= 0.0_wp) then
+                     h_face = ms%h_layer(i - 1, j, k)
+                  else
+                     h_face = ms%h_layer(i, j, k)
+                  end if
                else
-                  h_face = ms%h_layer(i, j, k)
+                  h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
                end if
+               h_face = h_face*metrics%open_u(i, j, k)
+               hu_sum = hu_sum + ms%u_face_x_layer(i, j, k)*h_face
+               h_face_sum = h_face_sum + h_face
+            end do
+            if (h_face_sum > 0.0_wp) then
+               bt_work%bt_ubt(i, j) = hu_sum/h_face_sum
             else
-               h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+               bt_work%bt_ubt(i, j) = 0.0_wp
             end if
-            hu_sum = hu_sum + ms%u_face_x_layer(i, j, k)*h_face
-            h_face_sum = h_face_sum + h_face
          end do
-         if (h_face_sum > 0.0_wp) then
-            bt_work%bt_ubt(i, j) = hu_sum/h_face_sum
-         else
-            bt_work%bt_ubt(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:ny, i=1:nx_face) &
+            local(k, hu_sum, h_face_sum, h_face)
+            hu_sum = 0.0_wp
+            h_face_sum = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = ms%h_layer(1, j, k)
+               else if (i == nx_face) then
+                  h_face = ms%h_layer(nx, j, k)
+               else if (use_upstream) then
+                  if (ms%u_face_x_layer(i, j, k) >= 0.0_wp) then
+                     h_face = ms%h_layer(i - 1, j, k)
+                  else
+                     h_face = ms%h_layer(i, j, k)
+                  end if
+               else
+                  h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+               end if
+               hu_sum = hu_sum + ms%u_face_x_layer(i, j, k)*h_face
+               h_face_sum = h_face_sum + h_face
+            end do
+            if (h_face_sum > 0.0_wp) then
+               bt_work%bt_ubt(i, j) = hu_sum/h_face_sum
+            else
+               bt_work%bt_ubt(i, j) = 0.0_wp
+            end if
+         end do
+      end if
 
-      do concurrent(j=1:ny_face, i=1:nx) &
-         local(k, hv_sum, h_face_sum, h_face)
-         hv_sum = 0.0_wp
-         h_face_sum = 0.0_wp
-         do k = 1, nz
-            if (j == 1) then
-               h_face = ms%h_layer(i, 1, k)
-            else if (j == ny_face) then
-               h_face = ms%h_layer(i, ny, k)
-            else if (use_upstream) then
-               if (ms%v_face_y_layer(i, j, k) >= 0.0_wp) then
-                  h_face = ms%h_layer(i, j - 1, k)
+      if (use_open) then
+         do concurrent(j=1:ny_face, i=1:nx) &
+            local(k, hv_sum, h_face_sum, h_face)
+            hv_sum = 0.0_wp
+            h_face_sum = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = ms%h_layer(i, 1, k)
+               else if (j == ny_face) then
+                  h_face = ms%h_layer(i, ny, k)
+               else if (use_upstream) then
+                  if (ms%v_face_y_layer(i, j, k) >= 0.0_wp) then
+                     h_face = ms%h_layer(i, j - 1, k)
+                  else
+                     h_face = ms%h_layer(i, j, k)
+                  end if
                else
-                  h_face = ms%h_layer(i, j, k)
+                  h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
                end if
+               h_face = h_face*metrics%open_v(i, j, k)
+               hv_sum = hv_sum + ms%v_face_y_layer(i, j, k)*h_face
+               h_face_sum = h_face_sum + h_face
+            end do
+            if (h_face_sum > 0.0_wp) then
+               bt_work%bt_vbt(i, j) = hv_sum/h_face_sum
             else
-               h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+               bt_work%bt_vbt(i, j) = 0.0_wp
             end if
-            hv_sum = hv_sum + ms%v_face_y_layer(i, j, k)*h_face
-            h_face_sum = h_face_sum + h_face
          end do
-         if (h_face_sum > 0.0_wp) then
-            bt_work%bt_vbt(i, j) = hv_sum/h_face_sum
-         else
-            bt_work%bt_vbt(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:ny_face, i=1:nx) &
+            local(k, hv_sum, h_face_sum, h_face)
+            hv_sum = 0.0_wp
+            h_face_sum = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = ms%h_layer(i, 1, k)
+               else if (j == ny_face) then
+                  h_face = ms%h_layer(i, ny, k)
+               else if (use_upstream) then
+                  if (ms%v_face_y_layer(i, j, k) >= 0.0_wp) then
+                     h_face = ms%h_layer(i, j - 1, k)
+                  else
+                     h_face = ms%h_layer(i, j, k)
+                  end if
+               else
+                  h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+               end if
+               hv_sum = hv_sum + ms%v_face_y_layer(i, j, k)*h_face
+               h_face_sum = h_face_sum + h_face
+            end do
+            if (h_face_sum > 0.0_wp) then
+               bt_work%bt_vbt(i, j) = hv_sum/h_face_sum
+            else
+               bt_work%bt_vbt(i, j) = 0.0_wp
+            end if
+         end do
+      end if
    end subroutine derive_bt_from_layers
 
    pure subroutine compute_h_face_upstream(grid, bt_work, ms)
@@ -577,7 +663,7 @@ contains
       end if
    end subroutine set_cor_ref_velocity
 
-   pure subroutine face_depth_mean_u(grid, F_3d, h_layer, F_mean_2d, nz)
+   pure subroutine face_depth_mean_u(grid, F_3d, h_layer, F_mean_2d, nz, metrics)
       !! Depth-average a u-face 3D field, weighted by the face
       !! thickness (= mean of the two abutting cell columns'
       !! `h_layer` values).  Writes to a 2D field at the same u-face
@@ -591,36 +677,72 @@ contains
       real(wp), intent(in) :: h_layer(:, :, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
+      type(ocean_metrics_t), intent(in), optional :: metrics
+         !! Present ⇒ the open-weighted branch is available.  Under
+         !! `&vcoord_nml zfixed_closed_faces` the barotropic forcing mean
+         !! MUST use the same weights `derive_bt_from_layers` and
+         !! `apply_bt_correction` use — `h_face·open` — or the `dt·F_bt`
+         !! the fold subtracts back out is not the quantity the fast loop
+         !! integrated, and the difference survives as a permanent
+         !! per-face bias.  ABSENT, or the knob off, ⇒ the ORIGINAL loop
+         !! runs, textually unchanged (byte-identical).
       integer :: i, j, k, nu, ny, nx_cells
       real(wp) :: h_face, num, denom
+      logical :: use_open
 
       nu = size(F_3d, 1)
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
+      use_open = .false.
+      if (present(metrics)) use_open = metrics%use_closed_faces
 
-      do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
-         num = 0.0_wp
-         denom = 0.0_wp
-         do k = 1, nz
-            if (i == 1) then
-               h_face = h_layer(1, j, k)
-            else if (i == nu) then
-               h_face = h_layer(nx_cells, j, k)
+      if (use_open) then
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = h_layer(1, j, k)
+               else if (i == nu) then
+                  h_face = h_layer(nx_cells, j, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               end if
+               h_face = h_face*metrics%open_u(i, j, k)
+               num = num + F_3d(i, j, k)*h_face
+               denom = denom + h_face
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
             else
-               h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               F_mean_2d(i, j) = 0.0_wp
             end if
-            num = num + F_3d(i, j, k)*h_face
-            denom = denom + h_face
          end do
-         if (denom > 0.0_wp) then
-            F_mean_2d(i, j) = num/denom
-         else
-            F_mean_2d(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = h_layer(1, j, k)
+               else if (i == nu) then
+                  h_face = h_layer(nx_cells, j, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               end if
+               num = num + F_3d(i, j, k)*h_face
+               denom = denom + h_face
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
+            else
+               F_mean_2d(i, j) = 0.0_wp
+            end if
+         end do
+      end if
    end subroutine face_depth_mean_u
 
-   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz)
+   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics)
       !! `face_depth_mean_u` with MOM6 `wt_u` weighting (`&ocean_bt_nml
       !! forcing_visc_rem`): the weight is
       !! `h_face·visc_rem(k)` instead of `h_face`, so layers the implicit
@@ -639,37 +761,74 @@ contains
       real(wp), intent(in) :: rem(:, :, :)      ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
+      type(ocean_metrics_t), intent(in), optional :: metrics
+         !! Present ⇒ the open-weighted branch is available: the weight
+         !! becomes `h_face·visc_rem·open`.  It must match
+         !! `derive_bt_from_layers` and `apply_bt_correction` or the
+         !! `dt·F_bt` the fold subtracts is not what the fast loop
+         !! integrated.  Note a CLOSED layer's `visc_rem` is ~1, not 0 —
+         !! the closed-face vdiff decoupling leaves it uncoupled, so
+         !! `visc_rem` alone does NOT stand in for the mask here.
+         !! ABSENT, or the knob off, ⇒ the ORIGINAL loop, byte-identical.
       integer :: i, j, k, nu, ny, nx_cells
       real(wp) :: h_face, wt, num, denom
+      logical :: use_open
 
       nu = size(F_3d, 1)
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
 
-      do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
-         num = 0.0_wp
-         denom = 0.0_wp
-         do k = 1, nz
-            if (i == 1) then
-               h_face = h_layer(1, j, k)
-            else if (i == nu) then
-               h_face = h_layer(nx_cells, j, k)
+      use_open = .false.
+      if (present(metrics)) use_open = metrics%use_closed_faces
+
+      if (use_open) then
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = h_layer(1, j, k)
+               else if (i == nu) then
+                  h_face = h_layer(nx_cells, j, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               end if
+               wt = metrics%open_u(i, j, k)*h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               num = num + F_3d(i, j, k)*wt
+               denom = denom + wt
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
             else
-               h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               F_mean_2d(i, j) = 0.0_wp
             end if
-            wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
-            num = num + F_3d(i, j, k)*wt
-            denom = denom + wt
          end do
-         if (denom > 0.0_wp) then
-            F_mean_2d(i, j) = num/denom
-         else
-            F_mean_2d(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (i == 1) then
+                  h_face = h_layer(1, j, k)
+               else if (i == nu) then
+                  h_face = h_layer(nx_cells, j, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+               end if
+               wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               num = num + F_3d(i, j, k)*wt
+               denom = denom + wt
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
+            else
+               F_mean_2d(i, j) = 0.0_wp
+            end if
+         end do
+      end if
    end subroutine face_depth_mean_rem_u
 
-   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz)
+   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics)
       !! Symmetric v-face counterpart of `face_depth_mean_rem_u`.
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx,ny+1,nz); a single (nx,ny,nz)
@@ -679,37 +838,74 @@ contains
       real(wp), intent(in) :: rem(:, :, :)      ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
+      type(ocean_metrics_t), intent(in), optional :: metrics
+         !! Present ⇒ the open-weighted branch is available: the weight
+         !! becomes `h_face·visc_rem·open`.  It must match
+         !! `derive_bt_from_layers` and `apply_bt_correction` or the
+         !! `dt·F_bt` the fold subtracts is not what the fast loop
+         !! integrated.  Note a CLOSED layer's `visc_rem` is ~1, not 0 —
+         !! the closed-face vdiff decoupling leaves it uncoupled, so
+         !! `visc_rem` alone does NOT stand in for the mask here.
+         !! ABSENT, or the knob off, ⇒ the ORIGINAL loop, byte-identical.
       integer :: i, j, k, nx, nv, ny_cells
       real(wp) :: h_face, wt, num, denom
+      logical :: use_open
 
       nx = size(F_3d, 1)
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
 
-      do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
-         num = 0.0_wp
-         denom = 0.0_wp
-         do k = 1, nz
-            if (j == 1) then
-               h_face = h_layer(i, 1, k)
-            else if (j == nv) then
-               h_face = h_layer(i, ny_cells, k)
+      use_open = .false.
+      if (present(metrics)) use_open = metrics%use_closed_faces
+
+      if (use_open) then
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = h_layer(i, 1, k)
+               else if (j == nv) then
+                  h_face = h_layer(i, ny_cells, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               end if
+               wt = metrics%open_v(i, j, k)*h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               num = num + F_3d(i, j, k)*wt
+               denom = denom + wt
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
             else
-               h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               F_mean_2d(i, j) = 0.0_wp
             end if
-            wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
-            num = num + F_3d(i, j, k)*wt
-            denom = denom + wt
          end do
-         if (denom > 0.0_wp) then
-            F_mean_2d(i, j) = num/denom
-         else
-            F_mean_2d(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = h_layer(i, 1, k)
+               else if (j == nv) then
+                  h_face = h_layer(i, ny_cells, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               end if
+               wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               num = num + F_3d(i, j, k)*wt
+               denom = denom + wt
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
+            else
+               F_mean_2d(i, j) = 0.0_wp
+            end if
+         end do
+      end if
    end subroutine face_depth_mean_rem_v
 
-   pure subroutine face_depth_mean_v(grid, F_3d, h_layer, F_mean_2d, nz)
+   pure subroutine face_depth_mean_v(grid, F_3d, h_layer, F_mean_2d, nz, metrics)
       !! Symmetric v-face counterpart of `face_depth_mean_u`.
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx,ny+1,nz); a single (nx,ny,nz)
@@ -718,33 +914,64 @@ contains
       real(wp), intent(in) :: h_layer(:, :, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       real(wp), intent(out) :: F_mean_2d(:, :)  ! assumed-shape-ok: face-sized array; size() derives loop bounds
       integer, intent(in) :: nz
+      type(ocean_metrics_t), intent(in), optional :: metrics
+         !! Present ⇒ the open-weighted branch is available.  See
+         !! `face_depth_mean_u` for the argument; ABSENT, or the knob off,
+         !! ⇒ the ORIGINAL loop, byte-identical.
       integer :: i, j, k, nx, nv, ny_cells
       real(wp) :: h_face, num, denom
+      logical :: use_open
 
       nx = size(F_3d, 1)
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
+      use_open = .false.
+      if (present(metrics)) use_open = metrics%use_closed_faces
 
-      do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)
-         num = 0.0_wp
-         denom = 0.0_wp
-         do k = 1, nz
-            if (j == 1) then
-               h_face = h_layer(i, 1, k)
-            else if (j == nv) then
-               h_face = h_layer(i, ny_cells, k)
+      if (use_open) then
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = h_layer(i, 1, k)
+               else if (j == nv) then
+                  h_face = h_layer(i, ny_cells, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               end if
+               h_face = h_face*metrics%open_v(i, j, k)
+               num = num + F_3d(i, j, k)*h_face
+               denom = denom + h_face
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
             else
-               h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               F_mean_2d(i, j) = 0.0_wp
             end if
-            num = num + F_3d(i, j, k)*h_face
-            denom = denom + h_face
          end do
-         if (denom > 0.0_wp) then
-            F_mean_2d(i, j) = num/denom
-         else
-            F_mean_2d(i, j) = 0.0_wp
-         end if
-      end do
+      else
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)
+            num = 0.0_wp
+            denom = 0.0_wp
+            do k = 1, nz
+               if (j == 1) then
+                  h_face = h_layer(i, 1, k)
+               else if (j == nv) then
+                  h_face = h_layer(i, ny_cells, k)
+               else
+                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+               end if
+               num = num + F_3d(i, j, k)*h_face
+               denom = denom + h_face
+            end do
+            if (denom > 0.0_wp) then
+               F_mean_2d(i, j) = num/denom
+            else
+               F_mean_2d(i, j) = 0.0_wp
+            end if
+         end do
+      end if
    end subroutine face_depth_mean_v
 
    pure subroutine apply_bt_correction(bt_work, ms, dt, skip_h_rescale, use_h_weighted, &
@@ -780,9 +1007,30 @@ contains
       logical, intent(in), optional :: use_bc_pgf
       logical, intent(in), optional :: use_visc_rem
       type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Curvilinear horizontal metrics — required only when
+         !! Curvilinear horizontal metrics — required when
          !! `use_bc_pgf = .true.` (the per-face bc-PGF retro-correction
-         !! divides the e_anom gradient by `idxCu`/`idyCv`).
+         !! divides the e_anom gradient by `idxCu`/`idyCv`), and the
+         !! carrier of the z-level closed-face mask.
+         !!
+         !! When `metrics%use_closed_faces` is set the fold takes a THIRD
+         !! branch: OPEN-LAYER.  A CLOSED layer gets `wt = 0` and
+         !! receives nothing; the OPEN layers keep whichever distribution
+         !! `use_h_weighted` selected (`wt = 1` by default, `wt =
+         !! h_o·vr/h_bar_o` with `h_o = h_face·open` when it is on).
+         !! Either way `Σ_k h_face·open·wt = Σ_k h_face·open`, so the
+         !! OPEN-column depth mean is shifted by exactly `Δu` — which is
+         !! the same column `derive_bt_from_layers` and
+         !! `face_depth_mean_*` weight by once the knob is on.
+         !!
+         !! This replaces the spike's fold-then-mask: there `Δu` was added
+         !! uniformly to every layer and `mask_layer_velocities` removed
+         !! it again from the closed ones, so the layer depth mean fell
+         !! short of `ubt_end` by `Δu·(Σ_closed h)/(Σ_k h)` — preserved by
+         !! CANCELLATION rather than by construction, and invisible only
+         !! because those cases run near rest.  Here the closed layers
+         !! never receive the increment in the first place, so the mask
+         !! that follows is a no-op on the fold and the two systems cannot
+         !! drift apart.
       real(wp), intent(in), optional :: scale
          !! Multiplier on the Δu correction (default 1, bit-identical).
          !! The pred_corr PREDICTOR passes `BE` so the provisional velocity
@@ -804,7 +1052,7 @@ contains
       real(wp) :: du_scale
       real(wp) :: h_face, sum_h, sum_h2, h_bar_h, wt, vr_k
       real(wp) :: du_bc, dv_bc
-      logical :: do_rescale, do_h_weighted, do_bc_pgf, do_visc_rem
+      logical :: do_rescale, do_h_weighted, do_bc_pgf, do_visc_rem, do_open
 
       do_rescale = .true.
       if (present(skip_h_rescale)) do_rescale = .not. skip_h_rescale
@@ -816,6 +1064,8 @@ contains
       if (present(use_visc_rem)) do_visc_rem = use_visc_rem
       du_scale = 1.0_wp
       if (present(scale)) du_scale = scale
+      do_open = .false.
+      if (present(metrics)) do_open = metrics%use_closed_faces
       if (do_bc_pgf .and. .not. present(grid)) then
          error stop "apply_bt_correction: use_bc_pgf=.true. requires grid"
       end if
@@ -849,7 +1099,103 @@ contains
          n_nonfin = nfin
       end if
 
-      if (.not. do_h_weighted) then
+      if (do_open) then
+         ! OPEN-LAYER Δu distribution (`&vcoord_nml zfixed_closed_faces`).
+         !
+         ! A CLOSED layer receives NOTHING — `wt = 0` there, by
+         ! construction, not by a mask cleaning up afterwards.  The OPEN
+         ! layers keep the distribution the configuration asked for:
+         !   * default (`use_h_weighted = .false.`): `wt = 1` on every open
+         !     layer, so the OPEN-column depth mean shifts by exactly Δu
+         !     (`Σ_k h_o·wt = Σ_k h_o` trivially);
+         !   * `use_h_weighted = .true.`: `wt = h_o·vr/h_bar_o` with
+         !     `h_o = h_face·open` and `h_bar_o = Σ h_o²·vr / Σ h_o`, which
+         !     satisfies the same identity.
+         !
+         ! The DISTRIBUTION is deliberately NOT forced to the h-weighted
+         ! form.  Forcing it was tried and measured: on
+         ! `cavity_sloping_lid_rest_zfixed` it put En at 2.1E-04 by day 1
+         ! (270x the open-uniform fold) and reached a non-finite state on
+         ! day 2, where the open-uniform fold completes 30 days at
+         ! 2.3E-06.  Under `z_fixed` a partially open face can have one
+         ! dominant open layer and several thin ones, and `h_o/h_bar_o`
+         ! then concentrates the whole barotropic increment into the thick
+         ! layer — a vertical redistribution the coordinate does not want
+         ! and the case cannot absorb.  Whether to h-weight is an
+         ! ORTHOGONAL decision and stays on its own knob.
+         do concurrent(j=1:ny, i=1:nu) &
+            local(k, delta_u, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
+            sum_h = 0.0_wp
+            sum_h2 = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
+               h_face = h_face*metrics%open_u(i, j, k)
+               if (do_visc_rem) then
+                  vr_k = bt_work%visc_rem_u(i, j, k)
+               else
+                  vr_k = 1.0_wp
+               end if
+               sum_h = sum_h + h_face
+               sum_h2 = sum_h2 + h_face*h_face*vr_k
+            end do
+            if (sum_h > 0.0_wp .and. ieee_is_finite(delta_u)) then
+               h_bar_h = 1.0_wp
+               if (do_h_weighted .and. sum_h2 > 0.0_wp) h_bar_h = sum_h2/sum_h
+               do k = 1, nz
+                  if (do_h_weighted) then
+                     h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
+                     h_face = h_face*metrics%open_u(i, j, k)
+                     if (do_visc_rem) then
+                        vr_k = bt_work%visc_rem_u(i, j, k)
+                     else
+                        vr_k = 1.0_wp
+                     end if
+                     wt = h_face*vr_k/h_bar_h
+                  else
+                     wt = metrics%open_u(i, j, k)
+                  end if
+                  ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + delta_u*wt
+               end do
+            end if
+         end do
+         do concurrent(j=1:nv, i=1:nx) &
+            local(k, delta_v, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
+            sum_h = 0.0_wp
+            sum_h2 = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
+               h_face = h_face*metrics%open_v(i, j, k)
+               if (do_visc_rem) then
+                  vr_k = bt_work%visc_rem_v(i, j, k)
+               else
+                  vr_k = 1.0_wp
+               end if
+               sum_h = sum_h + h_face
+               sum_h2 = sum_h2 + h_face*h_face*vr_k
+            end do
+            if (sum_h > 0.0_wp .and. ieee_is_finite(delta_v)) then
+               h_bar_h = 1.0_wp
+               if (do_h_weighted .and. sum_h2 > 0.0_wp) h_bar_h = sum_h2/sum_h
+               do k = 1, nz
+                  if (do_h_weighted) then
+                     h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
+                     h_face = h_face*metrics%open_v(i, j, k)
+                     if (do_visc_rem) then
+                        vr_k = bt_work%visc_rem_v(i, j, k)
+                     else
+                        vr_k = 1.0_wp
+                     end if
+                     wt = h_face*vr_k/h_bar_h
+                  else
+                     wt = metrics%open_v(i, j, k)
+                  end if
+                  ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + delta_v*wt
+               end do
+            end if
+         end do
+      else if (.not. do_h_weighted) then
          ! Uniform Δu distribution — every layer gets the same Δu.  The finite
          ! guard skips a face whose Δ is non-finite (Inf/NaN from a blown-up BT
          ! loop) so the fold never mints NaN into the layer velocity.
