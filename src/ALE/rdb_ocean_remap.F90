@@ -6,8 +6,12 @@ module rdb_ocean_remap
    !! `rdb_remap_column` (shared with coastal); this module wires it across the
    !! registered tracer slot list plus the face-velocity pass.
    !!
-   !! Per-column conservation: sum_k(c_old·h_old) = sum_k(c_new·h_new) to machine
-   !! precision (modulo the c = hTr/h step, which a vanishing-layer guard protects).
+   !! Per-column conservation: sum_k(hTr) is preserved to machine precision.
+   !! The `c = hTr/h` ↔ `hTr = c·h` round trip is protected by a TWO-SIDED
+   !! vanishing-layer guard (`remap_merge_vanished_content`) which keeps the
+   !! content of a sub-threshold layer in the column instead of deleting it,
+   !! and refuses to park content in one. See that routine and
+   !! `src/core/ocean/README.md` ("The vanished-layer content rule").
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
@@ -48,6 +52,7 @@ module rdb_ocean_remap
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
+   public :: remap_merge_vanished_content   ! exposed for unit tests
 
 #ifdef LFORTRAN_PASSING
    integer, parameter :: NZ_STACK_MAX = 64
@@ -57,6 +62,64 @@ module rdb_ocean_remap
 #endif
 
 contains
+
+   pure subroutine remap_merge_vanished_content(nz, h_col, q_col)
+      !$acc routine seq
+      !! Establish invariant **I1** on one column: `h <= H_VANISHED ⇒ q = 0`,
+      !! with the column sum `Σ q` preserved to round-off.
+      !!
+      !! `q_col` is CONTENT (`hTr = h·c`, or any extensive per-layer quantity).
+      !! Content held by a sub-threshold ("vanished" / inert-filler) layer is
+      !! handed to the NEAREST LIVE layer — the next live layer above, or, for
+      !! a run of fillers that reaches the top of the column, the topmost live
+      !! layer below them — and the filler is zeroed. It is a D4 skip/MERGE,
+      !! not a clamp: nothing is created, nothing is destroyed, nothing leaves
+      !! the column, so a budget accumulator fed `q_new - q_old` still
+      !! telescopes to zero per column and remains a valid leak detector.
+      !!
+      !! This is the ONE definition of the vanished-layer content rule for the
+      !! ALE remap; both the read side (`c_old = hTr/h_old`) and the write side
+      !! (`hTr_new = c_new·h_new`) of `ocean_remap_tracer_field` call it, which
+      !! is what makes the guard two-sided. See `src/core/ocean/README.md`
+      !! ("The vanished-layer content rule").
+      !!
+      !! **Bit-identity:** every mutation sits behind `orphan /= 0` or the
+      !! sub-threshold branch, so a column with no layer at or below
+      !! `H_VANISHED` leaves `q_col` textually untouched.
+      !!
+      !! **Column with no live layer at all** (land / fully grounded): every
+      !! layer is a filler, the content is zero by construction (nothing may
+      !! deposit into a dead column), and `q_col` is zeroed — which is the same
+      !! answer the un-merged code gave, now stated rather than incidental.
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
+      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
+      integer :: k
+      real(wp) :: orphan
+
+      orphan = 0.0_wp
+      do k = 1, nz
+         if (h_col(k) > H_FLOOR) then
+            if (orphan /= 0.0_wp) then
+               q_col(k) = q_col(k) + orphan
+               orphan = 0.0_wp
+            end if
+         else
+            orphan = orphan + q_col(k)
+            q_col(k) = 0.0_wp
+         end if
+      end do
+      if (orphan /= 0.0_wp) then
+         ! Fillers above the last live layer: give it back downward.
+         do k = nz, 1, -1
+            if (h_col(k) > H_FLOOR) then
+               q_col(k) = q_col(k) + orphan
+               orphan = 0.0_wp
+               exit
+            end if
+         end do
+      end if
+   end subroutine remap_merge_vanished_content
 
    pure subroutine ocean_apply_ale_remap_centres(grid, vcoord, ms, bt_eta, bt_H_ref, method, eos, dt)
       !! Orchestrate the centre-cell pass of the ALE remap step (h_layer +
@@ -200,6 +263,18 @@ contains
       !! `budget` (optional): when present, the per-cell hTr_new−hTr_old increment
       !! is accumulated into the slot (heat/salt remap deltas) before overwriting.
       !! Flat-arg so GPU codegen doesn't chase the array-of-derived-types pointer.
+      !!
+      !! **The vanishing-layer guard is two-sided** (`remap_merge_vanished_content`):
+      !! a SOURCE layer at or below `H_VANISHED` hands its content to the nearest
+      !! live source layer before the reconstruction sees it (the reconstruction
+      !! must never be handed a concentration recovered from a near-zero divisor,
+      !! but the content is real and must not be deleted), and a TARGET layer at
+      !! or below `H_VANISHED` receives ZERO content, its share going to the
+      !! nearest live target layer. Without the second half the remap parks
+      !! content in a filler and refuses to read it back one step later —
+      !! un-budgeted deletion, and the day-16 z_fixed salt/heat break.
+      !! Post-condition (I1): `h_new <= H_VANISHED ⇒ hTr = 0`, column sum
+      !! conserved to round-off, so `budget` still telescopes per column.
       integer, intent(in) :: nx, ny, nz, method
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
@@ -216,18 +291,23 @@ contains
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
       real(wp) :: c_old_col(NZ_STACK_MAX), c_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX)
-      real(wp) :: hTr_new
+      real(wp) :: hTr_col(NZ_STACK_MAX), hTr_new_col(NZ_STACK_MAX)
 
       ! Gate the budget write INSIDE the one loop (as vdiff does); splitting
       ! present(budget) into two loops makes NVHPC compile the no-budget branch
       ! ~25x slower. Bit-identical to the split form.
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, hTr_new)
+         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, hTr_new_col)
          do k = 1, nz
             h_old_col(k) = h_old(i, j, k)
             h_new_col(k) = h_new(i, j, k)
             hTr_col(k) = hTr(i, j, k)
+         end do
+         ! Read side. `hTr_col` is a LOCAL copy — the budget below still
+         ! differences against the original `hTr` array, so the merge is
+         ! invisible to the leak detector.
+         call remap_merge_vanished_content(nz, h_old_col, hTr_col)
+         do k = 1, nz
             if (h_old_col(k) > H_FLOOR) then
                c_old_col(k) = hTr_col(k)/h_old_col(k)
             else
@@ -237,15 +317,19 @@ contains
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
                            c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
+         ! Write side.
+         do k = 1, nz
+            hTr_new_col(k) = c_new_col(k)*h_new_col(k)
+         end do
+         call remap_merge_vanished_content(nz, h_new_col, hTr_new_col)
          if (present(budget)) then
             do k = 1, nz
-               hTr_new = c_new_col(k)*h_new_col(k)
-               budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
-               hTr(i, j, k) = hTr_new
+               budget(i, j, k) = budget(i, j, k) + (hTr_new_col(k) - hTr(i, j, k))
+               hTr(i, j, k) = hTr_new_col(k)
             end do
          else
             do k = 1, nz
-               hTr(i, j, k) = c_new_col(k)*h_new_col(k)
+               hTr(i, j, k) = hTr_new_col(k)
             end do
          end if
       end do
@@ -748,23 +832,37 @@ contains
 
    subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method)
       !! Single-column unit-test entry: wraps `remap_column` with the
-      !! c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
-      !! `ocean_remap_tracer_field`.
+      !! c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
+      !! vanishing-layer merge the production kernel runs
+      !! (`remap_merge_vanished_content`), so this entry cannot drift from
+      !! `ocean_remap_tracer_field`. Production callers go through that one.
       integer, intent(in) :: nz, method
       real(wp), intent(in) :: h_old(nz), h_new(nz)
       real(wp), intent(inout) :: hTr_inout(nz)
       real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX)
+      real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
+      real(wp) :: hTr_col(NZ_STACK_MAX)
       integer :: k
       do k = 1, nz
+         h_old_col(k) = h_old(k)
+         h_new_col(k) = h_new(k)
+         hTr_col(k) = hTr_inout(k)
+      end do
+      call remap_merge_vanished_content(nz, h_old_col, hTr_col)
+      do k = 1, nz
          if (h_old(k) > H_FLOOR) then
-            c_old(k) = hTr_inout(k)/h_old(k)
+            c_old(k) = hTr_col(k)/h_old(k)
          else
             c_old(k) = 0.0_wp
          end if
       end do
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
       do k = 1, nz
-         hTr_inout(k) = c_new(k)*h_new(k)
+         hTr_col(k) = c_new(k)*h_new(k)
+      end do
+      call remap_merge_vanished_content(nz, h_new_col, hTr_col)
+      do k = 1, nz
+         hTr_inout(k) = hTr_col(k)
       end do
    end subroutine ocean_remap_tracer_column
 
