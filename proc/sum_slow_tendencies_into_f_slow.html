@@ -134,14 +134,14 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-i~60">i</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-j~56">j</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-k~31">k</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nu~3">nu</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nv~3">nv</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nx~52">nx</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-ny~52">ny</a>
-            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nz~38">nz</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-i~516">i</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-j~445">j</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-k~342">k</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nu~4">nu</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nv~5">nv</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nx~439">nx</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-ny~439">ny</a>
+            <a class="list-group-item" href="../proc/sum_slow_tendencies_into_f_slow.html#variable-nz~385">nz</a>
         </div>
       </div>
     </div>
@@ -187,6 +187,77 @@ layer.  Reads <code>pgf%dpdx_face</code>, <code>cor%pv_flux_x</code>, <code>hv%d
 <code>bd%du_drag</code>, <code>ss%du_stress</code> and their v counterparts —
 all already at the matching u-face / v-face shape.  Each
 kernel must have run its compute step before this is called.</p>
+<h2 id="what-this-list-is-and-what-it-is-not">What this list IS (and what it is not)</h2>
+<p>The five terms are the ADDITIVE layer-tendency buffers that
+<code>run_stage_split</code> applies between the forcing assembly and
+<code>apply_bt_correction</code>.  The depth mean of this sum becomes
+<code>F_bt_u/v</code>, the frozen forcing the barotropic substep integrates,
+and the SAME <code>F_bt</code> is subtracted again inside the correction.</p>
+<p>It is tempting to read the list as a completeness requirement —
+&ldquo;a tendency missing from here never reaches the barotropic mode&rdquo;.
+It is not, because <code>apply_bt_correction</code> adds an INCREMENT rather
+than REPLACING the layer depth mean.  Writing <code>T_k</code> for the
+summed tendencies and <code>D_k</code> for one that is applied but omitted,
+a stage does</p>
+<div class="codehilite"><pre><span></span><code>u_k^{n+1} = u_k^n + dt·(T_k + D_k)
+                  + (u_bt^end − u_bt^n − dt·F_bt),
+</code></pre></div>
+
+<p>and with <code>F_bt = ⟨T⟩_h</code> plus <code>⟨u^n⟩_h = u_bt^n</code>
+(<code>derive_bt_from_layers</code>) its thickness-weighted depth mean is</p>
+<div class="codehilite"><pre><span></span><code>⟨u^{n+1}⟩ = u_bt^end + dt·⟨D⟩.
+</code></pre></div>
+
+<p>So <code>⟨D⟩</code> is applied EXACTLY ONCE, on top of the barotropic
+solution — never lost, never double counted.  The mirror holds
+for a summed term: the fast loop integrates <code>⟨T⟩</code> across the
+substeps and the <code>−dt·F_bt</code> guard takes it straight back out, so
+membership is depth-mean NEUTRAL to leading order.</p>
+<p>What membership actually buys is SECOND order, and it is real:
+a summed term shapes the substep&rsquo;s live η / ζ / KE / <code>bt_rem</code>
+trajectory and therefore the time-mean transports <code>bt_uhbt</code> that
+the slow continuity renormalises to.  Omitting a term is a
+first-order-in-dt operator SPLIT — the depth mean is applied
+after the fast loop instead of inside it.</p>
+<h2 id="the-contract-for-a-new-tendency">The contract for a new tendency</h2>
+<p>A new layer velocity tendency applied inside the corrected set
+MUST come with a decision about this sum, recorded here:</p>
+<ul>
+<li><strong>Summed (the default).</strong>  An additive <code>du/dt</code> buffer that the
+  barotropic mode should feel DURING the substeps — anything that
+  changes the depth-mean momentum on the fast timescale, or whose
+  transport must be consistent with <code>bt_uhbt</code>.  Add it to both
+  <code>do concurrent</code> bodies below; keep them branch-free and
+  explicit-shape.</li>
+<li><strong>Deliberately omitted.</strong>  A term with no additive tendency
+  buffer to sum (a multiplicative / implicit operator), or one
+  whose depth-mean lag is physically irrelevant.  The side-wall
+  CHANNEL drag (<code>ocean_channel_drag_apply_tendencies</code>) is the one
+  such term today: it is a frozen-rate BACKWARD-EULER factor
+  <code>u ← u/(1 + dt·λ_side)</code>, not a <code>du/dt</code> field, so there is no
+  buffer to add — and by the algebra above its depth mean still
+  lands exactly once.</li>
+</ul>
+<p>Tendencies applied by separate operator-split steps AFTER
+<code>apply_bt_correction</code> (the baroclinic OBC, the sponges, the
+implicit vertical friction <code>vdiff_apply_momentum</code> and the
+<code>&amp;ocean_vdiff_nml implicit_stress</code> / <code>implicit_drag</code> folds) are
+outside the corrected set and must NOT be summed here.  Note the
+deliberate asymmetry that follows: <code>bd%du_drag</code> / <code>ss%du_stress</code>
+stay in this sum even when their explicit applies are skipped by
+those folds — the fast loop adds their depth mean and the
+correction removes it, so the fold&rsquo;s later application is still
+the only one.</p>
+<p>The gate is <code>tests/test_ocean_bt_slow_forcing.F90</code>
+(<code>channel_drag_depth_mean_decay</code> for an omitted term,
+<code>bottom_drag_depth_mean_decay</code> for a summed one): on a
+doubly-periodic uniform box each decays at the outer scheme&rsquo;s
+exact analytic rate under both <code>pred_corr</code> and <code>ssp_rk2</code>.</p>
+<p>Terms that reach the barotropic mode by a DIFFERENT seam have no
+business here either: <code>&amp;ocean_bt_nml substep_drag</code> and the linear
+wave drag multiply <code>bt_rem_u/v</code> inside the substep, the porous
+barriers narrow the substep transport widths, and the tide / SAL
+/ surface-pressure loads arrive as <code>eta_forcing</code>.</p>
 
 
     <h3>Arguments</h3>
@@ -202,7 +273,7 @@ kernel must have run its compute step before this is called.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_work~7"></span>
+              <span class="anchor" id="variable-bt_work~18"></span>
               type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -217,7 +288,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-pgf~2"></span>
+              <span class="anchor" id="variable-pgf~9"></span>
               type(<a href='../type/ocean_pressure_force_t.html'>ocean_pressure_force_t</a>),
             </td>
 <td>intent(in)</td>
@@ -232,7 +303,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-cor~3"></span>
+              <span class="anchor" id="variable-cor~10"></span>
               type(<a href='../type/coriolis_adv_t.html'>coriolis_adv_t</a>),
             </td>
 <td>intent(in)</td>
@@ -247,7 +318,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-hv~2"></span>
+              <span class="anchor" id="variable-hv~9"></span>
               type(<a href='../type/ocean_horizontal_viscosity_t.html'>ocean_horizontal_viscosity_t</a>),
             </td>
 <td>intent(in)</td>
@@ -262,7 +333,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bd~2"></span>
+              <span class="anchor" id="variable-bd~8"></span>
               type(<a href='../type/ocean_bottom_drag_t.html'>ocean_bottom_drag_t</a>),
             </td>
 <td>intent(in)</td>
@@ -277,7 +348,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ss~5"></span>
+              <span class="anchor" id="variable-ss~22"></span>
               type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
             </td>
 <td>intent(in)</td>
@@ -292,7 +363,7 @@ kernel must have run its compute step before this is called.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~26"></span>
+              <span class="anchor" id="variable-ms~133"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -525,7 +596,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~60"></span>
+              <span class="anchor" id="variable-i~516"></span>
               integer,
             </td>
               <td>private</td>
@@ -542,7 +613,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~56"></span>
+              <span class="anchor" id="variable-j~445"></span>
               integer,
             </td>
               <td>private</td>
@@ -559,7 +630,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~31"></span>
+              <span class="anchor" id="variable-k~342"></span>
               integer,
             </td>
               <td>private</td>
@@ -576,7 +647,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nu~3"></span>
+              <span class="anchor" id="variable-nu~4"></span>
               integer,
             </td>
               <td>private</td>
@@ -593,7 +664,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nv~3"></span>
+              <span class="anchor" id="variable-nv~5"></span>
               integer,
             </td>
               <td>private</td>
@@ -610,7 +681,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~52"></span>
+              <span class="anchor" id="variable-nx~439"></span>
               integer,
             </td>
               <td>private</td>
@@ -627,7 +698,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~52"></span>
+              <span class="anchor" id="variable-ny~439"></span>
               integer,
             </td>
               <td>private</td>
@@ -644,7 +715,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~38"></span>
+              <span class="anchor" id="variable-nz~385"></span>
               integer,
             </td>
               <td>private</td>
@@ -682,6 +753,85 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! `bd%du_drag`, `ss%du_stress` and their v counterparts —</span>
 <span class="w">      </span><span class="c">!! all already at the matching u-face / v-face shape.  Each</span>
 <span class="w">      </span><span class="c">!! kernel must have run its compute step before this is called.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! ## What this list IS (and what it is not)</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The five terms are the ADDITIVE layer-tendency buffers that</span>
+<span class="w">      </span><span class="c">!! `run_stage_split` applies between the forcing assembly and</span>
+<span class="w">      </span><span class="c">!! `apply_bt_correction`.  The depth mean of this sum becomes</span>
+<span class="w">      </span><span class="c">!! `F_bt_u/v`, the frozen forcing the barotropic substep integrates,</span>
+<span class="w">      </span><span class="c">!! and the SAME `F_bt` is subtracted again inside the correction.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! It is tempting to read the list as a completeness requirement —</span>
+<span class="w">      </span><span class="c">!! "a tendency missing from here never reaches the barotropic mode".</span>
+<span class="w">      </span><span class="c">!! It is not, because `apply_bt_correction` adds an INCREMENT rather</span>
+<span class="w">      </span><span class="c">!! than REPLACING the layer depth mean.  Writing `T_k` for the</span>
+<span class="w">      </span><span class="c">!! summed tendencies and `D_k` for one that is applied but omitted,</span>
+<span class="w">      </span><span class="c">!! a stage does</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!     u_k^{n+1} = u_k^n + dt·(T_k + D_k)</span>
+<span class="w">      </span><span class="c">!!                       + (u_bt^end − u_bt^n − dt·F_bt),</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! and with `F_bt = ⟨T⟩_h` plus `⟨u^n⟩_h = u_bt^n`</span>
+<span class="w">      </span><span class="c">!! (`derive_bt_from_layers`) its thickness-weighted depth mean is</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!     ⟨u^{n+1}⟩ = u_bt^end + dt·⟨D⟩.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! So `⟨D⟩` is applied EXACTLY ONCE, on top of the barotropic</span>
+<span class="w">      </span><span class="c">!! solution — never lost, never double counted.  The mirror holds</span>
+<span class="w">      </span><span class="c">!! for a summed term: the fast loop integrates `⟨T⟩` across the</span>
+<span class="w">      </span><span class="c">!! substeps and the `−dt·F_bt` guard takes it straight back out, so</span>
+<span class="w">      </span><span class="c">!! membership is depth-mean NEUTRAL to leading order.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! What membership actually buys is SECOND order, and it is real:</span>
+<span class="w">      </span><span class="c">!! a summed term shapes the substep's live η / ζ / KE / `bt_rem`</span>
+<span class="w">      </span><span class="c">!! trajectory and therefore the time-mean transports `bt_uhbt` that</span>
+<span class="w">      </span><span class="c">!! the slow continuity renormalises to.  Omitting a term is a</span>
+<span class="w">      </span><span class="c">!! first-order-in-dt operator SPLIT — the depth mean is applied</span>
+<span class="w">      </span><span class="c">!! after the fast loop instead of inside it.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! ## The contract for a new tendency</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! A new layer velocity tendency applied inside the corrected set</span>
+<span class="w">      </span><span class="c">!! MUST come with a decision about this sum, recorded here:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! * **Summed (the default).**  An additive `du/dt` buffer that the</span>
+<span class="w">      </span><span class="c">!!   barotropic mode should feel DURING the substeps — anything that</span>
+<span class="w">      </span><span class="c">!!   changes the depth-mean momentum on the fast timescale, or whose</span>
+<span class="w">      </span><span class="c">!!   transport must be consistent with `bt_uhbt`.  Add it to both</span>
+<span class="w">      </span><span class="c">!!   `do concurrent` bodies below; keep them branch-free and</span>
+<span class="w">      </span><span class="c">!!   explicit-shape.</span>
+<span class="w">      </span><span class="c">!! * **Deliberately omitted.**  A term with no additive tendency</span>
+<span class="w">      </span><span class="c">!!   buffer to sum (a multiplicative / implicit operator), or one</span>
+<span class="w">      </span><span class="c">!!   whose depth-mean lag is physically irrelevant.  The side-wall</span>
+<span class="w">      </span><span class="c">!!   CHANNEL drag (`ocean_channel_drag_apply_tendencies`) is the one</span>
+<span class="w">      </span><span class="c">!!   such term today: it is a frozen-rate BACKWARD-EULER factor</span>
+<span class="w">      </span><span class="c">!!   `u ← u/(1 + dt·λ_side)`, not a `du/dt` field, so there is no</span>
+<span class="w">      </span><span class="c">!!   buffer to add — and by the algebra above its depth mean still</span>
+<span class="w">      </span><span class="c">!!   lands exactly once.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Tendencies applied by separate operator-split steps AFTER</span>
+<span class="w">      </span><span class="c">!! `apply_bt_correction` (the baroclinic OBC, the sponges, the</span>
+<span class="w">      </span><span class="c">!! implicit vertical friction `vdiff_apply_momentum` and the</span>
+<span class="w">      </span><span class="c">!! `&amp;ocean_vdiff_nml implicit_stress` / `implicit_drag` folds) are</span>
+<span class="w">      </span><span class="c">!! outside the corrected set and must NOT be summed here.  Note the</span>
+<span class="w">      </span><span class="c">!! deliberate asymmetry that follows: `bd%du_drag` / `ss%du_stress`</span>
+<span class="w">      </span><span class="c">!! stay in this sum even when their explicit applies are skipped by</span>
+<span class="w">      </span><span class="c">!! those folds — the fast loop adds their depth mean and the</span>
+<span class="w">      </span><span class="c">!! correction removes it, so the fold's later application is still</span>
+<span class="w">      </span><span class="c">!! the only one.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The gate is `tests/test_ocean_bt_slow_forcing.F90`</span>
+<span class="w">      </span><span class="c">!! (`channel_drag_depth_mean_decay` for an omitted term,</span>
+<span class="w">      </span><span class="c">!! `bottom_drag_depth_mean_decay` for a summed one): on a</span>
+<span class="w">      </span><span class="c">!! doubly-periodic uniform box each decays at the outer scheme's</span>
+<span class="w">      </span><span class="c">!! exact analytic rate under both `pred_corr` and `ssp_rk2`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Terms that reach the barotropic mode by a DIFFERENT seam have no</span>
+<span class="w">      </span><span class="c">!! business here either: `&amp;ocean_bt_nml substep_drag` and the linear</span>
+<span class="w">      </span><span class="c">!! wave drag multiply `bt_rem_u/v` inside the substep, the porous</span>
+<span class="w">      </span><span class="c">!! barriers narrow the substep transport widths, and the tide / SAL</span>
+<span class="w">      </span><span class="c">!! / surface-pressure loads arrive as `eta_forcing`.</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">barotropic_workstate_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_work</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_pressure_force_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pgf</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">coriolis_adv_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cor</span>
@@ -736,7 +886,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-20 05:27 +0000             </p>
+ on 2026-09-21 16:42 +0000             </p>
           </div>
         </div>
         <br>
