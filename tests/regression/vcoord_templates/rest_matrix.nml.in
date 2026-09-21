@@ -1,0 +1,169 @@
+! ===================================================================
+! THE REST-STATE MATRIX TEMPLATE -- generated, do not edit a copy.
+!
+! This is the ONE canonical definition of the rest-state problem the
+! vertical-coordinate stability matrix runs.  `tests/regression/
+! vcoord_matrix.py` substitutes the double-brace fields and emits one
+! namelist per (geometry x stratification x EOS x coordinate family)
+! into a scratch directory at run time.  Nothing in the matrix is
+! checked in as a namelist: dozens of near-identical files rot, and a
+! reader cannot tell which cell of the matrix a given file is.
+!
+! WHAT THE PROBLEM IS.  A motionless, stably stratified ocean on an
+! f-plane with:
+!
+!   * NO forcing            -- no wind, no surface flux, no tides
+!   * NO lateral viscosity  -- nu_h = nu_4 = 0, no flow-aware closure
+!   * NO bottom drag        -- cd = 0
+!   * NO vertical mixing    -- use_closure = use_kpp = .false.
+!   * isopycnals FLAT IN GEOPOTENTIAL z, laid by
+!     `&ocean_zinit_nml source="linear"` -- NOT by a layer-index
+!     profile, which would tilt them with a terrain-following
+!     coordinate and hand the run real available potential energy to
+!     convert.  Over a slope that distinction is the whole experiment.
+!
+! Such a state is the GLOBAL MINIMUM of potential energy under rigid
+! boundaries, so APE is identically zero and there is no energy source
+! of any kind.  Every joule of kinetic energy the run develops was
+! manufactured by the discretisation -- which here means, almost
+! entirely, by the vertical coordinate's pressure-gradient truncation
+! over the geometry.  That is what the matrix measures.
+!
+! The dissipation is left OUT on purpose and must stay out.  Measured
+! on the sibling cavity case (validation_examples/ocean/
+! ice_shelf_cavity/README.md): nu_h = 50 m2/s removes a four-decade
+! instability entirely, and every flow-aware closure (Smagorinsky,
+! Leith) is inert at rest because it sets its viscosity from the
+! resolved deformation rate, which is zero.  A viscosity that removes
+! the instability removes the measurement with it.
+! ===================================================================
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = {{NX}}
+   ny     = {{NY}}
+   dx     = {{DX}}
+   dy     = {{DY}}
+   nghost = {{NGHOST}}
+/
+
+&time_nml
+   t_end        = 86400.0        ! overwritten per tier by stability.py
+   dt_fixed     = {{DT}}
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = {{CORIOLIS_F}}
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = {{NZ}}
+/
+
+&vcoord_nml
+   vcoord_type = "{{VCOORD}}"
+   zstar_h_min = 1.0e-4
+   remap_method = "{{REMAP}}"
+{{VCOORD_EXTRA}}
+/
+
+&ocean_topo_nml
+   topo_config    = "{{TOPO_CONFIG}}"
+   max_depth      = {{MAX_DEPTH}}
+   edge_depth     = {{EDGE_DEPTH}}
+   slope_scale    = {{SLOPE_SCALE}}
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+{{CAVITY}}
+
+&ocean_pgf_nml
+   form        = "{{PGF_FORM}}"
+   p_top_in_bc = {{P_TOP_IN_BC}}
+   maxvel      = 2.0
+/
+
+&ocean_eos_nml
+   eos = "{{EOS}}"
+/
+
+&ocean_ic_nml
+   ! ISOMIP+ linear-EOS coefficients (Asay-Davis et al. 2016 Table 4).
+   ! Ignored when eos = "wright", which carries its own polynomial.
+   alpha_T = 3.8356948e-2
+   beta_S  = 8.0587609e-1
+   T_ref   = -1.0
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"
+   lin_t_ref = {{LIN_T_REF}}
+   lin_dt_dz = {{LIN_DT_DZ}}
+   lin_s_ref = {{LIN_S_REF}}
+   lin_ds_dz = {{LIN_DS_DZ}}
+/
+
+&tracer_nml
+   ! Overwritten by the zinit overlay on the interior AND the ghosts;
+   ! kept consistent so a reader is not misled about the seeded state.
+   initial_temperature = {{LIN_T_REF}}
+   initial_salinity    = {{LIN_S_REF}}
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   ! ZERO, and it must stay zero -- see the header.
+   nu_h = 0.0
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.
+/
+
+&ocean_bt_nml
+{{BT_EXTRA}}
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "{{NAME}}"
+   dt_out   = 86400.0
+   ! `h_layer` is the LAYER-THICKNESS derived diagnostic: its console
+   ! [diag] min is how the matrix reads thickness positivity and the
+   ! vanished-layer count without opening a NetCDF file.
+   diags    = "h_layer"
+/
+
+&output_nml
+   output_dir     = "."
+   output_to_file = .false.
+{{BATHY_FILE}}
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/
