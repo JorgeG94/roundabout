@@ -241,6 +241,7 @@ set(RDB_TESTS
     "test_ocean_zfixed_cor_ref|test_ocean_zfixed_cor_ref|collect_ocean_zfixed_cor_ref_tests|ocean_zfixed_cor_ref|ocean"
     "test_vcoord_parse|test_vcoord_parse|collect_vcoord_parse_tests|vcoord_parse|ocean"
     "test_ocean_remap|test_ocean_remap|collect_ocean_remap_tests|ocean_remap|ocean"
+    "test_ocean_remap_vanished|test_ocean_remap_vanished|collect_ocean_remap_vanished_tests|ocean_remap_vanished|ocean"
     "test_ocean_regrid_refine|test_ocean_regrid_refine|collect_ocean_regrid_refine_tests|ocean_regrid_refine|ocean"
     "test_ocean_remap_e2e|test_ocean_remap_e2e|collect_ocean_remap_e2e_tests|ocean_remap_e2e|ocean"
     "test_ocean_ppm_h4_remap|test_ocean_ppm_h4_remap|collect_ocean_ppm_h4_remap_tests|ocean_ppm_h4_remap|ocean+core"
