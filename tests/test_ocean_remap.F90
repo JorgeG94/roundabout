@@ -19,6 +19,8 @@ module test_ocean_remap
    use rdb_ocean_remap, only: ocean_apply_ale_remap_centres, &
                               ocean_apply_ale_remap_faces, &
                               ocean_apply_ale_remap_step, &
+                              ocean_remap_scan_preconditions, &
+                              OCEAN_REMAP_PRECOND_RTOL, &
                               ocean_remap_tracer_column
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_EULERIAN_Z
    use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR_FULL
@@ -46,7 +48,9 @@ contains
                   new_unittest("faces_momentum_conserved_per_face", test_faces_momentum), &
                   new_unittest("step_remaps_centres_and_faces", test_step_full), &
                   new_unittest("ale_remap_budget_contributors_telescope", &
-                               test_ale_remap_budget_contributors) &
+                               test_ale_remap_budget_contributors), &
+                  new_unittest("precondition_scan_finds_the_bad_columns", &
+                               test_precondition_scan) &
                   ]
    end subroutine collect_ocean_remap_tests
 
@@ -759,5 +763,72 @@ contains
       call vc%destroy()
       call ms%destroy()
    end subroutine test_ale_remap_budget_contributors
+
+   subroutine test_precondition_scan(error)
+      !! `ocean_remap_scan_preconditions` is the domain sweep the fail-loud
+      !! guard (`&vcoord_nml remap_check_preconditions`) runs at the thermo
+      !! cadence (audit findings V5, V6).  It must be silent on a healthy
+      !! field, count exactly the offending columns, and report magnitudes
+      !! large enough to identify the producer — a relative column-total
+      !! mismatch and the most negative thickness.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 5, NY = 4, NZ = 6
+      real(wp) :: h_old(NX, NY, NZ), h_new(NX, NY, NZ)
+      integer :: i, j, k, n_bad
+      real(wp) :: worst_rel, worst_neg
+
+      ! Healthy: stretched source, differently stretched target, equal totals.
+      do k = 1, NZ
+         do j = 1, NY
+            do i = 1, NX
+               h_old(i, j, k) = 5.0_wp + real(k, wp)
+               h_new(i, j, k) = 5.0_wp + real(NZ + 1 - k, wp)
+            end do
+         end do
+      end do
+      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+                                          OCEAN_REMAP_PRECOND_RTOL, &
+                                          n_bad, worst_rel, worst_neg)
+      call check(error, n_bad == 0, "a healthy field must report no bad columns")
+      if (allocated(error)) return
+      call check(error, worst_neg == 0.0_wp, "a healthy field has no negative thickness")
+      if (allocated(error)) return
+
+      ! One column 10% short in the TARGET: the sweep would delete that
+      ! tenth of the column's tracer content with no diagnostic at all.
+      h_new(2, 3, :) = h_new(2, 3, :)*0.9_wp
+      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+                                          OCEAN_REMAP_PRECOND_RTOL, &
+                                          n_bad, worst_rel, worst_neg)
+      call check(error, n_bad == 1, "exactly one short column must be counted")
+      if (allocated(error)) return
+      call check(error, abs(worst_rel - 0.1_wp) < 1.0e-12_wp, &
+                 "the reported mismatch must be the 10% that was removed")
+      if (allocated(error)) return
+
+      ! Plus a NEGATIVE source thickness in a different column, kept
+      ! total-neutral so only the sign test can catch it — which is the
+      ! case that matters, because a non-monotone interface stack CREATES
+      ! mass rather than losing it.
+      h_old(4, 2, 3) = -2.0_wp
+      h_old(4, 2, 4) = h_old(4, 2, 4) + 10.0_wp
+      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+                                          OCEAN_REMAP_PRECOND_RTOL, &
+                                          n_bad, worst_rel, worst_neg)
+      call check(error, n_bad == 2, "the negative-thickness column must be counted too")
+      if (allocated(error)) return
+      call check(error, abs(worst_neg + 2.0_wp) < 1.0e-12_wp, &
+                 "the most negative thickness must be reported")
+      if (allocated(error)) return
+
+      ! A land column (both totals zero) is well-posed, not a violation:
+      ! the relative test must not trip on a 0/0.
+      h_old = 0.0_wp
+      h_new = 0.0_wp
+      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+                                          OCEAN_REMAP_PRECOND_RTOL, &
+                                          n_bad, worst_rel, worst_neg)
+      call check(error, n_bad == 0, "an all-land field must pass, not divide by zero")
+   end subroutine test_precondition_scan
 
 end module test_ocean_remap

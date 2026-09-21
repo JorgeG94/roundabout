@@ -316,6 +316,14 @@ class Vcoord(Group):
         default=False,
     )
 
+    remap_check_preconditions = Bool(
+        'remap_check_preconditions',
+        doc="ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals)",
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class Physics(Group):
     """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
@@ -5638,4 +5646,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 617
+N_KNOBS = 618

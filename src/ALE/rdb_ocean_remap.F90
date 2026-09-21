@@ -9,9 +9,9 @@ module rdb_ocean_remap
    !! Per-column conservation: sum_k(c_old·h_old) = sum_k(c_new·h_new) to machine
    !! precision (modulo the c = hTr/h step, which a vanishing-layer guard protects).
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, REMAP_PPM, H_VANISHED
+   use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PPM, H_VANISHED
+   use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #endif
    use rdb_grid, only: hgrid_t
    use rdb_remap_column, only: remap_column
@@ -34,7 +34,17 @@ module rdb_ocean_remap
    ! `rdb_vcoord :: vcoord_h_min_role`).
    real(wp), parameter :: H_FLOOR = H_VANISHED
 
+   real(wp), parameter, public :: OCEAN_REMAP_PRECOND_RTOL = 1.0e-9_wp
+      !! Relative tolerance on `sum(h_old) == sum(target_h)` for the
+      !! precondition assertion.  The target builders reach the sum by a
+      !! different arithmetic route than the continuity update does, so a
+      !! few ulp of drift per layer is expected and is not the failure mode
+      !! being hunted: the violations that matter (a degenerate column that
+      !! manufactures `nz*h_min` of water, a short target that deletes its
+      !! tail) are percent-level, decades above this.
+
    public :: ocean_apply_ale_remap_centres
+   public :: ocean_remap_scan_preconditions
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
@@ -514,6 +524,12 @@ contains
          end do
       end if
 
+      ! `vcoord%remap_h_old` and `vcoord%target_h` are the exact pair every
+      ! column kernel below consumes, and neither is overwritten by steps 4-7
+      ! — so `ocean_remap_scan_preconditions` can assert them from the
+      ! (impure) driver AFTER this call.  See `&vcoord_nml
+      ! remap_check_preconditions` and `rdb_ocean_dyn :: ocean_dyn_step_split`.
+
       ! 4. Tracer remap (centre cells)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
@@ -560,6 +576,59 @@ contains
          end do
       end do
    end subroutine ocean_apply_ale_remap_step
+
+   pure subroutine ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, rel_tol, &
+                                                  n_bad, worst_rel, worst_neg)
+      !! Scan every column for the two remap preconditions and report how
+      !! badly they are missed — the domain-wide counterpart of
+      !! `rdb_remap_column :: remap_column_preconditions_ok`.
+      !!
+      !! `pure` and flat-arg so the caller owns the fail-loud decision and
+      !! the reduction can run on-device; three scalars come back rather than
+      !! a per-column field, so a thermo-cadence call costs one pass plus a
+      !! tiny D→H.  Public for the unit-test suite.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_old(nx, ny, nz)
+         !! Source thicknesses (the pre-remap `h_layer` snapshot).
+      real(wp), intent(in) :: h_new(nx, ny, nz)
+         !! Target thicknesses (`vcoord%target_h`, after any time filter).
+      real(wp), intent(in) :: rel_tol
+         !! Relative tolerance on the column-total match.
+      integer, intent(out) :: n_bad
+         !! Number of columns violating either precondition.
+      real(wp), intent(out) :: worst_rel
+         !! Largest relative column-total mismatch over the domain.
+      real(wp), intent(out) :: worst_neg
+         !! Most negative thickness found (0 when there is none).
+
+      integer :: i, j, k
+      real(wp) :: s_old, s_new, rel, hmin
+
+      n_bad = 0
+      worst_rel = 0.0_wp
+      worst_neg = 0.0_wp
+      !$acc parallel loop collapse(2) present(h_old, h_new) &
+      !$acc   reduction(+:n_bad) reduction(max:worst_rel) reduction(min:worst_neg) &
+      !$acc   private(k, s_old, s_new, rel, hmin)
+      do j = 1, ny
+         do i = 1, nx
+            s_old = 0.0_wp
+            s_new = 0.0_wp
+            hmin = 0.0_wp
+            do k = 1, nz
+               s_old = s_old + h_old(i, j, k)
+               s_new = s_new + h_new(i, j, k)
+               hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
+            end do
+            ! Relative to the LARGER total, so a land column (both zero)
+            ! scores 0 rather than tripping on a 0/0.
+            rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
+            worst_rel = max(worst_rel, rel)
+            worst_neg = min(worst_neg, hmin)
+            if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
+         end do
+      end do
+   end subroutine ocean_remap_scan_preconditions
 
    pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
       !! Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer
