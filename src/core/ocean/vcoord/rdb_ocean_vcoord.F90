@@ -75,6 +75,7 @@ module rdb_ocean_vcoord
    public :: invert_density_targets
    public :: ocean_vcoord_z_fixed_target
    public :: ocean_vcoord_closed_face_masks
+   public :: ocean_vcoord_k_top_from_target
    public :: ocean_vcoord_count_ledges
    public :: VCOORD_EULERIAN_Z
    public :: VCOORD_LAGRANGIAN
@@ -1110,6 +1111,107 @@ contains
          end if
       end do
    end subroutine ocean_vcoord_closed_face_masks
+
+   pure subroutine ocean_vcoord_k_top_from_target(k_top, k_top_u, k_top_v, &
+                                                  target_h, nx, ny, nz, h_vanished)
+      !! The shared FIRST-LIVE-LAYER index, counting down from the top —
+      !! `multilayer_state_t%k_top` and its two face twins — built from
+      !! a layer-thickness field.
+      !!
+      !! ### The rule
+      !!
+      !! ```
+      !! k_top(i,j) = the largest k with target_h(i,j,k) > h_vanished,
+      !!              or nz when the column has none
+      !! ```
+      !!
+      !! **Strict `>`**, matching the remap drain's `H_FLOOR`
+      !! (`rdb_ocean_remap.F90`), the melt far-field sampler's
+      !! `<= H_VANISHED ⇒ cycle`, and `ocean_vcoord_closed_face_masks`
+      !! above: a layer sitting exactly ON the marker is dead on every
+      !! side of the contract.  `h_vanished` is `H_VANISHED`, never a
+      !! slot-local `h_min = 1.0e-3` anti-zero floor — those are a
+      !! different thing under the D4 taxonomy.
+      !!
+      !! **The `nz` fallback is what makes the whole indirection free.**
+      !! On sigma, z*-lite, and every geometric family that does not
+      !! vanish a layer against the top, no wet column has
+      !! `h(:,:,nz) <= h_vanished`, so `k_top ≡ nz` and every consumer
+      !! that reads `k_top(i,j)` instead of `nz` reads the same memory
+      !! with the same arithmetic.  A land column (every layer at the
+      !! marker under the land-state contract) also lands on `nz`, which
+      !! is what those consumers index today, and is then masked out by
+      !! `wet_mask` exactly as before.
+      !!
+      !! ### The face rule is `min`, not `max`
+      !!
+      !! `k_top_u(I,j) = min(k_top(I-1,j), k_top(I,j))` and the v-face
+      !! mirror.  A velocity face carries water in layer `k` only where
+      !! BOTH abutting columns are live there — which is precisely the
+      !! statement `ocean_vcoord_closed_face_masks` makes with
+      !! `open_u = 1 iff target_h > h_vanished on both sides` — so the
+      !! shallowest layer the FACE has is the DEEPER of the two column
+      !! tops, i.e. the SMALLER index.  `max` would hand the ice-ocean
+      !! top drag and the implicit stress/drag fold a row that is a
+      !! filler on one side, which is the bug this field exists to stop.
+      !! With `k_top ≡ nz` everywhere, `min(nz, nz) = nz` ⇒ the face
+      !! twins are bit-identical too.
+      !!
+      !! Array-edge faces (`I = 1`, `I = nx+1`) take the one column they
+      !! have, mirroring the mask builder leaving them fully open: their
+      !! `dy_cu` is already zero and the wall zeroing owns them.
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      integer, intent(out) :: k_top(nx, ny)
+         !! Cell-centred first live layer.
+      integer, intent(out) :: k_top_u(nx + 1, ny)
+         !! u-face twin.
+      integer, intent(out) :: k_top_v(nx, ny + 1)
+         !! v-face twin.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! Layer thickness (m) the live/filler pattern is read from —
+         !! the `z_fixed` target at `eta = 0` at configure time.
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).  A layer is LIVE iff its
+         !! thickness is strictly greater than this.
+      integer :: i, j, k
+
+      do concurrent(j=1:ny, i=1:nx) local(k)
+         k_top(i, j) = nz
+         do k = nz, 1, -1
+            if (target_h(i, j, k) > h_vanished) then
+               k_top(i, j) = k
+               exit
+            end if
+         end do
+      end do
+
+      do concurrent(j=1:ny, i=1:nx + 1)
+         k_top_u(i, j) = nz
+      end do
+      do concurrent(j=1:ny, i=2:nx)
+         k_top_u(i, j) = min(k_top(i - 1, j), k_top(i, j))
+      end do
+      do concurrent(j=1:ny)
+         k_top_u(1, j) = k_top(1, j)
+         k_top_u(nx + 1, j) = k_top(nx, j)
+      end do
+
+      do concurrent(j=1:ny + 1, i=1:nx)
+         k_top_v(i, j) = nz
+      end do
+      do concurrent(j=2:ny, i=1:nx)
+         k_top_v(i, j) = min(k_top(i, j - 1), k_top(i, j))
+      end do
+      do concurrent(i=1:nx)
+         k_top_v(i, 1) = k_top(i, 1)
+         k_top_v(i, ny + 1) = k_top(i, ny)
+      end do
+   end subroutine ocean_vcoord_k_top_from_target
 
    pure function ocean_vcoord_count_ledges(open_u, open_v, target_h, &
                                            nx, ny, nz, h_vanished) result(n_ledge)

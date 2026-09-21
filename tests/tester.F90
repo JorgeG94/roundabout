@@ -142,6 +142,7 @@ program rdb_tests
                                         collect_ocean_vcoord_hygiene_tests
    use test_ocean_vcoord_zfixed_cavity, only: ocean_vcoord_zfixed_cavity_collect => &
                                               collect_ocean_vcoord_zfixed_cavity_tests
+   use test_ocean_ktop, only: ocean_ktop_collect => collect_ocean_ktop_tests
    use test_ocean_zfixed_closed_faces, only: ocean_zfixed_closed_faces_collect => &
                                              collect_ocean_zfixed_closed_faces_tests
    use test_ocean_zfixed_bt_seiche, only: ocean_zfixed_bt_seiche_collect => &
@@ -316,6 +317,7 @@ program rdb_tests
                               ocean_vcoord_interface_depths_collect), &
                 new_testsuite("ocean_vcoord_hygiene", ocean_vcoord_hygiene_collect), &
                 new_testsuite("ocean_vcoord_zfixed_cavity", ocean_vcoord_zfixed_cavity_collect), &
+                new_testsuite("ocean_ktop", ocean_ktop_collect), &
                 new_testsuite("ocean_zfixed_closed_faces", ocean_zfixed_closed_faces_collect), &
                 new_testsuite("ocean_zfixed_bt_seiche", ocean_zfixed_bt_seiche_collect), &
                 new_testsuite("ocean_zfixed_cor_ref", ocean_zfixed_cor_ref_collect), &
