@@ -948,6 +948,60 @@ is the canonical reference implementation.
   kernel doesn't quietly regress (or crash on AMD) by being bound directly to a
   polymorphic type.
 
+#### Sharing a helper BODY across kernel modules: `#include`, not a hand-copied `*_impl`
+
+When several kernel modules must agree on a small `pure` (+ `!$acc routine
+seq`) leaf helper — a rule rather than a routine, called from *inside* a
+`do concurrent` — put the **body** in `src/shared_module_utilities/<concern>.inc`
+and `#include` it in each consumer's `contains` section:
+
+```fortran
+module rdb_something
+   use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
+   implicit none
+   private
+   public :: something_public
+contains
+
+   subroutine something_public(...)
+      ...
+   end subroutine something_public
+
+#include "rdb_vanished_layer.inc"
+
+end module rdb_something
+```
+
+Every consumer gets a module-LOCAL, `private` copy — the case every toolchain
+inlines most readily — while the tree has ONE source text to edit. Sources are
+`.F90`, so cpp runs everywhere and the include path is the ordinary `-I` one
+(`RDB_SHARED_INCLUDE_DIR` is on every target's include path). The admission
+test, the naming rules (prefixed procedure names *and* suffixed locals, since
+the body lands in a module that has its own names), and the tooling caveats
+are in `src/shared_module_utilities/README.md`.
+
+**This replaces the older "duplicate the helper body into the calling kernel
+module as a `*_impl` copy" advice.** Hand duplication was invented because
+NVHPC's device codegen was reported not to inline `pure !$acc routine seq`
+helpers across a module boundary; it gives you N copies to keep in step, and
+they drift. Measured on nvfortran 26.5 (`-O2 -stdpar=gpu
+-gpu=cc70,mem:separate`, V100), a per-cell accessor written three ways — raw
+inline expression, included module-local helper, cross-module `!$acc routine
+seq` helper — produced device PTX with **zero `call` instructions in all
+three**, kernels within two PTX lines of each other and one inlined
+`div.rn.f64` apiece; the 600×600×50 sweep timed 0.0179 / 0.0173 / 0.0172 s per
+30 launches. So on this compiler the cross-module form inlines too, and the
+include's value is the single source of truth, not a speed-up — with the
+bonus that it does not depend on that staying true. Existing hand-duplicated
+`*_impl` copies in the tree are historical; don't add more.
+
+One observable difference: passing an array *element* to a helper (either
+form) makes nvfortran report the enclosing array as a whole-array `implicit
+copy` rather than the sliced `copyin` it reports for the raw expression. Under
+`mem:separate` with the array already device-resident that is
+"if not already present" and free — but it is one more reason the data
+residency rules are not optional.
+
 #### Restrictions that apply to any `do concurrent`
 - No `exit`, `cycle`, `return`, or `goto` inside the loop body (Fortran-language rule, independent of backend).
 - Side effects (I/O, logging, pure-function violations) are undefined behavior.

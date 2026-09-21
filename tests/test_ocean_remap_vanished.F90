@@ -35,7 +35,7 @@ module test_ocean_remap_vanished
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_remap_column, only: remap_column
    use rdb_ocean_remap, only: ocean_remap_tracer_column, &
-                              remap_merge_vanished_content, &
+                              ocean_remap_merge_vanished_content, &
                               ocean_apply_ale_remap_centres
    use rdb_ocean_vcoord, only: ocean_vcoord_t
    use testdrive, only: error_type, check, new_unittest, unittest_type
@@ -55,7 +55,9 @@ contains
                   new_unittest("bit_identical_without_fillers", test_bit_identity), &
                   new_unittest("dead_column_stays_dead", test_dead_column), &
                   new_unittest("merge_helper_properties", test_merge_helper), &
-                  new_unittest("remap_budget_telescopes_with_fillers", test_budget_telescopes) &
+                  new_unittest("remap_budget_telescopes_with_fillers", test_budget_telescopes), &
+                  new_unittest("state_enforcement_point_establishes_i1", test_enforcement_point), &
+                  new_unittest("state_scan_detects_and_clears", test_i1_scan) &
                   ]
    end subroutine collect_ocean_remap_vanished_tests
 
@@ -316,7 +318,7 @@ contains
       q(1:NZ) = [1.0_wp, 2.0_wp, 300.0_wp, 4.0_wp, 600.0_wp, 6.0_wp]
       before = col_sum(NZ, q)
 
-      call remap_merge_vanished_content(NZ, h, q)
+      call ocean_remap_merge_vanished_content(NZ, h, q)
       after = col_sum(NZ, q)
 
       checks: block
@@ -338,7 +340,7 @@ contains
          if (allocated(error)) exit checks
 
          q2 = q
-         call remap_merge_vanished_content(NZ, h, q2)
+         call ocean_remap_merge_vanished_content(NZ, h, q2)
          ok = .true.
          do k = 1, NZ
             if (q2(k) /= q(k)) ok = .false.
@@ -349,7 +351,7 @@ contains
          h(1:NZ) = [5.0_wp, 5.0_wp, 10.0_wp, 5.0_wp, 20.0_wp, 5.0_wp]
          q(1:NZ) = [1.0_wp, 2.0_wp, 300.0_wp, 4.0_wp, 600.0_wp, 6.0_wp]
          q2 = q
-         call remap_merge_vanished_content(NZ, h, q2)
+         call ocean_remap_merge_vanished_content(NZ, h, q2)
          ok = .true.
          do k = 1, NZ
             if (q2(k) /= q(k)) ok = .false.
@@ -450,5 +452,143 @@ contains
       call vc%destroy()
       call ms%destroy()
    end subroutine test_budget_telescopes
+
+   subroutine test_enforcement_point(error)
+      !! `multilayer_state_t%enforce_vanished_content` — THE I1 enforcement
+      !! point.  Park content in bed and top fillers of every registered
+      !! tracer (including a passive one, to prove the registry loop carries
+      !! it), sweep, and require: I1 everywhere, the column content conserved,
+      !! and the live column with no filler left BIT-identical (the sweep is a
+      !! textual no-op there).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      integer, parameter :: NX = 4, NY = 3, NZ = 6
+      real(wp), parameter :: S0 = 34.5_wp
+      real(wp), allocatable :: before_s(:, :), live_ref(:, :, :)
+      integer :: nx_tot, ny_tot, i, j, k, t, idx_pass
+      real(wp) :: s, worst_content
+      logical :: i1_ok, live_identical
+
+      call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ms%register_passive_tracer(grid, "dye", "1", "a passive dye", idx_pass)
+      nx_tot = grid%nx_total
+      ny_tot = grid%ny_total
+
+      ! j = 1 columns are all live (bit-identity control); every other column
+      ! carries a bed filler at k = 1 and a top filler at k = NZ, both holding
+      ! parked content.
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            do k = 1, NZ
+               ms%h_layer(i, j, k) = 20.0_wp
+               if (j > 1 .and. (k == 1 .or. k == NZ)) ms%h_layer(i, j, k) = 1.0e-4_wp
+               do t = 1, size(ms%tracers)
+                  ms%tracers(t)%hTr(i, j, k) = S0*20.0_wp + real(t, wp)
+               end do
+            end do
+         end do
+      end do
+
+      allocate (before_s(nx_tot, ny_tot), source=0.0_wp)
+      allocate (live_ref(nx_tot, ny_tot, NZ), source=0.0_wp)
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            do k = 1, NZ
+               before_s(i, j) = before_s(i, j) + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               live_ref(i, j, k) = ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+            end do
+         end do
+      end do
+
+      call ms%enforce_vanished_content(nx_tot, ny_tot)
+
+      i1_ok = .true.
+      live_identical = .true.
+      worst_content = 0.0_wp
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            s = 0.0_wp
+            do k = 1, NZ
+               s = s + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               do t = 1, size(ms%tracers)
+                  if (ms%h_layer(i, j, k) <= H_VANISHED .and. &
+                      ms%tracers(t)%hTr(i, j, k) /= 0.0_wp) i1_ok = .false.
+               end do
+               if (j == 1) then
+                  if (ms%tracers(ms%idx_salinity)%hTr(i, j, k) /= live_ref(i, j, k)) &
+                     live_identical = .false.
+               end if
+            end do
+            worst_content = max(worst_content, abs(s - before_s(i, j)))
+         end do
+      end do
+
+      checks: block
+         call check(error, idx_pass > 0, "the passive tracer must register")
+         if (allocated(error)) exit checks
+         call check(error, i1_ok, "enforcement point: I1 over the whole registry")
+         if (allocated(error)) exit checks
+         call check(error, worst_content <= 1.0e-10_wp*abs(before_s(1, 1)), &
+                    "enforcement point: column content conserved")
+         if (allocated(error)) exit checks
+         call check(error, live_identical, &
+                    "enforcement point: an all-live column is BIT-identical")
+      end block checks
+
+      deallocate (before_s, live_ref)
+      call ms%destroy()
+   end subroutine test_enforcement_point
+
+   subroutine test_i1_scan(error)
+      !! `multilayer_state_t%scan_vanished_content` — the tripwire's pure
+      !! half.  It must SEE a violation (count + worst |hTr|), and report
+      !! clean once the enforcement point has run.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      integer, parameter :: NX = 3, NY = 3, NZ = 4
+      integer :: nx_tot, ny_tot, i, j, k, n_bad
+      real(wp) :: worst
+
+      call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      nx_tot = grid%nx_total
+      ny_tot = grid%ny_total
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            do k = 1, NZ
+               ms%h_layer(i, j, k) = 10.0_wp
+               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 345.0_wp
+               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp
+            end do
+            ! One bed filler holding parked content.
+            ms%h_layer(i, j, 1) = 1.0e-4_wp
+            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 3.45e-3_wp
+            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 1.0e-4_wp
+         end do
+      end do
+
+      checks: block
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == 2*nx_tot*ny_tot, &
+                    "the scan must count every violating (cell, tracer)")
+         if (allocated(error)) exit checks
+         call check(error, abs(worst - 3.45e-3_wp) <= 1.0e-15_wp, &
+                    "the scan must report the worst |hTr| found in a filler")
+         if (allocated(error)) exit checks
+
+         call ms%enforce_vanished_content(nx_tot, ny_tot)
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == 0, "the scan must be clean after enforcement")
+         if (allocated(error)) exit checks
+         call check(error, worst == 0.0_wp, "clean scan reports worst = 0")
+      end block checks
+
+      call ms%destroy()
+   end subroutine test_i1_scan
 
 end module test_ocean_remap_vanished

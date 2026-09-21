@@ -373,6 +373,15 @@ module rdb_ocean_vcoord
          !! capped at a 1.25× rescale factor.  The barotropic/depth-mean
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
+      logical :: check_vanished_content = .false.
+         !! `&vcoord_nml check_vanished_content` — the I1 tripwire.  Carried
+         !! on this slot (rather than on `ocean_dyn_t`) because the vertical
+         !! coordinate is what MAKES vanished layers, so the knob that
+         !! polices them belongs beside `zstar_h_min` and the filler
+         !! contract.  A plain scalar on the type: it rides the existing
+         !! `copyin(this)` and adds no device array.  Read by
+         !! `check_vanished_invariant_or_die` in `rdb_ocean_dyn`.  Default
+         !! `.false.` ⇒ no scan, no cost.
       logical :: zfixed_closed_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
          !! closure.  Only meaningful on `VCOORD_Z_FIXED`, where a layer
