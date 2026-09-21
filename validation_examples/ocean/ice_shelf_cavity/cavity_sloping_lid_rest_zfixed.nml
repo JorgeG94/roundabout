@@ -1,0 +1,250 @@
+! Resting cavity under a SLOPING ice shelf — the QUASI-GEOPOTENTIAL leg.
+!
+! *** THIS CASE IS THE MEASUREMENT, AND THE MEASUREMENT IS BAD. ***  It is
+! DELIBERATELY NOT in `tests/regression/stability_manifest.py`: it is a
+! diagnostic for the vanished-layer corrections (P6.6-P6.8), not a gate,
+! and a case whose outcome is toolchain-dependent (NaN on one, saturation
+! on the other) cannot be carried as a scoped XFAIL.  Add it to the suite when those
+! corrections land, not before, and do NOT make it pass by shortening it,
+! by widening a bar or by adding viscosity.  The P6.2 gate that DOES pass
+! is its flat-lid sibling, `cavity_flat_lid_rest_zfixed.nml` (bit-zero).
+!
+! MEASURED (gfortran 15.1, Release, single rank, pred_corr, 30 days
+! requested):
+!
+!                             sigma leg        z_fixed (this file)
+!   accel. at step 1 (rms)    1.40E-09 m/s2    6.62E-08 m/s2   (47x worse)
+!   En, day  1                1.0-2.1E-09      2.783E-06       (~3 decades)
+!   En, day 30                3.043E-08        3.845E-04  (nvfortran GPU)
+!   outcome                   completes        NaN during day 18 (gfortran)
+!                                              completes         (nvfortran GPU)
+!
+!   The two toolchains agree on the PHYSICS (day-1 En 2.783E-06 gfortran
+!   vs 2.818E-06 nvfortran/GPU, 1.3 % apart) and diverge only on how an
+!   unstable run ends: gfortran reaches a non-finite state on day 18,
+!   nvfortran saturates instead and finishes at 3.845E-04 -- four
+!   decades above the sigma leg, i.e. 1.4 cm/s of spurious current in a
+!   cavity that is supposed to be at rest.  Neither outcome is usable
+!   and neither is a toolchain bug; the case is simply past the point
+!   where its answer means anything.
+!
+!   (En day 1 for this file, measured before the filler tracer hold
+!   landed, was 2.783E-06 m2/s2, ~4 decades above the sigma leg's own
+!   day-1 plateau of 1.0-2.1E-09.)
+!
+! WHY.  The interior tilt IS gone — the flat-lid sibling is bit-zero, so
+! the geopotential interfaces truncate nothing where the draft is
+! uniform.  What replaces it is the ice-base STAIRCASE: where the draft
+! crosses a nominal level the two columns' filler counts differ by one,
+! the interface offset across that face jumps by up to `h_nominal`, and
+! the FV-MOM6 Pass-2/Pass-3 acceleration in a vanished layer is
+! `h`-INDEPENDENT (numerator O(delta-e), denominator -> 0).  Note this is
+! NOT the filler-DENSITY mechanism the phase design derives (2.0E-8 m/s2
+! from `rho' = -27.6 kg/m3`): on this branch `eos_linear_impl` already
+! substitutes `(T_ref, S_ref)` for `h <= H_VANISHED`, so with
+! `rho_ref = rho_0 = 1027.51` a filler's density anomaly is EXACTLY zero
+! and that term cannot be the source.  It is the geometry term, which
+! needs Yung et al. (2026) §3.3.1 (vanished-layer viscosity upwinding),
+! §3.3.2 (top-side MWIPG) and §3.2 (interior reference interface) — in
+! that order, and none of them is in this build.
+!
+! This is the z_fixed twin of `cavity_sloping_lid_rest.nml`.  Read that
+! file first: the geometry, the stratification, the load partition, the
+! zero-viscosity / zero-drag / zero-mixing envelope and the reason the
+! initial condition uses `&ocean_zinit_nml source = "linear"` are all
+! identical and are documented there.  What follows is ONLY the delta and
+! what the delta is expected to do.
+!
+! THE DELTA — two lines.
+!
+!   1. `&vcoord_nml vcoord_type = "z_fixed"` (was "sigma").
+!   2. `&ocean_cavity_dyn_nml h_min_cavity = 96.0` (was 40.0), forced by
+!      the configure-time rule `h_min_cavity >= 2*h_nominal` with
+!      `h_nominal = max_depth/nz_layers = 720/15 = 48 m`.  This is
+!      ISOMIP+'s own minimum-column rule (Asay-Davis et al. 2016, GMD 9,
+!      2471, §3.1.5: "approximately two grid cells").  It is NOT a
+!      confound here: the thinnest water column in this domain is 226 m,
+!      so 0 of 288 columns are grounded at EITHER value and the grounding
+!      line does not move between the two legs.  Everything else —
+!      48 x 6 x 15, dx = 2 km, dt = 600 s, 30 days, the draft, the EOS,
+!      the IC — is byte-identical to the sigma leg.
+!
+! WHAT THE COORDINATE DOES.  Under sigma the 15 interfaces TILT with the
+! ice base on every column, and it is that tilt the FV-MOM6 pressure
+! gradient has to integrate across.  Under z_fixed the interfaces are
+! GEOPOTENTIAL: they sit at fixed depths `(nz - k)*48 m` below z = 0
+! whatever the draft is, the layers that outcrop into the ice vanish to
+! the inert filler `zstar_h_min` and stack under the ice base, and the
+! first live layer is CUT by the draft into a partial top cell (Yung,
+! Hallberg, Adcroft & Morrison 2026, JAMES 18, e2025MS005645, Fig. 1b;
+! Losch 2008, JGR 113 C08043 §2.1 for the partial top cell).  So the
+! interior tilt — and with it the sigma truncation the sigma leg
+! measures — is STRUCTURALLY absent, and what is left is confined to the
+! staircase at the ice base where the filler count changes column to
+! column.
+!
+! WHAT WAS EXPECTED, AND WHY IT WAS THE WRONG EXPECTATION.  The phase
+! design predicts a residual from the fillers' DENSITY: a top filler
+! carries `hTr = 0` (the ALE remap's drain gate zeroes a vanished cell's
+! content), so a column builder that forms `T = hTr/H_FLOOR` reads
+! `T = S = 0` and, under the ISOMIP+ linear EOS, `rho' ~ -27.6 kg/m3`.
+! That is a real hazard for the RECONSTRUCT column builder
+! (`&ocean_pgf_nml reconstruct_for_pressure`), which is where the design
+! derived it.  It is NOT what this file runs: on the default
+! `rho_layer` path `eos_linear_impl` already substitutes `(T_ref, S_ref)`
+! for `h <= H_VANISHED`, so a filler's density is exactly `rho_0` and,
+! with `rho_ref = rho_0`, its anomaly is exactly zero.  The measured
+! residual is therefore the GEOMETRY term, not the density term, and
+! substituting live T/S at consumption would not remove it.
+!
+! THE V1 ENVELOPE.  `z_fixed` x cavity is ADIABATIC DYNAMICS ONLY until
+! the shared `k_top(i,j)` lands (the first live layer, counting down):
+! until then `k = nz` is an inert filler on every ice-covered column and
+! every consumer that indexes it literally is wrong there.
+! `validate_config` refuses basal melt, ice-shelf top drag, KPP, EPBL,
+! the ideal-age tracer, GM / Redi / isopycnal slopes, a non-zero
+! `kappa_h` and a non-zero `regrid_time_scale` under this combination,
+! each naming its follow-up.  Atmospheric forcing is NOT refused: the
+! cover mask already zeroes wind stress, surface heat/salt, shortwave and
+! restoring on every covered column, and an open-ocean column has
+! `z_top = 0` so its `k = nz` is live.  This file is at rest with none of
+! it anyway.
+!
+! `split_scheme` is DELIBERATELY not pinned, exactly as in the sigma leg.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 6
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "z_fixed"     ! quasi-geopotential: does NOT follow the ice
+                               ! base.  h_nominal = max_depth/nz = 48 m.
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 720.0      ! ISOMIP+ z_b,deep; also sets z_fixed_h_ref
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "linear"
+   draft_depth  = 570.0        ! draft AT draft_x0
+   draft_slope  = -6.9e-3      ! shallows toward the calving front
+   draft_x0     = -10000.0     ! anchor OUTSIDE the domain so ghosts are iced
+   draft_x1     = 72000.0      ! the CALVING FRONT; open ocean beyond
+   h_min_cavity = 96.0         ! = 2*h_nominal, ISOMIP+ 3.1.5.  Nothing is
+                               ! grounded at 40 or at 96 (min column 226 m).
+/
+
+&ocean_pgf_nml
+   form          = "fv_mom6"   ! the only form with an injectable top BC
+   p_top_in_bc   = .true.      ! REQUIRED for a varying draft
+   maxvel        = 2.0
+/
+
+&ocean_eos_nml
+   eos = "linear"
+/
+
+&ocean_ic_nml
+   alpha_T = 3.8356948e-2      ! rho_0 * 3.733e-5 /degC   (ISOMIP+)
+   beta_S  = 8.0587609e-1      ! rho_0 * 7.843e-4 /PSU    (ISOMIP+)
+   T_ref   = -1.0              ! ISOMIP+ Table 4
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"        ! analytic T(z)/S(z) at the TRUE geopotential
+                               ! depth.  Under z_fixed the layer centres are
+                               ! seeded FROM the target grid, so the profile
+                               ! is exact on the running coordinate and the
+                               ! first remap is an identity.
+   lin_t_ref = -1.9            ! ISOMIP+ COLD: T0 = T_bot, no thermal gradient
+   lin_dt_dz = 0.0
+   lin_s_ref = 33.8            ! S at z = 0
+   lin_ds_dz = -1.0416667e-3   ! (33.8 - 34.55)/720, z positive UP
+/
+
+&tracer_nml
+   ! Overwritten by the zinit overlay on the interior AND the ghosts; kept
+   ! consistent so a reader is not misled about the state being seeded.
+   initial_temperature = -1.9
+   initial_salinity    = 34.175
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   ! Zero, deliberately — see the sigma leg.  It matters more here, not
+   ! less: a z-like coordinate's remaining error lives at the ice-base
+   ! staircase, and viscosity is exactly what would hide it.
+   nu_h = 0.0
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   ! No drag: the measurement must not be flattered by dissipation.
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.       ! pure dyn-core: no mixing anywhere
+   use_kpp     = .false.       ! also REQUIRED under z_fixed x cavity (v1)
+/
+
+&ocean_bt_nml
+   ! split_scheme is DELIBERATELY not pinned: the default (pred_corr) is the
+   ! base case and the stability suite builds the __ssp_rk2 twin from the
+   ! same file.  Pinning either would delete that comparison.
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "cavity_sloping_lid_rest_zfixed"
+   dt_out   = 86400.0          ! daily
+/
+
+&output_nml
+   output_dir     = "./out_cavity_sloping_lid_rest_zfixed"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/

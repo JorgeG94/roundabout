@@ -652,6 +652,40 @@ STABILITY_CASES = [
                "BOTH outer schemes -- hence the bit-zero bar.",
           tags=["cavity", "ice_shelf", "rest_exact", "vcoord_sigma",
                 "pgf_fv_mom6", "zinit_linear"]),
+    _case("cavity_flat_lid_rest_zfixed",
+          V + "ice_shelf_cavity/cavity_flat_lid_rest_zfixed.nml",
+          "rest", 4320, 1440, en_rest_max=REST_1UM_S,
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
+                            "nu_h": 0.0, "nghost": 2,
+                            "has_western_boundary": True, "eddying": False},
+          note="the P6.2 gate: the flat-lid cavity on the QUASI-GEOPOTENTIAL "
+               "coordinate (vcoord_type='z_fixed'), the first z-like family "
+               "taught about the ice base. Under a UNIFORM draft every column "
+               "vanishes the SAME layers to the inert filler and cuts its "
+               "first live layer at the SAME depth, so every interface offset "
+               "De(K) is identically zero -- fillers included -- and the only "
+               "correct answer is again exactly zero motion. It separates 'the "
+               "rigid-top target builder is RIGHT' from 'the rigid-top target "
+               "builder happens to be small', which the sigma twin cannot: "
+               "under sigma nothing vanishes at all. MEASURED En = 0.000E+00 "
+               "at every daily sample to 30 days, mass and salt residuals "
+               "-1.8E-12 / -2.0E-12 relative at day 30 and EXACTLY 0.000E+00 "
+               "at step 0 -- the fillers are seeded at hTr = 0, so the first "
+               "regrid's drain has nothing to discard and no budget step "
+               "appears. h_min_cavity = 96 m = 2*h_nominal is the ISOMIP+ "
+               "minimum-column rule (Asay-Davis et al. 2016 3.1.5) that "
+               "z_fixed x cavity fails loud on; nothing is grounded at 40 or "
+               "at 96 here, so the grounding line does not move between the "
+               "legs. The SLOPING twin is deliberately NOT tracked: its "
+               "outcome is toolchain-dependent (NaN during day 18 on "
+               "gfortran; nvfortran/GPU saturates at En = 3.845E-04, four "
+               "decades over the sigma leg) because the ice-base staircase "
+               "needs Yung et al. (2026) 3.3.1/3.3.2/3.2, none of which are "
+               "in this build. See "
+               "validation_examples/ocean/ice_shelf_cavity/"
+               "cavity_sloping_lid_rest_zfixed.nml for that measurement.",
+          tags=["cavity", "ice_shelf", "rest_exact", "vcoord_z_fixed",
+                "pgf_fv_mom6", "zinit_linear"]),
     _case("cavity_uniform_rho_rest",
           V + "ice_shelf_cavity/cavity_uniform_rho_rest.nml",
           "rest", 4320, 1440, en_rest_max=REST_1UM_S,
