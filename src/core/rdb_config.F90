@@ -89,6 +89,7 @@ module rdb_config
    public :: resolve_bt_halo
    public :: bt_halo_auto_exclusion
    public :: p_top_has_producer
+   public :: cavity_draft_is_uniform
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
    public :: MAX_OCEAN_LAYER_RHO_INIT
@@ -5227,17 +5228,9 @@ contains
          ! when no box bound clips it, else the calving front is a step.
          if (.not. cfg%ocean%pgf%p_top_in_bc) then
             block
-               logical :: draft_uniform
                character(len=:), allocatable :: dcfg
                dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
-               draft_uniform = (dcfg == "none")
-               if (dcfg == "flat") then
-                  draft_uniform = abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp .and. &
-                                  abs(cfg%ocean%cavity_dyn%draft_x1) >= 1.0e29_wp .and. &
-                                  abs(cfg%ocean%cavity_dyn%draft_y0) >= 1.0e29_wp .and. &
-                                  abs(cfg%ocean%cavity_dyn%draft_y1) >= 1.0e29_wp
-               end if
-               if (.not. draft_uniform) then
+               if (.not. cavity_draft_is_uniform(cfg)) then
                   call logger%error("&ocean_cavity_dyn_nml enable=.true. with "// &
                                     "draft_config='"//dcfg//"' requires "// &
                                     "&ocean_pgf_nml p_top_in_bc=.true.  That knob is "// &
@@ -5264,8 +5257,14 @@ contains
             has_error = .true.
          end if
          ! --- vertical-coordinate envelope ---
-         ! Only sigma (and zstar-lite, which shares its ocean branch)
-         ! rescales the live column and so follows the draft for free.
+         ! sigma (and zstar-lite, which shares its ocean branch) rescales
+         ! the live column and so follows the draft for free; `z_fixed`
+         ! is the FIRST family taught about the ice base explicitly
+         ! (P6.2) — it reads `vcoord%z_top`, keeps its nominal interface
+         ! depths GEOPOTENTIAL, vanishes the layers that outcrop into the
+         ! ice to the inert filler and cuts the first live layer at the
+         ! draft (Yung, Hallberg, Adcroft & Morrison 2026, JAMES 18,
+         ! e2025MS005645, Fig. 1b).  Its own envelope is fenced below.
          !
          ! The refusal used to be a two-value whitelist whose message
          ! enumerated SIX families and named neither `lagrangian` nor
@@ -5281,11 +5280,13 @@ contains
          ! `test_ocean_vcoord_interface_depths`.
          block
             integer :: cav_vcoord_code
+            real(wp) :: cav_h_nominal
             character(len=:), allocatable :: cav_reason
             cav_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
                                                 default_code=VCOORD_EULERIAN_Z)
             if (.not. (cav_vcoord_code == VCOORD_SIGMA .or. &
-                       cav_vcoord_code == VCOORD_ZSTAR)) then
+                       cav_vcoord_code == VCOORD_ZSTAR .or. &
+                       cav_vcoord_code == VCOORD_Z_FIXED)) then
                select case (cav_vcoord_code)
                case (VCOORD_LAGRANGIAN)
                   cav_reason = "'lagrangian' is geometrically datum-FREE (the target "// &
@@ -5319,12 +5320,6 @@ contains
                                "against the ice base and the deep water is carried by "// &
                                "shallow-ocean spacing.  It does not merely anchor at "// &
                                "z = 0, it inverts which half of the column is resolved"
-               case (VCOORD_Z_FIXED)
-                  cav_reason = "'z_fixed' hangs its nominal stack from the COLUMN TOP, "// &
-                               "which under a shelf is the ice base, so a '20 m "// &
-                               "z-level' lands 20 m below the ICE instead of 20 m "// &
-                               "below z = 0, and the leftover layers vanish at the BED "// &
-                               "instead of against the top"
                case default
                   cav_reason = "'"//trim(cfg%vcoord_type)//"' is a DENSITY-space "// &
                                "coordinate with no geometric anchor, so the placement "// &
@@ -5335,11 +5330,228 @@ contains
                                "draft-FOLLOWING and must not be quoted as z-like"
                end select
                call logger%error("&ocean_cavity_dyn_nml enable=.true. accepts "// &
-                                 "vcoord_type='sigma' or 'zstar' (zstar-lite) ONLY — "// &
-                                 "the two families that rescale the live column and so "// &
-                                 "follow the ice base for free.  Got '"// &
+                                 "vcoord_type='sigma', 'zstar' (zstar-lite) or "// &
+                                 "'z_fixed' ONLY — the two families that rescale the "// &
+                                 "live column and so follow the ice base for free, "// &
+                                 "plus the one that has been TAUGHT the ice base "// &
+                                 "(z_fixed reads vcoord%z_top, keeps its nominal "// &
+                                 "interface depths geopotential, and vanishes the "// &
+                                 "layers that outcrop into the ice).  Got '"// &
                                  trim(cfg%vcoord_type)//"': "//cav_reason//".")
                has_error = .true.
+            end if
+
+            if (cav_vcoord_code == VCOORD_Z_FIXED) then
+               ! ---- The staircase, and why this is a WARNING ----
+               !
+               ! A z-like coordinate removes the interior sigma tilt but
+               ! replaces it with the ice-base STAIRCASE: where the draft
+               ! crosses a nominal level the two columns' filler counts
+               ! differ by one, the interface offset across that face
+               ! jumps by up to `h_nominal`, and the FV_MOM6 acceleration
+               ! in a vanished layer is h-INDEPENDENT.  The corrections
+               ! that arrest it — top-side mass weighting (MWIPG) and the
+               ! interior reference interface, Yung, Hallberg, Adcroft &
+               ! Morrison (2026), JAMES 18, e2025MS005645, §3.3.2 and
+               ! §3.2 — are NOT implemented.  A UNIFORM draft has no
+               ! staircase (every column vanishes the same layers and
+               ! cuts at the same depth, so every interface offset is
+               ! identically zero) and is validated bit-zero to 30 days;
+               ! a VARYING draft is not validated at all, and measured on
+               ! `cavity_sloping_lid_rest_zfixed.nml` it is 47x the sigma
+               ! leg's resting pressure-gradient residual at step 1 and
+               ! ends in a non-finite state on day 18 (gfortran) or a
+               ! saturated En = 3.8E-04 (nvfortran GPU).
+               !
+               ! WARNING, not a refusal, deliberately: those corrections
+               ! are the next slices and they need this configuration to
+               ! be runnable to be developed and measured against.  What
+               ! the user must not do is walk into it silently.
+               if (.not. cavity_draft_is_uniform(cfg)) then
+                  call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                      "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                      "(draft_config='"// &
+                                      trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                      "') is NOT VALIDATED.  Only a UNIFORM draft is: "// &
+                                      "there every column vanishes the same layers and "// &
+                                      "cuts at the same depth, so the answer is "// &
+                                      "bit-zero at rest.  Where the draft crosses a "// &
+                                      "nominal level the filler count changes column "// &
+                                      "to column and the ice-base STAIRCASE drives a "// &
+                                      "spurious pressure gradient this build cannot "// &
+                                      "arrest: the top-side mass weighting (MWIPG) and "// &
+                                      "the interior reference interface — Yung, "// &
+                                      "Hallberg, Adcroft & Morrison (2026), JAMES 18, "// &
+                                      "e2025MS005645, sections 3.3.2 and 3.2 — are not "// &
+                                      "implemented.  Measured at rest: 47x the sigma "// &
+                                      "leg's step-1 residual, and the run does not "// &
+                                      "survive 30 days.  Use vcoord_type='sigma' for a "// &
+                                      "sloping lid until those land.")
+               end if
+               ! ---- z_fixed × cavity, v1 envelope ----
+               !
+               ! Under a quasi-geopotential coordinate the ice base cuts
+               ! the nominal stack, so on an ICE-COVERED column `k = nz`
+               ! is an inert filler (`h <= H_VANISHED`), NOT the
+               ! ice-adjacent live layer.  This is a state no consumer in
+               ! the tree has ever seen: no family on this branch
+               ! vanishes a layer against the TOP.  The shared
+               ! `k_top(i,j)` (the first live layer, counting down) that
+               ! fixes them is the NEXT slice — P6.3 for the tracer/flux
+               ! consumers, P6.4 for momentum and the boundary-layer
+               ! schemes — so until it lands the only thing this
+               ! combination may run is ADIABATIC DYNAMICS.
+               !
+               ! What is NOT refused, and why: OPEN-OCEAN columns have
+               ! `z_top = 0`, so `k = nz` is live there and behaves
+               ! exactly as today; and on a COVERED column the binary
+               ! cover mask (`cover_frac`) already zeroes every
+               ! ATMOSPHERIC input at source — wind stress (and with it
+               ! `stress_mag`, hence u*), the scalar and assembled
+               ! surface heat/salt fluxes, the shortwave deposit and both
+               ! restoring increments.  Those therefore compose with a
+               ! vanished `k = nz` and are left alone.  What follows is
+               ! everything that acts ON the ice-adjacent layer itself,
+               ! and so is not masked by anything.
+               if (cfg%ocean%cavity_melt%enable) then
+                  call logger%error("&ocean_cavity_melt_nml enable=.true. is refused "// &
+                                    "with vcoord_type='z_fixed' under a cavity.  The "// &
+                                    "melt heat/salt fluxes (and, with "// &
+                                    "freshwater='mass', the column-mass source) are "// &
+                                    "deposited into k = nz, which a z-like "// &
+                                    "coordinate makes an inert filler on every "// &
+                                    "covered column: the deposit is frozen by the "// &
+                                    "vdiff decoupling gate and then DELETED by the "// &
+                                    "next ALE remap drain, with the console budget "// &
+                                    "still counting it — a per-step conservation "// &
+                                    "hole.  Needs the shared k_top: follow-up "// &
+                                    "P6.3/P6.4.  The far-field sampler itself is "// &
+                                    "already vanish-aware; it is the deposit that "// &
+                                    "is not.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%tdrag%enable) then
+                  call logger%error("&ocean_tdrag_nml enable=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the "// &
+                                    "ice-ocean drag is applied at k = nz (layer-only "// &
+                                    "mode) or walked down from it on an `h <= 0` "// &
+                                    "gate (htbl mode), so under a z-like coordinate "// &
+                                    "the whole stress would land on a massless "// &
+                                    "filler.  Needs the shared k_top: follow-up "// &
+                                    "P6.4.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%vmix%use_kpp) then
+                  call logger%error("&ocean_vmix_nml use_kpp=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: KPP's "// &
+                                    "surface reference column is k = nz "// &
+                                    "(b_ref = -g*rho_layer(nz)/rho_0, "// &
+                                    "d_centre_ref = h(nz)/2), which on a covered "// &
+                                    "column is the filler — a spurious buoyancy jump "// &
+                                    "at the very first interface and a reference "// &
+                                    "depth of ~1e-4 m.  Set use_kpp=.false. (an "// &
+                                    "adiabatic cavity run is the v1 envelope).  "// &
+                                    "Needs the shared k_top: follow-up P6.4.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%epbl%enable) then
+                  call logger%error("&ocean_epbl_nml enable=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the EPBL "// &
+                                    "column captures the surface at k = nz and gates "// &
+                                    "on `h > 0` rather than on H_VANISHED, so a "// &
+                                    "filler top layer reaches the specific-volume "// &
+                                    "derivatives as an absurd concentration.  Needs "// &
+                                    "the shared k_top: follow-up P6.4.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%tracers%enable_ideal_age) then
+                  call logger%error("&ocean_tracers_nml enable_ideal_age=.true. is "// &
+                                    "refused with vcoord_type='z_fixed' under a "// &
+                                    "cavity: the young-band reset writes "// &
+                                    "hTr_age(:,:,nz) = young*h(:,:,nz), which on a "// &
+                                    "covered column ventilates a filler (and there "// &
+                                    "is no ventilation under a shelf at all).  "// &
+                                    "Follow-up P6.3.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%gm%enable) then
+                  call logger%error("&ocean_gm_nml enable=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the "// &
+                                    "non-divergence closure dumps the residual "// &
+                                    "streamfunction transport into k = nz.  GM x "// &
+                                    "cavity is unvalidated on any coordinate; "// &
+                                    "revisited with the coordinate study.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%redi%enable .or. cfg%ocean%slopes%enable) then
+                  call logger%error("&ocean_redi_nml / &ocean_slopes_nml enable="// &
+                                    ".true. is refused with vcoord_type='z_fixed' "// &
+                                    "under a cavity: the isopycnal-slope surface "// &
+                                    "fill is built from h(:,:,nz), the filler on a "// &
+                                    "covered column.  Unvalidated with a cavity on "// &
+                                    "any coordinate; revisited with the coordinate "// &
+                                    "study.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%hdiff%kappa_h /= 0.0_wp) then
+                  call logger%error("&ocean_hdiff_nml kappa_h /= 0 is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the "// &
+                                    "along-coordinate tracer diffusion gates its "// &
+                                    "T = hTr/h division on `h > 0` (1/0 armour), "// &
+                                    "not on H_VANISHED, weights the face flux by the "// &
+                                    "ARITHMETIC mean thickness — so a filler beside "// &
+                                    "a 20 m cell is weighted by 10 m — and has no "// &
+                                    "mass-availability limiter, so it can drive a "// &
+                                    "vanished cell's hTr strongly negative in one "// &
+                                    "step.  Follow-up P6.5.")
+                  has_error = .true.
+               end if
+               if (cfg%regrid_time_scale > 0.0_wp) then
+                  call logger%error("&vcoord_nml regrid_time_scale > 0 is refused "// &
+                                    "with vcoord_type='z_fixed' under a cavity: the "// &
+                                    "grid time-filter is a per-layer convex blend "// &
+                                    "that does not respect the vanish marker, so a "// &
+                                    "filler relaxing toward h_min from a live "// &
+                                    "thickness passes THROUGH H_VANISHED and the "// &
+                                    "layer oscillates live/dead on successive steps "// &
+                                    "— the remap drain deleting its content on the "// &
+                                    "step it reads dead.  Excluding the fillers from "// &
+                                    "the blend is its own change.")
+                  has_error = .true.
+               end if
+               ! ISOMIP+ (Asay-Davis et al. 2016 §3.1.5): "the minimum
+               ! thickness is likely to be approximately two grid cells
+               ! (~40 m if z levels are equally spaced)".  Under a
+               ! terrain-following coordinate a just-afloat column still
+               ! carries all nz layers; under a z-like one a column
+               ! thinner than 2*h_nominal carries ONE partial live layer
+               ! and nz-1 fillers, and every column-walking consumer then
+               ! operates on a single cell.  `h_nominal` is
+               ! `max_depth/nz` — Z_FIXED's spacing is written from
+               ! `&ocean_topo_nml max_depth`, deliberately with no second
+               ! spelling.
+               cav_h_nominal = 0.0_wp
+               if (cfg%nz_layers > 0) then
+                  cav_h_nominal = cfg%ocean%topo%max_depth/real(cfg%nz_layers, wp)
+               end if
+               if (cav_h_nominal > 0.0_wp .and. &
+                   cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*cav_h_nominal) then
+                  call logger%error("&ocean_cavity_dyn_nml h_min_cavity = "// &
+                                    to_string(cfg%ocean%cavity_dyn%h_min_cavity)// &
+                                    " m is below 2*h_nominal = "// &
+                                    to_string(2.0_wp*cav_h_nominal)//" m "// &
+                                    "(h_nominal = &ocean_topo_nml max_depth / "// &
+                                    "nz_layers = "//to_string(cav_h_nominal)// &
+                                    " m), which vcoord_type='z_fixed' requires under "// &
+                                    "a cavity: a thinner water column carries a "// &
+                                    "single partial live layer and nz-1 inert "// &
+                                    "fillers.  This is ISOMIP+'s own rule "// &
+                                    "(Asay-Davis et al. 2016, GMD 9, 2471, "// &
+                                    "§3.1.5).  NOTE it moves the grounding line "// &
+                                    "relative to a sigma leg — a confound the "// &
+                                    "coordinate study must control for.")
+                  has_error = .true.
+               end if
             end if
          end block
          if (trim(cfg%thickness_config) == "uniform_z") then
@@ -6905,6 +7117,38 @@ contains
       logical :: has
       has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
    end function p_top_has_producer
+
+   pure function cavity_draft_is_uniform(cfg) result(uniform)
+      !! Is the configured ice-shelf draft UNIFORM over the whole array?
+      !!
+      !! The one predicate, so the two rules that turn on it cannot drift
+      !! apart: the `&ocean_pgf_nml p_top_in_bc` REFUSAL (a load with a
+      !! gradient must have a consumer — a uniform load is bit-identically
+      !! inert in the FV_MOM6 top BC, which is the theorem in
+      !! `compute_fv_mom6_impl`'s docstring), and the `z_fixed` x cavity
+      !! staircase WARNING (only a uniform draft is validated on a
+      !! quasi-geopotential coordinate).
+      !!
+      !! `draft_config = "none"` is uniform because it is identically
+      !! zero.  `"flat"` is uniform only when NO box bound clips it —
+      !! a clipped flat draft has a calving front, which is a step, and a
+      !! step is the largest gradient in the domain.  `"linear"` and
+      !! `"file"` are never assumed uniform: this is a NAMELIST-level
+      !! predicate and cannot see the filled array (the configure-time
+      !! twin in `configure_ocean_cavity` tests `maxval /= minval` on the
+      !! field itself, which is the stricter check and runs later).
+      type(config_t), intent(in) :: cfg
+      logical :: uniform
+      character(len=:), allocatable :: dcfg
+      dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
+      uniform = (dcfg == "none")
+      if (dcfg == "flat") then
+         uniform = abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_x1) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_y0) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_y1) >= 1.0e29_wp
+      end if
+   end function cavity_draft_is_uniform
 
    subroutine warn_unknown_bc(bc_str, param_name)
       !! Warn if a BC string does not match any known type

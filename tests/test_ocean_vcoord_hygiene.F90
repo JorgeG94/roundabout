@@ -33,7 +33,8 @@
 module test_ocean_vcoord_hygiene
    use rdb_constants, only: wp, VCOORD_ZSTAR_FULL
    use rdb_ocean_status, only: OCEAN_STATUS_OK
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+                         cavity_draft_is_uniform
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_teardown
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
@@ -58,7 +59,9 @@ contains
                   new_unittest("zsigma_is_refused", test_zsigma_refused), &
                   new_unittest("zstar_full_is_accepted", test_zstar_full_accepted), &
                   new_unittest("h_min_above_h_vanished_is_refused", test_h_min_refused), &
-                  new_unittest("h_min_on_the_marker_is_accepted", test_h_min_on_marker) &
+                  new_unittest("h_min_on_the_marker_is_accepted", test_h_min_on_marker), &
+                  new_unittest("cavity_draft_uniformity_predicate", test_draft_uniform), &
+                  new_unittest("cavity_accepts_z_fixed_and_fences_it", test_cavity_z_fixed) &
                   ]
    end subroutine collect_ocean_vcoord_hygiene_tests
 
@@ -232,5 +235,143 @@ contains
                                                 "zstar_h_min = 1.5e-4"), .true., &
                          "zstar_full with zstar_h_min exactly on H_VANISHED")
    end subroutine test_h_min_on_marker
+
+   function nml_cavity(vcoord_type, draft_body, vmix_body, extra) result(nml)
+      !! A minimal in-envelope single-rank CAVITY namelist.  Flat 1000 m
+      !! bed, 4 layers (so `h_nominal = max_depth/nz = 250 m` and the
+      !! `h_min_cavity >= 2*h_nominal` rule wants 500 m), FV_MOM6 with the
+      !! top BC injected.  `vmix_body` is the `&ocean_vmix_nml` body (KPP
+      !! must be off inside the `z_fixed` x cavity envelope, so it is a
+      !! parameter rather than a fixed line) and `extra` appends further
+      !! groups verbatim.
+      character(len=*), intent(in) :: vcoord_type, draft_body, vmix_body, extra
+      character(len=:), allocatable :: nml
+      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
+            new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
+            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
+            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"//new_line("a")// &
+            "&vcoord_nml vcoord_type = '"//vcoord_type//"' /"//new_line("a")// &
+            "&ocean_cavity_dyn_nml enable = .true., h_min_cavity = 500.0, "// &
+            draft_body//" /"//new_line("a")// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
+            "&ocean_vmix_nml "//vmix_body//" /"//new_line("a")// &
+            extra// &
+            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+            "&output_nml output_to_file = .false. /"//new_line("a")
+   end function nml_cavity
+
+   subroutine test_draft_uniform(error)
+      !! The ONE varying-draft predicate, exercised directly.  It carries
+      !! two rules that must not drift apart, because two different rules
+      !! turn on it: the `&ocean_pgf_nml p_top_in_bc` REFUSAL (a load with
+      !! a gradient must have a consumer) and the `z_fixed` x cavity
+      !! staircase WARNING (only a uniform draft is validated on a
+      !! quasi-geopotential coordinate).
+      !!
+      !! `"none"` is uniform because it is identically zero; `"flat"` is
+      !! uniform only when NO box bound clips it, because a clipped flat
+      !! draft has a calving front and a front is a step; `"linear"` never
+      !! is.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+      checks: block
+         call read_config_from_string( &
+            nml_cavity("z_fixed", "draft_config = 'none'", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the 'none' probe must parse")
+         if (allocated(error)) exit checks
+         call check(error, cavity_draft_is_uniform(cfg), &
+                    "draft_config='none' is identically zero, hence uniform")
+         if (allocated(error)) exit checks
+
+         call read_config_from_string( &
+            nml_cavity("z_fixed", "draft_config = 'flat', draft_depth = 200.0", &
+                       "use_kpp = .false.", ""), &
+            cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the 'flat' probe must parse")
+         if (allocated(error)) exit checks
+         call check(error, cavity_draft_is_uniform(cfg), &
+                    "an unclipped flat draft is uniform")
+         if (allocated(error)) exit checks
+
+         call read_config_from_string( &
+            nml_cavity("z_fixed", "draft_config = 'flat', draft_depth = 200.0, "// &
+                       "draft_x1 = 4000.0", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the clipped-'flat' probe must parse")
+         if (allocated(error)) exit checks
+         call check(error,.not. cavity_draft_is_uniform(cfg), &
+                    "a flat draft clipped by a box bound has a calving FRONT, "// &
+                    "which is a step, so it is not uniform")
+         if (allocated(error)) exit checks
+
+         call read_config_from_string( &
+            nml_cavity("z_fixed", "draft_config = 'linear', draft_depth = 200.0, "// &
+                       "draft_slope = -1.0e-3", "use_kpp = .false.", ""), cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the 'linear' probe must parse")
+         if (allocated(error)) exit checks
+         call check(error,.not. cavity_draft_is_uniform(cfg), &
+                    "a linear draft VARIES")
+      end block checks
+   end subroutine test_draft_uniform
+
+   subroutine test_cavity_z_fixed(error)
+      !! `z_fixed` is now the one z-like family a cavity accepts — and it
+      !! is accepted only inside its ADIABATIC v1 envelope, because under
+      !! a rigid top `k = nz` is an inert filler on every covered column
+      !! and the shared `k_top` that fixes its consumers is a later slice.
+      !! One representative refusal from each class is exercised: a
+      !! boundary-layer scheme (KPP), a forcing path that deposits into
+      !! `k = nz` (basal melt), a diffusive operator with no vanish gate
+      !! (`kappa_h`), and the minimum-live-layer rule.
+      type(error_type), allocatable, intent(out) :: error
+      checks: block
+         call expect_config(error, &
+                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", ""), &
+                            .true., "z_fixed under a cavity, adiabatic")
+         if (allocated(error)) exit checks
+         call expect_config(error, &
+                            nml_cavity("zstar_full", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", ""), &
+                            .false., "zstar_full under a cavity (P6.11)")
+         if (allocated(error)) exit checks
+         call expect_config(error, &
+                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .true.", ""), &
+                            .false., "z_fixed x cavity x KPP")
+         if (allocated(error)) exit checks
+         call expect_config(error, &
+                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", &
+                                       "&ocean_hdiff_nml kappa_h = 1.0 /"// &
+                                       new_line("a")), &
+                            .false., "z_fixed x cavity x kappa_h")
+         if (allocated(error)) exit checks
+         ! h_nominal = 1000/4 = 250 m, so 400 m is under the 500 m rule.
+         call expect_config(error, &
+                            "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+                            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, "// &
+                            "dy = 1000.0 /"//new_line("a")// &
+                            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+                            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"// &
+                            new_line("a")// &
+                            "&ocean_topo_nml max_depth = 1000.0 /"//new_line("a")// &
+                            "&ocean_bt_nml auto_n_inner = .false., n_inner = 8 /"// &
+                            new_line("a")// &
+                            "&vcoord_nml vcoord_type = 'z_fixed' /"//new_line("a")// &
+                            "&ocean_cavity_dyn_nml enable = .true., "// &
+                            "h_min_cavity = 400.0, draft_config = 'flat', "// &
+                            "draft_depth = 200.0 /"//new_line("a")// &
+                            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"// &
+                            new_line("a")// &
+                            "&ocean_vmix_nml use_kpp = .false. /"//new_line("a")// &
+                            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+                            "&output_nml output_to_file = .false. /"//new_line("a"), &
+                            .false., "z_fixed x cavity with h_min_cavity < 2*h_nominal")
+      end block checks
+   end subroutine test_cavity_z_fixed
 
 end module test_ocean_vcoord_hygiene
