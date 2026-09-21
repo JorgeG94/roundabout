@@ -62,6 +62,8 @@ program rdb_tests
                                                 collect_ocean_cavity_grounded_budget_tests
    use test_ocean_cavity_freshwater, only: ocean_cavity_freshwater_collect => &
                                            collect_ocean_cavity_freshwater_tests
+   use test_ocean_pgf_sigma_rest, only: ocean_pgf_sigma_rest_collect => &
+                                        collect_ocean_pgf_sigma_rest_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
    use test_ocean_pgf_rho_ref, only: ocean_pgf_rho_ref_collect => collect_ocean_pgf_rho_ref_tests
    use test_ocean_forcing_rho_ref, only: ocean_forcing_rho_ref_collect => &
@@ -98,6 +100,8 @@ program rdb_tests
    use test_ocean_barotropic_substep, only: ocean_barotropic_substep_collect => collect_ocean_barotropic_substep_tests
    use test_ocean_cor_ref_seiche, only: ocean_cor_ref_seiche_collect => &
                                         collect_ocean_cor_ref_seiche_tests
+   use test_ocean_bt_slow_forcing, only: ocean_bt_slow_forcing_collect => &
+                                         collect_ocean_bt_slow_forcing_tests
    use test_ocean_tides_astronomy, only: ocean_tides_astronomy_collect => collect_ocean_tides_astronomy_tests
    use test_ocean_tides_disabled_bitident, only: ocean_tides_bitident_collect => &
                                                  collect_ocean_tides_disabled_bitident_tests
@@ -250,6 +254,7 @@ program rdb_tests
                               ocean_cavity_grounded_budget_collect), &
                 new_testsuite("ocean_cavity_freshwater", &
                               ocean_cavity_freshwater_collect), &
+                new_testsuite("ocean_pgf_sigma_rest", ocean_pgf_sigma_rest_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &
                 new_testsuite("ocean_pgf_rho_ref", ocean_pgf_rho_ref_collect), &
                 new_testsuite("ocean_forcing_rho_ref", ocean_forcing_rho_ref_collect), &
@@ -274,6 +279,7 @@ program rdb_tests
 #endif
                 new_testsuite("ocean_barotropic_substep", ocean_barotropic_substep_collect), &
                 new_testsuite("ocean_cor_ref_seiche", ocean_cor_ref_seiche_collect), &
+                new_testsuite("ocean_bt_slow_forcing", ocean_bt_slow_forcing_collect), &
                 new_testsuite("ocean_tides_astronomy", ocean_tides_astronomy_collect), &
                 new_testsuite("ocean_tides_disabled_bitident", ocean_tides_bitident_collect), &
                 new_testsuite("ocean_tidal_forcing", ocean_tidal_forcing_collect), &

@@ -465,6 +465,25 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (log-layer, MOM6/ROMS default `Cd ≈ 2.5e-3`). Both have an
   HBBL-distributed mode that spreads the stress across the bottom
   `hbbl` metres rather than the bed-most layer alone.
+- **Side-wall (channel) drag** (`&ocean_bdrag_nml channel_drag`,
+  `cdrag_side`; default off ⇒ bit-identical): a per-layer lateral
+  Rayleigh rate at every face whose cross-stream perimeter is blocked by
+  land or a vanished neighbour layer, applied as a frozen-rate
+  backward-Euler factor `u ← u/(1 + dt·λ_side)` — thin-layer stable, and
+  a literal no-op on an all-wet flat bed. **Limitation, documented not
+  defective:** because it is multiplicative rather than an additive
+  `du/dt` buffer, it is the one corrected-set tendency NOT summed into
+  the split solver's `F_slow`, so the barotropic substep does not feel it
+  *during* the fast loop and the time-mean transports `bt_uhbt` handed to
+  continuity are undragged. The depth mean is still applied exactly once
+  (`apply_bt_correction` adds an increment, it does not replace the depth
+  mean), so nothing is lost or double counted — the cost is one
+  first-order-in-dt operator split. Algebra, decision table and the
+  analytic gate (`tests/test_ocean_bt_slow_forcing.F90`, both split
+  schemes, agreement to ~1e-14) are in the "`F_slow` seam contract"
+  section of `src/core/ocean/README.md`. Folding it into `visc_rem` for
+  MOM6 parity is future work, alongside the barotropic-coupling flip for
+  the implicit stress/drag folds.
 - **Time-varying NetCDF input reader** (PR-14, `rdb_ocean_data_input`):
   the shared, target-agnostic reader every forced-hindcast/regional-
   nesting capability builds on. A consumer registers a `(file,
@@ -1099,6 +1118,52 @@ migrate an old `&ocean_setup_nml` namelist.)
 This is the regime that hits day 580 on the MOM6-ref double-gyre.
 Outside this envelope (lower `nu_h`, alternative drag form, alternative
 PGF on real bathymetry) needs case-by-case validation.
+
+#### Quiescent terrain-following runs over a slope need a CONSTANT viscosity floor
+
+A σ (or z*σ) column at rest over a sloping boundary, on an f-plane, with
+`ny ≥ 2` and no constant lateral viscosity, develops a **grid-scale
+2Δy computational mode in `u`** that grows exponentially and does not
+saturate. Measured on an ice-free 48 × 6 × 15 channel at 2 km, flat free
+surface, bed sloping linearly 226 → 709 m, linear EOS, T linear in z, no
+forcing, no drag, no mixing, `pred_corr`, `form="fv_mom6"`:
+
+| | plateau (d5–15) | day 45 | day 90 | fitted `σ_En` (d25–45) |
+|---|---|---|---|---|
+| default PCM density integral | 6.4e-10 | 1.6e-6 | 3.3e-5 | 0.31 /day |
+| `reconstruct_for_pressure=.true.` (exact PGF) | 1.0e-25 | 1.3e-20 | 1.7e-13 | 0.38 /day |
+
+Two facts follow, and they point in different directions:
+
+* **The pressure-gradient truncation error is only the SEED.** With the
+  in-layer reconstruction on, the static σ PGF error is at round-off
+  (see the FV-MOM6 reconstruction row of `docs/CLOSURE_MATRIX.md`) and the
+  plateau drops **15 decades**. That buys ~55 days of horizon on this
+  configuration and nothing more.
+* **The AMPLIFIER is a separate defect and is NOT in the pressure
+  gradient.** The fitted growth rate agrees to ~25 % with a round-off seed
+  and with a 1e-8 m/s² one, and it is unchanged (0.9 %) by the Coriolis
+  variant. It **requires rotation** (`f = 0` ⇒ no growth), it **gets faster
+  as `dy` is refined** (0.35 /day at `dy = 2 km`, 0.54 /day at 1 km — a
+  rate that rises without bound under refinement has no continuum limit),
+  and it **disappears when the per-step ALE remap onto the σ target is
+  switched off** (`vcoord_type="lagrangian"`, where the remap is an
+  early-return no-op: 0.05 /day, i.e. the same residual creep as `f = 0`).
+
+**Practical envelope.** Any long, quiescent, weakly-forced terrain-following
+run over a slope — a spin-up from rest, a sub-shelf cavity, a continental
+slope at rest — needs a **constant** `&ocean_hvisc_nml nu_h` or `nu_4`
+floor. Marginal values measured at 2 km on this family: `nu_h ≈ 50 m² s⁻¹`
+or `nu_4 ≈ 1e8 m⁴ s⁻¹`. The requirement grows as `dy` shrinks and is not
+yet measured as a function of resolution.
+
+**Flow-aware closures do NOT qualify.** Smagorinsky, Leith,
+Leith-biharmonic and Smagorinsky-AH all set their coefficient from the
+resolved deformation rate or vorticity gradient, which is zero in a fluid
+at rest: at onset the mode is a µm/s perturbation and these closures
+generate essentially no viscosity exactly when it is needed. A forced,
+energetic, viscous run sits decades above this floor and never notices; a
+quiescent one does not, and there the manufactured energy IS the signal.
 
 ### Headline ocean performance
 

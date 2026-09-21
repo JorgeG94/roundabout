@@ -290,6 +290,85 @@ contains
       !! `bd%du_drag`, `ss%du_stress` and their v counterparts —
       !! all already at the matching u-face / v-face shape.  Each
       !! kernel must have run its compute step before this is called.
+      !!
+      !! ## What this list IS (and what it is not)
+      !!
+      !! The five terms are the ADDITIVE layer-tendency buffers that
+      !! `run_stage_split` applies between the forcing assembly and
+      !! `apply_bt_correction`.  The depth mean of this sum becomes
+      !! `F_bt_u/v`, the frozen forcing the barotropic substep integrates,
+      !! and the SAME `F_bt` is subtracted again inside the correction.
+      !!
+      !! It is tempting to read the list as a completeness requirement —
+      !! "a tendency missing from here never reaches the barotropic mode".
+      !! It is not, because `apply_bt_correction` adds an INCREMENT rather
+      !! than REPLACING the layer depth mean.  Writing `T_k` for the
+      !! summed tendencies and `D_k` for one that is applied but omitted,
+      !! a stage does
+      !!
+      !!     u_k^{n+1} = u_k^n + dt·(T_k + D_k)
+      !!                       + (u_bt^end − u_bt^n − dt·F_bt),
+      !!
+      !! and with `F_bt = ⟨T⟩_h` plus `⟨u^n⟩_h = u_bt^n`
+      !! (`derive_bt_from_layers`) its thickness-weighted depth mean is
+      !!
+      !!     ⟨u^{n+1}⟩ = u_bt^end + dt·⟨D⟩.
+      !!
+      !! So `⟨D⟩` is applied EXACTLY ONCE, on top of the barotropic
+      !! solution — never lost, never double counted.  The mirror holds
+      !! for a summed term: the fast loop integrates `⟨T⟩` across the
+      !! substeps and the `−dt·F_bt` guard takes it straight back out, so
+      !! membership is depth-mean NEUTRAL to leading order.
+      !!
+      !! What membership actually buys is SECOND order, and it is real:
+      !! a summed term shapes the substep's live η / ζ / KE / `bt_rem`
+      !! trajectory and therefore the time-mean transports `bt_uhbt` that
+      !! the slow continuity renormalises to.  Omitting a term is a
+      !! first-order-in-dt operator SPLIT — the depth mean is applied
+      !! after the fast loop instead of inside it.
+      !!
+      !! ## The contract for a new tendency
+      !!
+      !! A new layer velocity tendency applied inside the corrected set
+      !! MUST come with a decision about this sum, recorded here:
+      !!
+      !! * **Summed (the default).**  An additive `du/dt` buffer that the
+      !!   barotropic mode should feel DURING the substeps — anything that
+      !!   changes the depth-mean momentum on the fast timescale, or whose
+      !!   transport must be consistent with `bt_uhbt`.  Add it to both
+      !!   `do concurrent` bodies below; keep them branch-free and
+      !!   explicit-shape.
+      !! * **Deliberately omitted.**  A term with no additive tendency
+      !!   buffer to sum (a multiplicative / implicit operator), or one
+      !!   whose depth-mean lag is physically irrelevant.  The side-wall
+      !!   CHANNEL drag (`ocean_channel_drag_apply_tendencies`) is the one
+      !!   such term today: it is a frozen-rate BACKWARD-EULER factor
+      !!   `u ← u/(1 + dt·λ_side)`, not a `du/dt` field, so there is no
+      !!   buffer to add — and by the algebra above its depth mean still
+      !!   lands exactly once.
+      !!
+      !! Tendencies applied by separate operator-split steps AFTER
+      !! `apply_bt_correction` (the baroclinic OBC, the sponges, the
+      !! implicit vertical friction `vdiff_apply_momentum` and the
+      !! `&ocean_vdiff_nml implicit_stress` / `implicit_drag` folds) are
+      !! outside the corrected set and must NOT be summed here.  Note the
+      !! deliberate asymmetry that follows: `bd%du_drag` / `ss%du_stress`
+      !! stay in this sum even when their explicit applies are skipped by
+      !! those folds — the fast loop adds their depth mean and the
+      !! correction removes it, so the fold's later application is still
+      !! the only one.
+      !!
+      !! The gate is `tests/test_ocean_bt_slow_forcing.F90`
+      !! (`channel_drag_depth_mean_decay` for an omitted term,
+      !! `bottom_drag_depth_mean_decay` for a summed one): on a
+      !! doubly-periodic uniform box each decays at the outer scheme's
+      !! exact analytic rate under both `pred_corr` and `ssp_rk2`.
+      !!
+      !! Terms that reach the barotropic mode by a DIFFERENT seam have no
+      !! business here either: `&ocean_bt_nml substep_drag` and the linear
+      !! wave drag multiply `bt_rem_u/v` inside the substep, the porous
+      !! barriers narrow the substep transport widths, and the tide / SAL
+      !! / surface-pressure loads arrive as `eta_forcing`.
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(ocean_pressure_force_t), intent(in) :: pgf
       type(coriolis_adv_t), intent(in) :: cor

@@ -780,6 +780,62 @@ Note the consequence for the melt physics: because the liquidus reads the
 assembled TOTAL, an atmospheric load under the shelf depresses the
 freezing point exactly as the ice load does, with no extra wiring.
 
+### The `F_slow` seam contract (which layer tendencies the fast loop sees)
+
+`sum_slow_tendencies_into_F_slow` (`kernels/barotropic/rdb_barotropic_coupling.F90`)
+sums FIVE per-layer velocity tendencies — PGF, Coriolis-advection, horizontal
+viscosity, bottom drag, surface stress. Their thickness-weighted depth mean is
+`F_bt_u/v`, the frozen forcing the barotropic substep integrates; the **same**
+`F_bt` is subtracted back out inside `apply_bt_correction`.
+
+**That list is a decision record, not a completeness requirement**, and reading
+it as one is the trap. `apply_bt_correction` adds an INCREMENT
+`Δu = u_bt^end − u_bt^n − dt·F_bt`; it does **not** replace the layer depth mean
+with `u_bt^end`. So for a tendency `D_k` that is applied inside the corrected set
+but omitted from the sum, the stage's depth mean comes out as
+
+```
+⟨u^{n+1}⟩ = u_bt^end + dt·⟨D⟩
+```
+
+— applied **exactly once**, never lost and never double counted. The mirror holds
+for a summed term `T_k`: the fast loop integrates `⟨T⟩` across the substeps and
+the `−dt·F_bt` guard removes it again, so membership is depth-mean **neutral** to
+leading order. What it buys is second order and real: a summed term shapes the
+substep's live η / ζ / KE / `bt_rem` trajectory and hence the time-mean transports
+`bt_uhbt` the slow continuity renormalises to. Omitting one is a
+first-order-in-dt operator **split**, not a missing term.
+
+The corrected set is exactly the six velocity applies between the forcing
+assembly and `apply_bt_correction` in `run_stage_split`:
+
+| applied tendency | in `F_slow`? | why |
+|---|---|---|
+| `cor%pv_flux_x/y` | yes | + its fast double-count removed by `subtract_fast_cor_ref` |
+| `pgf%dpdx/dpdy_face` | yes | + `F_bt_*_fast = F_bt − ⟨PGF⟩` removes the substep's own `−g∇η` |
+| `hv%du_visc/dv_visc` | yes | MEKE backscatter rides inside it (it edits `ah_face_*`, not a new buffer) |
+| `bd%du_drag/dv_drag` | yes | stays summed even when `&ocean_vdiff_nml implicit_drag` skips the explicit apply |
+| `bd%lambda_side_u/v` (channel drag) | **no** | multiplicative backward-Euler `u ← u/(1+dt·λ)` — no `du/dt` buffer exists to sum |
+| `ss%du_stress/dv_stress` | yes | stays summed even when `implicit_stress` skips the explicit apply |
+
+Everything applied AFTER `apply_bt_correction` — the baroclinic OBC, the sponges,
+`vdiff_apply_momentum` and the implicit stress/drag folds — is outside the
+corrected set and must **not** be summed. Terms that reach the barotropic mode by
+a different seam are likewise out of scope here: `&ocean_bt_nml substep_drag` and
+the linear wave drag multiply `bt_rem_u/v` inside the substep, the porous barriers
+narrow the substep transport widths, and the tide / SAL / surface-pressure loads
+arrive as `eta_forcing`.
+
+**Adding a tendency to the corrected set obliges a decision** — sum it (the
+default, and what to do whenever the barotropic mode should feel it *during* the
+substeps) or deliberately omit it — recorded in the
+`sum_slow_tendencies_into_F_slow` docstring. Keep the kernel's two
+`do concurrent` bodies branch-free and explicit-shape. The standing gate is
+`tests/test_ocean_bt_slow_forcing.F90`: on a doubly-periodic, flat, non-rotating
+uniform box it runs one omitted term (channel drag) and one summed term (linear
+bed drag) against the outer scheme's exact analytic decay under **both**
+`pred_corr` and `ssp_rk2`, and both land on it to ~1e-14 relative.
+
 ## How to pick up a slot
 
 1. **Read the slot's module doc-comment** — it states the algorithm

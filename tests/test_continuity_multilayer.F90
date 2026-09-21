@@ -28,8 +28,12 @@ module test_continuity_multilayer
                              continuity_apply_fluxes, &
                              continuity_step_split, &
                              continuity_zonal_flux
-   use rdb_ocean_metrics, only: ocean_metrics_t
+   use rdb_continuity, only: continuity_meridional_flux
+   use rdb_ocean_metrics, only: ocean_metrics_t, metrics_apply_land_mask
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_exceptions, only: ieee_get_flag, ieee_set_flag, &
+                                                                               ieee_divide_by_zero, ieee_support_flag
    implicit none
    private
 
@@ -60,7 +64,11 @@ contains
                   new_unittest("renorm_visc_rem_transport_matches", &
                                test_renorm_vr_transport), &
                   new_unittest("renorm_visc_rem_gamma_shares", &
-                               test_renorm_vr_shares) &
+                               test_renorm_vr_shares), &
+                  new_unittest("renorm_land_face_no_divide_by_zero", &
+                               test_renorm_land_face), &
+                  new_unittest("renorm_land_mask_leaves_wet_faces_alone", &
+                               test_renorm_land_bit_identity) &
                   ]
    end subroutine collect_continuity_multilayer_tests
 
@@ -898,5 +906,218 @@ contains
       call destroy_cartesian_metrics(metrics)
       deallocate (uhbt, vr, u_cor)
    end subroutine test_renorm_vr_shares
+
+   subroutine setup_land_channel(grid, metrics, ms, ct, uhbt, vhbt, &
+                                 u0, v0, h0, with_land)
+      !! Uniform zonal+meridional channel with an interior LAND island, so
+      !! the renormalisers visit faces whose `wet_u`/`wet_v` is 0 and whose
+      !! `idxCu`/`idyCv` were therefore zeroed by `metrics_apply_land_mask`.
+      !!
+      !! `with_land = .false.` builds the identical case with an all-wet
+      !! mask, which leaves every metric multiplied by 1 — the reference the
+      !! bit-identity assertion compares against.
+      type(hgrid_t), intent(out) :: grid
+      type(ocean_metrics_t), intent(out) :: metrics
+      type(multilayer_state_t), intent(out) :: ms
+      type(continuity_t), intent(out) :: ct
+      real(wp), allocatable, intent(out) :: uhbt(:, :), vhbt(:, :)
+      real(wp), intent(in) :: u0, v0, h0
+      logical, intent(in) :: with_land
+      real(wp), allocatable :: wet(:, :)
+      integer :: nx, ny, i, j
+
+      call make_grid(grid, 12, 8, 1000.0_wp, 1000.0_wp)
+      call make_cartesian_metrics(metrics, grid)
+      nx = grid%nx_total
+      ny = grid%ny_total
+
+      allocate (wet(nx, ny), source=1.0_wp)
+      if (with_land) then
+         ! A 2x2 island well inside the physical domain: its four bounding
+         ! u-faces and v-faces mask, and the loops below DO visit them —
+         ! they skip only the array edges and the two physical walls.
+         do j = grid%nghost + 4, grid%nghost + 5
+            do i = grid%nghost + 5, grid%nghost + 6
+               wet(i, j) = 0.0_wp
+            end do
+         end do
+      end if
+      call metrics_apply_land_mask(metrics, wet, grid, &
+                                   periodic_x=.false., periodic_y=.false., &
+                                   north_fold=.false., mask_wall_velocity=.false., &
+                                   wall_west=.true., wall_east=.true., &
+                                   wall_south=.true., wall_north=.true.)
+      deallocate (wet)
+
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ct%init(grid, nz_ml=NZ)
+      ms%h_layer = h0
+      ms%u_face_x_layer = u0
+      ms%v_face_y_layer = v0
+
+      allocate (uhbt(nx + 1, ny), vhbt(nx, ny + 1))
+      ! Targets set to HALF the unconstrained transport, so `du`/`dv` are
+      ! well away from zero and the CFL bracket is genuinely consulted.
+      uhbt = 0.5_wp*u0*h0*real(NZ, wp)*1000.0_wp
+      vhbt = 0.5_wp*v0*h0*real(NZ, wp)*1000.0_wp
+   end subroutine setup_land_channel
+
+   subroutine run_land_channel(grid, metrics, ms, ct, uhbt, vhbt, dt)
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(multilayer_state_t), intent(inout) :: ms
+      type(continuity_t), intent(inout) :: ct
+      real(wp), intent(inout) :: uhbt(:, :), vhbt(:, :)
+      real(wp), intent(in) :: dt
+      call map_in(ms, ct)
+      !$acc enter data copyin(uhbt, vhbt)
+      call continuity_zonal_flux(grid, metrics, ct, ms, dt, uhbt=uhbt)
+      call continuity_meridional_flux(grid, metrics, ct, ms, dt, vhbt=vhbt)
+      !$acc exit data delete(uhbt, vhbt)
+      call map_out(ms, ct)
+   end subroutine run_land_channel
+
+   subroutine test_renorm_land_face(error)
+      !! The `uhbt`/`vhbt` renormalisers bracket `du` by a CFL limit
+      !! `RENORM_CFL/(dt*idxCu)`.  `metrics_apply_land_mask` multiplies
+      !! `idxCu` by `wet_u`, so on a land face that divisor is EXACTLY
+      !! zero — and these loops visit land faces: they skip the array edges
+      !! and the two physical walls, never an interior coastline.
+      !!
+      !! Unguarded the division is `0.25/0`: it traps under
+      !! `-ffpe-trap=zero`, and without a trap it yields `u_lim = +Inf`,
+      !! which propagates into `du_hi`/`du_lo`.  Once an Inf is in the
+      !! bracket, `min`/`max` against it are no longer a bound, and an
+      !! `Inf - Inf` anywhere downstream is a NaN that a clamp will then
+      !! LAUNDER into a plausible extreme velocity (the documented
+      !! `-fast` NaN-blind-select behaviour).  So the assertion is not
+      !! cosmetic: it is that no non-finite value leaves the kernel.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      real(wp), allocatable :: uhbt(:, :), vhbt(:, :)
+      real(wp), parameter :: U0 = 0.4_wp, V0 = 0.3_wp, H0 = 50.0_wp, DT = 100.0_wp
+      logical :: div0, flag_supported
+      integer :: i, j, k
+
+      call setup_land_channel(grid, metrics, ms, ct, uhbt, vhbt, U0, V0, H0, .true.)
+
+      ! The masked faces really are zero-divisor faces — assert the
+      ! premise, so the case cannot silently stop testing anything.
+      call check(error, any(metrics%idxCu == 0.0_wp), &
+                 "the fixture must actually produce a zeroed idxCu face")
+      if (allocated(error)) go to 100
+      call check(error, any(metrics%idyCv == 0.0_wp), &
+                 "the fixture must actually produce a zeroed idyCv face")
+      if (allocated(error)) go to 100
+
+      ! The primary assertion: run the two renormalisers with the IEEE
+      ! divide-by-zero flag CLEARED and require it still clear afterwards.
+      ! That is the defect itself rather than a downstream symptom — the
+      ! Inf `u_lim` happens not to reach `mass_flux` here (the masked face
+      ! has `sum_h = 0`, so the Newton correction is multiplied by zero),
+      ! which is exactly why the bug survived: a value test cannot see it,
+      ! and a build with `-ffpe-trap=zero` simply dies.  `ieee_set_flag` is
+      ! the portable, non-fatal equivalent of that trap.
+      flag_supported = ieee_support_flag(ieee_divide_by_zero, 1.0_wp)
+      call ieee_set_flag(ieee_divide_by_zero, .false.)
+      call run_land_channel(grid, metrics, ms, ct, uhbt, vhbt, DT)
+      call ieee_get_flag(ieee_divide_by_zero, div0)
+      if (flag_supported) then
+         call check(error,.not. div0, &
+                    "the renormalisers must not divide by zero on a land face "// &
+                    "(idxCu/idyCv are multiplied by wet_u/wet_v, so they are "// &
+                    "EXACTLY zero there)")
+         if (allocated(error)) go to 100
+      end if
+
+      do k = 1, NZ
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total + 1
+               call check(error, ieee_is_finite(ms%mass_flux_x_layer(i, j, k)), &
+                          "a land face must not make the zonal renormaliser "// &
+                          "produce a non-finite mass flux")
+               if (allocated(error)) go to 100
+            end do
+         end do
+      end do
+      do k = 1, NZ
+         do j = 1, grid%ny_total + 1
+            do i = 1, grid%nx_total
+               call check(error, ieee_is_finite(ms%mass_flux_y_layer(i, j, k)), &
+                          "a land face must not make the meridional renormaliser "// &
+                          "produce a non-finite mass flux")
+               if (allocated(error)) go to 100
+            end do
+         end do
+      end do
+
+      ! And the land face carries no transport, which is the answer the
+      ! masked metric was put there to produce.
+      i = grid%nghost + 5
+      j = grid%nghost + 4
+      do k = 1, NZ
+         call check(error, ms%mass_flux_x_layer(i, j, k) == 0.0_wp, &
+                    "a masked u-face must still carry exactly zero mass flux")
+         if (allocated(error)) go to 100
+      end do
+
+100   continue
+      call ct%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+      deallocate (uhbt, vhbt)
+   end subroutine test_renorm_land_face
+
+   subroutine test_renorm_land_bit_identity(error)
+      !! The guard is `max(dt*idxCu, H_DIV_EPS)`, so on a WET face — where
+      !! `dt/dxCu` is a physical rate, decades above 1e-20 — the `max`
+      !! selects the true operand and nothing moves.  Compare the all-wet
+      !! run against the run with the island and require the faces away
+      !! from the coastline to agree BIT for bit, which is the property
+      !! that makes this fix safe to ship without a knob.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid_a, grid_b
+      type(ocean_metrics_t) :: met_a, met_b
+      type(multilayer_state_t) :: ms_a, ms_b
+      type(continuity_t) :: ct_a, ct_b
+      real(wp), allocatable :: uhbt_a(:, :), vhbt_a(:, :), uhbt_b(:, :), vhbt_b(:, :)
+      real(wp), parameter :: U0 = 0.4_wp, V0 = 0.3_wp, H0 = 50.0_wp, DT = 100.0_wp
+      integer :: i, j, k, i_isl, j_isl
+
+      call setup_land_channel(grid_a, met_a, ms_a, ct_a, uhbt_a, vhbt_a, &
+                              U0, V0, H0, .false.)
+      call run_land_channel(grid_a, met_a, ms_a, ct_a, uhbt_a, vhbt_a, DT)
+      call setup_land_channel(grid_b, met_b, ms_b, ct_b, uhbt_b, vhbt_b, &
+                              U0, V0, H0, .true.)
+      call run_land_channel(grid_b, met_b, ms_b, ct_b, uhbt_b, vhbt_b, DT)
+
+      i_isl = grid_a%nghost + 5
+      j_isl = grid_a%nghost + 4
+      do k = 1, NZ
+         do j = 1, grid_a%ny_total
+            do i = 1, grid_a%nx_total + 1
+               ! Skip the island's own neighbourhood: those faces SHOULD
+               ! differ (they are masked), and the halo column the PPM
+               ! stencil reaches from them with it.
+               if (abs(i - i_isl) <= 3 .and. abs(j - j_isl) <= 3) cycle
+               call check(error, ms_a%mass_flux_x_layer(i, j, k) == &
+                          ms_b%mass_flux_x_layer(i, j, k), &
+                          "the land-face guard must leave wet-face zonal "// &
+                          "fluxes bit-identical")
+               if (allocated(error)) go to 200
+            end do
+         end do
+      end do
+
+200   continue
+      call ct_a%destroy(); call ms_a%destroy()
+      call ct_b%destroy(); call ms_b%destroy()
+      call destroy_cartesian_metrics(met_a)
+      call destroy_cartesian_metrics(met_b)
+      deallocate (uhbt_a, vhbt_a, uhbt_b, vhbt_b)
+   end subroutine test_renorm_land_bit_identity
 
 end module test_continuity_multilayer
