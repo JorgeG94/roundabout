@@ -4375,7 +4375,7 @@ contains
          ! depth-mean above used.  Without this the uncancelled
          ! `f × (v̄_av − v̄^n)` forces every substep and pumps the basin's
          ! gravest Poincaré seiche (see `set_cor_ref_velocity`).
-         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc)
+         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc, metrics)
          call subtract_fast_cor_ref(grid, metrics, dyn%bt_work, cor%f_corner, &
                                     bc_w_drv, bc_e_drv, bc_s_drv, bc_n_drv, &
                                     has_w_drv, has_e_drv, has_s_drv, has_n_drv)
