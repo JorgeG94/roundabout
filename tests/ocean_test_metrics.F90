@@ -15,7 +15,7 @@ module ocean_test_metrics
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t, metrics_fill_cartesian, &
                                 metrics_fill_spherical, metrics_fill_tripolar, &
-                                metrics_finalize, &
+                                metrics_finalize, metrics_apply_land_mask, &
                                 adcroft_recip
    implicit none
    private
@@ -28,13 +28,34 @@ module ocean_test_metrics
 
 contains
 
-   subroutine make_cartesian_metrics(metrics, grid)
-      !! Init + cartesian-fill + finalize + device-map a metrics slot.
+   subroutine make_cartesian_metrics(metrics, grid, wet_mask)
+      !! Init + cartesian-fill + finalize [+ land-mask] + device-map a
+      !! metrics slot.
+      !!
+      !! `wet_mask` (optional, T-cell wet=1 / land=0, `(nx_total,
+      !! ny_total)`) is applied by `metrics_apply_land_mask` BEFORE the
+      !! device map — the ONLY order that is correct under
+      !! `-gpu=...,mem:separate`.  The mask routine is a host-loop
+      !! setup-time editor with no `!$acc update`, so a caller that maps
+      !! first and masks afterwards leaves the device holding the
+      !! ALL-WET metrics: every kernel then transports straight across
+      !! the coast on the GPU while the host-side assertions, reading
+      !! the masked host copy, look perfectly fine.  Taking the mask
+      !! here makes that ordering unskippable.
       type(ocean_metrics_t), intent(inout) :: metrics
       type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in), optional :: wet_mask(:, :)
+         !! T-cell wet/land mask.  Absent ⇒ the masker is not called at
+         !! all and the slot keeps its unmasked fill (`init` sources
+         !! `wet_*` to 1), which is what every pre-existing caller gets.
       call metrics%init(grid)
       call metrics_fill_cartesian(metrics, grid, grid%dx, grid%dy)
       call metrics_finalize(metrics)
+      if (present(wet_mask)) then
+         call metrics_apply_land_mask(metrics, wet_mask, grid, &
+                                      periodic_x=.false., periodic_y=.false., &
+                                      north_fold=.false.)
+      end if
       !$acc enter data copyin(metrics)
       call metrics%enter_data()
    end subroutine make_cartesian_metrics
