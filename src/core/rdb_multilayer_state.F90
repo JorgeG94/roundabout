@@ -251,13 +251,15 @@ module rdb_multilayer_state
          !! basin (perfect telescope).
       real(wp), allocatable :: heat_budget_surface(:, :, :)
          !! hTr (K·m) change per cell per step attributed to the surface
-         !! heat-flux kernel.  Populated only at k=nz_ml (the surface
-         !! layer); zero elsewhere.  Sign convention: positive = source
-         !! into the ocean.
+         !! heat-flux kernel.  Populated only at `k_top(i,j)`, the first
+         !! LIVE layer — which is `nz_ml` on every column with no
+         !! top-side filler, i.e. everywhere but an ice-covered column
+         !! under a quasi-geopotential coordinate; zero elsewhere.  Sign
+         !! convention: positive = source into the ocean.
       real(wp), allocatable :: salt_budget_surface(:, :, :)
          !! hTr (PSU·m) change per cell per step attributed to the
          !! surface salt-flux kernel.  Same shape + indexing convention
-         !! as `heat_budget_surface`.
+         !! as `heat_budget_surface` (`k_top`, not a literal `nz_ml`).
       real(wp), allocatable :: heat_budget_geothermal(:, :, :)
          !! hTr (K·m) change per cell per step attributed to the
          !! geothermal bottom-heat-flux kernel.  Populated only at the
