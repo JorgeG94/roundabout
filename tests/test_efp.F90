@@ -19,6 +19,7 @@
 module test_efp
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: iso_fortran_env, only: int64, real64, real128
+   use lcg_deterministic, only: lcg_next, lcg_unit
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use rdb_efp, only: efp_t, EFP_DIGITS, EFP_PREC_WIDTH, EFP_GUARD_WIDTH, &
                       EFP_MAX_SUMMANDS, EFP_MAX_RANKS, &
@@ -53,14 +54,12 @@ contains
    pure function lcg_value(seed) result(x)
       integer(int64), intent(in) :: seed
       real(real64) :: x
-      integer(int64) :: s
-      integer(int64), parameter :: A = 6364136223846793005_int64
-      integer(int64), parameter :: C = 1442695040888963407_int64
       real(real64) :: u
 
-      s = A*seed + C
-      ! Map the low 48 bits to [0,1) then rescale to [-1e12, 1e12].
-      u = real(iand(s, 281474976710655_int64), real64)/281474976710656.0_real64
+      ! `lcg_next` is the same MMIX recurrence taken mod 2**48, computed
+      ! without the signed overflow the inline form relied on -- the value
+      ! stream is bit-identical (see `lcg_deterministic`).
+      u = lcg_unit(lcg_next(seed))
       x = (u - 0.5_real64)*2.0e12_real64
    end function lcg_value
 

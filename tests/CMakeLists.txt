@@ -18,7 +18,7 @@
 # Helper modules used by some unit tests (Ritter dam-break + Thacker bowl
 # analytical solutions). Built as a static lib and linked into every test.
 add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
-                                  ocean_test_metrics.F90)
+                                  ocean_test_metrics.F90 lcg_deterministic.F90)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
 target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules")
