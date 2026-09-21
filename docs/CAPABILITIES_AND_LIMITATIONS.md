@@ -708,15 +708,24 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   positivity, the closed budgets and the solver's own truncation counters.
   **The measured table is the envelope statement for each family** and lives
   in [`tests/regression/README.md`](../tests/regression/README.md#the-baseline-table).
-  Headlines as measured on this branch (3.33 simulated days, gfortran 15.1
-  Release, `pred_corr`): every family is bit-zero on a FLAT bed;
-  `sigma`/`zstar`/`zstar_sigma` are byte-identical on every geometry;
-  `z_fixed` is the only family that LEAKS salt and heat (1e-6 relative
-  against a 1e-11 bar) wherever layers vanish; `rho`/`hycom` sit three to
-  four decades above the geometric families on the identical problem; and
-  **no family survives the stiffness ladder, not even at `rx0 = 0.1`** —
-  from `rx0 = 0.4` up every one of them goes non-finite inside the first
-  simulated day. Generated from one template by
+  Headlines as measured on this branch (115 cells, 30 simulated days each,
+  one V100, NVHPC 26.5, `pred_corr`, 66 min wall): every accepted family is
+  bit-zero on a FLAT bed and under a FLAT ice lid (`En = 0.000E+00` at every
+  sample to day 30); `sigma`/`zstar`/`zstar_sigma` agree to every printed
+  digit on every geometry; `eulerian_z` is SIX decades worse than sigma on a
+  slope (1.13e-03 vs 3.00e-09 m2/s2) because it drops the free surface;
+  `zstar_full` is 1500x worse (4.50e-06); `z_fixed` is the only family that
+  LEAKS salt and heat (1e-6 relative against a 1e-11 bar) wherever layers
+  vanish, and goes non-finite by day 30 on a seamount and under a sloping
+  lid; `rho`/`hycom` sit three to four decades above the geometric families
+  and `rho` NaNs on every sloping geometry; and **no family survives the
+  stiffness ladder, not even at `rx0 = 0.1`, half the classical bound** --
+  `sigma` reaches 9.02e-04 m2/s2 (4.2 cm/s out of nothing) there, and from
+  `rx0 = 0.4` up every family goes non-finite. There is no truly
+  geopotential coordinate in this tree to escape to: `eulerian_z` is a
+  stretched sigma with the free surface dropped, and `lagrangian` inherits
+  the sigma-shaped initial thickness and then never regrids. Generated from
+  one template by
   `tests/regression/vcoord_matrix.py`; each failing cell is pinned as a
   scoped XFAIL carrying its measured number.
 - **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =

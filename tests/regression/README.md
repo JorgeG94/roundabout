@@ -588,91 +588,109 @@ checks it fails the first and passes the second — who tests the test.
 
 ## THE BASELINE TABLE
 
-Measured at the **tier-2 horizon (3.33 simulated days)**, gfortran 15.1
-Release, single rank, MPI off, `pred_corr`. `ok` = every assertion passed ·
-`xfail` = measured defect, pinned with its number · `refused` = rejected at
-configure, as designed.
+**Tier 1 — the real horizon.** 115 cells, 30 simulated days each, NVHPC 26.5
+on one V100, `pred_corr`, `RDB_ENABLE_MPI=OFF`. 3989 s wall (66 min) for the
+whole matrix. The number in each cell is the **peak `En`** in m² s⁻²; `ok`
+means every assertion passed (on `flat` and `lid_flat` that means
+`En = 0.000E+00` at every sample, exactly); `NaN` means the run went
+non-finite and aborted; `refused` means `validate_config` rejected the
+configuration by design and the row asserts the refusal.
 
 | problem | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `flat`            | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
-| `slope`           | ok | ok | ok | ok | ok | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `seamount_gentle` | ok | ok | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `seamount_steep`  | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `rx0_010`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `rx0_020`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `rx0_040`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `rx0_060`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `rx0_080`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
-| `lid_flat`        | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
-| `lid_slope`       | refused | refused | **xfail** | **xfail** | refused | refused | **xfail** | refused | refused | refused |
+| `flat` | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
+| `slope` | ok | 1.13e-03 | 3.00e-09 | 3.00e-09 | 3.00e-09 | 4.50e-06 | 3.23e-05 | NaN | 1.72e-05 | refused |
+| `seamount_gentle` | 8.14e-08 | 5.06e-04 | 4.91e-06 | 4.91e-06 | 4.91e-06 | 2.48e-05 | NaN | NaN | 7.60e-05 | refused |
+| `seamount_steep` | NaN | NaN | 1.19e-04 | 1.19e-04 | 1.19e-04 | 2.68e-04 | NaN | NaN | NaN | refused |
+| `rx0_010` | NaN | NaN | 9.02e-04 | 9.02e-04 | 9.02e-04 | 7.73e-04 | NaN | NaN | NaN | refused |
+| `rx0_020` | NaN | NaN | 6.35e-03 | 6.35e-03 | 6.36e-03 | 5.05e-03 | NaN | NaN | NaN | refused |
+| `rx0_040` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
+| `rx0_060` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
+| `rx0_080` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
+| `lid_flat` | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
+| `lid_slope` | refused | refused | 1.99e-09 | 1.99e-09 | refused | refused | NaN | refused | refused | refused |
 
-### The key number behind each cell
+Tier-1 totals: **13 PASS · 0 live FAIL after pinning · 65 XFAIL · 0 XPASS**
+(the first sweep reported 37 FAIL; every one of them is now a scoped,
+measured marker in `MEASURED_XFAIL`, and the tier-2 slice re-runs clean at
+28 PASS / 0 FAIL / 35 XFAIL / 0 XPASS).
 
-Peak `En` (m² s⁻²) at day 3.33, `pred_corr`. `NaN` = the run went non-finite
-and aborted inside the first simulated day.
+**The same table at the tier-2 horizon (3.33 days)** is what the CI slice
+sees, and it is systematically milder — which is the point of having two:
 
-| problem | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom |
-|---|---|---|---|---|---|---|---|---|---|
-| `flat`            | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `slope`           | 8.83e-11 | 8.39e-11 | 8.85e-11 | 8.85e-11 | 8.85e-11 | 2.84e-07 | 5.11e-06 | 1.30e-05 | 1.09e-05 |
-| `seamount_gentle` | 1.03e-08 | 9.92e-09 | 1.05e-08 | 1.05e-08 | 1.05e-08 | 4.88e-07 | 7.39e-05 | 1.81e-05 | 2.37e-05 |
-| `seamount_steep`  | NaN | 1.60e-06 | 1.08e-06 | 1.08e-06 | 1.08e-06 | 2.40e-06 | NaN | NaN | NaN |
-| `rx0_010`         | 1.07e-04 | 1.95e-06 | 1.44e-06 | 1.44e-06 | 1.44e-06 | 2.26e-06 | 7.62e-04 | NaN | NaN |
-| `rx0_020`         | NaN | 1.77e-04 | 1.34e-04 | 1.34e-04 | 1.34e-04 | 1.34e-04 | NaN | NaN | NaN |
-| `rx0_040` … `rx0_080` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN |
-| `lid_flat`        | — | — | 0 | 0 | — | — | 0 | — | — |
-| `lid_slope`       | — | — | 1.02e-09 | 1.02e-09 | — | — | 3.48e-05 | — | — |
+| problem | lagrangian | eulerian_z | sigma / zstar / zstar_sigma | zstar_full | z_fixed | rho | hycom |
+|---|---|---|---|---|---|---|---|
+| `flat` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `slope` | 8.83e-11 | 8.39e-11 | 8.85e-11 | 2.84e-07 | 5.11e-06 | 1.30e-05 | 1.09e-05 |
+| `seamount_gentle` | 1.03e-08 | 9.92e-09 | 1.05e-08 | 4.88e-07 | 7.39e-05 | 1.81e-05 | 2.37e-05 |
+| `seamount_steep` | NaN | 1.60e-06 | 1.08e-06 | 2.40e-06 | NaN | NaN | NaN |
+| `rx0_010` | 1.07e-04 | 1.95e-06 | 1.44e-06 | 2.26e-06 | 7.62e-04 | NaN | NaN |
+| `rx0_020` | NaN | 1.77e-04 | 1.34e-04 | 1.34e-04 | NaN | NaN | NaN |
+| `lid_slope` | refused | refused | 1.02e-09 | refused | 3.48e-05 | refused | refused |
 
 **How to read it.**
 
-1. **`flat` is bit-zero for every family.** `En = 0.000E+00` at every sample,
-   ten families, both outer schemes. That is the control: a family that moves
-   here has a defect that has nothing to do with topography, and none does.
-2. **`sigma`, `zstar` and `zstar_sigma` are byte-identical everywhere.** Three
-   names, one answer, to every printed digit, on every geometry — which is the
-   claim `CLAUDE.md` makes about `zstar` (it shares the `sigma` branch) and the
-   thing 21 shipped namelists selecting `zstar_sigma` do **not** know about
-   themselves. The matrix now pins it.
-3. **The `unstrat` control works.** `lid_slope` × `sigma` at `N² = 0` holds
-   `En = 4.45e-23` — machine zero, fourteen decades under the stratified twin
-   on the identical geometry. That is what says the stratified answer really is
-   the `ρ₀N²Δe³` truncation and not a mis-cancelled load.
-4. **`z_fixed` LEAKS.** It is the only family in the matrix whose `Salt` and
-   `Heat` budget residuals leave round-off — **1e-6 relative against a 1e-11
-   bar, five decades over** — and it does so on every geometry with vanishing
-   layers (slope, seamount, ice base), as a *step* at the first regrid rather
-   than a drift. It also makes new tracer extrema. Leading suspect: the
-   first-order boundary cell in the remap reconstruction, which is fixed on
-   `origin/fix/ale-remap-rest-amplifier` and is **not** in this tree — a
-   hypothesis, not a measurement, and the marker must be re-measured when that
-   branch lands.
-5. **The density-space coordinates are three to four decades worse than the
-   geometric ones on the identical problem.** `rho` is documented
-   validation-grade; `hycom` is the *production GVC coordinate* and its number
-   here is the one to watch.
-6. **`zstar_full` sits between them** — 3.2× (slope) to 46× (seamount_gentle)
-   above the `sigma` cell, because its per-column `z_ref` table gives two
-   neighbouring columns of different depth *different* interface depths. It is
-   the only geometric family whose interface offset does not shrink with the
-   bathymetric gradient.
-7. **Nothing survives the `rx0` ladder — not even at `rx0 = 0.1`, half the
-   Beckmann–Haidvogel bound.** A single 2 km face joining a 675 m column to an
-   825 m one already puts every family over the 1 mm/s bar (1.4e-6 to 7.6e-4
-   m² s⁻², i.e. 1.7 to 39 cm/s of current out of nothing), and from `rx0 = 0.4`
-   up every family goes non-finite inside the first day. `lagrangian` and
-   `eulerian_z` fail too, which is worth stating plainly: **there is no truly
-   geopotential coordinate in this tree** — `eulerian_z` is a stretched sigma
-   with `η` dropped, and `lagrangian` inherits the sigma-shaped initial
-   thickness and then never regrids. `z_fixed` is the closest thing to a z
-   coordinate, and on a single cliff it is the **worst** cell in the row
-   (7.6e-4 at `rx0 = 0.1`), because the staircase replaces the tilt rather than
-   removing it.
-8. **A cell being `xfail` does not excuse the case.** Every marker names the
-   assertions it covers, so a `zstar_full` cell that is `xfail` on
-   `energy:rest-settles` still gates `finite`, `conserve:*`, the level bar, the
-   tracer bounds and the counters. That scoping is what stops one documented
-   defect from hiding the next regression.
+1. **`flat` and `lid_flat` are bit-zero for every accepted family, at BOTH
+   horizons.** `En = 0.000E+00` at every sample out to 30 days. That is the
+   control: a family that moves here has a defect that has nothing to do with
+   topography, and none does.
+2. **`sigma`, `zstar` and `zstar_sigma` are identical to every printed digit
+   on every geometry.** Three names, one answer — which is the claim
+   `CLAUDE.md` makes about `zstar` (it shares the `sigma` branch) and the
+   thing the 21 shipped namelists selecting `zstar_sigma` do **not** know
+   about themselves. The matrix now pins it. (At `rx0_020` they part in the
+   fourth digit, 6.354e-03 vs 6.358e-03 — the only place in the matrix they
+   differ at all.)
+3. **The horizon matters more than anything else in this table.** `slope` ×
+   `sigma` reads 8.85e-11 at 3.33 days and 3.00e-09 at 30 days — a 34× rise,
+   which a LEVEL bar set at either horizon would call a pass. It is the
+   `energy:rest-growth-rate` gate, tier 1 only, that says whether that is a
+   truncation settling or a mode growing. Nothing in the suite could ask that
+   before.
+4. **The `N² = 0` control works.** `lid_slope` × `sigma` unstratified holds
+   `En = 3.17e-20` at 30 days — machine zero, eleven decades under its
+   stratified twin on the identical geometry. That is what says the
+   stratified answer really is the `ρ₀N²Δe³` truncation and not a
+   mis-cancelled ice load. (It creeps 4.45e-23 → 3.17e-20 over the 30 days,
+   which a log fit happily calls 0.22/day — hence the round-off floor on the
+   rate gate, the same `1e-12` floor `energy:rest-settles` already carried.)
+5. **`z_fixed` LEAKS.** It is the only family whose `Salt` and `Heat` budget
+   residuals leave round-off — **1e-6 relative against a 1e-11 bar, five
+   decades over** — on every geometry with vanishing layers, as a *step* at
+   the first regrid rather than a drift. It also makes new tracer extrema,
+   and by 30 days it has gone non-finite on `seamount_gentle` and on
+   `lid_slope` where it survived 3.33 days. Leading suspect: the first-order
+   boundary cell in the remap reconstruction, fixed on
+   `origin/fix/ale-remap-rest-amplifier` and **not** in this tree — a
+   hypothesis, not a measurement, and the marker must be re-measured when
+   that branch lands.
+6. **`eulerian_z` is far worse than sigma on a slope, not better.** 1.13e-03
+   against sigma's 3.00e-09 — six decades — despite the name. It is a
+   stretched sigma with `η` dropped, and dropping `η` is what costs it.
+7. **The density-space coordinates are three to four decades above the
+   geometric ones**, and `rho` goes non-finite on every sloping geometry by
+   30 days. `rho` is documented validation-grade; `hycom` is the *production
+   GVC coordinate* and its numbers here are the ones to watch.
+8. **`zstar_full` sits between them** — 1500× above the `sigma` cell on
+   `slope` at 30 days — because its per-column `z_ref` table gives two
+   neighbouring columns of different depth *different* interface depths. It
+   is the only geometric family whose interface offset does not shrink with
+   the bathymetric gradient.
+9. **Nothing survives the `rx0` ladder — not even at `rx0 = 0.1`, half the
+   Beckmann–Haidvogel bound.** A single 2 km face joining a 675 m column to
+   an 825 m one puts `sigma` at 9.02e-04 m² s⁻² (4.2 cm/s of current out of
+   nothing) by 30 days, and from `rx0 = 0.4` up every family goes non-finite.
+   `lagrangian` and `eulerian_z` fail too, which is worth stating plainly:
+   **there is no truly geopotential coordinate in this tree** — `eulerian_z`
+   is a stretched sigma with `η` dropped, and `lagrangian` inherits the
+   sigma-shaped initial thickness and then never regrids. `z_fixed` is the
+   closest thing to a z coordinate, and it NaNs at every rung.
+10. **A cell being `xfail` does not excuse the case.** Every marker names the
+    assertions it covers **and the tiers it applies to**, so a cell excused on
+    `energy:rest-settles` still gates `finite`, `conserve:*`, the level bar,
+    the tracer bounds and the counters — and a defect only visible at 30 days
+    is not marked known-failing at tier 2, where it would report a permanent
+    XPASS.
 
 ## Adding a family or a problem
 
@@ -701,7 +719,7 @@ and aborted inside the first simulated day.
 | geometries | `flat`, `slope`, `rx0_060` — one per geometry class | all eleven |
 | length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days |
 | rows | 63 (incl. the `__ssp_rk2` twins) | 115 (twins are tier-1-skipped by the curated scheme axis) |
-| measured | **+122 s** on 6 workers, on top of the pre-existing 163 s — 285 s for the whole tier-2 suite | see the tier-1 line below |
+| measured | **+122 s** on 6 workers, on top of the pre-existing 163 s — 285 s for the whole tier-2 suite (matrix slice alone: 63 rows, 111 s) | **3989 s (66 min) for all 115 cells on ONE V100**, NVHPC 26.5. Nightly, not CI. |
 | the rate gate | `SKIP … TIER 1 ONLY` — the bar is a 20-day e-folding | evaluated |
 
 ## Not done, and not stubbed
