@@ -1139,9 +1139,10 @@ contains
       if (allocated(ocean_state%vcoord%rho_target)) then
          call configure_rho_target(cfg, ocean_state%vcoord%rho_target, ocean_state%vcoord%nz_ml)
       end if
-      ! ALE-regrid refinements (both default-off ⇒ bit-identical).
+      ! ALE-regrid refinements (all default-off ⇒ bit-identical).
       ocean_state%vcoord%regrid_time_scale = cfg%regrid_time_scale
       ocean_state%vcoord%remap_vel_conserve_ke = cfg%remap_vel_conserve_ke
+      ocean_state%vcoord%remap_boundary_extrap = cfg%remap_boundary_extrap
       if (compute_rank == 0) then
          if (ocean_state%vcoord%coord_type == VCOORD_EULERIAN_Z) then
             call logger%info("Vertical coord:  "//trim(cfg%vcoord_type)// &

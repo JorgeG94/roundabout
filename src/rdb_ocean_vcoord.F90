@@ -232,6 +232,22 @@ module rdb_ocean_vcoord
          !! type, reaches the device through the existing `copyin(this)`;
          !! no new device array.  Default `0.0` ⇒ `wtd = 1` ⇒ jump to
          !! target ⇒ bit-identical to the no-filter remap.
+      logical :: remap_boundary_extrap = .false.
+         !! Close the ALE remap's reconstruction at the two boundary cells
+         !! (`k=1`, `k=nz`) with the linear-exact one-sided edge pair
+         !! instead of the PCM flatten (MOM6 `BOUNDARY_EXTRAPOLATION`).
+         !!
+         !! The default closure makes PLM/PPM/PPM_H4/PQM first-order in
+         !! exactly the two cells adjacent to the bed and the surface, so
+         !! a column whose tracer is linear in z is remapped with an O(h)
+         !! error there every thermo step.  Under a terrain-following
+         !! coordinate over a slope that error differs between neighbouring
+         !! columns, which is a horizontal density gradient, which is a
+         !! spurious pressure-gradient force — and with rotation it feeds a
+         !! growing grid mode trapped in those same layers (see
+         !! `docs/CAPABILITIES_AND_LIMITATIONS.md`).  Scalar on the type,
+         !! reaches the device through the existing `copyin(this)`; no new
+         !! device array.  Default `.false.` ⇒ bit-identical.
       logical :: remap_vel_conserve_ke = .false.
          !! Enable the KE-conserving rescale of the remapped layer
          !! velocities.  After the per-face column remap (which already
