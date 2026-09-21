@@ -109,6 +109,7 @@ module rdb_ocean_vmix
    public :: vmix_interior_closure_is_implemented
    public :: parse_kpp_sw_method
    public :: kpp_sw_method_is_implemented
+   public :: kpp_surface_buoyancy_flux
 
    ! KPP shortwave-in-boundary-layer methods (MOM6 KPP_SHORTWAVE_METHOD).
    ! The surface buoyancy flux `B_0` is charged only for the SW ABSORBED
@@ -212,7 +213,9 @@ module rdb_ocean_vmix
       ! the dyn-core EOS coefficients (previously a private pair that
       ! was NEVER refreshed from the eos slot — the latent staleness
       ! bug this centralization fixes).  Maps onto the device with
-      ! the parent `this`.
+      ! the parent `this`.  Both are DIMENSIONAL (kg/m^3 per degC /
+      ! psu) — see `kpp_surface_buoyancy_flux` for the `1/rho_0` that
+      ! turns them into a buoyancy flux.
       type(eos_t) :: eos
 
       ! ---- KPP-specific ----
@@ -458,6 +461,17 @@ module rdb_ocean_vmix
       ! ---- Diagnostic / prognostic 2D fields (KPP) ----
       real(wp), allocatable :: bl_depth(:, :)
          !! KPP boundary-layer depth (m, positive down).
+      real(wp), allocatable :: b0(:, :)
+         !! Surface buoyancy flux `B_0` (m^2/s^3) the KPP overlay's
+         !! convective scale was built from, persisted per column on the
+         !! SECOND pass (the one that uses the freshly-diagnosed
+         !! `bl_depth`).  Sign convention matches EPBL's `epbl%b0`:
+         !! `> 0` stabilizing (heating / freshening), `< 0` destabilizing
+         !! (cooling / salting), and `w_*^3 = max(0, -b0)*bl_depth`.
+         !! Diagnostic only — nothing reads it back into the closure; it
+         !! exists so the two boundary-layer schemes' surface forcing can
+         !! be compared directly (`test_ocean_buoyancy_flux`).  Zero until
+         !! the first KPP overlay call.
 
       ! ---- 3D mixing coefficients on layer interfaces ----
       ! Shape (nx, ny, nz_ml+1); k=1 at the bed, k=nz_ml+1 at the
@@ -559,6 +573,7 @@ contains
       ! slot at configure — see `rdb_ocean_setup.F90:configure_ocean_lateral`.
       call this%seed_backgrounds()
       allocate (this%bl_depth(nx, ny), source=0.0_wp)
+      allocate (this%b0(nx, ny), source=0.0_wp)
       allocate (this%gamma_t(nx, ny, nz + 1), source=0.0_wp)
       allocate (this%gamma_s(nx, ny, nz + 1), source=0.0_wp)
 
@@ -602,6 +617,7 @@ contains
       class(ocean_vmix_t), intent(inout) :: this
       this%is_init = .false.
       if (allocated(this%bl_depth)) deallocate (this%bl_depth)
+      if (allocated(this%b0)) deallocate (this%b0)
       if (allocated(this%kv)) deallocate (this%kv)
       if (allocated(this%kt)) deallocate (this%kt)
       if (allocated(this%ks)) deallocate (this%ks)
@@ -635,6 +651,9 @@ contains
       end if
       if (allocated(this%bl_depth)) then
          !$acc enter data copyin(this%bl_depth)
+      end if
+      if (allocated(this%b0)) then
+         !$acc enter data copyin(this%b0)
       end if
       if (allocated(this%gamma_t)) then
          !$acc enter data copyin(this%gamma_t)
@@ -671,6 +690,9 @@ contains
       end if
       if (allocated(this%bl_depth)) then
          !$acc exit data delete(this%bl_depth)
+      end if
+      if (allocated(this%b0)) then
+         !$acc exit data delete(this%b0)
       end if
       if (allocated(this%gamma_t)) then
          !$acc exit data delete(this%gamma_t)
@@ -836,7 +858,13 @@ contains
       !!         (ρ_0·cp) and F_S = Q_salt/ρ_0 are the kinematic
       !!         surface heat / salt fluxes.  B_0 > 0 = stabilizing
       !!         (heating / freshening), B_0 < 0 = destabilizing
-      !!         (cooling / salting).
+      !!         (cooling / salting).  The `1/ρ_0` is load-bearing:
+      !!         `α_T` / `β_S` here are the DIMENSIONAL linear-EOS
+      !!         sensitivities (kg m^-3 per degC / psu), not the
+      !!         fractional ones — see `kpp_surface_buoyancy_flux`,
+      !!         which owns the expression and the convention.  B_0 is
+      !!         persisted per column into `this%b0` on the second pass
+      !!         (diagnostic; the same quantity as `epbl%b0`).
       !!
       !! `sf` is REQUIRED (A7): B_0 is computed PER COLUMN from the 2D
       !! `sf%Q_heat / Q_salt` fields inside the kernel, so file-driven
@@ -941,7 +969,8 @@ contains
             q_T_kin = sf%Q_heat(i, j)/(this%rho0*sf%cp)
          end if
          q_S_kin = sf%Q_salt(i, j)/this%rho0
-         B_0 = GRAVITY*(this%eos%alpha_T*q_T_kin - this%eos%beta_S*q_S_kin)
+         B_0 = kpp_surface_buoyancy_flux(this%eos%alpha_T, this%eos%beta_S, &
+                                         this%rho0, q_T_kin, q_S_kin)
          destabilizing = (B_0 < 0.0_wp)
          wstar3_lagged = max(0.0_wp, -B_0)*h_b_lagged
          w_s_col = sqrt(u_star*u_star + wstar3_lagged**(2.0_wp/3.0_wp))
@@ -1022,7 +1051,9 @@ contains
             q_T_kin = sf%Q_heat(i, j)/(this%rho0*sf%cp)
          end if
          q_S_kin = sf%Q_salt(i, j)/this%rho0
-         B_0 = GRAVITY*(this%eos%alpha_T*q_T_kin - this%eos%beta_S*q_S_kin)
+         B_0 = kpp_surface_buoyancy_flux(this%eos%alpha_T, this%eos%beta_S, &
+                                         this%rho0, q_T_kin, q_S_kin)
+         this%b0(i, j) = B_0
          destabilizing = (B_0 < 0.0_wp)
          wstar3 = max(0.0_wp, -B_0)*h_b
          w_star = wstar3**(1.0_wp/3.0_wp)
@@ -1048,6 +1079,49 @@ contains
          end if
       end do
    end subroutine vmix_kpp_overlay_impl
+
+   pure function kpp_surface_buoyancy_flux(alpha_T, beta_S, rho0, q_T_kin, q_S_kin) &
+      result(b0)
+      !! Surface buoyancy flux for the KPP overlay's convective scale:
+      !!
+      !!   `B_0 = (g/ρ_0)·(α_T·F_T − β_S·F_S)`   [m^2/s^3]
+      !!
+      !! **Units convention.** `alpha_T` / `beta_S` are the LINEAR-EOS
+      !! DIMENSIONAL sensitivities of the density ANOMALY form used
+      !! throughout this tree (`rdb_eos`):
+      !!
+      !!   `rho = rho_0 + beta_S·(S − S_ref) − alpha_T·(T − T_ref)`
+      !!
+      !! so `alpha_T = -∂ρ/∂T` [kg m^-3 K^-1] and
+      !! `beta_S = ∂ρ/∂S` [kg m^-3 psu^-1] — NOT the fractional
+      !! `(1/ρ)·∂ρ/∂T` coefficients (~2e-4 K^-1) that many texts write
+      !! as α.  Buoyancy is `b = −g·ρ'/ρ_0`, so converting a dimensional
+      !! `α_T` into a buoyancy flux costs a `1/ρ_0` — dropping it makes
+      !! `B_0` a factor `ρ_0` (~1035) too large.  Fed a FRACTIONAL
+      !! coefficient `α_frac = α_T/ρ_0` the caller must therefore pass
+      !! `rho0 = 1`, and the two spellings agree exactly.
+      !!
+      !! `q_T_kin` / `q_S_kin` are the KINEMATIC surface fluxes
+      !! `Q_heat/(ρ_0·cp)` [K m/s] and `Q_salt/ρ_0` [psu m/s] (the
+      !! caller charges `q_T_kin` for penetrating shortwave first, so
+      !! this stays a pure algebraic kernel).  `b0 > 0` is stabilizing
+      !! (heating / freshening), `b0 < 0` destabilizing.
+      !!
+      !! Same quantity as EPBL's `b0 = g·ρ_0·(dSV/dT·q_T + dSV/dS·q_S)`:
+      !! the linear EOS has `dSV/dT = +α_T/ρ_0²`, `dSV/dS = −β_S/ρ_0²`,
+      !! so the two reduce to the identical expression (they agree to
+      !! round-off, not bitwise — the FP op orders differ).
+      !$acc routine seq
+      real(wp), intent(in) :: alpha_T, beta_S
+         !! Dimensional linear-EOS sensitivities (kg/m^3 per degC / psu).
+      real(wp), intent(in) :: rho0
+         !! Boussinesq reference density (kg/m^3).
+      real(wp), intent(in) :: q_T_kin, q_S_kin
+         !! Kinematic surface heat / salt fluxes (K m/s, psu m/s).
+      real(wp) :: b0
+
+      b0 = (GRAVITY/rho0)*(alpha_T*q_T_kin - beta_S*q_S_kin)
+   end function kpp_surface_buoyancy_flux
 
    pure function parse_kpp_sw_method(name) result(tag)
       !! Map the `&ocean_thermo_nml kpp_sw_method` string to a
@@ -1918,6 +1992,7 @@ contains
       class(ocean_vmix_t), intent(in) :: this
       integer(int64) :: nbytes
       nbytes = arr_bytes(this%bl_depth) &
+               + arr_bytes(this%b0) &
                + arr_bytes(this%kv) &
                + arr_bytes(this%kt) &
                + arr_bytes(this%ks) &
