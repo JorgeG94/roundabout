@@ -48,7 +48,8 @@ module rdb_ocean_dyn
    use rdb_ocean_ke_probe, only: ke_probe_t, ke_probe_sample, ke_probe_coradv_split
    use rdb_ocean_chksum, only: chksum_probe_t, chksum_state, chksum_bt, chksum_hotface
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_ocean_porous, only: porous_update_face_areas
+   use rdb_ocean_porous, only: porous_update_face_areas, &
+                               closed_faces_update_bt_widths
    use rdb_ocean_metrics, only: ocean_metrics_t, &
                                 metrics_fill_cartesian, metrics_fill_spherical, &
                                 metrics_finalize, metrics_fill_coriolis, &
@@ -453,20 +454,52 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(multilayer_state_t), intent(in) :: ms
 
-      if (.not. metrics%use_porous) return
+      if (metrics%use_porous) then
+         call porous_update_face_areas(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                       metrics%porous_eta_interp, &
+                                       metrics%porous_mask_depth, &
+                                       metrics%por_bed, ms%h_layer, &
+                                       metrics%por_dmin_u, metrics%por_dmax_u, &
+                                       metrics%por_davg_u, &
+                                       metrics%por_dmin_v, metrics%por_dmax_v, &
+                                       metrics%por_davg_v, &
+                                       metrics%dy_cu, metrics%dx_cv, &
+                                       metrics%por_face_area_u, &
+                                       metrics%por_face_area_v, &
+                                       metrics%dy_cu_bt, metrics%dx_cv_bt)
+      end if
 
-      call porous_update_face_areas(grid%nx_total, grid%ny_total, ms%nz_ml, &
-                                    metrics%porous_eta_interp, &
-                                    metrics%porous_mask_depth, &
-                                    metrics%por_bed, ms%h_layer, &
-                                    metrics%por_dmin_u, metrics%por_dmax_u, &
-                                    metrics%por_davg_u, &
-                                    metrics%por_dmin_v, metrics%por_dmax_v, &
-                                    metrics%por_davg_v, &
-                                    metrics%dy_cu, metrics%dx_cv, &
-                                    metrics%por_face_area_u, &
-                                    metrics%por_face_area_v, &
-                                    metrics%dy_cu_bt, metrics%dx_cv_bt)
+      ! z-level closed faces: refresh the BAROTROPIC widths from the LIVE
+      ! `h` at the same (per-outer-step) cadence.  AFTER the porous write,
+      ! which it SUPERSEDES rather than multiplies — the combined
+      ! thickness-weighted fraction it computes already contains the
+      ! porous one.  See `closed_faces_update_bt_widths`.
+      if (metrics%use_closed_faces) then
+         ! Two branches, one per porous state: with porous OFF the
+         ! `por_face_area_*` arrays are the `(1,1,1)` placeholder and must
+         ! NOT reach the callee's explicit-shape dummy (see its `use_por`
+         ! docstring -- the GPU build aborts, the CPU builds do not).  The
+         ! mask itself is the inert stand-in: right shape, already mapped,
+         ! `intent(in)` at both dummies so the double association is legal.
+         if (metrics%use_porous) then
+            call closed_faces_update_bt_widths(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                               .true., &
+                                               metrics%dy_cu, metrics%dx_cv, &
+                                               ms%h_layer, &
+                                               metrics%por_face_area_u, &
+                                               metrics%por_face_area_v, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%dy_cu_bt, metrics%dx_cv_bt)
+         else
+            call closed_faces_update_bt_widths(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                               .false., &
+                                               metrics%dy_cu, metrics%dx_cv, &
+                                               ms%h_layer, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%dy_cu_bt, metrics%dx_cv_bt)
+         end if
+      end if
    end subroutine ocean_porous_refresh
 
    subroutine ocean_dyn_init(this, grid, nz_ml)
@@ -3135,6 +3168,21 @@ contains
                                          method=vcoord%remap_method, eos=eos, dt=dyn%therm_dt(dt))
          call profiler_stop("ocean_ale_remap")
          call probe_dS(grid, ms, "after ALE remap", 3, dyn%outer_step_count + 1)
+         ! z-level closed faces: the ALE remap is the LAST velocity writer
+         ! of the outer step, and it is a COLUMN operator -- it redistributes
+         ! momentum along a face column without consulting any horizontal
+         ! mask.  Its own `min(h_L,h_R)` face column (see
+         ! `remap_x_face_velocity`) already gives a closed layer an
+         ! exactly-zero target so nothing is poured IN, but the layers
+         ! ABOVE and BELOW it still shift, and a PPM reconstruction whose
+         ! stencil straddles the gap can leave a non-zero value in the
+         ! zero-thickness cell.  Re-assert the wall here: a closed face
+         ! carries exactly zero normal velocity at the END of the step, not
+         ! merely at the end of the last stage.  Gated inside
+         ! `mask_layer_velocities`, so this is a no-op with the knob off.
+         if (metrics%use_closed_faces) then
+            call mask_layer_velocities(grid, metrics, ms, bt_work=dyn%bt_work)
+         end if
       end if
 
       ! Ideal-age surface reset (PR-7): the Dirichlet BC `age = young_val`
@@ -3951,7 +3999,7 @@ contains
       call chksum_state(grid, ms, dyn%chksum_probe, "entry", stage_id, step_id)
 
       ! ---- 1. Snapshot u_bt^n, v_bt^n at start of stage ----
-      call derive_bt_from_layers(grid, dyn%bt_work, ms)
+      call derive_bt_from_layers(grid, dyn%bt_work, ms, metrics)
       ! Build the per-face upstream-PPM column-sum thickness on the
       ! same snapshot.  No-op when `use_upstream_h_face = .false.`;
       ! otherwise feeds the BT substep + corrector with the same
@@ -4197,12 +4245,12 @@ contains
       ! first stage degenerates to the plain h-mean.
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
          call face_depth_mean_rem_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
       else
-         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml)
-         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml)
+         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
+         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
       end if
       ! Subtract the bt projection of the PGF: the barotropic substep has
       ! its own `-G·∂η/∂x` term, so without this subtraction the
@@ -4210,12 +4258,12 @@ contains
       ! √(2gH).
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, pgf%dpdx_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
          call face_depth_mean_rem_v(grid, pgf%dpdy_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
       else
-         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml)
-         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml)
+         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
+         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
       end if
       do concurrent(j=1:ny_uface, i=1:nx_face)
          dyn%bt_work%F_bt_u_fast(i, j) = dyn%bt_work%F_bt_u(i, j) - dyn%bt_work%F_bt_u_fast(i, j)

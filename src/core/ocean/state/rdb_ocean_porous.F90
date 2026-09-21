@@ -124,6 +124,7 @@ module rdb_ocean_porous
    public :: porous_stats_are_ordered
    public :: porous_update_face_areas
    public :: porous_narrow_3d
+   public :: closed_faces_update_bt_widths
    public :: parse_porous_source, parse_porous_eta_interp
    public :: POROUS_SOURCE_RESOLVED, POROUS_SOURCE_FILE
    public :: POROUS_ETA_MAX, POROUS_ETA_MIN, POROUS_ETA_ARITH, POROUS_ETA_HARM
@@ -750,5 +751,94 @@ contains
          f = max(0.0_wp, min(1.0_wp, x))
       end if
    end function clamp_fraction
+
+   pure subroutine closed_faces_update_bt_widths(nx, ny, nz, use_por, &
+                                                 dy_cu, dx_cv, h_layer, &
+                                                 por_u, por_v, open_u, open_v, &
+                                                 dy_cu_bt, dx_cv_bt)
+      !! Refresh the BAROTROPIC face widths from the LIVE layer
+      !! thicknesses when `&vcoord_nml zfixed_closed_faces` is on.
+      !!
+      !! The barotropic substep transports on `ubt * FA * dy_cu_bt` with
+      !! `FA = sum_k h_face` — the FULL column.  A closed layer carries no
+      !! transport, so the BT solve has to see the OPEN depth of the face
+      !! or it will hand the blocked transport straight back through the
+      !! per-layer renormalisation.  Narrowing the WIDTH by the open
+      !! fraction and reducing the DEPTH to the open depth are the same
+      !! number here, so:
+      !!
+      !! ```
+      !! dy_cu_bt(I,j) = dy_cu(I,j) * (sum_k h_face_k * por_k * open_k)
+      !!                            / (sum_k h_face_k)
+      !! ```
+      !!
+      !! WRITE, not multiply: when porous barriers are also on,
+      !! `porous_update_face_areas` has just written
+      !! `dy_cu_bt = dy_cu * por_col` with its own thickness-weighted mean
+      !! `por_col`, and the expression above already contains that mean.
+      !! Multiplying would count the porous fraction twice.  This routine
+      !! therefore SUPERSEDES the porous write and must run after it —
+      !! which is exactly the order `ocean_porous_refresh` calls them in.
+      !!
+      !! Per OUTER step (MOM6's porous cadence), from the live `h`, not
+      !! frozen at `eta = 0`: under `z_fixed` the `eta = 0` value is only
+      !! `O(eta/H) ~ 1E-4` off because eta lands in the first LIVE layer,
+      !! but "only a small error" is not a reason to carry one.
+      integer, intent(in) :: nx, ny, nz
+      logical, intent(in) :: use_por
+         !! Porous barriers also active.  `.false.` => `por_u`/`por_v`
+         !! are never indexed, and the caller must hand over a full-size,
+         !! device-present stand-in rather than the `(1,1,1)` porous
+         !! placeholder: nvfortran builds the `do concurrent` data clause
+         !! from the LOOP BOUNDS, not from the descriptor, so a
+         !! placeholder aborts under `mem:separate` ("variable in data
+         !! clause is partially present") even though the branch that
+         !! indexes it is never taken.  `ocean_porous_refresh` passes
+         !! `open_u`/`open_v` themselves — right shape, already mapped,
+         !! `intent(in)` on both dummies so the double association is not
+         !! aliasing.  (Found by the GPU build; both CPU builds were
+         !! silently happy.)
+      real(wp), intent(in) :: dy_cu(nx + 1, ny), dx_cv(nx, ny + 1)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: por_u(nx + 1, ny, nz), por_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz), open_v(nx, ny + 1, nz)
+      real(wp), intent(inout) :: dy_cu_bt(nx + 1, ny), dx_cv_bt(nx, ny + 1)
+      integer :: i, j, k
+      real(wp) :: h_face, sum_all, sum_open, wk
+
+      do concurrent(j=1:ny, i=2:nx) local(k, h_face, sum_all, sum_open, wk)
+         sum_all = 0.0_wp
+         sum_open = 0.0_wp
+         do k = 1, nz
+            h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+            wk = open_u(i, j, k)
+            if (use_por) wk = wk*por_u(i, j, k)
+            sum_all = sum_all + h_face
+            sum_open = sum_open + h_face*wk
+         end do
+         if (sum_all > 0.0_wp) then
+            dy_cu_bt(i, j) = dy_cu(i, j)*(sum_open/sum_all)
+         else
+            dy_cu_bt(i, j) = 0.0_wp
+         end if
+      end do
+
+      do concurrent(j=2:ny, i=1:nx) local(k, h_face, sum_all, sum_open, wk)
+         sum_all = 0.0_wp
+         sum_open = 0.0_wp
+         do k = 1, nz
+            h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+            wk = open_v(i, j, k)
+            if (use_por) wk = wk*por_v(i, j, k)
+            sum_all = sum_all + h_face
+            sum_open = sum_open + h_face*wk
+         end do
+         if (sum_all > 0.0_wp) then
+            dx_cv_bt(i, j) = dx_cv(i, j)*(sum_open/sum_all)
+         else
+            dx_cv_bt(i, j) = 0.0_wp
+         end if
+      end do
+   end subroutine closed_faces_update_bt_widths
 
 end module rdb_ocean_porous
