@@ -235,6 +235,7 @@ set(RDB_TESTS
     "test_ocean_vcoord_hygiene|test_ocean_vcoord_hygiene|collect_ocean_vcoord_hygiene_tests|ocean_vcoord_hygiene|ocean"
     "test_ocean_vcoord_zfixed_cavity|test_ocean_vcoord_zfixed_cavity|collect_ocean_vcoord_zfixed_cavity_tests|ocean_vcoord_zfixed_cavity|ocean"
     "test_ocean_ktop|test_ocean_ktop|collect_ocean_ktop_tests|ocean_ktop|ocean"
+    "test_ocean_ktop_consumers|test_ocean_ktop_consumers|collect_ocean_ktop_consumers_tests|ocean_ktop_consumers|ocean"
     "test_ocean_zfixed_closed_faces|test_ocean_zfixed_closed_faces|collect_ocean_zfixed_closed_faces_tests|ocean_zfixed_closed_faces|ocean"
     "test_ocean_zfixed_bt_seiche|test_ocean_zfixed_bt_seiche|collect_ocean_zfixed_bt_seiche_tests|ocean_zfixed_bt_seiche|ocean"
     "test_ocean_zfixed_cor_ref|test_ocean_zfixed_cor_ref|collect_ocean_zfixed_cor_ref_tests|ocean_zfixed_cor_ref|ocean"

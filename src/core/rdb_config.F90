@@ -5459,34 +5459,17 @@ contains
                ! vanished `k = nz` and are left alone.  What follows is
                ! everything that acts ON the ice-adjacent layer itself,
                ! and so is not masked by anything.
-               if (cfg%ocean%cavity_melt%enable) then
-                  call logger%error("&ocean_cavity_melt_nml enable=.true. is refused "// &
-                                    "with vcoord_type='z_fixed' under a cavity.  The "// &
-                                    "melt heat/salt fluxes (and, with "// &
-                                    "freshwater='mass', the column-mass source) are "// &
-                                    "deposited into k = nz, which a z-like "// &
-                                    "coordinate makes an inert filler on every "// &
-                                    "covered column: the deposit is frozen by the "// &
-                                    "vdiff decoupling gate and then DELETED by the "// &
-                                    "next ALE remap drain, with the console budget "// &
-                                    "still counting it — a per-step conservation "// &
-                                    "hole.  Needs the shared k_top: follow-up "// &
-                                    "P6.3/P6.4.  The far-field sampler itself is "// &
-                                    "already vanish-aware; it is the deposit that "// &
-                                    "is not.")
-                  has_error = .true.
-               end if
-               if (cfg%ocean%tdrag%enable) then
-                  call logger%error("&ocean_tdrag_nml enable=.true. is refused with "// &
-                                    "vcoord_type='z_fixed' under a cavity: the "// &
-                                    "ice-ocean drag is applied at k = nz (layer-only "// &
-                                    "mode) or walked down from it on an `h <= 0` "// &
-                                    "gate (htbl mode), so under a z-like coordinate "// &
-                                    "the whole stress would land on a massless "// &
-                                    "filler.  Needs the shared k_top: follow-up "// &
-                                    "P6.4.")
-                  has_error = .true.
-               end if
+               ! NOTE `&ocean_cavity_melt_nml enable` and
+               ! `&ocean_tdrag_nml enable` used to be refused HERE, and
+               ! are not any more: both are routed through the shared
+               ! first-live-layer index `ms%k_top` (and its two face
+               ! twins) — P6.3/P6.4.  The melt heat/salt deposit and the
+               ! `freshwater="mass"` column source land on
+               ! `k_top(i,j)`; the ice-ocean drag's band walk starts at
+               ! `k_top_u/v`, gates on `H_VANISHED` instead of on zero,
+               ! and captures its implicit-fold rate on the same row the
+               ! vdiff diagonal adds it to.  `k_top ≡ nz` off a rigid
+               ! top, so nothing else moved.
                if (cfg%ocean%vmix%use_kpp) then
                   call logger%error("&ocean_vmix_nml use_kpp=.true. is refused with "// &
                                     "vcoord_type='z_fixed' under a cavity: KPP's "// &
@@ -5539,9 +5522,35 @@ contains
                                     "study.")
                   has_error = .true.
                end if
-               if (cfg%ocean%hdiff%kappa_h /= 0.0_wp) then
+               ! ---- kappa_h: refused ONLY with the face mask off ----
+               !
+               ! The objection is unchanged where it still applies: the
+               ! along-coordinate tracer diffusion gates its T = hTr/h
+               ! division on `h > 0` (1/0 armour) and not on H_VANISHED,
+               ! weights the face flux by the ARITHMETIC mean thickness
+               ! — a filler beside a 20 m cell is weighted by 10 m — and
+               ! carries no mass-availability limiter, so it can drive a
+               ! vanished cell's hTr strongly negative in one step.
+               !
+               ! But `&vcoord_nml zfixed_closed_faces` already answers
+               ! it, from the other end: `ocean_hdiff_tracer_step`
+               ! multiplies every face flux by `metrics%open_u/open_v`,
+               ! which is exactly zero wherever the layer is a filler on
+               ! EITHER side.  A filler cell then has all four of its
+               ! own-layer faces closed, so its hTr divergence is
+               ! identically zero and the garbage concentration the
+               ! `h > 0` gate computes for it never leaves the cell.
+               ! Flux-zero, not flux-limited, so the scheme stays
+               ! conservative by construction.  That is the P6.5 gate,
+               ! reached through the mask instead of through a new
+               ! threshold — and it is a strictly stronger statement,
+               ! because it also closes the partial⇄filler face the
+               ! threshold alone would leave open on the thick side.
+               if (cfg%ocean%hdiff%kappa_h /= 0.0_wp .and. &
+                   .not. cfg%zfixed_closed_faces) then
                   call logger%error("&ocean_hdiff_nml kappa_h /= 0 is refused with "// &
-                                    "vcoord_type='z_fixed' under a cavity: the "// &
+                                    "vcoord_type='z_fixed' under a cavity UNLESS "// &
+                                    "&vcoord_nml zfixed_closed_faces=.true.: the "// &
                                     "along-coordinate tracer diffusion gates its "// &
                                     "T = hTr/h division on `h > 0` (1/0 armour), "// &
                                     "not on H_VANISHED, weights the face flux by the "// &
@@ -5549,7 +5558,35 @@ contains
                                     "a 20 m cell is weighted by 10 m — and has no "// &
                                     "mass-availability limiter, so it can drive a "// &
                                     "vanished cell's hTr strongly negative in one "// &
-                                    "step.  Follow-up P6.5.")
+                                    "step.  With the partial-step face mask on, "// &
+                                    "every face touching a filler is CLOSED and the "// &
+                                    "flux is exactly zero, which answers all three.  "// &
+                                    "Set zfixed_closed_faces=.true., or kappa_h=0.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%kshear%enable) then
+                  call logger%error("&ocean_kappa_shear_nml enable=.true. is refused "// &
+                                    "with vcoord_type='z_fixed' under a cavity: the "// &
+                                    "JHL08 column solve closes its SURFACE row on "// &
+                                    "k = nz (u_c/v_c/t_c/s_c(nz)), which on a "// &
+                                    "covered column is an inert filler inside the "// &
+                                    "ice draft, and its own massless-merge helper is "// &
+                                    "off by default.  Not covered by the shared "// &
+                                    "k_top (P6.3/P6.4), which routes the FORCING "// &
+                                    "sites; a column solver wants the compacted "// &
+                                    "column rdb_massless already builds.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%tidal_mixing%enable) then
+                  call logger%error("&ocean_tidal_mixing_nml enable=.true. is "// &
+                                    "refused with vcoord_type='z_fixed' under a "// &
+                                    "cavity: the N^2 column sets its top boundary "// &
+                                    "at k = nz and forms the k = nz-1 interface "// &
+                                    "spacing as 0.5*(h(nz-1) + h(nz)), which on a "// &
+                                    "covered column HALVES that spacing against a "// &
+                                    "filler and inflates the buoyancy frequency at "// &
+                                    "the first live interface.  Unvalidated under a "// &
+                                    "rigid top.")
                   has_error = .true.
                end if
                if (cfg%regrid_time_scale > 0.0_wp) then

@@ -103,7 +103,7 @@
 !!   * Killworth, P. D. and Edwards, N. R. (1999): J. Phys. Oceanogr. 29,
 !!     1221-1238 (boundary layer of prescribed thickness).
 module rdb_ocean_top_drag
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
@@ -360,7 +360,8 @@ contains
       !! Fill `du_drag` / `dv_drag` with the top-boundary drag
       !! acceleration, `stress_top` with the cell-centred stress
       !! magnitude, and (when `implicit_fold`) `lambda_top_u/v` with the
-      !! `k = nz` Rayleigh rate the vdiff diagonal consumes.
+      !! `k = k_top` Rayleigh rate the vdiff diagonal consumes (the
+      !! rate-capture row and the sink row MUST be the same row).
       !!
       !! No-op (and no kernel launch) when the slot is disabled — the
       !! arrays are `(1,1[,1])` placeholders then and must not be indexed.
@@ -387,7 +388,7 @@ contains
          this%du_drag%data, this%dv_drag%data, &
          this%lambda_top_u, this%lambda_top_v, &
          ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, ms%wet_mask, &
-         this%cover_u, this%cover_v, &
+         this%cover_u, this%cover_v, ms%k_top_u, ms%k_top_v, H_VANISHED, &
          this%variant, this%r_linear, this%c_drag, this%h_min, &
          this%htbl, this%drag_bg_vel, tbl_min, dt_imp, this%implicit_fold, &
          size(ms%u_face_x_layer, 1), size(ms%u_face_x_layer, 2), &
@@ -396,7 +397,7 @@ contains
 
       call top_drag_stress_mag_impl( &
          this%stress_top, ms%u_face_x_layer, ms%v_face_y_layer, &
-         ms%h_layer, ms%wet_mask, this%cover_t, &
+         ms%h_layer, ms%wet_mask, this%cover_t, ms%k_top, H_VANISHED, &
          this%variant, this%r_linear, this%c_drag, this%h_min, &
          this%htbl, this%drag_bg_vel, tbl_min, this%rho0, &
          size(ms%u_face_x_layer, 1), size(ms%u_face_x_layer, 2), &
@@ -406,7 +407,8 @@ contains
 
    pure subroutine top_drag_tendencies_impl(du_drag, dv_drag, lambda_u, lambda_v, &
                                             u_face, v_face, h_layer, wet_mask, &
-                                            cover_u, cover_v, &
+                                            cover_u, cover_v, k_top_u, k_top_v, &
+                                            h_vanished, &
                                             variant, r, c_d, h_floor, &
                                             htbl, bg_vel, tbl_min, dt_imp, fold, &
                                             nx_u, ny_u, nx_v, ny_v, &
@@ -415,7 +417,7 @@ contains
       !! dereference inside the `do concurrent`.
       !!
       !! One code path covers both modes.  `htbl <= 0` is the LAYER-ONLY
-      !! mode: the band is layer `nz` alone and `h_in/h_face == 1`, which
+      !! mode: the band is layer `k_top` alone and `h_in/h_face == 1`, which
       !! reduces the formulae below to the exact algebraic mirror of
       !! `ocean_bottom_drag_compute_tendencies`' bed-only branch (at the
       !! default `bg_vel = 0`).  `htbl > 0` spreads the stress over the
@@ -442,10 +444,22 @@ contains
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(in) :: cover_u(nx + 1, ny), cover_v(nx, ny + 1)
+      integer, intent(in) :: k_top_u(nx + 1, ny), k_top_v(nx, ny + 1)
+         !! `ms%k_top_u` / `k_top_v` -- the first layer LIVE on BOTH
+         !! sides of the face (`min` of the two columns' own `k_top`),
+         !! `nz` wherever nothing vanishes against the top, so the walks
+         !! below start exactly where they do today on every coordinate
+         !! but `z_fixed` under a rigid top.
+      real(wp), intent(in) :: h_vanished
+         !! `H_VANISHED`.  The band walks `exit` on a face thickness at
+         !! or below this instead of at or below ZERO: a filler has
+         !! `h = zstar_h_min > 0`, so the old `<= 0` gate let it into the
+         !! band with `h_in/h_face = 1` -- FULL drag rate on a massless
+         !! layer -- while contributing nothing to `cumul_h`.
       real(wp), intent(out) :: du_drag(nx_u, ny_u, nz), dv_drag(nx_v, ny_v, nz)
       real(wp), intent(out) :: lambda_u(nx + 1, ny), lambda_v(nx, ny + 1)
 
-      integer :: i, j, k
+      integer :: i, j, k, kt
       logical :: layer_only, quad
       real(wp) :: cumul_h, h_face_k, h_in, mask_face, frac
       real(wp) :: h_in_total, u_int, v_int, u_tbl, v_tbl, u_at_v, v_at_u
@@ -474,20 +488,21 @@ contains
 
       ! ---- East (u) faces ----
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, cumul_h, h_face_k, h_in, mask_face, frac, &
+         local(k, kt, cumul_h, h_face_k, h_in, mask_face, frac, &
                h_in_total, u_int, v_int, u_tbl, v_tbl, v_at_u, &
                abs_u_eff, h_eff, rate)
          mask_face = min(wet_mask(i - 1, j), wet_mask(i, j))*cover_u(i, j)
+         kt = k_top_u(i, j)
          ! Pass 1: band mean.
          cumul_h = 0.0_wp
          u_int = 0.0_wp
          v_int = 0.0_wp
          h_in_total = 0.0_wp
-         do k = nz, 1, -1
-            if (layer_only .and. k < nz) exit
+         do k = kt, 1, -1
+            if (layer_only .and. k < kt) exit
             if ((.not. layer_only) .and. cumul_h >= htbl) exit
             h_face_k = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-            if (h_face_k <= 0.0_wp) exit
+            if (h_face_k <= h_vanished) exit
             if (layer_only) then
                h_in = h_face_k
             else
@@ -508,11 +523,11 @@ contains
          abs_u_eff = max(bg_vel, sqrt(u_tbl*u_tbl + v_tbl*v_tbl))
          ! Pass 2: per-layer rate + tendency.
          cumul_h = 0.0_wp
-         do k = nz, 1, -1
-            if (layer_only .and. k < nz) exit
+         do k = kt, 1, -1
+            if (layer_only .and. k < kt) exit
             if ((.not. layer_only) .and. cumul_h >= htbl) exit
             h_face_k = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-            if (h_face_k <= 0.0_wp) exit
+            if (h_face_k <= h_vanished) exit
             if (layer_only) then
                h_in = h_face_k
             else
@@ -525,26 +540,27 @@ contains
                rate = mask_face*r*frac
             end if
             du_drag(i, j, k) = -rate*u_face(i, j, k)/(1.0_wp + dt_imp*rate)
-            if (fold .and. k == nz) lambda_u(i, j) = rate
+            if (fold .and. k == kt) lambda_u(i, j) = rate
             cumul_h = cumul_h + h_face_k
          end do
       end do
 
       ! ---- North (v) faces ----
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, cumul_h, h_face_k, h_in, mask_face, frac, &
+         local(k, kt, cumul_h, h_face_k, h_in, mask_face, frac, &
                h_in_total, u_int, v_int, u_tbl, v_tbl, u_at_v, &
                abs_u_eff, h_eff, rate)
          mask_face = min(wet_mask(i, j - 1), wet_mask(i, j))*cover_v(i, j)
+         kt = k_top_v(i, j)
          cumul_h = 0.0_wp
          u_int = 0.0_wp
          v_int = 0.0_wp
          h_in_total = 0.0_wp
-         do k = nz, 1, -1
-            if (layer_only .and. k < nz) exit
+         do k = kt, 1, -1
+            if (layer_only .and. k < kt) exit
             if ((.not. layer_only) .and. cumul_h >= htbl) exit
             h_face_k = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-            if (h_face_k <= 0.0_wp) exit
+            if (h_face_k <= h_vanished) exit
             if (layer_only) then
                h_in = h_face_k
             else
@@ -564,11 +580,11 @@ contains
          v_tbl = v_int/h_eff
          abs_u_eff = max(bg_vel, sqrt(u_tbl*u_tbl + v_tbl*v_tbl))
          cumul_h = 0.0_wp
-         do k = nz, 1, -1
-            if (layer_only .and. k < nz) exit
+         do k = kt, 1, -1
+            if (layer_only .and. k < kt) exit
             if ((.not. layer_only) .and. cumul_h >= htbl) exit
             h_face_k = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-            if (h_face_k <= 0.0_wp) exit
+            if (h_face_k <= h_vanished) exit
             if (layer_only) then
                h_in = h_face_k
             else
@@ -581,7 +597,7 @@ contains
                rate = mask_face*r*frac
             end if
             dv_drag(i, j, k) = -rate*v_face(i, j, k)/(1.0_wp + dt_imp*rate)
-            if (fold .and. k == nz) lambda_v(i, j) = rate
+            if (fold .and. k == kt) lambda_v(i, j) = rate
             cumul_h = cumul_h + h_face_k
          end do
       end do
@@ -589,6 +605,7 @@ contains
 
    pure subroutine top_drag_stress_mag_impl(stress_top, u_face, v_face, &
                                             h_layer, wet_mask, cover_frac, &
+                                            k_top, h_vanished, &
                                             variant, r, c_d, h_floor, &
                                             htbl, bg_vel, tbl_min, rho0, &
                                             nx_u, ny_u, nx_v, ny_v, nx, ny, nz)
@@ -608,9 +625,17 @@ contains
       real(wp), intent(in) :: u_face(nx_u, ny_u, nz), v_face(nx_v, ny_v, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny), cover_frac(nx, ny)
+      integer, intent(in) :: k_top(nx, ny)
+         !! `ms%k_top` -- the first LIVE layer, `nz` off a rigid top.
+         !! `stress_top` is the one number the boundary-layer schemes
+         !! turn into `u_*` under the shelf (through
+         !! `ocean_surface_stress_t%stress_shelf`), so a band mean built
+         !! from a filler is a wrong `u_*` in BOTH KPP and EPBL.
+      real(wp), intent(in) :: h_vanished
+         !! `H_VANISHED`; see `top_drag_tendencies_impl`.
       real(wp), intent(out) :: stress_top(nx, ny)
 
-      integer :: i, j, k
+      integer :: i, j, k, kt
       logical :: layer_only, quad
       real(wp) :: cumul_h, h_k, h_in, u_int, v_int, h_in_total
       real(wp) :: u_c, v_c, u_tbl, v_tbl, h_eff, abs_u_eff, spd
@@ -619,17 +644,18 @@ contains
       quad = (variant == TDRAG_QUADRATIC)
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, cumul_h, h_k, h_in, u_int, v_int, h_in_total, &
+         local(k, kt, cumul_h, h_k, h_in, u_int, v_int, h_in_total, &
                u_c, v_c, u_tbl, v_tbl, h_eff, abs_u_eff, spd)
+         kt = k_top(i, j)
          cumul_h = 0.0_wp
          u_int = 0.0_wp
          v_int = 0.0_wp
          h_in_total = 0.0_wp
-         do k = nz, 1, -1
-            if (layer_only .and. k < nz) exit
+         do k = kt, 1, -1
+            if (layer_only .and. k < kt) exit
             if ((.not. layer_only) .and. cumul_h >= htbl) exit
             h_k = h_layer(i, j, k)
-            if (h_k <= 0.0_wp) exit
+            if (h_k <= h_vanished) exit
             if (layer_only) then
                h_in = h_k
             else

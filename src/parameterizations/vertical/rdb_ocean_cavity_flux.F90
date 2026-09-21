@@ -885,9 +885,10 @@ contains
    pure subroutine cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, s_ice, &
                                           active, melt, s_far, t_b, &
                                           h_layer, hTr_S, hTr_T, &
-                                          salt_budget, heat_budget, n_thin)
+                                          salt_budget, heat_budget, k_top, n_thin)
       !! The real-mass top-layer source: add the meltwater VOLUME to
-      !! `h_layer(:,:,nz)`, replace the virtual salt flux the assembler
+      !! `h_layer` at the first LIVE layer `k_top(i,j)`, replace the
+      !! virtual salt flux the assembler
       !! stamped with the real advective salt `w*s_ice`, and add the
       !! enthalpy `dh*T_b` — mirroring both tracer increments into the
       !! existing surface budget contributors.
@@ -950,7 +951,7 @@ contains
          !! Interface temperature (degC): the temperature the meltwater
          !! joins the column at.
       real(wp), intent(inout) :: h_layer(nx, ny, nz)
-         !! Layer thickness (m); only `k = nz` is touched.
+         !! Layer thickness (m); only `k = k_top(i,j)` is touched.
       real(wp), intent(inout) :: hTr_S(nx, ny, nz)
          !! `h*S` ((g/kg) m).
       real(wp), intent(inout) :: hTr_T(nx, ny, nz)
@@ -959,15 +960,24 @@ contains
          !! `ms%salt_budget_surface`.
       real(wp), intent(inout) :: heat_budget(nx, ny, nz)
          !! `ms%heat_budget_surface`.
+      integer, intent(in) :: k_top(nx, ny)
+         !! `ms%k_top` — the first LIVE layer counting down from the
+         !! top, `nz` wherever nothing vanishes against the top.  Under
+         !! a quasi-geopotential coordinate beneath the shelf `k = nz` is
+         !! an inert filler on every covered column: growing IT would put
+         !! the meltwater where the remap drain deletes it, and shrinking
+         !! it would trip the fatal thin-withdrawal clamp on every column
+         !! at once (a filler is already AT the marker).
       integer, intent(out) :: n_thin
          !! Columns whose withdrawal had to be clamped.
-      integer :: i, j, c_thin
+      integer :: i, j, kt, c_thin
       real(wp) :: dh, h0, hn, cell_s, cell_t, virt
 
       c_thin = 0
-      do concurrent(j=1:ny, i=1:nx) local(dh, h0, hn, cell_s, cell_t, virt) reduce(+:c_thin)
+      do concurrent(j=1:ny, i=1:nx) local(kt, dh, h0, hn, cell_s, cell_t, virt) reduce(+:c_thin)
          if (active(i, j) > 0.5_wp) then
-            h0 = h_layer(i, j, nz)
+            kt = k_top(i, j)
+            h0 = h_layer(i, j, kt)
             dh = melt(i, j)*dt_over_rho0
             hn = h0 + dh
             if (dh < 0.0_wp .and. hn < H_CAVITY_FLOOR) then
@@ -996,18 +1006,18 @@ contains
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + dh*s_ice
             cell_t = dh*t_b(i, j)
-            h_layer(i, j, nz) = hn
-            hTr_S(i, j, nz) = hTr_S(i, j, nz) + cell_s
-            salt_budget(i, j, nz) = salt_budget(i, j, nz) + cell_s
-            hTr_T(i, j, nz) = hTr_T(i, j, nz) + cell_t
-            heat_budget(i, j, nz) = heat_budget(i, j, nz) + cell_t
+            h_layer(i, j, kt) = hn
+            hTr_S(i, j, kt) = hTr_S(i, j, kt) + cell_s
+            salt_budget(i, j, kt) = salt_budget(i, j, kt) + cell_s
+            hTr_T(i, j, kt) = hTr_T(i, j, kt) + cell_t
+            heat_budget(i, j, kt) = heat_budget(i, j, kt) + cell_t
          end if
       end do
       n_thin = c_thin
    end subroutine cavity_mass_apply_impl
 
    pure subroutine cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, &
-                                                s_ice, active, melt, s_far, hTr)
+                                                s_ice, active, melt, s_far, hTr, k_top)
       !! The pseudo-salt mirror of `cavity_mass_apply_impl`'s SALT
       !! increment, with no budget accumulation — `budget_id = NONE`, so
       !! it must not touch `salt_budget_surface`.
@@ -1044,6 +1054,10 @@ contains
          !! undone is rebuilt from it, exactly as in the sibling.
       real(wp), intent(inout) :: hTr(nx, ny, nz)
          !! Pseudo-salt `h*C`.
+      integer, intent(in) :: k_top(nx, ny)
+         !! The SAME first-live-layer index the salt branch used — the
+         !! mirror's whole contract is that its increment is bit-identical
+         !! to salinity's, which includes landing on the same row.
       integer :: i, j
       real(wp) :: cell_s, virt
 
@@ -1051,7 +1065,7 @@ contains
          if (active(i, j) > 0.5_wp) then
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + melt(i, j)*dt_over_rho0*s_ice
-            hTr(i, j, nz) = hTr(i, j, nz) + cell_s
+            hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell_s
          end if
       end do
    end subroutine cavity_mass_salt_mirror_impl
@@ -1373,11 +1387,12 @@ contains
       call cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, cav%s_ice, &
                                   cav%active, cav%melt, cav%s_far, cav%t_b, &
                                   ms%h_layer, ms%tracers(idx_s)%hTr, ms%tracers(idx_t)%hTr, &
-                                  ms%salt_budget_surface, ms%heat_budget_surface, n_thin_src)
+                                  ms%salt_budget_surface, ms%heat_budget_surface, &
+                                  ms%k_top, n_thin_src)
       if (idx_ps > 0) then
          call cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, &
                                            cav%s_ice, cav%active, cav%melt, &
-                                           cav%s_far, ms%tracers(idx_ps)%hTr)
+                                           cav%s_far, ms%tracers(idx_ps)%hTr, ms%k_top)
       end if
       ms%mass_src = ms%mass_src + weight*RHO_WATER*vol_melt
 
@@ -1391,6 +1406,15 @@ contains
                                      ms%h_layer, ms%tracers(idx_s)%hTr, &
                                      ms%tracers(idx_t)%hTr, ms%salt_budget_surface, &
                                      ms%heat_budget_surface, cav%comp_scale, n_thin_comp)
+         ! NOTE the sink stays on `k = nz` and is NOT routed through
+         ! `k_top`, deliberately: its own gate is `cover_frac < 0.5`, so
+         ! it only ever acts on OPEN-OCEAN columns, and an open-ocean
+         ! column has `z_top = 0` ⇒ no top-side filler ⇒ `k_top ≡ nz`.
+         ! Routing it would be a provable no-op; leaving it spells out
+         ! that "the top layer" and "the first live layer" are the same
+         ! row wherever this kernel runs.  `cavity_comp_scale_tracer_impl`
+         ! below rides the same argument (it is unconditional, but
+         ! `comp_scale` is exactly 1 off the sink).
          do it = 1, size(ms%tracers)
             if (it == idx_s .or. it == idx_t) cycle
             call cavity_comp_scale_tracer_impl(nx, ny, nz, cav%comp_scale, &
