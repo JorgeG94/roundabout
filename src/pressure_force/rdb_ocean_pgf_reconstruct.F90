@@ -32,10 +32,26 @@ module rdb_ocean_pgf_reconstruct
    !! layers adjacent to the tilted boundary are exactly where the
    !! sigma pressure-gradient truncation error lives, and flattening them
    !! to PCM left the FULL error there while the interior was corrected.
+   !!
+   !! FILLERS (`h <= H_VANISHED`) ARE NOT PART OF THE STENCIL.  Under a
+   !! z-like coordinate (`VCOORD_Z_FIXED`, `VCOORD_ZSTAR_FULL`) the layers
+   !! that outcrop into the ice base — or pinch out below the bed — are
+   !! held at `zstar_h_min` as inert fillers whose `hTr` is whatever the
+   !! ALE drain left, so their layer MEAN `hTr/h` is not a water property
+   !! at all.  Feeding one into a centred PLM/PPM slope corrupts the edge
+   !! reconstruction of the adjacent LIVE partial cell, which is the one
+   !! cell the pressure gradient most depends on.  The column is therefore
+   !! split into maximal runs of live layers; each run is reconstructed
+   !! independently with its own ends closed by `boundary_edges_linear`
+   !! (top AND bed side, so a partial cell cut by the ice base gets the
+   !! same linear-exact closure as `k = nz` of an open-ocean column); and
+   !! each filler takes FLAT (PCM) edges at the adjacent live layer's edge
+   !! value — the live profile's linear-exact continuation to the filler's
+   !! own depth, which the filler sits within `nz*zstar_h_min` of.
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, GRAVITY
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY
+   use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY, H_VANISHED
 #endif
    use rdb_eos, only: eos_t, eos_density_point
    implicit none
@@ -116,14 +132,81 @@ contains
       q_b = q_self - d
    end subroutine boundary_edges_linear
 
+   pure subroutine fill_filler_edges(nz, h, q, q_t, q_b)
+      !$acc routine seq
+      !! Give every FILLER layer (`h <= H_VANISHED`) flat (PCM) edges at
+      !! the adjacent LIVE layer's edge value, after the live runs have
+      !! been reconstructed.
+      !!
+      !! A filler carries no water, so it has no profile of its own; what
+      !! the FV quadrature needs from it is the value of the TRUE profile
+      !! at the filler's own geopotential height.  A filler run sits
+      !! immediately above (under the ice base) or immediately below
+      !! (under the bed) the live column, within `nz*zstar_h_min` — order
+      !! `1e-3 m` — of the bounding live layer's edge, so that live edge
+      !! IS the linear-exact continuation of the profile to the filler.
+      !!
+      !! Rule: prefer the nearest live layer BELOW (take its TOP edge);
+      !! with none below — a bed-side filler run — take the nearest live
+      !! layer ABOVE and its BOTTOM edge.  A column with NO live layer at
+      !! all (a fully grounded cavity column, whose every face the closed-
+      !! face mask walls) keeps the raw layer means as PCM edges; nothing
+      !! better is defined there and nothing dynamic reads it.
+      !!
+      !! No-op — and so bit-identical — on any column whose layers all
+      !! exceed `H_VANISHED`.
+      integer, intent(in) :: nz
+      real(wp), intent(in)    :: h(nz)
+      real(wp), intent(in)    :: q(nz)
+      real(wp), intent(inout) :: q_t(nz)
+      real(wp), intent(inout) :: q_b(nz)
+
+      integer :: k, first_live, prev_live
+
+      first_live = 0
+      do k = 1, nz
+         if (h(k) > H_VANISHED) then
+            first_live = k
+            exit
+         end if
+      end do
+      ! No live layer anywhere: the caller's PCM seed already stands.
+      if (first_live == 0) return
+
+      ! Bed-side filler run (nothing live below it): the live column's
+      ! DEEPER edge is the profile value at that height.
+      do k = 1, first_live - 1
+         q_t(k) = q_b(first_live)
+         q_b(k) = q_b(first_live)
+      end do
+
+      ! Every filler above the first live layer: the SHALLOWER edge of the
+      ! nearest live layer below it.
+      prev_live = first_live
+      do k = first_live + 1, nz
+         if (h(k) > H_VANISHED) then
+            prev_live = k
+         else
+            q_t(k) = q_t(prev_live)
+            q_b(k) = q_t(prev_live)
+         end if
+      end do
+   end subroutine fill_filler_edges
+
    pure subroutine plm_edges_column(nz, h, q, q_t, q_b)
       !$acc routine seq
       !! Per-column PLM top/bottom edge values of a layer-mean field `q`,
       !! via a two-stage h-weighted van-Leer slope (White, Adcroft &
       !! Hallberg 2009 §2). Returns the SHALLOWER edge in `q_t` (toward
       !! k+1) and the DEEPER edge in `q_b` (toward k-1), bottom-up.
-      !! Boundary layers (k=1, k=nz) -> `boundary_edges_linear`, the
-      !! linear-exact one-sided pair.
+      !!
+      !! The column is split into maximal runs of LIVE layers
+      !! (`h > H_VANISHED`); each run is reconstructed on its own, its two
+      !! ends closed by `boundary_edges_linear` (the linear-exact one-sided
+      !! pair), and the fillers between runs are flattened onto the
+      !! adjacent live edge by `fill_filler_edges`.  An all-live column is
+      !! ONE run spanning `1..nz`, so the arithmetic — and the answer — is
+      !! unchanged there.
       integer, intent(in) :: nz
       real(wp), intent(in)  :: h(nz)
          !! Layer thicknesses (m), k=1 bed .. k=nz surface.
@@ -134,15 +217,57 @@ contains
       real(wp), intent(out) :: q_b(nz)
          !! Bottom (deeper) edge value per layer.
 
+      integer :: k, k0
+
+      ! Seed every layer with its own mean (PCM).  Each live run then
+      ! overwrites its own layers and `fill_filler_edges` the fillers, so
+      ! this only survives on a column with NO live layer at all — and it
+      ! keeps `q_t`/`q_b` fully defined, which an `intent(out)` dummy
+      ! handed to two successive run calls would not.
+      do k = 1, nz
+         q_t(k) = q(k)
+         q_b(k) = q(k)
+      end do
+      k0 = 0
+      do k = 1, nz
+         if (h(k) > H_VANISHED) then
+            if (k0 == 0) k0 = k
+            if (k == nz) call plm_edges_run(nz, k0, nz, h, q, q_t, q_b)
+         else
+            if (k0 > 0) call plm_edges_run(nz, k0, k - 1, h, q, q_t, q_b)
+            k0 = 0
+         end if
+      end do
+      call fill_filler_edges(nz, h, q, q_t, q_b)
+   end subroutine plm_edges_column
+
+   pure subroutine plm_edges_run(nz, k0, k1, h, q, q_t, q_b)
+      !$acc routine seq
+      !! PLM edge pair over ONE contiguous run of live layers `k0..k1`.
+      !! `k0` and `k1` are the run's boundary cells and take the
+      !! linear-exact one-sided pair; everything strictly between them is
+      !! the two-stage h-weighted van-Leer slope.  With `k0 = 1`,
+      !! `k1 = nz` this is the whole-column reconstruction.
+      integer, intent(in) :: nz
+      integer, intent(in) :: k0, k1
+         !! First / last layer of the live run (bottom-up, `k0 <= k1`).
+      real(wp), intent(in)  :: h(nz)
+      real(wp), intent(in)  :: q(nz)
+      real(wp), intent(inout) :: q_t(nz)
+         !! INOUT, not OUT: a run defines only `k0..k1`, and an `intent(out)`
+         !! explicit-shape dummy lets the optimiser treat the PREVIOUS run's
+         !! stores as dead.
+      real(wp), intent(inout) :: q_b(nz)
+
       real(wp) :: slp(NZ_STACK_MAX)
       real(wp) :: h_l, h_c, h_r, sig_c, sig_l, sig_r, slp_max
       real(wp) :: e_t, e_b, q_lo, q_hi
       integer  :: k
 
-      ! Single-layer column: PCM is the only option (no neighbour).
-      if (nz <= 1) then
-         q_t(1) = q(1)
-         q_b(1) = q(1)
+      ! Single-layer run: PCM is the only option (no neighbour).
+      if (k1 <= k0) then
+         q_t(k0) = q(k0)
+         q_b(k0) = q(k0)
          return
       end if
 
@@ -154,9 +279,9 @@ contains
       !   sig_c = (q(k+1)-q(k-1)) * h(k) / (h(k-1)+2 h(k)+h(k+1))  * 2
       ! then limited to 2*min(|q(k)-q_deeper|,|q_shallower-q(k)|), zeroed
       ! at extrema.
-      slp(1) = 0.0_wp
-      slp(nz) = 0.0_wp
-      do k = 2, nz - 1
+      slp(k0) = 0.0_wp
+      slp(k1) = 0.0_wp
+      do k = k0 + 1, k1 - 1
          h_l = h(k - 1)   ! deeper neighbour thickness
          h_c = h(k)
          h_r = h(k + 1)   ! shallower neighbour thickness
@@ -177,10 +302,11 @@ contains
       ! (White, Adcroft & Hallberg 2009 §2 monotonization — prevents the
       ! reconstructed edge from over/undershooting the neighbour mean,
       ! which would manufacture a density inversion under the EOS).
-      call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
-      call boundary_edges_linear(h(nz), h(nz - 1), q(nz), q(nz) - q(nz - 1), &
-                                 q_t(nz), q_b(nz))
-      do k = 2, nz - 1
+      call boundary_edges_linear(h(k0), h(k0 + 1), q(k0), q(k0 + 1) - q(k0), &
+                                 q_t(k0), q_b(k0))
+      call boundary_edges_linear(h(k1), h(k1 - 1), q(k1), q(k1) - q(k1 - 1), &
+                                 q_t(k1), q_b(k1))
+      do k = k0 + 1, k1 - 1
          e_t = q(k) + 0.5_wp*slp(k)   ! shallower edge (toward k+1)
          e_b = q(k) - 0.5_wp*slp(k)   ! deeper edge (toward k-1)
          ! Bound the shallower edge between q(k) and q(k+1).
@@ -192,7 +318,7 @@ contains
          q_hi = max(q(k), q(k - 1))
          q_b(k) = max(q_lo, min(q_hi, e_b))
       end do
-   end subroutine plm_edges_column
+   end subroutine plm_edges_run
 
    pure subroutine ppm_edges_column(nz, h, q, q_t, q_b)
       !$acc routine seq
@@ -213,11 +339,56 @@ contains
       !! is symmetric about the layer mean, so `q6 = 3*(2*q - (q_t+q_b))`
       !! is identically zero there: the boundary layer carries a straight
       !! line, which is the exact profile whenever `q(z)` is linear.
+      !!
+      !! Filler-aware in exactly the way `plm_edges_column` is: maximal
+      !! runs of live layers (`h > H_VANISHED`) are reconstructed
+      !! independently, run ends are boundary cells, fillers are flattened
+      !! onto the adjacent live edge.  An all-live column is one run and
+      !! is bit-identical to the unsegmented build.
       integer, intent(in) :: nz
       real(wp), intent(in)  :: h(nz)
       real(wp), intent(in)  :: q(nz)
       real(wp), intent(out) :: q_t(nz)
       real(wp), intent(out) :: q_b(nz)
+
+      integer :: k, k0
+
+      ! Seed every layer with its own mean (PCM).  Each live run then
+      ! overwrites its own layers and `fill_filler_edges` the fillers, so
+      ! this only survives on a column with NO live layer at all — and it
+      ! keeps `q_t`/`q_b` fully defined, which an `intent(out)` dummy
+      ! handed to two successive run calls would not.
+      do k = 1, nz
+         q_t(k) = q(k)
+         q_b(k) = q(k)
+      end do
+      k0 = 0
+      do k = 1, nz
+         if (h(k) > H_VANISHED) then
+            if (k0 == 0) k0 = k
+            if (k == nz) call ppm_edges_run(nz, k0, nz, h, q, q_t, q_b)
+         else
+            if (k0 > 0) call ppm_edges_run(nz, k0, k - 1, h, q, q_t, q_b)
+            k0 = 0
+         end if
+      end do
+      call fill_filler_edges(nz, h, q, q_t, q_b)
+   end subroutine ppm_edges_column
+
+   pure subroutine ppm_edges_run(nz, k0, k1, h, q, q_t, q_b)
+      !$acc routine seq
+      !! PPM edge pair over ONE contiguous run of live layers `k0..k1`
+      !! (implicit-h4 interior interfaces + Colella-Woodward limiter, the
+      !! two run ends closed by `boundary_edges_linear`).  With `k0 = 1`,
+      !! `k1 = nz` this is the whole-column reconstruction.
+      integer, intent(in) :: nz
+      integer, intent(in) :: k0, k1
+         !! First / last layer of the live run (bottom-up, `k0 <= k1`).
+      real(wp), intent(in)  :: h(nz)
+      real(wp), intent(in)  :: q(nz)
+      real(wp), intent(inout) :: q_t(nz)
+         !! INOUT, not OUT — see `plm_edges_run`.
+      real(wp), intent(inout) :: q_b(nz)
 
       real(wp) :: edge(NZ_STACK_MAX)
          !! edge(k) = value at the SHALLOWER interface of layer k (between
@@ -231,21 +402,23 @@ contains
       real(wp), parameter :: H_MIN_FRAC = 1.0e-5_wp
       integer  :: k
 
-      if (nz <= 1) then
-         q_t(1) = q(1)
-         q_b(1) = q(1)
+      if (k1 <= k0) then
+         q_t(k0) = q(k0)
+         q_b(k0) = q(k0)
          return
       end if
-      if (nz == 2) then
-         call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
-         call boundary_edges_linear(h(2), h(1), q(2), q(2) - q(1), q_t(2), q_b(2))
+      if (k1 == k0 + 1) then
+         call boundary_edges_linear(h(k0), h(k1), q(k0), q(k1) - q(k0), &
+                                    q_t(k0), q_b(k0))
+         call boundary_edges_linear(h(k1), h(k0), q(k1), q(k1) - q(k0), &
+                                    q_t(k1), q_b(k1))
          return
       end if
 
       ! ---- Interior interface estimates (implicit-h4 explicit form) ----
       ! edge(k) sits between layer k (deeper) and k+1 (shallower); the
       ! four-cell stencil is h(k-1..k+2).
-      do k = 2, nz - 2
+      do k = k0 + 1, k1 - 2
          h0 = h(k - 1)
          h1 = h(k)
          h2 = h(k + 1)
@@ -275,19 +448,21 @@ contains
       ! Near-boundary interior interfaces: thickness-weighted (h2)
       ! interface estimate — the linear-exact value at the shared face of
       ! two piecewise-linear cells, q_f = (q_k h_{k+1} + q_{k+1} h_k) /
-      ! (h_k + h_{k+1}).  These touch interior layer 2 (interface 1|2) and
-      ! nz-1 (interface nz-1|nz); the bounding layers 1 and nz take the
-      ! one-sided linear pair, so only these two matter.  (A plain mean
-      ! biases the thick interior layer's edge on non-uniform thicknesses.)
-      edge(1) = (q(1)*h(2) + q(2)*h(1))/(h(1) + h(2))
-      edge(nz - 1) = (q(nz - 1)*h(nz) + q(nz)*h(nz - 1))/(h(nz - 1) + h(nz))
+      ! (h_k + h_{k+1}).  These touch interior layer k0+1 (interface
+      ! k0|k0+1) and k1-1 (interface k1-1|k1); the bounding layers k0 and
+      ! k1 take the one-sided linear pair, so only these two matter.  (A
+      ! plain mean biases the thick interior layer's edge on non-uniform
+      ! thicknesses.)
+      edge(k0) = (q(k0)*h(k0 + 1) + q(k0 + 1)*h(k0))/(h(k0) + h(k0 + 1))
+      edge(k1 - 1) = (q(k1 - 1)*h(k1) + q(k1)*h(k1 - 1))/(h(k1 - 1) + h(k1))
 
       ! ---- Per-layer edges + Colella-Woodward parabola limiter ----
-      ! Boundary layers: linear-exact one-sided pair (q6 == 0 there).
-      call boundary_edges_linear(h(1), h(2), q(1), q(2) - q(1), q_t(1), q_b(1))
-      call boundary_edges_linear(h(nz), h(nz - 1), q(nz), q(nz) - q(nz - 1), &
-                                 q_t(nz), q_b(nz))
-      do k = 2, nz - 1
+      ! Run-boundary layers: linear-exact one-sided pair (q6 == 0 there).
+      call boundary_edges_linear(h(k0), h(k0 + 1), q(k0), q(k0 + 1) - q(k0), &
+                                 q_t(k0), q_b(k0))
+      call boundary_edges_linear(h(k1), h(k1 - 1), q(k1), q(k1) - q(k1 - 1), &
+                                 q_t(k1), q_b(k1))
+      do k = k0 + 1, k1 - 1
          qm = q(k)
          ql = edge(k - 1)   ! deeper interface  -> bottom edge
          qr = edge(k)       ! shallower interface -> top edge
@@ -317,7 +492,7 @@ contains
          q_b(k) = ql     ! deeper edge
          q_t(k) = qr     ! shallower edge
       end do
-   end subroutine ppm_edges_column
+   end subroutine ppm_edges_run
 
    pure subroutine boole_dpa_intz_layer(eos, rho0, rho_ref, &
                                         e_top, dz, &

@@ -64,6 +64,8 @@ program rdb_tests
                                            collect_ocean_cavity_freshwater_tests
    use test_ocean_pgf_sigma_rest, only: ocean_pgf_sigma_rest_collect => &
                                         collect_ocean_pgf_sigma_rest_tests
+   use test_ocean_pgf_filler_recon, only: ocean_pgf_filler_recon_collect => &
+                                          collect_ocean_pgf_filler_recon_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
    use test_ocean_pgf_rho_ref, only: ocean_pgf_rho_ref_collect => collect_ocean_pgf_rho_ref_tests
    use test_ocean_forcing_rho_ref, only: ocean_forcing_rho_ref_collect => &
@@ -255,6 +257,8 @@ program rdb_tests
                 new_testsuite("ocean_cavity_freshwater", &
                               ocean_cavity_freshwater_collect), &
                 new_testsuite("ocean_pgf_sigma_rest", ocean_pgf_sigma_rest_collect), &
+                new_testsuite("ocean_pgf_filler_recon", &
+                              ocean_pgf_filler_recon_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &
                 new_testsuite("ocean_pgf_rho_ref", ocean_pgf_rho_ref_collect), &
                 new_testsuite("ocean_forcing_rho_ref", ocean_forcing_rho_ref_collect), &

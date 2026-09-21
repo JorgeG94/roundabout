@@ -1445,6 +1445,20 @@ contains
       !! edges.  Boundary layers take the linear-exact one-sided edge pair
       !! in the edge helper (`boundary_edges_linear`).
       !!
+      !! FILLER-AWARE.  Under a z-like coordinate a column carries runs of
+      !! vanished filler layers (`h <= H_VANISHED`) above the ice base and
+      !! below the bed.  The edge helpers reconstruct the LIVE runs only
+      !! and flatten each filler onto the adjacent live edge (see
+      !! `rdb_ocean_pgf_reconstruct`), so the filler's layer MEAN here must
+      !! be that same flat edge value and NOT `hTr/H_VANISHED` — the raw
+      !! ratio is whatever the ALE drain left in a cell that holds no
+      !! water, and it enters `dpa` (the pa stack every live layer below
+      !! inherits) and the along-face quadrature at the wedge layers whose
+      !! `intx_pa` the live faces below inherit in turn.  Since a filler's
+      !! edges are flat, `S_t`/`T_t` ARE the mean, which is why no extra
+      !! array is needed.  All-live column ⇒ the `hTr/h` branch everywhere
+      !! ⇒ bit-identical.
+      !!
       !! `p_top_in_bc` injects the top load into the SAME Pass-1 surface
       !! BC as the PCM twin, and the Theorem in `compute_fv_mom6_impl`
       !! carries over verbatim: the reconstruction only changes `dpa` /
@@ -1550,13 +1564,14 @@ contains
          e_face(i, j, 1) = -b(i, j)
          do k = 1, nz
             e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
-            ! Layer mean (for the PPM parabolic curvature term).
+            ! Layer mean (for the PPM parabolic curvature term).  A filler
+            ! takes its (flat) reconstructed edge value, not `hTr/h`.
             if (h_layer(i, j, k) > H_FLOOR) then
                s_col(k) = hS(i, j, k)/h_layer(i, j, k)
                t_col(k) = hT(i, j, k)/h_layer(i, j, k)
             else
-               s_col(k) = hS(i, j, k)/H_FLOOR
-               t_col(k) = hT(i, j, k)/H_FLOOR
+               s_col(k) = S_t(i, j, k)
+               t_col(k) = T_t(i, j, k)
             end if
          end do
          eta = e_face(i, j, nz + 1)
@@ -1587,10 +1602,10 @@ contains
       do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
          intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
          do k = nz, 1, -1
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k), T_t(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k), T_t(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k), S_t(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k), S_t(i, j, k))
             call boole_dpa_face(eos, rho0, rho_ref, &
                                 e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
                                 h_layer(i - 1, j, k), h_layer(i, j, k), &
@@ -1616,10 +1631,10 @@ contains
       do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
          inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
          do k = nz, 1, -1
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k), T_t(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k), T_t(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k), S_t(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k), S_t(i, j, k))
             call boole_dpa_face(eos, rho0, rho_ref, &
                                 e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
                                 h_layer(i, j - 1, k), h_layer(i, j, k), &
@@ -1709,23 +1724,33 @@ contains
       end if
    end subroutine compute_fv_mom6_reconstruct_impl
 
-   pure function recon_layer_mean(hq, h) result(q)
+   pure function recon_layer_mean(hq, h, q_filler) result(q)
       !$acc routine seq
       !! Layer-mean tracer from the thickness-weighted prognostic,
-      !! `q = hq/h`, with the D4 vanished-layer floor.  Same gate as the
-      !! reconstruct kernel's Pass 0/1 (`H_VANISHED`, not `1e-10`): during
-      !! an active drain the PPM positivity limiter only guarantees
+      !! `q = hq/h`, with the D4 vanished-layer substitution.  Same gate as
+      !! the reconstruct kernel's Pass 0/1 (`H_VANISHED`, not `1e-10`):
+      !! during an active drain the PPM positivity limiter only guarantees
       !! `h >= 0`, so a layer in `(0, H_VANISHED]` would otherwise divide
       !! by a near-zero thickness.
+      !!
+      !! A vanished layer takes `q_filler`, its own FLAT reconstructed edge
+      !! value (`fill_filler_edges` put the adjacent live layer's edge
+      !! there), not `hq/H_VANISHED`: the raw ratio is not a water property
+      !! — the cell holds no water — and it would enter the along-face
+      !! quadrature at every wedge layer, which the live faces beneath
+      !! inherit through the `intx_pa` recurrence.
       real(wp), intent(in) :: hq
          !! Thickness-weighted tracer (e.g. `S*h`).
       real(wp), intent(in) :: h
          !! Layer thickness (m).
+      real(wp), intent(in) :: q_filler
+         !! Reconstructed flat edge value to use when the layer is
+         !! vanished (`S_t` / `T_t` of that cell).
       real(wp) :: q
       if (h > H_VANISHED) then
          q = hq/h
       else
-         q = hq/H_VANISHED
+         q = q_filler
       end if
    end function recon_layer_mean
 
