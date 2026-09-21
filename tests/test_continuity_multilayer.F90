@@ -29,7 +29,7 @@ module test_continuity_multilayer
                              continuity_step_split, &
                              continuity_zonal_flux
    use rdb_continuity, only: continuity_meridional_flux
-   use rdb_ocean_metrics, only: ocean_metrics_t, metrics_apply_land_mask
+   use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use, intrinsic :: ieee_exceptions, only: ieee_get_flag, ieee_set_flag, &
@@ -41,6 +41,19 @@ module test_continuity_multilayer
 
    integer, parameter :: NGHOST = 2
    integer, parameter :: NZ = 3
+
+   ! Does the `do concurrent` kernel execute in THIS thread's floating-point
+   ! environment?  Only then can an `ieee_get_flag` here observe an exception
+   ! the kernel raised.  On the offload build the arithmetic happens on the
+   ! device, which has no IEEE flag state the host can read (and neither
+   ! OpenACC nor CUDA propagates one back), so such an assertion is vacuous
+   ! there and must not be mistaken for a passing gate — see
+   ! `test_renorm_land_face`.
+#ifdef RDB_GPU_OFFLOAD
+   logical, parameter :: KERNEL_IN_HOST_FPENV = .false.
+#else
+   logical, parameter :: KERNEL_IN_HOST_FPENV = .true.
+#endif
 
 contains
 
@@ -927,7 +940,6 @@ contains
       integer :: nx, ny, i, j
 
       call make_grid(grid, 12, 8, 1000.0_wp, 1000.0_wp)
-      call make_cartesian_metrics(metrics, grid)
       nx = grid%nx_total
       ny = grid%ny_total
 
@@ -942,11 +954,15 @@ contains
             end do
          end do
       end if
-      call metrics_apply_land_mask(metrics, wet, grid, &
-                                   periodic_x=.false., periodic_y=.false., &
-                                   north_fold=.false., mask_wall_velocity=.false., &
-                                   wall_west=.true., wall_east=.true., &
-                                   wall_south=.true., wall_north=.true.)
+      ! The mask goes THROUGH the helper, which applies it before the
+      ! device map.  `metrics_apply_land_mask` is a host-loop setup-time
+      ! editor with no `!$acc update` of its own, so masking a metrics
+      ! slot that is ALREADY mapped leaves the device with the all-wet
+      ! metrics: on `mem:separate` the island then simply does not exist
+      ! on the GPU, the kernel transports straight through it, and the
+      ! host-side assertions below read a masked host copy that agrees
+      ! with nothing the device did.
+      call make_cartesian_metrics(metrics, grid, wet_mask=wet)
       deallocate (wet)
 
       ms%nz_ml = NZ
@@ -993,6 +1009,20 @@ contains
       !! LAUNDER into a plausible extreme velocity (the documented
       !! `-fast` NaN-blind-select behaviour).  So the assertion is not
       !! cosmetic: it is that no non-finite value leaves the kernel.
+      !!
+      !! WHICH assertion carries the case depends on where the kernel
+      !! runs.  The `1/0` is observable ONLY through the floating-point
+      !! environment (on this fixture the Inf is confined to `u_lim` and
+      !! the `du_hi`/`du_lo` bracket, which the masked face never spends:
+      !! `w = dy_cu = 0` there, so `sum_h = 0` and no flux is written) —
+      !! and an FP environment is a HOST thread property.  On the offload
+      !! build the division happens on the device, whose exception state
+      !! the host cannot read, so the flag assertion below is skipped
+      !! rather than left to pass vacuously; what the GPU build gates is
+      !! the land-mask contract on DEVICE data — the masked face carrying
+      !! exactly zero transport and every flux finite.  The divide-by-zero
+      !! gate itself is therefore a CPU-toolchain gate, which is also
+      !! where the trapping builds live.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_metrics_t) :: metrics
@@ -1014,19 +1044,26 @@ contains
                  "the fixture must actually produce a zeroed idyCv face")
       if (allocated(error)) go to 100
 
-      ! The primary assertion: run the two renormalisers with the IEEE
-      ! divide-by-zero flag CLEARED and require it still clear afterwards.
-      ! That is the defect itself rather than a downstream symptom — the
-      ! Inf `u_lim` happens not to reach `mass_flux` here (the masked face
-      ! has `sum_h = 0`, so the Newton correction is multiplied by zero),
-      ! which is exactly why the bug survived: a value test cannot see it,
-      ! and a build with `-ffpe-trap=zero` simply dies.  `ieee_set_flag` is
-      ! the portable, non-fatal equivalent of that trap.
+      ! The primary assertion ON A HOST-KERNEL BUILD: run the two
+      ! renormalisers with the IEEE divide-by-zero flag CLEARED and require
+      ! it still clear afterwards.  That is the defect itself rather than a
+      ! downstream symptom — the Inf `u_lim` happens not to reach
+      ! `mass_flux` here (the masked face has `sum_h = 0`, so the Newton
+      ! correction is multiplied by zero), which is exactly why the bug
+      ! survived: a value test cannot see it, and a build with
+      ! `-ffpe-trap=zero` simply dies.  `ieee_set_flag` is the portable,
+      ! non-fatal equivalent of that trap.
+      !
+      ! `KERNEL_IN_HOST_FPENV` is what keeps it honest: with the kernel on
+      ! the device this reads the HOST's flag, which the device arithmetic
+      ! never touches, so a green result would mean only "nothing on this
+      ! thread divided by zero" — a gate that passes just as happily with
+      ! the guard reverted.  Skipped, not trusted.
       flag_supported = ieee_support_flag(ieee_divide_by_zero, 1.0_wp)
       call ieee_set_flag(ieee_divide_by_zero, .false.)
       call run_land_channel(grid, metrics, ms, ct, uhbt, vhbt, DT)
       call ieee_get_flag(ieee_divide_by_zero, div0)
-      if (flag_supported) then
+      if (flag_supported .and. KERNEL_IN_HOST_FPENV) then
          call check(error,.not. div0, &
                     "the renormalisers must not divide by zero on a land face "// &
                     "(idxCu/idyCv are multiplied by wet_u/wet_v, so they are "// &
@@ -1055,14 +1092,33 @@ contains
          end do
       end do
 
-      ! And the land face carries no transport, which is the answer the
-      ! masked metric was put there to produce.
-      i = grid%nghost + 5
-      j = grid%nghost + 4
+      ! And EVERY masked face carries no transport, which is the answer the
+      ! masked metric was put there to produce — and the one assertion here
+      ! that reads a number the DEVICE computed, so it is also what proves
+      ! the fixture's mask reached the device at all (mask the metrics
+      ! after the `enter_data` and the GPU keeps the all-wet copy: the
+      ! island vanishes, these faces carry a full wet flux, and every
+      ! host-side premise check above still passes).  The renormaliser
+      ! skips the array-edge faces, so sweep the interior ones it visits.
       do k = 1, NZ
-         call check(error, ms%mass_flux_x_layer(i, j, k) == 0.0_wp, &
-                    "a masked u-face must still carry exactly zero mass flux")
-         if (allocated(error)) go to 100
+         do j = 1, grid%ny_total
+            do i = 2, grid%nx_total
+               if (metrics%wet_u(i, j) /= 0.0_wp) cycle
+               call check(error, ms%mass_flux_x_layer(i, j, k) == 0.0_wp, &
+                          "a masked u-face must still carry exactly zero mass flux")
+               if (allocated(error)) go to 100
+            end do
+         end do
+      end do
+      do k = 1, NZ
+         do j = 2, grid%ny_total
+            do i = 1, grid%nx_total
+               if (metrics%wet_v(i, j) /= 0.0_wp) cycle
+               call check(error, ms%mass_flux_y_layer(i, j, k) == 0.0_wp, &
+                          "a masked v-face must still carry exactly zero mass flux")
+               if (allocated(error)) go to 100
+            end do
+         end do
       end do
 
 100   continue
