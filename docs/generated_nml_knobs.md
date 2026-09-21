@@ -67,6 +67,7 @@ Vertical-coordinate + ALE-remap controls.
 | `rho_target_dense` | `0.1030000000E+04` | kg/m^3 | rho-coord: densest (bed) target density |
 | `regrid_time_scale` | `0.0000000000E+00` | s | ALE regrid grid time-filter timescale (0 = jump to target) |
 | `remap_vel_conserve_ke` | `.false.` |  | ALE velocity remap: KE-conserving baroclinic-anomaly rescale |
+| `zfixed_closed_faces` | `.false.` |  | z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip) |
 
 ### &physics_nml
 

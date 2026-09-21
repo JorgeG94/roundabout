@@ -3338,6 +3338,33 @@ module rdb_config
          !! the baroclinic anomaly per column so column KE is preserved
          !! (Adcroft & Hallberg 2006), capped 1.25×; barotropic mean
          !! untouched.  .false. (default) = momentum-only = bit-identical.
+      logical :: zfixed_closed_faces = .false.
+         !! **Partial-step z-level face closure** under
+         !! `vcoord_type = "z_fixed"` (Adcroft, Hill & Marshall 1997;
+         !! Losch 2008 for the ice-shelf cavity).  A layer whose nominal
+         !! geopotential range lies inside the bed — or inside the ice
+         !! draft — carries an inert FILLER of thickness `zstar_h_min`
+         !! (`<= H_VANISHED`).  A velocity face where layer `k` is a
+         !! filler on EITHER side is not a thin passage, it is a WALL for
+         !! that layer: no normal velocity, no mass / tracer flux, and
+         !! FREE-SLIP on the tangential component.  Leaving it open makes
+         !! the FV pressure gradient integrate across a staircase step of
+         !! height `Δz_step`, which drives
+         !! `|ρ′|·g·Δz_step/(ρ₀·dx)` out of a resting stratified state —
+         !! independent of the filler thickness, so no `h`-gate reaches
+         !! it.
+         !!
+         !! ON builds a STATIC 0/1 per-layer face mask
+         !! (`ocean_metrics_t%open_u` / `open_v`) once at configure from
+         !! the `z_fixed` target at `η = 0`, and composes it
+         !! multiplicatively with the land metrics and the porous-barrier
+         !! open-area fraction:
+         !! `dy_eff(i,j,k) = dy_cu(i,j)·por_face_area_u(i,j,k)·open_u(i,j,k)`.
+         !!
+         !! Default `.false.` ⇒ the mask arrays stay at their `(1,1,1)`
+         !! placeholder, no kernel branch is taken, byte-identical.
+         !! Refused on any coordinate but `z_fixed`, and without a
+         !! resolved `z_fixed_h_ref` (there would be no fillers to close).
 
       ! Logging parameters
       character(len=16) :: log_level = "info"
@@ -7520,6 +7547,10 @@ contains
       pl => cfg%remap_vel_conserve_ke
       call g%add(nml_logical("remap_vel_conserve_ke", pl, &
                              "ALE velocity remap: KE-conserving baroclinic-anomaly rescale"))
+      pl => cfg%zfixed_closed_faces
+      call g%add(nml_logical("zfixed_closed_faces", pl, &
+                             "z_fixed partial steps: close every face whose layer is "// &
+                             "an inert filler on either side (z-level wall, free-slip)"))
       call schema%add_group(g)
    end subroutine register_vcoord
 

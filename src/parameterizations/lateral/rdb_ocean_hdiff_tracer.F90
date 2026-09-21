@@ -181,52 +181,105 @@ contains
          wall_n = (bc%north%bc_type == OBC_WALL) .and. bc%has_north
       end if
 
-      do it = 1, size(ms%tracers)
-         if (.not. ms%tracers(it)%do_horizontal_diffusion) cycle
-         select case (ms%tracers(it)%budget_id)
-         case (TRACER_BUDGET_HEAT)
-            call tracer_hdiff_one_impl( &
-               grid%nx_total, grid%ny_total, ms%nz_ml, &
-               grid%nghost, grid%nx_phys, grid%ny_phys, &
-               dt, this%kappa_h, &
-               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
-               metrics%iareaT, &
-               ms%h_layer, ms%tracers(it)%hTr, &
-               this%T_centre%data, &
-               this%F_x_face%data, this%F_y_face%data, &
-               wall_w, wall_e, wall_s, wall_n, &
-               budget=ms%heat_budget_hdiff)
-         case (TRACER_BUDGET_SALT)
-            call tracer_hdiff_one_impl( &
-               grid%nx_total, grid%ny_total, ms%nz_ml, &
-               grid%nghost, grid%nx_phys, grid%ny_phys, &
-               dt, this%kappa_h, &
-               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
-               metrics%iareaT, &
-               ms%h_layer, ms%tracers(it)%hTr, &
-               this%T_centre%data, &
-               this%F_x_face%data, this%F_y_face%data, &
-               wall_w, wall_e, wall_s, wall_n, &
-               budget=ms%salt_budget_hdiff)
-         case default
-            call tracer_hdiff_one_impl( &
-               grid%nx_total, grid%ny_total, ms%nz_ml, &
-               grid%nghost, grid%nx_phys, grid%ny_phys, &
-               dt, this%kappa_h, &
-               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
-               metrics%iareaT, &
-               ms%h_layer, ms%tracers(it)%hTr, &
-               this%T_centre%data, &
-               this%F_x_face%data, this%F_y_face%data, &
-               wall_w, wall_e, wall_s, wall_n)
-         end select
-      end do
+      ! The mask actuals are chosen ONCE, outside the tracer loop: they are
+      ! passed as ABSENT optionals on the default path (see the `open_u`
+      ! docstring for why an inert stand-in is not available here), and
+      ! an absent optional cannot be selected inside an expression, so
+      ! the select-case is written twice rather than the arguments once.
+      ! Thermo cadence, cold code.
+      if (metrics%use_closed_faces) then
+         do it = 1, size(ms%tracers)
+            if (.not. ms%tracers(it)%do_horizontal_diffusion) cycle
+            select case (ms%tracers(it)%budget_id)
+            case (TRACER_BUDGET_HEAT)
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n, &
+                  open_u=metrics%open_u, open_v=metrics%open_v, &
+                  budget=ms%heat_budget_hdiff)
+            case (TRACER_BUDGET_SALT)
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n, &
+                  open_u=metrics%open_u, open_v=metrics%open_v, &
+                  budget=ms%salt_budget_hdiff)
+            case default
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n, &
+                  open_u=metrics%open_u, open_v=metrics%open_v)
+            end select
+         end do
+      else
+         do it = 1, size(ms%tracers)
+            if (.not. ms%tracers(it)%do_horizontal_diffusion) cycle
+            select case (ms%tracers(it)%budget_id)
+            case (TRACER_BUDGET_HEAT)
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n, &
+                  budget=ms%heat_budget_hdiff)
+            case (TRACER_BUDGET_SALT)
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n, &
+                  budget=ms%salt_budget_hdiff)
+            case default
+               call tracer_hdiff_one_impl( &
+                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                  dt, this%kappa_h, &
+                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                  metrics%iareaT, &
+                  ms%h_layer, ms%tracers(it)%hTr, &
+                  this%T_centre%data, &
+                  this%F_x_face%data, this%F_y_face%data, &
+                  wall_w, wall_e, wall_s, wall_n)
+            end select
+         end do
+      end if
    end subroutine tracer_hdiff
 
    pure subroutine tracer_hdiff_one_impl(nx, ny, nz, nghost, nx_phys, ny_phys, dt, kappa, &
                                          dy_cu, dx_cv, idxCu, idyCv, iareaT, &
                                          h, hTr, T_centre, F_x_face, F_y_face, &
-                                         wall_w, wall_e, wall_s, wall_n, budget)
+                                         wall_w, wall_e, wall_s, wall_n, &
+                                         open_u, open_v, budget)
       !! Four-pass flat-impl horizontal-Laplacian tracer diffusion in
       !! conservative curvilinear form (design §2, mirrors continuity):
       !!
@@ -271,6 +324,23 @@ contains
       real(wp), intent(inout) :: F_x_face(nx + 1, ny, nz)
       real(wp), intent(inout) :: F_y_face(nx, ny + 1, nz)
       logical, intent(in) :: wall_w, wall_e, wall_s, wall_n
+      real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask
+         !! (`&vcoord_nml zfixed_closed_faces`).  A CLOSED face is a
+         !! z-level WALL for that layer, so it carries no diffusive
+         !! tracer flux either — the same statement continuity makes
+         !! about mass.
+         !!
+         !! ABSENT (the default path) ⇒ no masking pass is generated and
+         !! every expression below is byte-identical to the un-masked
+         !! form.  It is OPTIONAL rather than a `use_open` + inert
+         !! stand-in pair precisely because the `(1,1,1)` placeholder
+         !! must never reach an explicit-shape dummy, and this routine
+         !! has no full-size read-only array of its own to lend (the
+         !! `F_*_face` buffers it would otherwise borrow are its own
+         !! `intent(inout)` scratch, so lending them would alias).
+      real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
+         !! v-face twin.  Present iff `open_u` is.
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
 
       integer :: i, j, k
@@ -292,6 +362,13 @@ contains
                              (T_centre(i, j, k) - T_centre(i - 1, j, k))* &
                              idxCu(i, j)*dy_cu(i, j)
       end do
+      ! z-level closed faces: a separate host-gated pass so the loop above
+      ! is textually unchanged with the knob off.
+      if (present(open_u)) then
+         do concurrent(k=1:nz, j=1:ny, i=2:nx)
+            F_x_face(i, j, k) = F_x_face(i, j, k)*open_u(i, j, k)
+         end do
+      end if
       ! Array-bound faces: always zeroed (pass-4 divergence at the
       ! domain-edge cells reads them even when the physical wall is
       ! elsewhere inside the ghost band).
@@ -315,6 +392,12 @@ contains
                              (T_centre(i, j, k) - T_centre(i, j - 1, k))* &
                              idyCv(i, j)*dx_cv(i, j)
       end do
+      ! z-level closed faces: see the zonal twin.
+      if (present(open_v)) then
+         do concurrent(k=1:nz, j=2:ny, i=1:nx)
+            F_y_face(i, j, k) = F_y_face(i, j, k)*open_v(i, j, k)
+         end do
+      end if
       do concurrent(k=1:nz, i=1:nx)
          F_y_face(i, 1, k) = 0.0_wp
          F_y_face(i, ny + 1, k) = 0.0_wp

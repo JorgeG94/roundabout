@@ -14,6 +14,7 @@ module rdb_ocean_setup
 #else
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
+   use rdb_constants, only: H_VANISHED
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
@@ -26,7 +27,10 @@ module rdb_ocean_setup
                       parse_tfreeze_set, eos_apply_tfreeze_set, &
                       TFREEZE_SET_SEAICE
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_EULERIAN_Z, &
-                               VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN
+                               VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN, &
+                               VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
+                               ocean_vcoord_closed_face_masks, &
+                               ocean_vcoord_count_ledges
    use rdb_vcoord, only: parse_remap_method
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
    use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
@@ -60,7 +64,7 @@ module rdb_ocean_setup
                                 parse_coriolis_scheme, ocean_metrics_t, &
                                 GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, &
                                 GRID_CONFIG_SUPERGRID, GRID_CONFIG_TRIPOLAR, &
-                                metrics_porous_alloc
+                                metrics_porous_alloc, metrics_closed_faces_alloc
    use rdb_ocean_cavity, only: cavity_fill_p_ice_ref, &
                                cavity_datum_impl, cavity_datum_residual
    use rdb_ocean_cavity_melt, only: CAVITY_GAMMA_RATIO_ISOMIP
@@ -115,6 +119,7 @@ module rdb_ocean_setup
    public :: configure_ocean_wave_drag
    public :: wave_drag_roughness_proxy
    public :: configure_ocean_porous
+   public :: configure_ocean_closed_faces
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
    public :: configure_ocean_top_drag
@@ -2226,6 +2231,250 @@ contains
       end associate
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
+
+   subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Build the static partial-step z-level FACE-CLOSURE mask
+      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
+      !!
+      !! Under `vcoord_type = "z_fixed"` a layer whose nominal
+      !! geopotential range lies inside the bed — or inside the ice draft
+      !! — carries an inert FILLER of thickness `zstar_h_min`
+      !! (`<= H_VANISHED`).  A velocity face at which layer `k` is a
+      !! filler on EITHER side stays OPEN today, and the FV pressure
+      !! gradient evaluated across that staircase step drives
+      !! `a = |ρ′|·g·Δz_step/(ρ₀·dx)` out of a resting stratified state —
+      !! independent of the filler thickness, so no `h`-gate can reach
+      !! it.  A z-LEVEL model treats such a face as a WALL for that
+      !! layer: no normal velocity, no mass or tracer flux, free-slip.
+      !!
+      !! This fills `metrics%open_u/open_v` with that wall, ONCE, from
+      !! `ocean_vcoord_z_fixed_target` at `η = 0` — the same kernel the
+      !! ALE regrid and the IC seed use, so there is no second definition
+      !! of "live".  The mask is STATIC: the bed and the draft are
+      !! static, and under `z_fixed` `η` is absorbed by the first LIVE
+      !! layer (the partial cell), so the live/filler pattern does not
+      !! move.
+      !!
+      !! It also seeds the barotropic face widths `dy_cu_bt`/`dx_cv_bt`
+      !! with the OPEN-depth fraction of the face, so the barotropic
+      !! solve is not blind to the closed layers.  That seed is refreshed
+      !! from the LIVE `h` every outer step by `ocean_porous_refresh`;
+      !! this is only the `η = 0` value the first stage reads.
+      !!
+      !! **Ordering.** MUST run AFTER `configure_ocean_cavity` (which
+      !! fills `vcoord%z_top`), after `configure_ocean_bt_split` (which
+      !! lays `bt_H_ref`) and after `configure_ocean_land_mask` and the
+      !! periodic-wrap / halo pass (the target is built from GHOST-FILLED
+      !! `bt_H_ref` and `z_top`, which is what makes the mask correct at
+      !! a periodic seam — the physical seam face is an interior index).
+      !! And BEFORE `ocean_state_enter_data`: the host fill is what the
+      !! `copyin` captures, and `metrics_closed_faces_alloc` reallocs.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a configuration conflict when present; absent
+         !! behaves as today (`error stop`).
+
+      integer :: nx, ny, nz, i, j, k
+      integer :: n_closed_u, n_closed_v, n_open_u, n_open_v, n_ledge
+      real(wp) :: h_nominal, h_min, h_face, sum_all, sum_open
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (.not. cfg%zfixed_closed_faces) return
+
+      if (.not. ocean_state%multilayer%is_init) then
+         call fail("&vcoord_nml zfixed_closed_faces requires the ocean "// &
+                   "multilayer path (the mask is per-layer)", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) then
+         call fail("&vcoord_nml zfixed_closed_faces is only defined for "// &
+                   "vcoord_type='z_fixed': the live/filler staircase it "// &
+                   "closes is a z-level artefact, and on a terrain-following "// &
+                   "or z* family every layer is live on every wet face", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
+         call fail("&vcoord_nml zfixed_closed_faces needs a resolved "// &
+                   "z_fixed_h_ref (set &ocean_topo_nml max_depth): without "// &
+                   "it the z_fixed target degenerates to uniform sigma, "// &
+                   "there are no fillers, and the mask would close nothing", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%dyn%bt_work%is_init) then
+         if (maxval(ocean_state%dyn%bt_work%bt_H_ref) <= 0.0_wp) then
+            call fail("&vcoord_nml zfixed_closed_faces: bt_H_ref is empty — "// &
+                      "the barotropic datum must be built (&ocean_bt_nml "// &
+                      "n_inner >= 1) before the static face mask can be laid", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+      if (cfg%ocean%wetdry%enable) then
+         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
+                   "&ocean_wetdry_nml enable: wet/dry moves the live/filler "// &
+                   "pattern under the running state and the mask is static", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%bt%bt_halo > 0) then
+         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
+                   "&ocean_bt_nml bt_halo > 0: the wide-halo barotropic "// &
+                   "clone carries its own metrics and no face mask, so the "// &
+                   "wide BT loop would transport through closed faces "// &
+                   "(the same argument &ocean_porous_nml already makes)", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%gm%enable .or. cfg%ocean%redi%enable .or. &
+          cfg%ocean%foxkemper%enable) then
+         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
+                   "with GM / Redi / MLE: all three form their face fluxes "// &
+                   "from a 2-D `wet_u`/`wet_v` gate and fold them into "// &
+                   "mass_flux_*_layer AFTER continuity has applied the "// &
+                   "per-layer mask, so their transports would leak through "// &
+                   "a closed face.  Per-layer seams in those three kernels "// &
+                   "are the follow-up slice", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then
+         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
+                   "with the BIHARMONIC viscosity (&ocean_hvisc_nml nu_4) or "// &
+                   "with stress_tensor: the free-slip closure of a closed "// &
+                   "face is implemented for the HARMONIC velocity-Laplacian "// &
+                   "kernels only (scalar nu_h and the per-face ah_face_*), "// &
+                   "and a mirror-Neumann biharmonic pass or a wet_q-style "// &
+                   "corner factor needs its own derivation and its own "// &
+                   "test.  Use a harmonic closure, or land that slice first", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+      h_min = ocean_state%vcoord%zstar_h_min
+
+      call metrics_closed_faces_alloc(ocean_state%metrics, grid, nz)
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, h_min)
+      call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
+                                          ocean_state%metrics%open_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+
+      ! Seed the BAROTROPIC face widths with the eta = 0 open-depth
+      ! fraction.  `ocean_porous_refresh` recomputes them from the live
+      ! `h` every outer step; this is only what stage 1 of step 1 reads.
+      ! The width and the depth are the same number here: the BT
+      ! transport is `ubt * FA * dy_cu_bt` with `FA = sum_k h_face`, so
+      ! `dy_cu_bt = dy_cu * (sum_open h_face)/(sum_k h_face)` makes that
+      ! product identically `ubt * (sum_open h_face) * dy_cu`.
+      do j = 1, ny
+         do i = 2, nx
+            sum_all = 0.0_wp
+            sum_open = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(tgt(i - 1, j, k) + tgt(i, j, k))
+               sum_all = sum_all + h_face
+               if (ocean_state%metrics%open_u(i, j, k) > 0.0_wp) then
+                  sum_open = sum_open + h_face
+               end if
+            end do
+            if (sum_all > 0.0_wp) then
+               ocean_state%metrics%dy_cu_bt(i, j) = &
+                  ocean_state%metrics%dy_cu(i, j)*(sum_open/sum_all)
+            end if
+         end do
+      end do
+      do j = 2, ny
+         do i = 1, nx
+            sum_all = 0.0_wp
+            sum_open = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(tgt(i, j - 1, k) + tgt(i, j, k))
+               sum_all = sum_all + h_face
+               if (ocean_state%metrics%open_v(i, j, k) > 0.0_wp) then
+                  sum_open = sum_open + h_face
+               end if
+            end do
+            if (sum_all > 0.0_wp) then
+               ocean_state%metrics%dx_cv_bt(i, j) = &
+                  ocean_state%metrics%dx_cv(i, j)*(sum_open/sum_all)
+            end if
+         end do
+      end do
+
+      ! Cheap one-shot census for the configure line: how much of the
+      ! array the mask actually closes, and whether it isolated any
+      ! water.  Host-side, once, O(nx*ny*nz) — not a per-step diagnostic.
+      n_closed_u = 0
+      n_open_u = 0
+      do k = 1, nz
+         do j = 1, ny
+            do i = 2, nx
+               if (ocean_state%metrics%open_u(i, j, k) > 0.0_wp) then
+                  n_open_u = n_open_u + 1
+               else
+                  n_closed_u = n_closed_u + 1
+               end if
+            end do
+         end do
+      end do
+      n_closed_v = 0
+      n_open_v = 0
+      do k = 1, nz
+         do j = 2, ny
+            do i = 1, nx
+               if (ocean_state%metrics%open_v(i, j, k) > 0.0_wp) then
+                  n_open_v = n_open_v + 1
+               else
+                  n_closed_v = n_closed_v + 1
+               end if
+            end do
+         end do
+      end do
+      n_ledge = ocean_vcoord_count_ledges(ocean_state%metrics%open_u, &
+                                          ocean_state%metrics%open_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+
+      deallocate (tgt, eta0)
+
+      ! Flip the switches LAST — every consumer branches on them, and the
+      ! mask has to be in place before any of them can read a closed face.
+      ocean_state%metrics%use_closed_faces = .true.
+      ocean_state%vcoord%zfixed_closed_faces = .true.
+      ocean_state%vdiff%zlevel_faces = .true.
+
+      if (compute_rank == 0) then
+         call logger%info("z_fixed closed faces: ON (partial steps, "// &
+                          "Adcroft/Hill/Marshall 1997) — u closed "// &
+                          to_string(n_closed_u)//"/"// &
+                          to_string(n_closed_u + n_open_u)//", v closed "// &
+                          to_string(n_closed_v)//"/"// &
+                          to_string(n_closed_v + n_open_v)// &
+                          ", isolated ledge cells "//to_string(n_ledge))
+         if (n_ledge > 0) then
+            call logger%warning("z_fixed closed faces: "//to_string(n_ledge)// &
+                                " LIVE cells have all four own-layer faces "// &
+                                "closed — the mask has isolated water.  They "// &
+                                "are inert (no flux in or out, velocity zeroed "// &
+                                "every stage) but a one-cell spike in the bed "// &
+                                "or the draft is worth looking at.")
+         end if
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_closed_faces
 
    subroutine configure_ocean_porous(cfg, ocean_state, grid, compute_rank, ierr)
       !! Configure porous barriers (`&ocean_porous_nml`, Adcroft 2013).

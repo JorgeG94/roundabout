@@ -2324,6 +2324,15 @@ contains
       !! at a dynamically blocked (drying-front) face resets to zero, so
       !! rewetting starts from rest.  Knob off / absent ⇒ the ORIGINAL
       !! loops run untouched (byte-identical).
+      !!
+      !! When `&vcoord_nml zfixed_closed_faces` is on, the PER-LAYER
+      !! z-level mask `metrics%open_u/open_v` composes multiplicatively
+      !! too — this is the "no normal velocity" half of the z-level wall
+      !! (the "no mass or tracer flux" half is continuity's, and
+      !! "free-slip" is the horizontal-viscosity kernels').  It runs
+      !! AFTER `apply_bt_correction` at every call site, so a barotropic
+      !! increment can never be left behind at a closed face.  Knob off
+      !! ⇒ the ORIGINAL loops, byte-identical.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(multilayer_state_t), intent(inout) :: ms
@@ -2356,6 +2365,20 @@ contains
          end do
          do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
             ms%v_face_y_layer(i, j, k) = metrics%wet_v(i, j)*ms%v_face_y_layer(i, j, k)
+         end do
+      end if
+
+      ! z-level closed faces: a SEPARATE host-gated pass, not folded into
+      ! the branches above, so neither the all-wet nor the wet/dry loop
+      ! changes textually when the knob is off.
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
+            ms%u_face_x_layer(i, j, k) = metrics%open_u(i, j, k)* &
+                                         ms%u_face_x_layer(i, j, k)
+         end do
+         do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
+            ms%v_face_y_layer(i, j, k) = metrics%open_v(i, j, k)* &
+                                         ms%v_face_y_layer(i, j, k)
          end do
       end if
    end subroutine mask_layer_velocities

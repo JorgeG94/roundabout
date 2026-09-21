@@ -1,0 +1,228 @@
+! ISOMIP+ Ocean0 BATHYMETRY, no ice shelf, on the QUASI-GEOPOTENTIAL
+! coordinate with PARTIAL-STEP face closure — the cheapest honest
+! statement of the whole z-level staircase defect.
+!
+! WHY THIS FILE EXISTS.  `vcoord_type = "z_fixed"` places its interfaces
+! at FIXED geopotential depths, so in shallow water the bed-side layers
+! outcrop and collapse to the inert filler `zstar_h_min`.  A velocity
+! face at which layer k is a filler on ONE side only was, until
+! `&vcoord_nml zfixed_closed_faces`, left OPEN: the FV pressure gradient
+! was then evaluated across a staircase step of height up to h_nominal
+! and drove `|rho'|*g*dz_step/(rho_0*dx)` out of a resting stratified
+! state — independent of the filler thickness, so no h-gate could reach
+! it.
+!
+! With the knob ON the face is a z-LEVEL WALL (Adcroft, Hill & Marshall
+! 1997; Losch 2008 §2.1).  That is what this case gates.
+!
+! It carries NO ice shelf, NO cavity code and NO melt — the ISOMIP+
+! trough and bed alone (Asay-Davis et al. 2016, GMD 9, 2471, Eqs. 1-4 +
+! Table 1, via `&ocean_topo_nml topo_config = "isomip_plus"`).  The
+! defect is therefore attributable to the COORDINATE and to nothing
+! else; the cavity legs in ../ice_shelf_cavity/ add the rigid top on top
+! of it.  Read `cavity_sloping_lid_rest_zfixed.nml` for the ice-shelf
+! twin of the same measurement.
+!
+! MEASURED (gfortran 15.1, Release, single rank, pred_corr, 2 days):
+!
+!                             knob absent      knob on (this file)
+!   En, day 0.25              2.833E-05        8.063E-08
+!   En, day 1                 1.786E-04        8.636E-07
+!   En, day 2                 5.629E-04        2.700E-06
+!   max MaxCFL over the run   0.086            0.0041
+!   outcome                   completes, but   completes, En still
+!                             En is 208x the   rising slowly, MaxCFL
+!                             closed-face leg  < 0.005
+!   Mass Error                4.4E-14          4.4E-14
+!
+! NOTE, because the spike write-up says otherwise: on THIS namelist the
+! knob-off leg does NOT reach a non-finite state within 2 days.  It
+! degrades — 208x the energy, 20x the CFL, and still climbing — but it
+! survives.  The throwaway spike measured "NaN during day 0.25" on a
+! cavity-OFF variant of `ocean0_idealised_draft.nml`, which is a
+! different configuration (different viscosity, drag, sponge and mixing
+! settings), and that number should not be attributed to this file.
+! What this case gates is the ENERGY, not survival.
+!
+! AT REST BY CONSTRUCTION: no wind, no melt, no surface flux, and the
+! sponge restores to the profile the run is initialised with, so every
+! term that could do work on the fluid is zero.  Any energy the run
+! shows is manufactured by the discretisation — which is the point.
+!
+! Viscosity and diffusivity are the PROTOCOL values (nu_H = 6, kappa_H =
+! 1), deliberately NOT zeroed: the closed-face free-slip closure in the
+! harmonic velocity-Laplacian and the per-layer mask on the kappa_h
+! tracer flux are exactly what a viscous, diffusive leg exercises and a
+! zero-viscosity leg does not.  `split_scheme` is NOT pinned, so the
+! stability suite builds the ssp_rk2 twin from this same file.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   ! 480 km x 80 km at the COM resolution (ISOMIP+ Table 3 Lx/Ly,
+   ! Table 4 dx = dy).
+   nx     = 240
+   ny     = 40
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 172800.0     ! 2 days
+   dt_fixed     = 300.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0         ! "no forcing at the surface of the open
+   wind_stress_y = 0.0         !  ocean" (3.1.3)
+/
+
+&nonhydrostatic_nml
+   nz_layers = 36              ! ISOMIP+ 3.1.5
+/
+
+&vcoord_nml
+   vcoord_type         = "z_fixed"   ! quasi-geopotential; h_nominal =
+                                     ! max_depth/nz = 720/36 = 20 m
+   zfixed_closed_faces = .true.      ! THE KNOB UNDER TEST: a face whose
+                                     ! layer is an inert filler on either
+                                     ! side is a z-level WALL for that
+                                     ! layer.  Absent => 208x the day-2
+                                     ! energy (see the header table).
+/
+
+&ocean_topo_nml
+   topo_config    = "isomip_plus"    ! Eqs. (1)-(4) + Table 1
+   max_depth      = 720.0            ! = -z_b,deep; also sets z_fixed_h_ref
+   x_origin       = 320000.0         ! Table 3 x0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_pgf_nml
+   form        = "fv_mom6"
+   p_top_in_bc = .true.
+   maxvel      = 5.0
+/
+
+&ocean_eos_nml
+   eos         = "linear"      ! ISOMIP+ 3.1.7 / Eq. (23)
+   tfreeze_set = "isomip"
+/
+
+&ocean_ic_nml
+   ! DIMENSIONAL alpha_T / beta_S (kg/m3 per unit), i.e. the protocol's
+   ! fractional coefficients times rho_ref — see ocean0.nml's note.
+   alpha_T = 3.8356948e-2
+   beta_S  = 8.0587609e-1
+   T_ref   = -1.0
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   ! WARM initial condition, Eqs. (21)-(22) + Table 6, z positive UP.
+   enable    = .true.
+   source    = "linear"
+   lin_t_ref = -1.9
+   lin_dt_dz = -4.0277778e-3
+   lin_s_ref = 33.8
+   lin_ds_dz = -1.25e-3
+/
+
+&tracer_nml
+   initial_temperature = -0.45
+   initial_salinity    = 34.25
+/
+
+&ocean_bc_nml
+   west  = "wall"
+   east  = "sponge"
+   south = "wall"
+   north = "wall"
+   sponge_width    = 5
+   sponge_strength = 1.1574074e-4
+/
+
+&ocean_sponge_nml
+   ! Restores to the SAME profile the run is initialised with, so the
+   ! sponge does no net work on a resting state.
+   enable        = .true.
+   damp_source   = "band"
+   ramp          = "linear"
+   target_source = "linear_z"
+   relax_uv      = .false.
+   relax_tracers = .true.
+   lin_t_ref     = -1.9
+   lin_dt_dz     = -4.0277778e-3
+   lin_s_ref     = 33.8
+   lin_ds_dz     = -1.25e-3
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h = 6.0                  ! Table 4 nu_H (harmonic, constant)
+   nu_4 = 0.0                  ! biharmonic is refused under the knob
+                               ! (its free-slip closure is a follow-up)
+/
+
+&ocean_hdiff_nml
+   kappa_h = 1.0               ! Table 4 kappa_H — exercises the
+                               ! per-layer mask on the lateral tracer flux
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 2.5e-3               ! Table 4 C_D,bot
+/
+
+&ocean_vmix_nml
+   ! ISOMIP+ 3.1.6 asks for CONSTANT vertical viscosity/diffusivity; PP81
+   ! at nu0 = 0 degenerates to exactly that.  Non-zero kv is what makes
+   ! this leg exercise the closed-face decoupling in the momentum vdiff.
+   use_closure   = .true.
+   use_kpp       = .false.
+   pp81_nu0      = 0.0
+   pp81_nu_bg    = 1.0e-3      ! Table 4 nu_stab
+   pp81_kappa_bg = 5.0e-5      ! Table 4 kappa_stab
+/
+
+&ocean_conv_nml
+   enable       = .true.
+   kd_conv      = 0.1          ! Table 4 nu_unstab = kappa_unstab
+   prandtl_conv = 1.0
+   n2_thresh    = 0.0
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.
+   ! split_scheme DELIBERATELY not pinned — the stability suite builds
+   ! the __ssp_rk2 twin from this file, and the mask must not depend on
+   ! the outer time split.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "isomip_ice_free_zfixed"
+   dt_out   = 43200.0          ! twice daily
+/
+
+&output_nml
+   output_dir     = "./out_isomip_ice_free_zfixed"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 21600.0   ! four times a day
+/

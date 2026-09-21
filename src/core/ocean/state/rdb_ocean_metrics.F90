@@ -60,6 +60,7 @@ module rdb_ocean_metrics
    public :: metrics_fill_tripolar
    public :: metrics_fill_coriolis
    public :: metrics_porous_alloc
+   public :: metrics_closed_faces_alloc
    public :: adcroft_recip
    public :: GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, GRID_CONFIG_SUPERGRID
    public :: GRID_CONFIG_TRIPOLAR
@@ -171,6 +172,52 @@ module rdb_ocean_metrics
       real(wp), allocatable :: por_face_area_v(:, :, :)
          !! v-face twin, `(nx,ny+1,nz)` when `use_porous`, `(1,1,1)`
          !! otherwise.
+
+      ! ---- Partial-step z-level face closure (VCOORD_Z_FIXED) ----
+      logical :: use_closed_faces = .false.
+         !! Master switch (`&vcoord_nml zfixed_closed_faces`), latched by
+         !! `configure_ocean_closed_faces`.  OFF ⇒ `open_u`/`open_v` stay
+         !! at their `(1,1,1)` placeholder size, no kernel branch is
+         !! taken, byte-identical to a build without the feature.
+      real(wp), allocatable :: open_u(:, :, :)
+         !! u-face per-layer 0/1 OPEN mask, `(nx+1,ny,nz)` when
+         !! `use_closed_faces`, `(1,1,1)` otherwise.  1 = the layer has
+         !! water on BOTH sides of the face; 0 = it is an inert `z_fixed`
+         !! filler on at least one side and the face is a z-LEVEL WALL for
+         !! that layer (Adcroft, Hill & Marshall 1997; Losch 2008).
+         !! STATIC — built once at configure by
+         !! `ocean_vcoord_closed_face_masks` from the `z_fixed` target at
+         !! `η = 0`, never refreshed (the bed and the draft are static and
+         !! `η` is absorbed by the first live layer).
+      real(wp), allocatable :: open_v(:, :, :)
+         !! v-face twin, `(nx,ny+1,nz)` when `use_closed_faces`,
+         !! `(1,1,1)` otherwise.
+         !!
+         !! ### THE COMPOSITION RULE (stated once, here)
+         !!
+         !! The three face gates are INDEPENDENT and compose by
+         !! multiplication — none replaces another:
+         !! ```
+         !! dy_eff(I,j,k) = dy_cu(I,j) · por_face_area_u(I,j,k) · open_u(I,j,k)
+         !! dx_eff(i,J,k) = dx_cv(i,J) · por_face_area_v(i,J,k) · open_v(i,J,k)
+         !! ```
+         !! `dy_cu`/`dx_cv` carry the 2-D LAND decision (metric zeroing in
+         !! `metrics_apply_land_mask`); `por_face_area_*` narrows
+         !! continuously for unresolved SUBGRID sills (Adcroft 2013); and
+         !! `open_*` closes per LAYER for the resolved z-level staircase.
+         !! Porous barriers and closed faces are therefore NOT mutually
+         !! exclusive.
+         !!
+         !! Every consumer applies the two 3-D factors as SEPARATE,
+         !! separately host-gated, INLINE `do concurrent` passes rather
+         !! than pre-composing them into a third array.  Two reasons:
+         !! a composed array would have to be recomputed whenever the
+         !! porous fit is refreshed (per outer step) and so could not be
+         !! static; and an inert host-gated branch that never names the
+         !! array costs nothing, whereas handing a state array to an
+         !! external helper pessimises every `do concurrent` in the
+         !! calling routine even when the branch is not taken (CLAUDE.md,
+         !! measured at +4.8 % for an inert porous pass).
 
       ! ---- Static ice-shelf cavity geometry (P5.1; see rdb_ocean_cavity) ----
       logical :: use_cavity = .false.
@@ -360,6 +407,15 @@ contains
       allocate (this%por_davg_v(1, 1), source=0.0_wp)
       allocate (this%por_face_area_u(1, 1, 1), source=1.0_wp)
       allocate (this%por_face_area_v(1, 1, 1), source=1.0_wp)
+      ! z-level closed faces: same placeholder discipline as the porous
+      ! arrays -- `metrics_closed_faces_alloc` grows them at configure
+      ! (after init, before enter_data) only when the knob is on.  The
+      ! placeholder is 1 (fully open) so an accidental read is inert, but
+      ! it must NEVER reach an explicit-shape device dummy: every consumer
+      ! names `open_u`/`open_v` only inside a branch guarded by
+      ! `use_closed_faces`.
+      allocate (this%open_u(1, 1, 1), source=1.0_wp)
+      allocate (this%open_v(1, 1, 1), source=1.0_wp)
       ! Ice-shelf cavity statics.  Unlike the porous arrays (grown at
       ! configure), these are sized HERE off the `use_cavity` flag that
       ! `init_from_config` latches before `init` — the draft has to exist
@@ -440,6 +496,8 @@ contains
       if (allocated(this%por_davg_v)) deallocate (this%por_davg_v)
       if (allocated(this%por_face_area_u)) deallocate (this%por_face_area_u)
       if (allocated(this%por_face_area_v)) deallocate (this%por_face_area_v)
+      if (allocated(this%open_u)) deallocate (this%open_u)
+      if (allocated(this%open_v)) deallocate (this%open_v)
       if (allocated(this%z_draft)) deallocate (this%z_draft)
       if (allocated(this%cover_frac)) deallocate (this%cover_frac)
       if (allocated(this%p_ice_ref)) deallocate (this%p_ice_ref)
@@ -516,6 +574,33 @@ contains
       allocate (this%por_face_area_v(nx, ny + 1, nz), source=1.0_wp)
    end subroutine metrics_porous_alloc
 
+   subroutine metrics_closed_faces_alloc(this, grid, nz)
+      !! Grow the z-level closed-face masks from their `(1,1,1)`
+      !! placeholder to full face size.  Call ONLY when
+      !! `&vcoord_nml zfixed_closed_faces` is on, at configure time —
+      !! after `init` and BEFORE `ocean_state_enter_data`, so the device
+      !! map captures the final shapes (a realloc after `enter_data`
+      !! would leave the device pointing at freed host memory).
+      !!
+      !! Seeded fully OPEN (1) so a stage that somehow reads them before
+      !! the builder runs sees an inert mask.
+      type(ocean_metrics_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: nz
+         !! Number of layers (`multilayer%nz_ml`).
+
+      integer :: nx, ny
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+
+      if (allocated(this%open_u)) deallocate (this%open_u)
+      if (allocated(this%open_v)) deallocate (this%open_v)
+
+      allocate (this%open_u(nx + 1, ny, nz), source=1.0_wp)
+      allocate (this%open_v(nx, ny + 1, nz), source=1.0_wp)
+   end subroutine metrics_closed_faces_alloc
+
    subroutine ocean_metrics_enter_data(this)
       class(ocean_metrics_t), intent(inout) :: this
       select type (this)
@@ -536,6 +621,7 @@ contains
       !$acc enter data copyin(this%por_dmin_u, this%por_dmax_u, this%por_davg_u)
       !$acc enter data copyin(this%por_dmin_v, this%por_dmax_v, this%por_davg_v)
       !$acc enter data copyin(this%por_face_area_u, this%por_face_area_v)
+      !$acc enter data copyin(this%open_u, this%open_v)
       !$acc enter data copyin(this%z_draft, this%cover_frac, this%p_ice_ref)
       !$acc enter data copyin(this%wet_T, this%wet_u, this%wet_v, this%wet_q)
       !$acc enter data copyin(this%areaT, this%areaCu, this%areaCv, this%areaBu)
@@ -566,6 +652,7 @@ contains
       !$acc exit data delete(this%areaT, this%areaCu, this%areaCv, this%areaBu)
       !$acc exit data delete(this%wet_T, this%wet_u, this%wet_v, this%wet_q)
       !$acc exit data delete(this%z_draft, this%cover_frac, this%p_ice_ref)
+      !$acc exit data delete(this%open_u, this%open_v)
       !$acc exit data delete(this%por_face_area_u, this%por_face_area_v)
       !$acc exit data delete(this%por_dmin_v, this%por_dmax_v, this%por_davg_v)
       !$acc exit data delete(this%por_dmin_u, this%por_dmax_u, this%por_davg_u)
@@ -1943,6 +2030,8 @@ contains
                + arr_bytes(this%por_davg_v) &
                + arr_bytes(this%por_face_area_u) &
                + arr_bytes(this%por_face_area_v) &
+               + arr_bytes(this%open_u) &
+               + arr_bytes(this%open_v) &
                + arr_bytes(this%z_draft) &
                + arr_bytes(this%cover_frac) &
                + arr_bytes(this%p_ice_ref) &

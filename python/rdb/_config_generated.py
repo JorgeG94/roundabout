@@ -300,6 +300,14 @@ class Vcoord(Group):
         default=False,
     )
 
+    zfixed_closed_faces = Bool(
+        'zfixed_closed_faces',
+        doc='z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class Physics(Group):
     """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
@@ -6119,4 +6127,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 669
+N_KNOBS = 670

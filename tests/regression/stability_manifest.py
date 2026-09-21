@@ -779,6 +779,67 @@ STABILITY_CASES = [
           tags=["cavity", "ice_shelf", "sloping_lid", "calving_front",
                 "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "rest"]),
 
+    _case("isomip_plus_ice_free_zfixed",
+          V + "isomip_plus/ocean0_ice_free_zfixed.nml",
+          "rest", 576, 144, en_rest_max=1.0e-05, t1_timeout=1200,
+          t2_timeout=300, t2_skip=False,
+          t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 300.0,
+                            "nu_h": 6.0, "nghost": 2,
+                            "has_western_boundary": True, "eddying": False},
+          note="THE PARTIAL-STEP GATE, and the cheapest honest statement of "
+               "the z-level staircase defect: the ISOMIP+ bed and trough on "
+               "vcoord_type='z_fixed' with NO ice shelf, NO cavity code and "
+               "NO melt, at rest, with &vcoord_nml zfixed_closed_faces on. "
+               "A face whose layer is an inert `zstar_h_min` filler on either "
+               "side is a z-LEVEL WALL for that layer (Adcroft, Hill & "
+               "Marshall 1997; Losch 2008 2.1) -- no normal velocity, no mass "
+               "or tracer flux, free-slip -- and leaving it OPEN lets the FV "
+               "pressure gradient integrate across a staircase step of up to "
+               "h_nominal = 20 m. MEASURED (gfortran 15.1 Release, "
+               "pred_corr, 2 days): knob ON En 8.063E-08 (d 0.25) / "
+               "8.636E-07 (d 1) / 2.700E-06 (d 2), MaxCFL <= 0.0041, Mass "
+               "Error 4.4E-14; knob OFF 2.833E-05 / 1.786E-04 / 5.629E-04, "
+               "MaxCFL to 0.086 -- 208x the energy at day 2 and still "
+               "climbing. Note the throwaway spike reported NaN by day 0.25 "
+               "for its own cavity-off variant of ocean0_idealised_draft; "
+               "THIS namelist does not go non-finite in 2 days, so the bar "
+               "here is the ENERGY, not survival. nu_h = 6 and kappa_h = 1 "
+               "are the protocol values and are deliberately NOT zeroed: "
+               "they are what exercises the free-slip closure in the "
+               "harmonic velocity-Laplacian and the per-layer mask on the "
+               "lateral tracer flux. split_scheme is not pinned, so the "
+               "ssp_rk2 twin is built from the same file.",
+          known_failure={
+              "assertions": ["conserve:Salt", "conserve:Heat",
+                             "energy:rest-settles"],
+              "reason":
+                  "OPEN, scoped, and NEITHER of the two is caused by the "
+                  "closed-face mask.  (1) conserve:Salt/Heat sit at a FIXED "
+                  "-1.524E-06 / -2.030E-06 that appears IN FULL at the first "
+                  "report (day 0.25) and is then flat to 6 digits for the "
+                  "rest of the run -- a one-time offset, not a leak.  It is "
+                  "the IC RELAMP: without a cavity the initial h_layer is "
+                  "seeded by &vcoord_nml thickness_config, not from the "
+                  "z_fixed target, so the FIRST ALE remap relamps the whole "
+                  "column onto the target and drains the fillers' tracer "
+                  "content once.  Mass, which has no relamp-drain term, "
+                  "closes at 4.4E-14 -- that is the discriminator, and it is "
+                  "why this is the seed and not the mask.  The cavity legs, "
+                  "whose seed IS built from the target, show only round-off "
+                  "(cavity_sloping_lid_rest_zfixed: -5.9E-13 / -6.2E-13).  "
+                  "thickness_config='uniform_z' was tried and moves it by "
+                  "less than 1 %.  The fix is a z_fixed-aware initial "
+                  "thickness for the cavity-OFF path, a separate slice.  "
+                  "(2) energy:rest-settles: the run is still at its peak at "
+                  "the end because the classical partial-step PGF error at "
+                  "an OPEN face between a PARTIAL and a FULL cell survives "
+                  "the closure and grows slowly -- Yung et al. (2026) 3.2, "
+                  "the one remaining item.  energy:rest (the AMPLITUDE bar) "
+                  "passes, and that is what this case gates.",
+              "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
+          },
+          tags=["isomip_plus", "vcoord_z_fixed", "closed_faces",
+                "partial_steps", "rest", "pgf_fv_mom6", "zinit_linear"]),
     _case("isomip_plus_ocean0_idealised",
           V + "isomip_plus/ocean0_idealised_draft.nml",
           "forced", 1000, 100, t1_timeout=1200, t2_timeout=300,
@@ -1055,6 +1116,19 @@ SCHEME_AXIS_PHYSICS = {}
 # scopes the marker so one documented defect does not excuse a case from every
 # other gate it has.
 SCHEME_AXIS_KNOWN_FAILURE = {
+    "isomip_plus_ice_free_zfixed": {
+        "assertions": ["conserve:Salt", "conserve:Heat",
+                       "energy:rest-settles"],
+        "reason":
+            "The same two scoped items as the pred_corr base case, and for "
+            "the same two reasons: the one-time IC-relamp offset in "
+            "Salt/Heat (Mass still closes at round-off) and the surviving "
+            "partial-step PGF error, which has not equilibrated in 2 days.  "
+            "Neither depends on the outer split -- the twin exists to prove "
+            "the MASK does not either.",
+        "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
+    },
+
     # `coriolis_coast` lived here as the BLOCKER entry until 2026-09-14.
     # It is gone because the defect is FIXED, not because the gate was
     # relaxed: the fast-loop Coriolis reference `subtract_fast_cor_ref`

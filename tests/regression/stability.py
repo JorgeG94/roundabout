@@ -1459,8 +1459,8 @@ def self_test():
     twins = [c for c in manifest.STABILITY_CASES if c.get("split_scheme")]
     n2 = sum(1 for c in manifest.STABILITY_CASES
              if not c["tier2"].get("skip"))
-    check("manifest covers 70 namelists ({} base cases, {} at tier 2)"
-          .format(len(base), n2), len(base) == 70)
+    check("manifest covers 71 namelists ({} base cases, {} at tier 2)"
+          .format(len(base), n2), len(base) == 71)
     # The scheme axis must EXIST -- a refactor that quietly stops building it
     # would leave the non-default scheme an untested branch of the dispatcher
     # while every report still said PASS.

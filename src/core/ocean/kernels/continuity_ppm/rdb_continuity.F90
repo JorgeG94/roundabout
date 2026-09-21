@@ -925,6 +925,18 @@ contains
          end do
       end if
 
+      ! ---- z-level closed faces: see the composition rule on
+      ! `ocean_metrics_t%open_v`.  A SEPARATE pass, not composed into
+      ! `por_face_area_u`: the two gates are independent and the porous
+      ! fraction is refreshed per outer step while this mask is static.
+      ! Inline for the same escaping-array reason as the porous pass.
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+            ms%mass_flux_x_layer(i, j, k) = ms%mass_flux_x_layer(i, j, k)* &
+                                            metrics%open_u(i, j, k)
+         end do
+      end if
+
       ! ============================================================
       ! Y-DIRECTION reconstruction
       ! ============================================================
@@ -985,6 +997,14 @@ contains
          do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
             ms%mass_flux_y_layer(i, j, k) = ms%mass_flux_y_layer(i, j, k)* &
                                             metrics%por_face_area_v(i, j, k)
+         end do
+      end if
+
+      ! ---- z-level closed faces: see the zonal twin ----
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+            ms%mass_flux_y_layer(i, j, k) = ms%mass_flux_y_layer(i, j, k)* &
+                                            metrics%open_v(i, j, k)
          end do
       end if
 
@@ -1243,6 +1263,17 @@ contains
          end do
       end if
 
+      ! ---- z-level closed faces: see the composition rule on
+      ! `ocean_metrics_t%open_v`.  Also before the renormalisation — the
+      ! renormaliser must distribute `uhbt` over the OPEN layers ONLY, so
+      ! it takes the SAME mask as a weight (`use_open`/`open` below).
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+            ms%mass_flux_x_layer(i, j, k) = ms%mass_flux_x_layer(i, j, k)* &
+                                            metrics%open_u(i, j, k)
+         end do
+      end if
+
       ! ---- MOM6-style transport constraint ----
       ! Renormalise the per-layer mass flux so its vertical sum
       ! matches the barotropic-substep's time-mean transport.  Single Newton
@@ -1284,25 +1315,49 @@ contains
          ! shape, already mapped, read-only in the callee, never indexed
          ! when `use_por` is .false.
          renorm_skip_walls = (bc_w_tag == OBC_WALL .and. bc_e_tag == OBC_WALL)
+         ! FOUR branches, one per (porous, closed-faces) combination: each
+         ! 3-D weight has to reach the callee as a full-size, device-present
+         ! explicit-shape actual, and the knob-off ones hand over a read-only
+         ! PPM edge buffer as the inert stand-in (see the `por` / `open_f`
+         ! docstrings).  The DEFAULT path is the last branch and is textually
+         ! the call this routine has always made, so it stays bit-identical.
          if (metrics%use_porous) then
+            if (metrics%use_closed_faces) then
+               call renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, &
+                                                   skip_walls=renorm_skip_walls, &
+                                                   has_west=has_w_flux, has_east=has_e_flux, &
+                                                   visc_rem=visc_rem, u_cor=u_cor, &
+                                                   use_por=.true., por=metrics%por_face_area_u, &
+                                                   use_open=.true., open_f=metrics%open_u)
+            else
+               call renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, &
+                                                   skip_walls=renorm_skip_walls, &
+                                                   has_west=has_w_flux, has_east=has_e_flux, &
+                                                   visc_rem=visc_rem, u_cor=u_cor, &
+                                                   use_por=.true., por=metrics%por_face_area_u, &
+                                                   use_open=.false., open_f=this%h_face_right_x%data)
+            end if
+         else if (metrics%use_closed_faces) then
             call renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, &
                                                 skip_walls=renorm_skip_walls, &
                                                 has_west=has_w_flux, has_east=has_e_flux, &
                                                 visc_rem=visc_rem, u_cor=u_cor, &
-                                                use_por=.true., por=metrics%por_face_area_u)
+                                                use_por=.false., por=this%h_face_left_x%data, &
+                                                use_open=.true., open_f=metrics%open_u)
          else
             call renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, &
                                                 skip_walls=renorm_skip_walls, &
                                                 has_west=has_w_flux, has_east=has_e_flux, &
                                                 visc_rem=visc_rem, u_cor=u_cor, &
-                                                use_por=.false., por=this%h_face_left_x%data)
+                                                use_por=.false., por=this%h_face_left_x%data, &
+                                                use_open=.false., open_f=this%h_face_right_x%data)
          end if
       end if
    end subroutine continuity_zonal_flux
 
    pure subroutine renormalise_zonal_flux_to_uhbt(grid, metrics, this, ms, uhbt, dt, skip_walls, &
                                                   has_west, has_east, visc_rem, u_cor, &
-                                                  use_por, por)
+                                                  use_por, por, use_open, open_f)
       !! Apply a uniform per-face velocity correction so
       !! `Σ_k mass_flux_x_layer(i, j, k) = uhbt(i, j)` at every face.
       !! Helper for `continuity_zonal_flux`.
@@ -1375,6 +1430,24 @@ contains
          !! argument aliasing) -- which keeps the two full-size open-area
          !! fields off the allocation list entirely for a default run.
 
+      logical, intent(in) :: use_open
+         !! z-level closed faces active (`&vcoord_nml zfixed_closed_faces`).
+         !! `.false.` => `open_f` is never indexed and the arithmetic below
+         !! stays byte-identical to the un-masked form.
+      real(wp), intent(in) :: open_f(grid%nx_total + 1, grid%ny_total, ms%nz_ml)
+         !! Per-layer 0/1 face-open mask at this stagger, read ONLY when
+         !! `use_open`.  It enters the SAME weight `wk` the porous fraction
+         !! does -- `wk = dy_cu * por * open` -- which is the whole reason
+         !! the barotropic transport is distributed over the OPEN layers
+         !! only: a closed layer gets `wk = 0`, so it receives no `du` and
+         !! contributes nothing to `sum_h`, and `sum_k mass_flux = uhbt`
+         !! stays the exact fixed point the Newton solve iterates to.
+         !!
+         !! `use_open = .false.` callers must still pass a face-sized,
+         !! genuinely device-present array and NOT the `(1,1,1)`
+         !! placeholder -- see the `por` dummy's docstring for why; the
+         !! call sites hand over `h_face_right_x` as the inert stand-in.
+
       integer :: i, j, k, nx, ny, nz, iter
       real(wp) :: u, h_face, sum_flux, sum_h, du, target, w, wk
       real(wp) :: flux0(NZ_STACK_MAX), u0(NZ_STACK_MAX)
@@ -1425,6 +1498,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                if (u0(k) >= 0.0_wp) then
                   h_face = this%h_face_left_x%data(i, j, k)
                else
@@ -1438,6 +1512,7 @@ contains
                do k = 1, nz
                   wk = w
                   if (use_por) wk = w*por(i, j, k)
+                  if (use_open) wk = wk*open_f(i, j, k)
                   if (u0(k) >= 0.0_wp) then
                      h_face = this%h_face_left_x%data(i, j, k)
                   else
@@ -1485,6 +1560,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                du_k = du
                if (use_vr) du_k = du*visc_rem(i, j, k)
                if (u0(k) + du_k >= 0.0_wp) then
@@ -1507,6 +1583,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                du_k = du
                if (use_vr) du_k = du*visc_rem(i, j, k)
                if (u0(k) + du_k >= 0.0_wp) then
@@ -1673,6 +1750,14 @@ contains
          end do
       end if
 
+      ! ---- z-level closed faces: see the zonal twin ----
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+            ms%mass_flux_y_layer(i, j, k) = ms%mass_flux_y_layer(i, j, k)* &
+                                            metrics%open_v(i, j, k)
+         end do
+      end if
+
       ! MOM6-style transport constraint — see continuity_zonal_flux
       ! for the rationale.
       if (present(vhbt)) then
@@ -1685,25 +1770,44 @@ contains
          ! folding the two BC branches together is exact and why it
          ! matters for the default-path cost.
          renorm_skip_walls = (bc_s_tag == OBC_WALL .and. bc_n_tag == OBC_WALL)
+         ! Four branches — see the zonal twin for why.
          if (metrics%use_porous) then
+            if (metrics%use_closed_faces) then
+               call renormalise_meridional_flux_to_vhbt(grid, metrics, this, ms, vhbt, dt, &
+                                                        skip_walls=renorm_skip_walls, &
+                                                        has_south=has_s_flux, has_north=has_n_flux, &
+                                                        visc_rem=visc_rem, v_cor=v_cor, &
+                                                        use_por=.true., por=metrics%por_face_area_v, &
+                                                        use_open=.true., open_f=metrics%open_v)
+            else
+               call renormalise_meridional_flux_to_vhbt(grid, metrics, this, ms, vhbt, dt, &
+                                                        skip_walls=renorm_skip_walls, &
+                                                        has_south=has_s_flux, has_north=has_n_flux, &
+                                                        visc_rem=visc_rem, v_cor=v_cor, &
+                                                        use_por=.true., por=metrics%por_face_area_v, &
+                                                        use_open=.false., open_f=this%h_face_right_y%data)
+            end if
+         else if (metrics%use_closed_faces) then
             call renormalise_meridional_flux_to_vhbt(grid, metrics, this, ms, vhbt, dt, &
                                                      skip_walls=renorm_skip_walls, &
                                                      has_south=has_s_flux, has_north=has_n_flux, &
                                                      visc_rem=visc_rem, v_cor=v_cor, &
-                                                     use_por=.true., por=metrics%por_face_area_v)
+                                                     use_por=.false., por=this%h_face_left_y%data, &
+                                                     use_open=.true., open_f=metrics%open_v)
          else
             call renormalise_meridional_flux_to_vhbt(grid, metrics, this, ms, vhbt, dt, &
                                                      skip_walls=renorm_skip_walls, &
                                                      has_south=has_s_flux, has_north=has_n_flux, &
                                                      visc_rem=visc_rem, v_cor=v_cor, &
-                                                     use_por=.false., por=this%h_face_left_y%data)
+                                                     use_por=.false., por=this%h_face_left_y%data, &
+                                                     use_open=.false., open_f=this%h_face_right_y%data)
          end if
       end if
    end subroutine continuity_meridional_flux
 
    pure subroutine renormalise_meridional_flux_to_vhbt(grid, metrics, this, ms, vhbt, dt, skip_walls, &
                                                        has_south, has_north, visc_rem, v_cor, &
-                                                       use_por, por)
+                                                       use_por, por, use_open, open_f)
       !! Apply a uniform per-face velocity correction so
       !! `Σ_k mass_flux_y_layer(i, j, k) = vhbt(i, j)` at every face.
       !! Mirror of `renormalise_zonal_flux_to_uhbt`.  See that routine
@@ -1756,6 +1860,16 @@ contains
          !! argument aliasing) -- which keeps the two full-size open-area
          !! fields off the allocation list entirely for a default run.
 
+      logical, intent(in) :: use_open
+         !! z-level closed faces active.  `.false.` => `open_f` is never
+         !! indexed; byte-identical to the un-masked form.  See the zonal
+         !! twin for the full rationale.
+      real(wp), intent(in) :: open_f(grid%nx_total, grid%ny_total + 1, ms%nz_ml)
+         !! Per-layer 0/1 face-open mask at this stagger, read ONLY when
+         !! `use_open`; enters the SAME weight `wk = dx_cv * por * open`.
+         !! Knob-off callers pass `h_face_right_y` as the inert stand-in
+         !! (never the `(1,1,1)` placeholder).
+
       integer :: i, j, k, nx, ny, nz, iter
       real(wp) :: v, h_face, sum_flux, sum_h, dv, target, w, wk
       real(wp) :: flux0(NZ_STACK_MAX), v0(NZ_STACK_MAX)
@@ -1795,6 +1909,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                if (v0(k) >= 0.0_wp) then
                   h_face = this%h_face_left_y%data(i, j, k)
                else
@@ -1808,6 +1923,7 @@ contains
                do k = 1, nz
                   wk = w
                   if (use_por) wk = w*por(i, j, k)
+                  if (use_open) wk = wk*open_f(i, j, k)
                   if (v0(k) >= 0.0_wp) then
                      h_face = this%h_face_left_y%data(i, j, k)
                   else
@@ -1846,6 +1962,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                dv_k = dv
                if (use_vr) dv_k = dv*visc_rem(i, j, k)
                if (v0(k) + dv_k >= 0.0_wp) then
@@ -1868,6 +1985,7 @@ contains
             do k = 1, nz
                wk = w
                if (use_por) wk = w*por(i, j, k)
+               if (use_open) wk = wk*open_f(i, j, k)
                dv_k = dv
                if (use_vr) dv_k = dv*visc_rem(i, j, k)
                if (v0(k) + dv_k >= 0.0_wp) then
