@@ -1,0 +1,171 @@
+! Resting cavity under a FLAT ice shelf, on the QUASI-GEOPOTENTIAL
+! coordinate — the P6.2 gate.
+!
+! The z_fixed twin of `cavity_flat_lid_rest.nml`.  Read that file for the
+! geometry, the stratification, the load partition and the zero-everything
+! envelope; they are identical here.  Two lines differ:
+!
+!   1. `&vcoord_nml vcoord_type = "z_fixed"` (was "sigma").
+!   2. `&ocean_cavity_dyn_nml h_min_cavity = 96.0` (was 40.0), forced by
+!      the configure rule `h_min_cavity >= 2*h_nominal` with
+!      `h_nominal = max_depth/nz_layers = 720/15 = 48 m` (ISOMIP+'s own
+!      minimum-column rule, Asay-Davis et al. 2016 §3.1.5).  The water
+!      column here is a uniform 420 m, so nothing is grounded at either
+!      value and the grounding line does not move between the legs.
+!
+! WHY THIS IS THE GATE.  Under `z_fixed` a flat lid removes exactly one
+! thing and leaves everything else: the nominal interfaces are
+! geopotential, so under a UNIFORM draft every column vanishes the SAME
+! layers (k = 12..15 here, `z_top = 300 m` over a 48 m spacing) and cuts
+! its first live layer at the SAME depth.  Every interface offset across
+! every face is therefore identically zero — fillers included — and the
+! FV-MOM6 pressure gradient has nothing to truncate.  The answer must be
+! BIT-ZERO, which is the same bar the sigma flat lid already meets, and
+! it is the only assertion that can separate "the rigid-top target builder
+! is right" from "the rigid-top target builder happens to be small".
+!
+! MEASURED (gfortran 15.1, Release, single rank, 30 days, pred_corr):
+!   En = 0.000E+00 at every daily sample, MaxCFL = 0.00000 throughout.
+!   Mass residual  -5.891E-14 relative at day 1, -1.753E-12 at day 30.
+!   Salt residual  -5.665E-14 relative at day 1, -2.043E-12 at day 30.
+!   Step-0 residual exactly 0.000E+00: the inert fillers are seeded at
+!   `hTr = 0` (the land-state contract, extended to a wet column's
+!   vanished layers), so the first regrid's drain has nothing to discard
+!   and no budget step appears.
+!
+! WHAT THIS CASE DOES NOT GATE.  The SLOPING lid, where the draft crosses
+! nominal levels and the filler count changes column to column.  That
+! staircase is the whole remaining error of the z family and it needs the
+! Yung et al. (2026) vanished-layer corrections, none of which are in this
+! build.  See `cavity_sloping_lid_rest_zfixed.nml` for the measurement.
+!
+! V1 ENVELOPE.  `z_fixed` x cavity is ADIABATIC DYNAMICS ONLY until the
+! shared `k_top(i,j)` lands: `validate_config` refuses basal melt,
+! ice-shelf top drag, KPP, EPBL, the ideal-age tracer, GM / Redi /
+! isopycnal slopes, a non-zero `kappa_h` and a non-zero
+! `regrid_time_scale` under this combination, each naming its follow-up.
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 48
+   ny     = 6
+   dx     = 2000.0
+   dy     = 2000.0
+   nghost = 2
+/
+
+&time_nml
+   t_end        = 2592000.0   ! 30 days
+   dt_fixed     = 600.0       ! 10 min outer
+   cfl_interval = 1
+/
+
+&physics_nml
+   coriolis_f    = -1.409e-4   ! f-plane at 75 S (ISOMIP+ 3.1.1)
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 15
+/
+
+&vcoord_nml
+   vcoord_type = "z_fixed"     ! quasi-geopotential; h_nominal = 720/15 = 48 m
+/
+
+&ocean_topo_nml
+   topo_config    = "flat"
+   max_depth      = 720.0      ! also sets z_fixed_h_ref
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+   coriolis_beta  = 0.0
+   coriolis_y_ref = 0.0
+/
+
+&ocean_cavity_dyn_nml
+   enable       = .true.
+   draft_config = "flat"       ! UNIFORM: no box bounds => no calving front
+   draft_depth  = 300.0
+   h_min_cavity = 96.0         ! = 2*h_nominal (ISOMIP+ 3.1.5); nothing is
+                               ! grounded at 40 or at 96 (column is 420 m)
+/
+
+&ocean_pgf_nml
+   form        = "fv_mom6"
+   p_top_in_bc = .true.        ! a uniform load is provably inert here, but
+                               ! the case is the control for the SLOPING one
+                               ! and must run the identical PGF path
+   maxvel      = 2.0
+/
+
+&ocean_eos_nml
+   eos = "linear"
+/
+
+&ocean_ic_nml
+   alpha_T = 3.8356948e-2      ! rho_0 * 3.733e-5 /degC   (ISOMIP+)
+   beta_S  = 8.0587609e-1      ! rho_0 * 7.843e-4 /PSU    (ISOMIP+)
+   T_ref   = -1.0
+   S_ref   = 34.2
+   rho_0   = 1027.51
+/
+
+&ocean_zinit_nml
+   enable    = .true.
+   source    = "linear"
+   lin_t_ref = -1.9
+   lin_dt_dz = 0.0
+   lin_s_ref = 33.8
+   lin_ds_dz = -1.0416667e-3   ! (33.8 - 34.55)/720, z positive UP
+/
+
+&tracer_nml
+   initial_temperature = -1.9
+   initial_salinity    = 34.175
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h = 0.0                  ! nothing to damp: the answer is exact zero
+   nu_4 = 0.0
+/
+
+&ocean_bdrag_nml
+   form = "quadratic"
+   cd   = 0.0
+/
+
+&ocean_vmix_nml
+   use_closure = .false.
+   use_kpp     = .false.       ! also REQUIRED under z_fixed x cavity (v1)
+/
+
+&ocean_bt_nml
+   ! split_scheme is DELIBERATELY not pinned: the default (pred_corr) is the
+   ! base case and the stability suite builds the __ssp_rk2 twin from the
+   ! same file.
+   auto_n_inner = .true.
+/
+
+&ocean_diag_nml
+   enabled  = .true.
+   filename = "cavity_flat_lid_rest_zfixed"
+   dt_out   = 86400.0
+/
+
+&output_nml
+   output_dir     = "./out_cavity_flat_lid_rest_zfixed"
+   output_to_file = .false.
+/
+
+&logging_nml
+   log_level       = "info"
+   status_interval = 86400.0
+/
