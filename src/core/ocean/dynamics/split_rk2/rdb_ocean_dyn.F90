@@ -120,7 +120,9 @@ module rdb_ocean_dyn
                               tides_update_eta_sal
    use rdb_ocean_p_surf, only: ocean_p_surf_t, p_surf_update_seam
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_EULERIAN_Z, VCOORD_LAGRANGIAN
-   use rdb_ocean_remap, only: ocean_apply_ale_remap_step
+   use rdb_ocean_remap, only: ocean_apply_ale_remap_step, &
+                              ocean_remap_scan_preconditions, &
+                              OCEAN_REMAP_PRECOND_RTOL
    use rdb_ocean_min_thickness, only: ocean_apply_conservative_min_thickness
    use rdb_profiler, only: profiler_start, profiler_stop
    use pic_logger, only: logger => global_logger
@@ -2844,6 +2846,8 @@ contains
          ! bit-identity default).
          call ocean_apply_ale_remap_step(grid, vcoord, ms, dyn%bt_work%bt_eta, dyn%bt_work%bt_H_ref, &
                                          method=vcoord%remap_method, eos=eos, dt=dyn%therm_dt(dt))
+         call check_remap_preconditions_or_die(grid, vcoord, ms%nz_ml, &
+                                               dyn%outer_step_count + 1)
          call profiler_stop("ocean_ale_remap")
          call probe_dS(grid, ms, "after ALE remap", 3, dyn%outer_step_count + 1)
       end if
@@ -3319,6 +3323,67 @@ contains
       flush (output_unit)
       error stop "h-guard: negative layer thickness (see [h-guard] block above)"
    end subroutine check_h_positive_or_die
+
+   subroutine check_remap_preconditions_or_die(grid, vcoord, nz, outer_step)
+      !! `&vcoord_nml remap_check_preconditions` guard (audit findings V5, V6).
+      !!
+      !! The per-column overlap sweep every remap method shares has two
+      !! standing preconditions that nothing has ever asserted:
+      !!
+      !!   * non-negative thicknesses — a negative source `h` makes the
+      !!     cumulative interface stack NON-MONOTONE, and the sweep then
+      !!     integrates the reversed interval twice, CREATING tracer mass
+      !!     with no NaN, no bounds hit and no budget entry;
+      !!   * equal column totals — the sweep integrates only over the overlap
+      !!     of the two stacks, so a SHORT target silently deletes the
+      !!     non-overlapping tail and a LONG one integrates it as `q = 0`.
+      !!
+      !! Both are caller obligations, so a trip here localises a defect in
+      !! the PRODUCER (a vcoord target builder that manufactures thickness on
+      !! a degenerate column, or a continuity overshoot that wrote a negative
+      !! `h`) rather than in the remap — which is why this aborts instead of
+      !! clamping.  Clamping would convert a conservation break into a
+      !! plausible number, the exact failure mode the audit found.
+      !!
+      !! Runs AFTER `ocean_apply_ale_remap_step` on purpose: the pair it has
+      !! to judge is `(vcoord%remap_h_old, vcoord%target_h)`, and neither is
+      !! overwritten by the remap, while the step routine itself is `pure`
+      !! and so cannot log or abort.  The run is dying either way, so the
+      !! one remap that already ran on the bad column costs nothing.
+      !!
+      !! Cheap on the healthy path: one device-side reduction per THERMO
+      !! step, three scalars back to the host, no field copy.  Default off.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_vcoord_t), intent(in) :: vcoord
+      integer, intent(in) :: nz
+         !! Number of layers (`ms%nz_ml`).
+      integer, intent(in) :: outer_step
+         !! Outer-step index, for the abort message.
+
+      integer :: n_bad
+      real(wp) :: worst_rel, worst_neg
+      character(len=320) :: msg
+
+      if (.not. vcoord%remap_check_preconditions) return
+      if (.not. vcoord%is_init) return
+
+      call ocean_remap_scan_preconditions(grid%nx_total, grid%ny_total, nz, &
+                                          vcoord%remap_h_old, vcoord%target_h, &
+                                          OCEAN_REMAP_PRECOND_RTOL, &
+                                          n_bad, worst_rel, worst_neg)
+      if (n_bad <= 0) return
+
+      write (msg, '("ALE remap preconditions violated at outer step ", i0, ": ", i0, &
+             &" column(s); worst relative column-total mismatch ", es12.5, &
+             &" (tolerance ", es12.5, "); most negative thickness ", es12.5)') &
+         outer_step, n_bad, worst_rel, OCEAN_REMAP_PRECOND_RTOL, worst_neg
+      call logger%error(trim(msg))
+      call logger%error("The overlap sweep assumes non-negative thicknesses and "// &
+                        "equal column totals; outside them it silently creates or "// &
+                        "deletes tracer mass.  Fix the producer (the vcoord target "// &
+                        "builder, or continuity), not the remap.")
+      error stop "ALE remap precondition violated (remap_check_preconditions)"
+   end subroutine check_remap_preconditions_or_die
 
    subroutine probe_dS(grid, ms, label, stage, outer_step)
       !! Debug-gated diagnostic.  Pulls `h_layer` + `hTr_S` from device

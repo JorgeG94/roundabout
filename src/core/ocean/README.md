@@ -516,6 +516,28 @@ bed drag) against the outer scheme's exact analytic decay under **both**
   Threaded `cfg%remap_nonuniform_weights` →
   `vcoord%remap_nonuniform_weights` → `remap_column(..., nonunif)`.
   Gate: `tests/test_remap_nonuniform.F90`.
+- **ALE remap precondition assertion** (`&vcoord_nml
+  remap_check_preconditions`, default `.false.` ⇒ never runs):
+  diagnostic fail-loud guard for the two obligations the per-column
+  overlap sweep has always assumed and nothing has ever checked —
+  NON-NEGATIVE thicknesses (a negative source `h` makes the cumulative
+  interface stack non-monotone, and the sweep integrates the reversed
+  interval twice, CREATING mass with no NaN and no budget entry) and
+  EQUAL column totals (a short target silently deletes the
+  non-overlapping tail; a long one integrates it as `q = 0`). Both are
+  caller obligations, so a trip localises a defect in the PRODUCER — a
+  target builder that manufactures thickness on a degenerate column, a
+  continuity overshoot that wrote a negative `h` — which is why it
+  aborts rather than clamping: clamping would turn a conservation break
+  into a plausible number. `ocean_remap_scan_preconditions`
+  (`../../ALE/rdb_ocean_remap.F90`) is the device-side reduction, three
+  scalars per THERMO step; `check_remap_preconditions_or_die`
+  (`dynamics/split_rk2/rdb_ocean_dyn.F90`) owns the logging and the
+  abort, because `ocean_apply_ale_remap_step` is `pure`. It runs AFTER
+  the remap — the pair it judges (`remap_h_old`, `target_h`) survives
+  it, and the run is dying either way. Gates:
+  `test_ocean_remap :: precondition_scan_finds_the_bad_columns`,
+  `test_remap_nonuniform :: preconditions_predicate`.
 - **Initial layer thickness** (`&vcoord_nml thickness_config`, default
   `"sigma"` ⇒ bit-identical): selects what `h_layer` is *seeded* to in
   `ocean_state_seed_from_cfg`, independently of `vcoord_type` (which

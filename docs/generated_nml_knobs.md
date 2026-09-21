@@ -69,6 +69,7 @@ Vertical-coordinate + ALE-remap controls.
 | `remap_vel_conserve_ke` | `.false.` |  | ALE velocity remap: KE-conserving baroclinic-anomaly rescale |
 | `remap_boundary_extrap` | `.false.` |  | ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION) |
 | `remap_nonuniform_weights` | `.false.` |  | ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations |
+| `remap_check_preconditions` | `.false.` |  | ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals) |
 
 ### &physics_nml
 

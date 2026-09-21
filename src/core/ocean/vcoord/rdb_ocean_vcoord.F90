@@ -266,6 +266,20 @@ module rdb_ocean_vcoord
          !! unaffected (their small-`nz` fallbacks excepted).  Scalar on the
          !! type, reaches the device through the existing `copyin(this)`; no
          !! new device array.  Default `.false.` ⇒ bit-identical.
+      logical :: remap_check_preconditions = .false.
+         !! Assert the ALE remap's column preconditions once per remap and
+         !! fail loud on a violation (audit findings V5, V6).
+         !!
+         !! The overlap sweep every reconstruction shares assumes both
+         !! `dz >= 0` (a negative source thickness makes the cumulative
+         !! interface stack NON-MONOTONE, and the sweep then integrates the
+         !! reversed interval twice — creating mass with no NaN and no bounds
+         !! hit) and `sum(dz_old) == sum(dz_new)` (a short target silently
+         !! deletes the non-overlapping tail; a long one integrates it as
+         !! `q = 0`).  Neither has ever been checked, and the target builders
+         !! break the second one on degenerate columns.  Diagnostic — a
+         !! per-column reduction at the THERMO cadence, two scalars back to
+         !! the host.  Default `.false.` ⇒ the check never runs.
       logical :: remap_vel_conserve_ke = .false.
          !! Enable the KE-conserving rescale of the remapped layer
          !! velocities.  After the per-face column remap (which already
