@@ -705,32 +705,37 @@ contains
          end if
          call fill_mld_density_impl(state%multilayer%h_layer, &
                                     state%multilayer%rho_layer, &
+                                    state%multilayer%k_top, &
                                     nz_ml, buf)
       end select
       if (.false.) buf(1, 1, 1) = GRAVITY  ! keep GRAVITY import live
    end subroutine fill_mld_density
 
-   pure subroutine fill_mld_density_impl(h_layer, rho_layer, nz_ml, buf)
-      !! Per-column scan from surface (k=nz_ml) toward bed; first layer
-      !! whose ρ exceeds (surface ρ + MLD_DENSITY_THRESHOLD) marks the
-      !! MLD as the cumulative h-sum above it.  No crossing → MLD = full
-      !! column depth.  Threshold met at the surface itself → MLD = 0.
+   pure subroutine fill_mld_density_impl(h_layer, rho_layer, k_top, nz_ml, buf)
+      !! Per-column scan from the first LIVE layer (`k_top`, which is
+      !! `nz_ml` unless a rigid top has vanished the layers above it)
+      !! toward the bed; first layer whose ρ exceeds (surface ρ +
+      !! MLD_DENSITY_THRESHOLD) marks the MLD as the cumulative h-sum
+      !! above it.  No crossing → MLD = full column depth.  Threshold met
+      !! at the surface itself → MLD = 0.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: h_layer(:, :, :), rho_layer(:, :, :)
+      integer, intent(in)    :: k_top(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer, intent(in)    :: nz_ml
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
-      integer :: i, j, k, nx, ny
+      integer :: i, j, k, kt, nx, ny
       real(wp) :: rho_surf, d_acc, mld
       logical :: crossed
       nx = min(size(buf, 1), size(rho_layer, 1))
       ny = min(size(buf, 2), size(rho_layer, 2))
       do concurrent(j=1:ny, i=1:nx) &
-         local(rho_surf, d_acc, mld, crossed, k)
-         rho_surf = rho_layer(i, j, nz_ml)
+         local(rho_surf, d_acc, mld, crossed, k, kt)
+         kt = k_top(i, j)
+         rho_surf = rho_layer(i, j, kt)
          d_acc = 0.0_wp
          mld = 0.0_wp
          crossed = .false.
-         do k = nz_ml, 1, -1
+         do k = kt, 1, -1
             if (rho_layer(i, j, k) - rho_surf >= MLD_DENSITY_THRESHOLD) then
                mld = d_acc
                crossed = .true.

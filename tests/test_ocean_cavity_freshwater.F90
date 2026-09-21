@@ -226,6 +226,7 @@ contains
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
       real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1), a_hps(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
+      integer :: a_ktop(1, 1)
       real(wp) :: salt_cav, stamp_s, stamp_t
 
       ! --- the virtual stamp, on the host, exactly as the assembler +
@@ -253,19 +254,20 @@ contains
       a_hps(1, 1, 1) = hps
       a_sb(1, 1, 1) = sb
       a_hb(1, 1, 1) = hb
+      a_ktop(1, 1) = 1
 
       !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                  a_hps, a_sb, a_hb)
+      !$acc&                  a_hps, a_sb, a_hb, a_ktop)
       !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&              a_hps, a_sb, a_hb)
+      !$acc&              a_hps, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
-                                        a_h, a_melt, a_sfar, a_hps)
+                                        a_h, a_melt, a_sfar, a_hps, a_ktop)
       !$acc update self(a_hl, a_hs, a_ht, a_hps, a_sb, a_hb)
       !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                 a_hps, a_sb, a_hb)
+      !$acc&                 a_hps, a_sb, a_hb, a_ktop)
 
       h = a_hl(1, 1, 1)
       hs = a_hs(1, 1, 1)
@@ -446,6 +448,7 @@ contains
       real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_small, big_melt
+      integer :: a_ktop(1, 1)
       integer :: n_thin
 
       ! A 1 mm top layer against a freezing flux that would take a metre.
@@ -460,14 +463,15 @@ contains
       a_ht(1, 1, 1) = h_small*T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
+      a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the starved column is counted")
       if (allocated(error)) return
@@ -506,6 +510,7 @@ contains
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_col(1), hs_col(1), ht_col(1)
       real(wp) :: h_small, big_melt
+      integer :: a_ktop(1, 1)
       integer :: n_thin
 
       h_small = 1.0e-3_wp
@@ -519,14 +524,15 @@ contains
       a_ht(1, 1, 1) = h_small*T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
+      a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl, a_hs, a_ht)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the fixture must actually clamp")
       if (allocated(error)) return
@@ -564,6 +570,7 @@ contains
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_small, big_melt, dh_applied, virt, undo
       real(wp) :: d_hs, d_ht, scale_s, scale_t
+      integer :: a_ktop(1, 1)
       integer :: n_thin
 
       h_small = 1.0e-3_wp
@@ -577,14 +584,15 @@ contains
       a_ht(1, 1, 1) = h_small*T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
+      a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       dh_applied = a_hl(1, 1, 1) - h_small
       d_hs = a_hs(1, 1, 1) - h_small*S0
@@ -630,6 +638,7 @@ contains
       real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_tiny
+      integer :: a_ktop(1, 1)
       integer :: n_thin
 
       h_tiny = 0.5_wp*H_VANISHED
@@ -642,14 +651,15 @@ contains
       a_ht(1, 1, 1) = h_tiny*T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
+      a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the refusal is still counted (and so still fatal)")
       if (allocated(error)) return

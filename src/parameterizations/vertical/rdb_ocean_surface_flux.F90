@@ -713,13 +713,13 @@ contains
             call apply_surface_src_2d_dyn_impl(ms%tracers(idx_T)%hTr, &
                                                ms%heat_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_heat, &
-                                               dt/(sf%rho0*sf%cp), nz, nx, ny)
+                                               dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
          end if
          if (idx_S > 0 .and. sf%has_salt) then
             call apply_surface_src_2d_dyn_impl(ms%tracers(idx_S)%hTr, &
                                                ms%salt_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_salt, &
-                                               dt/sf%rho0, nz, nx, ny)
+                                               dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
          ! Pseudo-salt mirror: exactly salinity's surface salt flux,
          ! but through the NOBUDGET twin — budget_id = NONE so it must
@@ -728,7 +728,7 @@ contains
          if (idx_ps > 0 .and. sf%has_salt) then
             call apply_surface_src_2d_dyn_nobudget_impl(ms%tracers(idx_ps)%hTr, &
                                                         ms%wet_mask, wet_dyn, sf%Q_salt, &
-                                                        dt/sf%rho0, nz, nx, ny)
+                                                        dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
          return
       end if
@@ -736,28 +736,41 @@ contains
          call apply_surface_src_2d_impl(ms%tracers(idx_T)%hTr, &
                                         ms%heat_budget_surface, &
                                         ms%wet_mask, sf%Q_heat, &
-                                        dt/(sf%rho0*sf%cp), nz, nx, ny)
+                                        dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
       end if
       if (idx_S > 0 .and. sf%has_salt) then
          call apply_surface_src_2d_impl(ms%tracers(idx_S)%hTr, &
                                         ms%salt_budget_surface, &
                                         ms%wet_mask, sf%Q_salt, &
-                                        dt/sf%rho0, nz, nx, ny)
+                                        dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
       ! Pseudo-salt mirror (plain, static-mask path) — see note above.
       if (idx_ps > 0 .and. sf%has_salt) then
          call apply_surface_src_2d_nobudget_impl(ms%tracers(idx_ps)%hTr, &
                                                  ms%wet_mask, sf%Q_salt, &
-                                                 dt/sf%rho0, nz, nx, ny)
+                                                 dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
    end subroutine ocean_surface_flux_apply_tracers
 
    pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, &
-                                             inv_scale, nz, nx, ny)
-      !! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the top
-      !! layer (k = nz) of a tracer's hTr array, mirror into the matching
-      !! budget contributor.  Explicit-shape dummies so NVHPC stdpar can
-      !! compile device kernels against static bounds.
+                                             inv_scale, k_top, nz, nx, ny)
+      !! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the first
+      !! LIVE layer (`k_top(i,j)`) of a tracer's hTr array, mirror into
+      !! the matching budget contributor.  Explicit-shape dummies so
+      !! NVHPC stdpar can compile device kernels against static bounds.
+      !!
+      !! **Why `k_top` and not `nz`.** Under a quasi-geopotential
+      !! coordinate beneath an ice shelf the layers inside the draft are
+      !! inert fillers, so on a covered column `k = nz` carries
+      !! `zstar_h_min` of water.  A flux stamped there is neither
+      !! diffused down (the vdiff tracer matrix decouples a vanished row
+      !! to the identity) nor kept (the next ALE remap drains it on
+      !! `h_old <= H_FLOOR`) — but the budget mirror on the line below
+      !! still counts it, so the column leaks exactly the deposit, every
+      !! thermo step.  The atmospheric part of `Q_field` is zero under
+      !! cover, but the cavity's own `heat_cavity`/`salt_cavity` pass
+      !! through `ocean_surface_flux_assemble` UNMASKED, which is why
+      !! this is the load-bearing site of the whole `k_top` slice.
       !!
       !! `inv_scale` = dt/(rho0·cp) for heat, dt/rho0 for salt — a
       !! column-invariant multiplier that the caller derives from `sf`.
@@ -771,17 +784,23 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top` — the first LIVE layer counting down from the top.
+         !! `nz` on every column that has no top-side filler (which is
+         !! every column on every coordinate but `z_fixed` under a rigid
+         !! top), so this reads the same memory as the literal `nz` it
+         !! replaced and the arithmetic is bit-identical.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
-         budget(i, j, nz) = budget(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_impl
 
    pure subroutine apply_surface_src_2d_dyn_impl(hTr, budget, wet_mask, wet_dyn, &
-                                                 Q_field, inv_scale, nz, nx, ny)
+                                                 Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry variant of `apply_surface_src_2d_impl`: the DYNAMIC cell
       !! wet mask composes multiplicatively with the static one, so a
       !! dynamically dry column (total depth below `&ocean_wetdry_nml
@@ -797,17 +816,19 @@ contains
       real(wp), intent(in)    :: wet_dyn(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
-         budget(i, j, nz) = budget(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_dyn_impl
 
    pure subroutine apply_surface_src_2d_nobudget_impl(hTr, wet_mask, Q_field, &
-                                                      inv_scale, nz, nx, ny)
+                                                      inv_scale, k_top, nz, nx, ny)
       !! Byte-for-byte copy of `apply_surface_src_2d_impl` with the
       !! `budget` dummy and its accumulation line removed — the
       !! pseudo-salt mirror of salinity's surface flux, which by
@@ -822,16 +843,20 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.  The SAME index salinity
+         !! used, so the pseudo-salt increment stays bit-identical to
+         !! salinity's and the deviation keeps measuring transport.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_nobudget_impl
 
    pure subroutine apply_surface_src_2d_dyn_nobudget_impl(hTr, wet_mask, wet_dyn, &
-                                                          Q_field, inv_scale, nz, nx, ny)
+                                                          Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry NOBUDGET twin — see `apply_surface_src_2d_nobudget_impl`
       !! and `apply_surface_src_2d_dyn_impl`.
       integer, intent(in)    :: nz, nx, ny
@@ -840,11 +865,13 @@ contains
       real(wp), intent(in)    :: wet_dyn(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
