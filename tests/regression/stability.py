@@ -579,26 +579,48 @@ def assert_matrix(series, res, phys, tier):
         else:
             days = [s["day"] for s in series["stats"]]
             en = [s["En"] for s in series["stats"]]
-            sig, r2, npts, span = fit_log_rate(days, en)
+            pk = max((e for e in en if _finite(e)), default=0.0)
+            # The same floor `energy:rest-settles` carries, and for the same
+            # reason: fitting an exponential to ROUND-OFF is not a
+            # measurement. `lid_slope x sigma` at N^2 = 0 creeps 4.45e-23 ->
+            # 3.17e-20 over 30 days -- machine zero, |u|_rms ~ 8e-10 m/s --
+            # which a log fit happily reports as 0.22/day. Below the floor
+            # the verdict SKIPS and says what it was measuring.
+            floor = phys.get("en_rest_trend_floor", 1e-12)
+            if not (pk > floor):
+                out.append(Verdict(
+                    "energy:rest-growth-rate", True,
+                    "fitted amplitude rate <= {:.3g} 1/s".format(sig_bar),
+                    "not asserted: peak En = {} is at or below the {:.1g} "
+                    "round-off floor (|u|_rms ~ {:.1g} m/s), so a log fit "
+                    "would be measuring the last bit, not a growth rate"
+                    .format(_fmt(pk), floor, math.sqrt(2.0 * pk) if pk > 0 else 0.0),
+                    skipped=True))
+                sig = None
+            else:
+                sig, r2, npts, span = fit_log_rate(days, en)
             ok = sig is None or sig <= sig_bar
-            out.append(Verdict(
-                "energy:rest-growth-rate", ok,
-                "a resting case has NO energy source, so its spurious energy "
-                "must equilibrate rather than grow: fitted amplitude rate "
-                "<= {:.3g} 1/s (En e-folding >= {:.1f} days)".format(
-                    sig_bar, 1.0 / (2.0 * sig_bar) / 86400.0),
-                "sigma = {} 1/s ({}), R2 = {}, {} samples over days {}".format(
-                    _fmt(sig),
-                    "En e-folding {:.2f} days".format(
-                        1.0 / (2.0 * sig) / 86400.0)
-                    if sig and sig > 0 else "not growing",
-                    _fmt(r2), npts,
-                    "{:.1f}-{:.1f}".format(*span) if span else "?"),
-                "The spurious motion is still growing EXPONENTIALLY when the "
-                "run ends. A level bar cannot see this: weakening the source "
-                "only postpones it. On the measured cavity case a 10 900x "
-                "smaller seed bought 143 days and breached the same bar.",
-                "validation_examples/ocean/ice_shelf_cavity/README.md"))
+            if sig is not None:
+                out.append(Verdict(
+                    "energy:rest-growth-rate", ok,
+                    "a resting case has NO energy source, so its spurious "
+                    "energy must equilibrate rather than grow: fitted "
+                    "amplitude rate <= {:.3g} 1/s (En e-folding >= {:.1f} "
+                    "days)".format(sig_bar, 1.0 / (2.0 * sig_bar) / 86400.0),
+                    "sigma = {} 1/s ({}), R2 = {}, {} samples over days {}"
+                    .format(
+                        _fmt(sig),
+                        "En e-folding {:.2f} days".format(
+                            1.0 / (2.0 * sig) / 86400.0)
+                        if sig and sig > 0 else "not growing",
+                        _fmt(r2), npts,
+                        "{:.1f}-{:.1f}".format(*span) if span else "?"),
+                    "The spurious motion is still growing EXPONENTIALLY when "
+                    "the run ends. A level bar cannot see this: weakening the "
+                    "source only postpones it. On the measured cavity case a "
+                    "10 900x smaller seed bought 143 days and breached the "
+                    "same bar.",
+                    "validation_examples/ocean/ice_shelf_cavity/README.md"))
 
     if not phys.get("matrix_gates"):
         return out
