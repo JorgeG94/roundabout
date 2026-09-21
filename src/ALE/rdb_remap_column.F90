@@ -25,12 +25,27 @@ module rdb_remap_column
    !! in z. It is the remap-side twin of
    !! `rdb_ocean_pgf_reconstruct :: boundary_edges_linear`. Default
    !! `.false.` everywhere ⇒ bit-identical.
+   !!
+   !! **Non-uniform-grid weights.** PLM's slope and PPM's edge estimate are
+   !! both written for a UNIFORM source column — the minmod half-difference
+   !! `0.5·minmod(Δq_l, Δq_r)` and the `(7/12, -1/12)` four-cell average are
+   !! the equal-thickness specialisations of Colella & Woodward (1984)
+   !! eqs (1.6)-(1.8).  On a STRETCHED source column they are only
+   !! first-order-consistent, so a profile linear in `z` is NOT reproduced —
+   !! the same defect the boundary closure above fixes at `k=1`/`k=nz`, but
+   !! in the interior and driven by the thickness RATIO rather than by the
+   !! missing stencil.  The optional `nonunif` argument selects the proper
+   !! thickness-weighted forms (MOM6 `PLM_slope_cw` / CW84 (1.6)-(1.8)),
+   !! which reduce to the shipped formulae exactly on a uniform column.
+   !! PPM_H4 and PQM already carry thickness-weighted stencils and are
+   !! unaffected except through their small-`nz` fallbacks.  Default
+   !! `.false.` everywhere ⇒ bit-identical.
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, REMAP_PCM, REMAP_PLM, REMAP_PPM, &
+   use rdb_constants, only: wp, H_DIV_EPS, REMAP_PCM, REMAP_PLM, REMAP_PPM, &
                             REMAP_PPM_H4, REMAP_PQM
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PCM, REMAP_PLM, REMAP_PPM, &
-                            REMAP_PPM_H4, REMAP_PQM
+   use rdb_constants, only: NZ_STACK_MAX, wp, H_DIV_EPS, REMAP_PCM, REMAP_PLM, &
+                            REMAP_PPM, REMAP_PPM_H4, REMAP_PQM
 #endif
    implicit none
    private
@@ -43,6 +58,7 @@ module rdb_remap_column
 #endif
 
    public :: remap_column
+   public :: remap_column_preconditions_ok
    public :: remap_column_pcm
    public :: remap_column_plm
    public :: remap_column_ppm
@@ -101,7 +117,215 @@ contains
       d = sign(min(abs(d), abs(dq_up)), d)
    end subroutine boundary_half_jump
 
-   pure subroutine remap_column(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
+   pure function remap_column_preconditions_ok(nz, dz_old, dz_new, rel_tol) result(ok)
+      !$acc routine seq
+      !! Precondition test for one remap column, as a `pure` predicate so the
+      !! caller decides what to do about a violation (audit findings V5, V6).
+      !!
+      !! The overlap sweep every method shares assumes BOTH of
+      !!
+      !!   * `dz_old(k) >= 0` and `dz_new(k) >= 0` — a negative source
+      !!     thickness makes the cumulative interface stack `z_old`
+      !!     NON-MONOTONE, and the sweep then integrates the reversed
+      !!     interval twice, CREATING mass with no NaN and no bounds hit;
+      !!   * `sum(dz_old) == sum(dz_new)` — the sweep integrates the
+      !!     reconstruction only over the overlap of the two stacks, so a
+      !!     SHORT target silently deletes the non-overlapping tail and a
+      !!     LONG target integrates it as `q = 0`, diluting the outermost
+      !!     target cell.
+      !!
+      !! Neither is checked inside the kernels: they are caller obligations,
+      !! and a kernel-side check would cost a branch per column in the hot
+      !! loop for a condition that must never hold.  This predicate exists so
+      !! a cadence-bounded caller can assert them and fail loud.
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: dz_old(nz)
+         !! Source-column thicknesses.
+      real(wp), intent(in) :: dz_new(nz)
+         !! Target-column thicknesses.
+      real(wp), intent(in) :: rel_tol
+         !! Relative tolerance on the column-total match, applied against
+         !! the larger of the two totals (so a land column of zero total
+         !! passes trivially).
+      logical :: ok
+         !! `.true.` when both preconditions hold.
+
+      real(wp) :: s_old, s_new
+      integer :: k
+
+      ok = .true.
+      s_old = 0.0_wp
+      s_new = 0.0_wp
+      do k = 1, nz
+         if (dz_old(k) < 0.0_wp) ok = .false.
+         if (dz_new(k) < 0.0_wp) ok = .false.
+         s_old = s_old + dz_old(k)
+         s_new = s_new + dz_new(k)
+      end do
+      if (abs(s_new - s_old) > rel_tol*max(abs(s_old), abs(s_new))) ok = .false.
+   end function remap_column_preconditions_ok
+
+   pure subroutine plm_slope_nonuniform(h_l, h_c, h_r, q_l, q_c, q_r, slope)
+      !$acc routine seq
+      !! Thickness-weighted PLM slope — Colella & Woodward (1984) eq (1.7)
+      !! with the (1.8) bound, the form MOM6 ships as `PLM_slope_cw`.
+      !!
+      !! Returns the HALF-jump across the cell (the module's `slope`
+      !! convention: `q_hat(xi) = q + slope*(2*xi - 1)`), i.e. half CW84's
+      !! `delta a_j`.  For a profile linear in `z` the unlimited estimate is
+      !! exactly `a*h_c` at ANY thickness triple, and the bound
+      !! `2*min(q_c - q_min, q_max - q_c)` is then `a*min(h_l+h_c, h_c+h_r)`
+      !! which never bites — so the reconstruction is linear-exact.
+      !!
+      !! **This is NOT the shipped formula's equal-thickness limit**, and the
+      !! difference is deliberate: on a uniform column (1.7) collapses to the
+      !! CENTRED difference `0.5*(dq_l + dq_r)` under the (1.8) bound, where
+      !! the shipped kernel uses the strictly more diffusive
+      !! `0.5*minmod(dq_l, dq_r)`.  So switching the knob on changes the PLM
+      !! answer even on an unstretched column — it swaps minmod for the CW84
+      !! limiter, which is what MOM6 ships as `PLM_slope_cw` and the only
+      !! h-weighted PLM slope that is second-order rather than first-order at
+      !! a smooth extremum.  (PPM's path, by contrast, reduces exactly; see
+      !! `ppm_jump_nonuniform`.)  Both remain monotone: the (1.8) bound keeps
+      !! the reconstructed edges inside the three cell means.
+      !!
+      !! `H_DIV_EPS` (not `H_NEGLECT`) armours the denominators: every one of
+      !! them is a SUM of thicknesses, already non-negative by the caller's
+      !! precondition, so this is the pure 1/0 role and nothing else.
+      real(wp), intent(in) :: h_l
+         !! Thickness of the cell below (toward the bed).
+      real(wp), intent(in) :: h_c
+         !! Thickness of the cell being reconstructed.
+      real(wp), intent(in) :: h_r
+         !! Thickness of the cell above (toward the surface).
+      real(wp), intent(in) :: q_l
+         !! Cell mean below.
+      real(wp), intent(in) :: q_c
+         !! Cell mean here.
+      real(wp), intent(in) :: q_r
+         !! Cell mean above.
+      real(wp), intent(out) :: slope
+         !! Limited half-jump across the cell.
+
+      real(wp) :: sig_l, sig_r, sig_c, q_min, q_max
+
+      sig_l = q_c - q_l
+      sig_r = q_r - q_c
+      sig_c = (h_c/(h_l + h_c + h_r + H_DIV_EPS))* &
+              ((2.0_wp*h_l + h_c)/(h_c + h_r + H_DIV_EPS)*sig_r &
+               + (h_c + 2.0_wp*h_r)/(h_l + h_c + H_DIV_EPS)*sig_l)
+      if (sig_l*sig_r > 0.0_wp) then
+         q_min = min(q_l, q_c, q_r)
+         q_max = max(q_l, q_c, q_r)
+         slope = 0.5_wp*sign(min(abs(sig_c), &
+                                 2.0_wp*min(q_c - q_min, q_max - q_c)), sig_c)
+      else
+         slope = 0.0_wp
+      end if
+   end subroutine plm_slope_nonuniform
+
+   pure subroutine ppm_edge_two_cell(h_l, h_r, q_l, q_r, edge)
+      !$acc routine seq
+      !! Thickness-weighted two-cell interface value — the non-uniform
+      !! generalisation of `0.5*(q_l + q_r)`.
+      !!
+      !! For a profile linear in `z` the cell means sit at the cell CENTRES,
+      !! which are `(h_l + h_r)/2` apart, and the shared interface is `h_l/2`
+      !! above the left centre; the weights `h_r/(h_l+h_r)`, `h_l/(h_l+h_r)`
+      !! are exactly that interpolation.  Used where CW84 (1.6) has no
+      !! stencil — the `1|2` and `(nz-1)|nz` edges.
+      real(wp), intent(in) :: h_l
+         !! Thickness of the cell below the interface.
+      real(wp), intent(in) :: h_r
+         !! Thickness of the cell above the interface.
+      real(wp), intent(in) :: q_l
+         !! Cell mean below.
+      real(wp), intent(in) :: q_r
+         !! Cell mean above.
+      real(wp), intent(out) :: edge
+         !! Interface value.
+
+      edge = (q_l*h_r + q_r*h_l)/(h_l + h_r + H_DIV_EPS)
+   end subroutine ppm_edge_two_cell
+
+   pure subroutine ppm_jump_nonuniform(h_l, h_c, h_r, q_l, q_c, q_r, dq)
+      !$acc routine seq
+      !! Colella & Woodward (1984) eq (1.7) — the thickness-weighted
+      !! second-order jump `delta a` across the cell, which eq (1.6)
+      !! consumes.  Returned UNLIMITED, deliberately.
+      !!
+      !! CW84 feeds (1.6) the (1.8)-limited `delta_m a`, and MOM6's explicit
+      !! H4 edge estimate does not limit either.  Here the unlimited estimate
+      !! is the right choice for two reasons: the Colella-Woodward limiter
+      !! this module already runs over the assembled edges (step 2 of
+      !! `remap_column_ppm`) does that job downstream, and leaving (1.7)
+      !! unlimited is what makes the whole non-uniform path reduce EXACTLY to
+      !! the shipped `(7/12, -1/12)` estimate on an equal-thickness column,
+      !! for ANY profile rather than only for a monotone one.  That is the
+      !! property that bounds how far a shipped answer can move when the knob
+      !! is switched on: only by the non-uniformity it was introduced to fix.
+      real(wp), intent(in) :: h_l
+         !! Thickness of the cell below.
+      real(wp), intent(in) :: h_c
+         !! Thickness of this cell.
+      real(wp), intent(in) :: h_r
+         !! Thickness of the cell above.
+      real(wp), intent(in) :: q_l
+         !! Cell mean below.
+      real(wp), intent(in) :: q_c
+         !! Cell mean here.
+      real(wp), intent(in) :: q_r
+         !! Cell mean above.
+      real(wp), intent(out) :: dq
+         !! Full jump across the cell.
+
+      dq = (h_c/(h_l + h_c + h_r + H_DIV_EPS))* &
+           ((2.0_wp*h_l + h_c)/(h_c + h_r + H_DIV_EPS)*(q_r - q_c) &
+            + (h_c + 2.0_wp*h_r)/(h_l + h_c + H_DIV_EPS)*(q_c - q_l))
+   end subroutine ppm_jump_nonuniform
+
+   pure subroutine ppm_edge_nonuniform(h0, h1, h2, h3, q1, q2, dq1, dq2, edge)
+      !$acc routine seq
+      !! Colella & Woodward (1984) eq (1.6): the fourth-order interface value
+      !! between cells 1 and 2 on a NON-UNIFORM stencil `h0,h1,h2,h3`.
+      !!
+      !! On equal thicknesses the whole correction term collapses and this
+      !! becomes `(7/12)(q1 + q2) - (1/12)(q0 + q3)`, the shipped estimate.
+      !! On a stretched column the correction is what makes it consistent:
+      !! substituting a profile linear in `z` (so `dq1 = a*h1`, `dq2 = a*h2`)
+      !! the three correction terms cancel IDENTICALLY, leaving
+      !! `q1 + (h1/(h1+h2))*(q2-q1)`, which is the exact interface value.
+      real(wp), intent(in) :: h0
+         !! Thickness two cells below the interface.
+      real(wp), intent(in) :: h1
+         !! Thickness of the cell just below the interface.
+      real(wp), intent(in) :: h2
+         !! Thickness of the cell just above the interface.
+      real(wp), intent(in) :: h3
+         !! Thickness two cells above the interface.
+      real(wp), intent(in) :: q1
+         !! Cell mean just below the interface.
+      real(wp), intent(in) :: q2
+         !! Cell mean just above the interface.
+      real(wp), intent(in) :: dq1
+         !! Limited CW84 (1.7) jump of the cell below.
+      real(wp), intent(in) :: dq2
+         !! Limited CW84 (1.7) jump of the cell above.
+      real(wp), intent(out) :: edge
+         !! Interface value.
+
+      real(wp) :: dq21, wa, wb, i_h12
+
+      dq21 = q2 - q1
+      i_h12 = 1.0_wp/(h1 + h2 + H_DIV_EPS)
+      wa = (h0 + h1)/(2.0_wp*h1 + h2 + H_DIV_EPS)
+      wb = (h2 + h3)/(h1 + 2.0_wp*h2 + H_DIV_EPS)
+      edge = q1 + h1*i_h12*dq21 &
+             + (2.0_wp*h1*h2*i_h12*(wa - wb)*dq21 - h1*wa*dq2 + h2*wb*dq1) &
+             /(h0 + h1 + h2 + h3 + H_DIV_EPS)
+   end subroutine ppm_edge_nonuniform
+
+   pure subroutine remap_column(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
       !$acc routine seq
       !! Dispatch to the requested remapping method.
       integer, intent(in) :: method
@@ -117,24 +341,36 @@ contains
          !! and `k=nz` reconstruct as PCM, which is first-order there.
          !! `.true.` ⇒ `boundary_half_jump`, the linear-exact one-sided
          !! closure.  Ignored by PCM (no reconstruction to close).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid reconstruction weights
+         !! (`&vcoord_nml remap_nonuniform_weights`).  Absent or `.false.`
+         !! (the default) ⇒ PLM's slope and PPM's edge estimate use their
+         !! equal-thickness specialisations, which are linear-exact only on
+         !! a uniform SOURCE column.  `.true.` ⇒ the Colella & Woodward
+         !! (1984) (1.6)-(1.8) thickness-weighted forms, linear-exact on any
+         !! source column.  Inert for PCM; reaches PPM_H4/PQM only through
+         !! their small-`nz` fallbacks, their own stencils already being
+         !! thickness-weighted.
 
-      logical :: be
+      logical :: be, nu
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
 
       select case (method)
       case (REMAP_PCM)
          call remap_column_pcm(nz, dz_old, dz_new, q_old, q_new)
       case (REMAP_PLM)
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be, nu)
       case (REMAP_PPM)
-         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be, nu)
       case (REMAP_PPM_H4)
-         call remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, be, nu)
       case (REMAP_PQM)
-         call remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, be, nu)
       case default
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be, nu)
       end select
    end subroutine remap_column
 
@@ -193,14 +429,17 @@ contains
       end do
    end subroutine remap_column_pcm
 
-   pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
+   pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
       !$acc routine seq
       !! Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
       !! Per old layer k: q_hat(xi) = q(k) + slope(k)*(2*xi - 1), xi in [0,1],
       !! slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
       !! `bnd_extrap` (absent/.false. = default) closes the boundary cells
       !! with `boundary_half_jump` instead of the PCM flatten — see
-      !! `remap_column`.
+      !! `remap_column`.  `nonunif` (absent/.false. = default) replaces the
+      !! minmod half-difference — which assumes EQUAL source thicknesses —
+      !! with the thickness-weighted CW84 (1.7)/(1.8) slope; see
+      !! `plm_slope_nonuniform`.
       integer, intent(in) :: nz
       real(wp), intent(in) :: dz_old(nz)
          !! Old layer thicknesses
@@ -212,12 +451,18 @@ contains
          !! New cell-average scalar values (conservative)
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid slope weights (CW84 1.7/1.8).
 
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       real(wp) :: slope(NZ_STACK_MAX)
       real(wp) :: z_lo, z_hi, overlap, integral
       real(wp) :: xi_lo, xi_hi, dq_l, dq_r
+      logical :: nu
       integer :: k, ko, ko_start
+
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
 
       ! Single-layer case: identity remap
       if (nz == 1) then
@@ -236,15 +481,22 @@ contains
       ! Compute minmod-limited slopes
       ! slope(k) = half the limited difference across the layer
       slope(1) = 0.0_wp
-      do k = 2, nz - 1
-         dq_l = q_old(k) - q_old(k - 1)
-         dq_r = q_old(k + 1) - q_old(k)
-         if (dq_l*dq_r > 0.0_wp) then
-            slope(k) = 0.5_wp*sign(min(abs(dq_l), abs(dq_r)), dq_l)
-         else
-            slope(k) = 0.0_wp
-         end if
-      end do
+      if (nu) then
+         do k = 2, nz - 1
+            call plm_slope_nonuniform(dz_old(k - 1), dz_old(k), dz_old(k + 1), &
+                                      q_old(k - 1), q_old(k), q_old(k + 1), slope(k))
+         end do
+      else
+         do k = 2, nz - 1
+            dq_l = q_old(k) - q_old(k - 1)
+            dq_r = q_old(k + 1) - q_old(k)
+            if (dq_l*dq_r > 0.0_wp) then
+               slope(k) = 0.5_wp*sign(min(abs(dq_l), abs(dq_r)), dq_l)
+            else
+               slope(k) = 0.0_wp
+            end if
+         end do
+      end if
       slope(nz) = 0.0_wp
       ! Boundary cells: PCM flatten by default; the linear-exact one-sided
       ! half-jump when boundary extrapolation is requested.
@@ -296,7 +548,7 @@ contains
       end do
    end subroutine remap_column_plm
 
-   pure subroutine remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
+   pure subroutine remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
       !$acc routine seq
       !! Piecewise-parabolic (Colella & Woodward 1984) remap.
       !! Per old layer k, xi in [0,1]:
@@ -305,6 +557,10 @@ contains
       !! layers fall back to PLM-quality edges, or — under `bnd_extrap` —
       !! to the linear-exact one-sided pair (`boundary_half_jump`), which
       !! zeroes `q6` there so the boundary cell carries a straight line.
+      !! `nonunif` swaps the `(7/12, -1/12)` edge estimate — an EQUAL-
+      !! thickness specialisation — for CW84 (1.6) on the true stencil
+      !! thicknesses, and the `1|2` / `(nz-1)|nz` edges for the
+      !! thickness-weighted two-cell value; see `ppm_edge_nonuniform`.
       integer, intent(in) :: nz
       real(wp), intent(in) :: dz_old(nz)
          !! Old layer thicknesses
@@ -316,18 +572,23 @@ contains
          !! New cell-average scalar values (conservative)
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid edge weights (CW84 1.6-1.8).
 
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       real(wp) :: q_L(NZ_STACK_MAX), q_R(NZ_STACK_MAX), q6(NZ_STACK_MAX)
+      real(wp) :: dq_cw(NZ_STACK_MAX)
       real(wp) :: z_lo, z_hi, overlap, integral
       real(wp) :: xi_lo, xi_hi
       real(wp) :: edge, dq, dq_l, dq_r, q_min, q_max
       real(wp) :: d_bnd
-      logical :: be
+      logical :: be, nu
       integer :: k, ko, ko_start
 
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
 
       ! Trivial cases
       if (nz == 1) then
@@ -336,7 +597,7 @@ contains
       end if
       if (nz == 2) then
          ! With only 2 layers, PPM reduces to PLM
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be, nu)
          return
       end if
 
@@ -356,32 +617,58 @@ contains
       q_L(1) = q_old(1)
       q_R(nz) = q_old(nz)
 
-      ! Layer 1 right edge = layer 2 left edge: use 3-cell stencil (one-sided)
-      q_R(1) = 0.5_wp*(q_old(1) + q_old(2))
-      ! Layer nz left edge = layer nz-1 right edge: use 3-cell stencil
-      q_L(nz) = 0.5_wp*(q_old(nz - 1) + q_old(nz))
+      if (nu) then
+         ! ---- Non-uniform weights: CW84 (1.6) on the true thicknesses ----
+         ! Limited per-cell jumps (1.7)+(1.8) feed the (1.6) correction; they
+         ! exist only where a centred triple does, k = 2 .. nz-1.
+         do k = 2, nz - 1
+            call ppm_jump_nonuniform(dz_old(k - 1), dz_old(k), dz_old(k + 1), &
+                                     q_old(k - 1), q_old(k), q_old(k + 1), dq_cw(k))
+         end do
+         ! The two edges CW84 (1.6) has no stencil for: thickness-weighted
+         ! two-cell interpolation, which is linear-exact (the non-uniform
+         ! generalisation of the 0.5 average the uniform path uses there).
+         call ppm_edge_two_cell(dz_old(1), dz_old(2), q_old(1), q_old(2), edge)
+         q_R(1) = edge
+         q_L(2) = edge
+         call ppm_edge_two_cell(dz_old(nz - 1), dz_old(nz), q_old(nz - 1), q_old(nz), edge)
+         q_R(nz - 1) = edge
+         q_L(nz) = edge
+         ! Interior edges with the full four-cell stencil.
+         do k = 2, nz - 2
+            call ppm_edge_nonuniform(dz_old(k - 1), dz_old(k), dz_old(k + 1), dz_old(k + 2), &
+                                     q_old(k), q_old(k + 1), dq_cw(k), dq_cw(k + 1), edge)
+            q_R(k) = edge
+            q_L(k + 1) = edge
+         end do
+      else
+         ! Layer 1 right edge = layer 2 left edge: use 3-cell stencil (one-sided)
+         q_R(1) = 0.5_wp*(q_old(1) + q_old(2))
+         ! Layer nz left edge = layer nz-1 right edge: use 3-cell stencil
+         q_L(nz) = 0.5_wp*(q_old(nz - 1) + q_old(nz))
 
-      ! Interior edges: 4th-order Colella-Woodward interpolation
-      ! For uniform layers this gives (7/12)(q_k + q_{k+1}) - (1/12)(q_{k-1} + q_{k+2})
-      ! For non-uniform layers, use the simpler weighted average
-      do k = 2, nz - 1
-         edge = 0.5_wp*(q_old(k) + q_old(k + 1))
-         if (k >= 2 .and. k + 1 <= nz) then
-            ! Add 4th-order correction when stencil is available
-            dq_l = q_old(k) - q_old(k - 1)
-            dq_r = q_old(k + 1) - q_old(k)
-            if (k - 1 >= 1 .and. k + 2 <= nz) then
-               edge = (7.0_wp/12.0_wp)*(q_old(k) + q_old(k + 1)) &
-                      - (1.0_wp/12.0_wp)*(q_old(k - 1) + q_old(k + 2))
+         ! Interior edges: 4th-order Colella-Woodward interpolation
+         ! For uniform layers this gives (7/12)(q_k + q_{k+1}) - (1/12)(q_{k-1} + q_{k+2})
+         ! For non-uniform layers, use the simpler weighted average
+         do k = 2, nz - 1
+            edge = 0.5_wp*(q_old(k) + q_old(k + 1))
+            if (k >= 2 .and. k + 1 <= nz) then
+               ! Add 4th-order correction when stencil is available
+               dq_l = q_old(k) - q_old(k - 1)
+               dq_r = q_old(k + 1) - q_old(k)
+               if (k - 1 >= 1 .and. k + 2 <= nz) then
+                  edge = (7.0_wp/12.0_wp)*(q_old(k) + q_old(k + 1)) &
+                         - (1.0_wp/12.0_wp)*(q_old(k - 1) + q_old(k + 2))
+               end if
             end if
-         end if
-         q_R(k) = edge
-         q_L(k + 1) = edge
-      end do
+            q_R(k) = edge
+            q_L(k + 1) = edge
+         end do
 
-      ! Layer 2 left edge (if nz >= 3, was set above; otherwise use average)
-      if (nz >= 3) then
-         q_L(2) = q_R(1)
+         ! Layer 2 left edge (if nz >= 3, was set above; otherwise use average)
+         if (nz >= 3) then
+            q_L(2) = q_R(1)
+         end if
       end if
 
       ! ---- Step 2: Colella-Woodward monotonicity limiting ----
@@ -490,7 +777,7 @@ contains
       end do
    end subroutine remap_column_ppm
 
-   pure subroutine remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
+   pure subroutine remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
       !$acc routine seq
       !! PPM with non-uniform 4th-order (H4) edge values (White & Adcroft 2008).
       !! As `remap_column_ppm` but the interior edge estimate is the
@@ -517,10 +804,14 @@ contains
       real(wp) :: xi_lo, xi_hi
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid weights.  The H4/H3 stencils below are ALREADY
+         !! thickness-weighted, so this only reaches the `nz == 2` PLM
+         !! fallback; passed through for consistency.
 
       real(wp) :: dq, dq_l, dq_r, q_min, q_max
       real(wp) :: d_bnd
-      logical :: be
+      logical :: be, nu
       real(wp) :: h0, h1, h2, h3, hf, h_sum
       real(wp) :: h01, h12, h23, h012, h123, h0123
       real(wp) :: f1, f2, f3, et1, et2, et3
@@ -530,6 +821,8 @@ contains
 
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
 
       ! Trivial cases (identical to PPM)
       if (nz == 1) then
@@ -538,7 +831,7 @@ contains
       end if
       if (nz == 2) then
          ! With only 2 layers, PPM reduces to PLM
-         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_plm(nz, dz_old, dz_new, q_old, q_new, be, nu)
          return
       end if
 
@@ -876,7 +1169,7 @@ contains
       csys(4) = ((wt(1, 4)*du1) + (wt(2, 4)*du2)) + (wt(3, 4)*du3)
    end subroutine pqm_end_value_h4
 
-   pure subroutine remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap)
+   pure subroutine remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
       !$acc routine seq
       !! Piecewise-quartic (PQM_IH4IH3) conservative remap (White & Adcroft 2008).
       !! Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
@@ -899,8 +1192,12 @@ contains
 
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).
+      logical, intent(in), optional :: nonunif
+         !! Non-uniform-grid weights.  The implicit-h4/h3 stencils below are
+         !! ALREADY thickness-weighted, so this only reaches the `nz < 5`
+         !! PPM fallback; passed through for consistency.
 
-      logical :: be
+      logical :: be, nu
       real(wp) :: d_bnd
       real(wp) :: z_old(0:NZ_STACK_MAX), z_new(0:NZ_STACK_MAX)
       ! Edge values / slopes, two per cell: index 1 = left, 2 = right.
@@ -926,6 +1223,8 @@ contains
 
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
+      nu = .false.
+      if (present(nonunif)) nu = nonunif
 
       ! Trivial / degenerate cases — fall back to lower-order safe paths.
       if (nz == 1) then
@@ -933,7 +1232,7 @@ contains
          return
       end if
       if (nz < 5) then
-         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be)
+         call remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, be, nu)
          return
       end if
 

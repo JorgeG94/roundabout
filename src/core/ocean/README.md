@@ -499,6 +499,23 @@ bed drag) against the outer scheme's exact analytic decay under **both**
   `remap_column(..., bnd_extrap)`. Gate:
   `tests/test_remap_boundary_extrap.F90`; numbers in
   `docs/CAPABILITIES_AND_LIMITATIONS.md`.
+- **ALE remap non-uniform-grid weights** (`&vcoord_nml
+  remap_nonuniform_weights`, default `.false.` ⇒ bit-identical): the
+  knob above buys linear exactness only on a UNIFORM source column.
+  PLM's `0.5·minmod` slope and PPM's `(7/12, −1/12)` edge estimate are
+  the equal-thickness specialisations of Colella & Woodward (1984)
+  (1.6)–(1.8), so a STRETCHED source column — every geometric family
+  but σ on a flat bed — carries an O(Δh/h) error through the whole
+  INTERIOR as well. On `.true.` PPM takes CW84 (1.6) on the true
+  stencil thicknesses and PLM the h-weighted (1.7)+(1.8) slope (MOM6
+  `PLM_slope_cw`); PPM_H4 and PQM already carry thickness-weighted
+  stencils and are unaffected. Measured on random stretched columns the
+  linear-profile error falls 1.5E-01 → 2.8E-14 (`plm`) and 1.7E-01 →
+  4.3E-14 (`ppm`). Caveat: PPM reduces exactly on a uniform column,
+  PLM does NOT — the knob also swaps PLM's minmod for the CW84 limiter.
+  Threaded `cfg%remap_nonuniform_weights` →
+  `vcoord%remap_nonuniform_weights` → `remap_column(..., nonunif)`.
+  Gate: `tests/test_remap_nonuniform.F90`.
 - **Initial layer thickness** (`&vcoord_nml thickness_config`, default
   `"sigma"` ⇒ bit-identical): selects what `h_layer` is *seeded* to in
   `ocean_state_seed_from_cfg`, independently of `vcoord_type` (which

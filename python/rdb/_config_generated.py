@@ -308,6 +308,14 @@ class Vcoord(Group):
         default=False,
     )
 
+    remap_nonuniform_weights = Bool(
+        'remap_nonuniform_weights',
+        doc='ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class Physics(Group):
     """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
@@ -5630,4 +5638,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 57
-N_KNOBS = 616
+N_KNOBS = 617
