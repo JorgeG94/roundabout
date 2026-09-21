@@ -450,83 +450,183 @@ XFAIL_REASONS = {
         "Scoped to the SETTLE gate: the MAGNITUDE gate passes with margin "
         "and is deliberately left live, because it is what separates the "
         "two outer split schemes.",
+    "slope_plateau":
+        "THE TERRAIN-FOLLOWING PLATEAU, AND WHETHER IT IS ONE. Over a "
+        "constant-gradient bed or a Gaussian seamount the spurious energy "
+        "sits at the second-order pressure-gradient truncation "
+        "a_peak = N^2 de^3/(6 dx Hbar) -- which is a tolerable "
+        "discretisation error IF it equilibrates. At the tier-2 horizon "
+        "(3.33 days) several of these cells are still at their maximum when "
+        "the clock stops, and at the tier-1 horizon (30 days) the fitted "
+        "growth rate says which of them are actually still growing. That is "
+        "the whole reason the RATE gate exists: a level bar reads a "
+        "slow instability and a settled truncation identically. The fix is "
+        "a pressure-gradient form that is exact on a sloping coordinate "
+        "surface -- `origin/fix/sigma-pgf-rest-state` carries the exact FV "
+        "form under `reconstruct_for_pressure` and is NOT in this tree, so "
+        "these cells must be re-measured when it lands.",
     "generic":
         "Measured failing on this cell; see the baseline table in "
         "tests/regression/README.md.",
 }
 
 MEASURED_XFAIL = {
-    "lid_slope/sigma": ("cavity_settle", ['energy:rest-settles'], "1.02e-09 (final 1.004e-09)"),
-    "lid_slope/z_fixed": ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'tracer:no-new-extrema'], "3.478e-05 (final 2.909e-05)"),
-    "lid_slope/zstar": ("cavity_settle", ['energy:rest-settles'], "1.02e-09 (final 1.004e-09)"),
-    "rx0_010/eulerian_z": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "1.954e-06 (final 1.954e-06)"),
-    "rx0_010/hycom": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_010/lagrangian": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "0.0001066 (final 0.0001066)"),
-    "rx0_010/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_010/sigma": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "1.445e-06 (final 1.445e-06)"),
-    "rx0_010/z_fixed": ("rx0_plateau", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], "0.0007616 (final 0.0007616)"),
-    "rx0_010/zstar": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "1.445e-06 (final 1.445e-06)"),
-    "rx0_010/zstar_full": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "2.261e-06 (final 2.261e-06)"),
-    "rx0_010/zstar_sigma": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "1.445e-06 (final 1.445e-06)"),
-    "rx0_020/eulerian_z": ("rx0_plateau", ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], "0.0001767 (final 0.0001767)"),
-    "rx0_020/hycom": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_020/lagrangian": ("blowup", ['completed'], "aborted"),
-    "rx0_020/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_020/sigma": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "0.0001335 (final 0.0001335)"),
-    "rx0_020/z_fixed": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_020/zstar": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "0.0001335 (final 0.0001335)"),
-    "rx0_020/zstar_full": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "0.0001344 (final 0.0001344)"),
-    "rx0_020/zstar_sigma": ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], "0.0001335 (final 0.0001335)"),
-    "rx0_040/eulerian_z": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/hycom": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/lagrangian": ("blowup", ['completed'], "aborted"),
-    "rx0_040/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/z_fixed": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/zstar": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/zstar_full": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_040/zstar_sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/eulerian_z": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/hycom": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/lagrangian": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/z_fixed": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/zstar": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/zstar_full": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_060/zstar_sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/eulerian_z": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/hycom": ("blowup", ['completed'], "aborted"),
-    "rx0_080/lagrangian": ("blowup", ['completed'], "aborted"),
-    "rx0_080/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/sigma/unstrat": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/z_fixed": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/zstar": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/zstar_full": ("blowup", ['completed', 'finite'], "aborted"),
-    "rx0_080/zstar_sigma": ("blowup", ['completed', 'finite'], "aborted"),
-    "seamount_gentle/hycom": ("density_coord", ['energy:rest-settles'], "2.374e-05 (final 2.361e-05)"),
-    "seamount_gentle/rho": ("density_coord", ['energy:rest-settles'], "1.808e-05 (final 1.808e-05)"),
-    "seamount_gentle/sigma": ("seamount_settle", ['energy:rest-settles'], "1.048e-08 (final 1.006e-08)"),
-    "seamount_gentle/z_fixed": ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], "7.392e-05 (final 7.255e-05)"),
-    "seamount_gentle/zstar": ("seamount_settle", ['energy:rest-settles'], "1.048e-08 (final 1.006e-08)"),
-    "seamount_gentle/zstar_full": ("zstar_full", ['energy:rest-settles'], "4.877e-07 (final 4.877e-07)"),
-    "seamount_gentle/zstar_sigma": ("seamount_settle", ['energy:rest-settles'], "1.048e-08 (final 1.006e-08)"),
-    "seamount_steep/eulerian_z": ("seamount_settle", ['energy:rest-settles'], "1.599e-06 (final 1.599e-06)"),
-    "seamount_steep/hycom": ("blowup", ['completed', 'finite'], "aborted"),
-    "seamount_steep/lagrangian": ("blowup", ['completed'], "aborted"),
-    "seamount_steep/rho": ("blowup", ['completed', 'finite'], "aborted"),
-    "seamount_steep/sigma": ("seamount_settle", ['energy:rest-settles'], "1.084e-06 (final 1.084e-06)"),
-    "seamount_steep/z_fixed": ("blowup", ['completed', 'finite'], "aborted"),
-    "seamount_steep/zstar": ("seamount_settle", ['energy:rest-settles'], "1.084e-06 (final 1.084e-06)"),
-    "seamount_steep/zstar_full": ("zstar_full", ['energy:rest-settles'], "2.402e-06 (final 2.402e-06)"),
-    "seamount_steep/zstar_sigma": ("seamount_settle", ['energy:rest-settles'], "1.084e-06 (final 1.084e-06)"),
-    "slope/hycom": ("density_coord", ['energy:rest', 'energy:rest-settles'], "1.094e-05 (final 1.094e-05)"),
-    "slope/hycom/wright": ("density_coord", ['energy:rest'], "1.49e-05 (final 1.35e-05)"),
-    "slope/rho": ("density_coord", ['energy:rest'], "1.298e-05 (final 1.203e-05)"),
-    "slope/z_fixed": ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], "5.109e-06 (final 5.109e-06)"),
-    "slope/z_fixed/wright": ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], "4.755e-06 (final 4.755e-06)"),
-    "slope/zstar_full": ("zstar_full", ['energy:rest-settles'], "2.836e-07 (final 2.836e-07)"),
+    "lid_slope/sigma":
+        ("cavity_settle", ['energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.988e-09 (final 1.988e-09); tier2 (3.33 d) peak En 1.02e-09 (final 1.004e-09)"),
+    "lid_slope/z_fixed":
+        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 3.478e-05 (final 2.909e-05)"),
+    "lid_slope/zstar":
+        ("cavity_settle", ['energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.988e-09 (final 1.988e-09); tier2 (3.33 d) peak En 1.02e-09 (final 1.004e-09)"),
+    "rx0_010/eulerian_z":
+        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.954e-06 (final 1.954e-06)"),
+    "rx0_010/hycom":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_010/lagrangian":
+        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0001066 (final 0.0001066)"),
+    "rx0_010/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_010/sigma":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
+    "rx0_010/z_fixed":
+        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0007616 (final 0.0007616)"),
+    "rx0_010/zstar":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
+    "rx0_010/zstar_full":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0007728 (final 0.0007728); tier2 (3.33 d) peak En 2.261e-06 (final 2.261e-06)"),
+    "rx0_010/zstar_sigma":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
+    "rx0_020/eulerian_z":
+        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0001767 (final 0.0001767)"),
+    "rx0_020/hycom":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_020/lagrangian":
+        ("rx0_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_020/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_020/sigma":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006354 (final 0.006222); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
+    "rx0_020/z_fixed":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_020/zstar":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006354 (final 0.006222); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
+    "rx0_020/zstar_full":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.005049 (final 0.004983); tier2 (3.33 d) peak En 0.0001344 (final 0.0001344)"),
+    "rx0_020/zstar_sigma":
+        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006358 (final 0.006249); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
+    "rx0_040/eulerian_z":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/hycom":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/lagrangian":
+        ("rx0_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/z_fixed":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/zstar":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/zstar_full":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_040/zstar_sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/eulerian_z":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/hycom":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/lagrangian":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/z_fixed":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/zstar":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/zstar_full":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_060/zstar_sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/eulerian_z":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/hycom":
+        ("blowup", ['completed'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/lagrangian":
+        ("blowup", ['completed'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/sigma/unstrat":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/z_fixed":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/zstar":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/zstar_full":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "rx0_080/zstar_sigma":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "seamount_gentle/eulerian_z":
+        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'tracer:no-new-extrema'], [1], "tier1 (30 d) peak En 0.0005058 (final 0.0004234); tier2 (3.33 d) peak En 9.924e-09 (final 8.983e-09)"),
+    "seamount_gentle/hycom":
+        ("density_coord", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 7.601e-05 (final 7.563e-05); tier2 (3.33 d) peak En 2.374e-05 (final 2.361e-05)"),
+    "seamount_gentle/lagrangian":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 8.143e-08 (final 8.143e-08); tier2 (3.33 d) peak En 1.025e-08 (final 8.508e-09)"),
+    "seamount_gentle/rho":
+        ("blowup", ['completed', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.808e-05 (final 1.808e-05)"),
+    "seamount_gentle/sigma":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
+    "seamount_gentle/z_fixed":
+        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 7.392e-05 (final 7.255e-05)"),
+    "seamount_gentle/zstar":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
+    "seamount_gentle/zstar_full":
+        ("zstar_full", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 2.481e-05 (final 2.481e-05); tier2 (3.33 d) peak En 4.877e-07 (final 4.877e-07)"),
+    "seamount_gentle/zstar_sigma":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
+    "seamount_steep/eulerian_z":
+        ("blowup", ['completed', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.599e-06 (final 1.599e-06)"),
+    "seamount_steep/hycom":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "seamount_steep/lagrangian":
+        ("slope_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "seamount_steep/rho":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "seamount_steep/sigma":
+        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
+    "seamount_steep/z_fixed":
+        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
+    "seamount_steep/zstar":
+        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
+    "seamount_steep/zstar_full":
+        ("zstar_full", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000268 (final 0.000268); tier2 (3.33 d) peak En 2.402e-06 (final 2.402e-06)"),
+    "seamount_steep/zstar_sigma":
+        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
+    "slope/eulerian_z":
+        ("slope_plateau", ['energy:rest', 'tracer:no-new-extrema'], [1], "tier1 (30 d) peak En 0.001131 (final 0.001028); tier2 (3.33 d) peak En 8.391e-11 (final 6.29e-11)"),
+    "slope/hycom":
+        ("density_coord", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.721e-05 (final 1.689e-05); tier2 (3.33 d) peak En 1.094e-05 (final 1.094e-05)"),
+    "slope/hycom/wright":
+        ("blowup", ['completed', 'energy:rest'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.49e-05 (final 1.35e-05)"),
+    "slope/rho":
+        ("blowup", ['completed', 'energy:rest', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.298e-05 (final 1.203e-05)"),
+    "slope/sigma":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
+    "slope/sigma/wright":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 3.246e-09 (final 3.246e-09); tier2 (3.33 d) peak En 8.982e-11 (final 6.652e-11)"),
+    "slope/z_fixed":
+        ("slope_plateau", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En 3.23e-05 (final 3.23e-05); tier2 (3.33 d) peak En 5.109e-06 (final 5.109e-06)"),
+    "slope/z_fixed/wright":
+        ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En 2.936e-05 (final 2.936e-05); tier2 (3.33 d) peak En 4.755e-06 (final 4.755e-06)"),
+    "slope/zstar":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
+    "slope/zstar_full":
+        ("zstar_full", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.501e-06 (final 4.501e-06); tier2 (3.33 d) peak En 2.836e-07 (final 2.836e-07)"),
+    "slope/zstar_sigma":
+        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
 }
 
 def problem_truncation_estimate(prob, n2):
@@ -750,17 +850,23 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
                     + ([strat] if strat != "linear" else [])
                     + ([eos] if eos != "linear" else []))
     if not refused and mkey in MEASURED_XFAIL:
-        rkey, assertions, measured = MEASURED_XFAIL[mkey]
+        rkey, assertions, tiers, measured = MEASURED_XFAIL[mkey]
         kw["known_failure"] = {
             "assertions": list(assertions),
-            "reason": "{}  MEASURED on this cell at the tier-2 horizon "
-                      "(3.33 simulated days, gfortran 15.1 Release, single "
-                      "rank): peak En = {}. Do NOT close this by widening "
-                      "en_rest_max, by shortening the run, or by putting "
-                      "viscosity into the template -- a viscosity that "
-                      "removes the spurious energy removes the measurement "
-                      "with it (nu_h = 50 m2/s does exactly that on the "
-                      "sibling cavity case).".format(
+            "tiers": list(tiers),
+            "reason": "{}  MEASURED on this cell -- {} (tier 1 = 30 "
+                      "simulated days on a V100/nvfortran, tier 2 = 3.33 "
+                      "days on gfortran 15.1 Release, single rank, "
+                      "pred_corr). The marker is scoped to the TIERS the "
+                      "defect is visible at as well as to the assertions it "
+                      "covers: several of these only appear at the 30-day "
+                      "horizon, and marking them known-failing at tier 2 "
+                      "would report a permanent XPASS there. Do NOT close "
+                      "this by widening en_rest_max, by shortening the run, "
+                      "or by putting viscosity into the template -- a "
+                      "viscosity that removes the spurious energy removes "
+                      "the measurement with it (nu_h = 50 m2/s does exactly "
+                      "that on the sibling cavity case).".format(
                           XFAIL_REASONS[rkey], measured),
             "ref": "tests/regression/README.md (the baseline table)",
         }
