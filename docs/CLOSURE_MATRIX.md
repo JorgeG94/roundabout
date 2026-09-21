@@ -381,7 +381,7 @@ the default too. Its per-step cost is ~7 % over `ssp_rk2`. Full detail in
 | Z-star/sigma hybrid | `"zstar_sigma"` |
 | Z-star full (per-column) | `"zstar_full"` |
 | Eulerian-Z | `"eulerian_z"` |
-| Z-fixed (gprime) | `"z_fixed"` / `"gprime"` |
+| Z-fixed (gprime) | `"z_fixed"` / `"gprime"` — nominal interfaces at `(nz-k)*h_nominal` below `z = 0` with `h_nominal = &ocean_topo_nml max_depth / nz_layers`; bed-side layers vanish to `zstar_h_min`. The ONLY z-like family legal under an ice-shelf cavity: there it reads `vcoord%z_top = metrics%z_draft`, vanishes the layers that outcrop into the ice to the same inert filler, and cuts the first live layer at the ice base into a partial top cell (min `0.1*h_nominal`, else the sliver merges into the layer below). `z_top = 0` ⇒ bit-identical. v1 cavity envelope is ADIABATIC: melt, top drag, KPP, EPBL, ideal age, GM/Redi/slopes, `kappa_h /= 0` and `regrid_time_scale > 0` all fail loud pending the shared `k_top`. |
 | Isopycnal (rho) | `"rho"` (validation-grade; collapses weakly-stratified columns — HYCOM hybrid is the production follow-on) |
 | Hybrid z*/isopycnal (HYCOM) | `"hycom"` (isopycnal interior + z* surface-resolution floor; the production isopycnal coord — reuses the `rho` inversion + `dsig` z* band) |
 
