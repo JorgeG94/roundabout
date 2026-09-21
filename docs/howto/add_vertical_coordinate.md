@@ -208,3 +208,49 @@ as the assertions the rigid-top slice must flip.
 - `src/driver/rdb_driver.F90` — the `parse_ocean_vcoord_type` wiring (before the
   IC seed).
 - The "Vertical Coordinates" section of the top-level [`CLAUDE.md`](../../CLAUDE.md).
+
+## Step 8 (NOT optional) — add `FOO` to the rest matrix, and state its row
+
+A family that is not in the vertical-coordinate **rest matrix** has no
+envelope statement: nothing in the tree says what it does to a fluid that
+should not move, on a slope, on a seamount, on a stiff bathymetric step, or
+under an ice lid. That is precisely the gap that let `ZSIGMA` collapse its
+whole column into the bed layer, `ZSTAR_SIGMA` be silently identical to
+`SIGMA` in 21 shipped namelists, and `ZSTAR_FULL` resolve the wrong half of
+the column under a lid — three defects, all invisible per-namelist and all
+obvious in a family x geometry table.
+
+So, in the same PR:
+
+1. **Append `FOO` to `FAMILIES`** in
+   [`tests/regression/vcoord_matrix.py`](../../tests/regression/vcoord_matrix.py):
+   its `vcoord_type` string, its status (`"run"`, or `"refused"` if
+   `validate_config` rejects it by design), the `split_scheme` it must pin if
+   any, any extra `&vcoord_nml` lines it needs to be non-degenerate, and a
+   one-paragraph note saying **what the row measures**. A family whose default
+   knobs make it numerically identical to `SIGMA` must carry knobs that make
+   it not — otherwise the row proves nothing (this is why `zstar_full` in the
+   matrix sets `zstar_h_surf_target = 20`).
+2. **If a cavity refuses it**, leave it out of `CAVITY_ACCEPTED`; the matrix
+   then emits a row asserting the REFUSAL, so an accidental widening of the
+   envelope turns that cell `NOT-REFUSED` and says so.
+3. **State the expected row in your PR description**, before you run it. "I
+   expect `FOO` to match `SIGMA` on `flat` and to beat it on `slope`" is a
+   prediction the matrix can falsify; "it should be fine" is not.
+4. **Run it and write down what happened.**
+   `python3 tests/regression/stability.py --tier 2 --build-dir build_gcc
+   --jobs 6 --tags vcoord_matrix`, then the tier-1 sweep on a GPU. Cells that
+   fail go into `MEASURED_XFAIL` **with the measured number and the assertion
+   list they came with** — never a widened bar, never a shortened run, never
+   viscosity added to the template.
+5. **Update the baseline table** in
+   [`tests/regression/README.md`](../../tests/regression/README.md). That table
+   is the product: it is what a user reads to decide whether to trust `FOO`.
+
+The column-level invariants (`Sum target_h = H + eta`, strict positivity,
+monotone interfaces, no live/vanished flip-flop under a 1e-10 m sea-level
+perturbation, and the filler contract) are swept automatically for every
+family in `FAMILIES` by
+[`tests/test_ocean_vcoord_invariants.F90`](../../tests/test_ocean_vcoord_invariants.F90),
+which is seconds and runs in `ctest -R rdb` — but it only sweeps the families
+the Fortran `FAM_CODE` table lists, so add `FOO` there too.

@@ -444,6 +444,285 @@ and decides per field: extrema **are** gated, the sentinel mean is reported as
 an `ARTIFACT` line. That the mean is unusable is itself a defect worth fixing
 (the reduction should skip the sentinel) — it is surfaced, not hidden.
 
+# The vertical-coordinate REST MATRIX (`vcoord_matrix.py`)
+
+Everything above runs each shipped namelist under **whatever vertical
+coordinate that namelist chose**. Nothing ran ONE problem under ALL of them, so
+nothing could answer the question a user actually has:
+
+> **Which vertical coordinate is trustworthy on which geometry?**
+
+That gap is not theoretical. In two days on the cavity branch it hid, at the
+same time: `VCOORD_ZSIGMA` collapsing its whole column into the bed layer (with
+`Σ target_h = H + η` still exact, which is why no conservation test caught it);
+`VCOORD_ZSTAR_SIGMA` being numerically indistinguishable from `VCOORD_SIGMA` in
+all 21 shipped namelists that select it; `VCOORD_ZSTAR_FULL` resolving the
+*wrong half* of the column under a lid; a rest-state growth mode over **any**
+sloping boundary that no shipped case saw because every sloping case carries
+viscosity or runs short; and sigma failing outright at `rx0 = 0.73`.
+
+Every one of those is invisible to a per-namelist suite and obvious in a
+family × geometry table. **The table is the product.**
+
+## How it is built
+
+One canonical template — [`vcoord_templates/rest_matrix.nml.in`](vcoord_templates/rest_matrix.nml.in)
+— plus one parameter dict per **problem** and one per **family**, in
+[`vcoord_matrix.py`](vcoord_matrix.py). `build_matrix()` emits one namelist per
+cell into `tmp_local_artifacts/vcoord_matrix/` at manifest-import time and
+registers the rows through the ordinary `_case(...)`. Dozens of
+near-identical namelists are deliberately **not** checked in: they rot, a
+reader cannot tell which cell of the matrix a given file is, and a change to
+the shared problem then has to be applied by hand N times. The emitted files
+are plain text, carry a generated header naming their cell, and are left on
+disk — any cell reproduces by hand with
+`./rdb tmp_local_artifacts/vcoord_matrix/<cell>.nml`.
+
+```bash
+# Just the matrix, tier 2 (CPU):
+python3 tests/regression/stability.py --tier 2 --build-dir build_gcc \
+        --jobs 6 --tags vcoord_matrix
+
+# The full matrix, tier 1 (GPU, 30 simulated days per cell):
+python3 tests/regression/stability.py --tier 1 --backend gpu \
+        --build-dir build_cc70 --gpus 0 --tags vcoord_matrix \
+        --out tmp_local_artifacts/vcm_t1.json
+```
+
+A run prints the family × problem table at the end and writes it next to the
+ordinary report as `<out>_vcoord_matrix.json`, one record per cell — so drift
+in the table can be diffed against last week's instead of being read out of a
+terminal.
+
+## The problem
+
+**One problem, at rest.** A motionless, stably stratified ocean on an f-plane
+(48 × 6 × 15 at 2 km, `dt = 600 s`, `f = −1.409e-4`), with **no forcing, no
+lateral viscosity, no bottom drag and no vertical mixing**, and with the
+isopycnals laid **flat in geopotential `z`** by `&ocean_zinit_nml
+source="linear"` — *not* by a layer-index profile, which would tilt them with
+a terrain-following coordinate and hand the run real available potential
+energy to convert. Over a slope that distinction is the whole experiment.
+
+Such a state is the global minimum of potential energy under rigid boundaries,
+so APE ≡ 0 and there is **no energy source of any kind**. Every joule of
+kinetic energy a cell develops was manufactured by the discretisation.
+
+The dissipation is left out on purpose and **must stay out**: `nu_h = 50 m² s⁻¹`
+removes a four-decade instability entirely on the sibling cavity case, and
+every flow-aware closure (Smagorinsky, Leith) is inert at rest because it sets
+its viscosity from the resolved deformation rate, which is zero. A viscosity
+that removes the instability removes the measurement with it.
+
+### Geometries
+
+| problem | geometry | `Δe` per face | bar |
+|---|---|---|---|
+| `flat` | flat bed, free surface | 0 | `REST_1UM_S` |
+| `slope` | constant gradient, 1000 → 500 m over 48 cells (`topo_config="file"`) | 10.6 m | `REST_1MM_S` |
+| `seamount_gentle` | Gaussian seamount, peak 300 m, `L = 40 km` = 20 cells | ~30 m | `REST_SEAMOUNT` |
+| `seamount_steep` | the same, `L = 15 km` = 7.5 cells | ~75 m | `REST_SEAMOUNT` |
+| `rx0_010` … `rx0_080` | two-level shelf/trough, ONE face at `rx0 = 0.1/0.2/0.4/0.6/0.8` | `2·H̄·rx0` = 150 … 1200 m | `REST_1MM_S` |
+| `lid_flat` | flat ice lid over a flat bed (cavity) | 0 | `REST_1UM_S` |
+| `lid_slope` | linearly sloping ice lid + calving front (cavity) | 13.8 m | `REST_1MM_S` |
+
+`rx0 = |H_a − H_b| / (H_a + H_b)` is the terrain-following **stiffness**
+(Beckmann & Haidvogel 1993, *J. Phys. Oceanogr.* **23**, 1736–1753, §2c, who
+write it `r = |Δh|/(2h̄)`; Haney 1991, *J. Phys. Oceanogr.* **21**, 610–619
+states the same thing as hydrostatic consistency). `rdb_ocean_stability_audit`
+bounds it at **0.2** and warns above; the ladder walks *past* the bound so the
+matrix can say where each family stops being trustworthy rather than asserting
+the bound and hoping. The motivating failure — the ISOMIP+ trough sidewall that
+takes the shipped case non-finite at day 3.2 — sits at **0.73**, between the
+0.6 and 0.8 rungs. `tools/make_bathy_nc.py` dials it exactly:
+`H_deep = H̄(1+rx0)`, `H_shallow = H̄(1−rx0)`.
+
+### Axes
+
+* **coordinate family** — all ten: `lagrangian`, `eulerian_z`, `sigma`,
+  `zstar`, `zstar_sigma`, `zstar_full`, `z_fixed`, `rho`, `hycom`, `zsigma`.
+  A family **refused by design** gets a row asserting the *refusal*, so an
+  accidental un-refusal turns the cell `NOT-REFUSED` and says so.
+  `eulerian_z` pins `split_scheme="ssp_rk2"` because the `pred_corr` v1
+  envelope refuses it fail-loud — which also keeps that row out of the
+  automatic scheme axis.
+* **stratification** — `linear` (uniform `N² = 5.77e-6 s⁻²` from a linear
+  `S(z)`) and `unstrat` (`N² = 0`, the control: the truncation
+  `G(K) ∝ ρ₀N²Δe³` is not *small* but **absent** however steep the geometry).
+* **EOS** — `linear` (ISOMIP+ Table 4) and `wright` on the clean slope.
+* **outer split** — every non-pinning cell gets its `__ssp_rk2` twin from the
+  existing scheme axis, for free.
+
+## The metrics, with formulas
+
+Everything comes from the model's own console output — no new Python
+dependencies, no NetCDF reader.
+
+| metric | assertion | formula / source |
+|---|---|---|
+| spurious energy **level** | `energy:rest` | peak `En` from `[stats]`, reported as `\|u\|_rms = sqrt(2·En)` |
+| spurious energy **rate** | `energy:rest-growth-rate` | least squares of `log En` over the **tail** (last 60 %) of the run; `En ~ exp(2σt)`, so the reported amplitude rate is `slope/2`. **R² is reported, not gated** — a plateau has a near-zero slope and a meaningless R², an instability has both, and letting the reader see the pair is honest where picking an R² threshold would not be. Tier 1 only: the bar is a 20-day e-folding and a 3.3-day twin cannot fit one. |
+| **truncation estimate** | printed in the row's note | `a_peak = N²·Δe³/(6·Δx·H̄)`, derived in [`validation_examples/ocean/ice_shelf_cavity/README.md`](../../validation_examples/ocean/ice_shelf_cavity/README.md) and verified there against a four-decade slope ladder to within 33 %. A rotating run balances it geostrophically at `U = a_peak/\|f\|`, so `En_plateau ≈ ½U²`. It is an **estimate** (one dominant face step, geostrophic balance) and is labelled as one; the bar never derives from it. |
+| tracer bounds | `tracer:no-new-extrema` | `[diag]` `temperature` / `salinity` extrema may not leave the **first sample's** range by more than 1e-6. At rest, with no flux and no mixing, a new extremum is spurious diapycnal mixing from the coordinate's own regrid. |
+| thickness positivity | `thickness:positive` | `min h_layer` over the run, from the `h_layer` derived diagnostic (`&ocean_diag_nml diags = "h_layer"`), strictly positive. |
+| budget residuals | `conserve:{Mass,Salt,Heat}` | the model's own closed-budget `Error`, 1e-11 relative. |
+| clamp / truncation counters | `counters:no-truncation` | the solver's `CFL truncations: N total` line. A rest case that truncates is not resting, whatever its energy says. |
+| stiffness | recorded in the JSON | the configure-time audit's own `rx0 = …` line. |
+
+### The growth-rate bar, derived
+
+`REST_SIGMA_MAX` is **0.05 per day of `En`** — a 20-day e-folding — expressed
+in 1/s of amplitude. Derived, not tuned:
+
+* the sloping-boundary sigma instability the matrix exists to find runs at
+  `σ_En = 0.333/day` (3.0-day e-folding) on the measured cavity case, and never
+  below `0.094/day` anywhere on its slope ladder → the bar sits **1.9× under
+  the slowest measured instance of the defect**;
+* the residual creep the *default* outer split leaves behind is `0.012/day`
+  (83-day e-folding) → the bar sits **4× above what a healthy-but-imperfect run
+  does**.
+
+One decade between those two is what makes a single bar workable.
+`stability.py --self-test` replays both measured series through the fit and
+checks it fails the first and passes the second — who tests the test.
+
+## THE BASELINE TABLE
+
+Measured at the **tier-2 horizon (3.33 simulated days)**, gfortran 15.1
+Release, single rank, MPI off, `pred_corr`. `ok` = every assertion passed ·
+`xfail` = measured defect, pinned with its number · `refused` = rejected at
+configure, as designed.
+
+| problem | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `flat`            | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
+| `slope`           | ok | ok | ok | ok | ok | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `seamount_gentle` | ok | ok | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `seamount_steep`  | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `rx0_010`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `rx0_020`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `rx0_040`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `rx0_060`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `rx0_080`         | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | **xfail** | refused |
+| `lid_flat`        | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
+| `lid_slope`       | refused | refused | **xfail** | **xfail** | refused | refused | **xfail** | refused | refused | refused |
+
+### The key number behind each cell
+
+Peak `En` (m² s⁻²) at day 3.33, `pred_corr`. `NaN` = the run went non-finite
+and aborted inside the first simulated day.
+
+| problem | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom |
+|---|---|---|---|---|---|---|---|---|---|
+| `flat`            | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `slope`           | 8.83e-11 | 8.39e-11 | 8.85e-11 | 8.85e-11 | 8.85e-11 | 2.84e-07 | 5.11e-06 | 1.30e-05 | 1.09e-05 |
+| `seamount_gentle` | 1.03e-08 | 9.92e-09 | 1.05e-08 | 1.05e-08 | 1.05e-08 | 4.88e-07 | 7.39e-05 | 1.81e-05 | 2.37e-05 |
+| `seamount_steep`  | NaN | 1.60e-06 | 1.08e-06 | 1.08e-06 | 1.08e-06 | 2.40e-06 | NaN | NaN | NaN |
+| `rx0_010`         | 1.07e-04 | 1.95e-06 | 1.44e-06 | 1.44e-06 | 1.44e-06 | 2.26e-06 | 7.62e-04 | NaN | NaN |
+| `rx0_020`         | NaN | 1.77e-04 | 1.34e-04 | 1.34e-04 | 1.34e-04 | 1.34e-04 | NaN | NaN | NaN |
+| `rx0_040` … `rx0_080` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN |
+| `lid_flat`        | — | — | 0 | 0 | — | — | 0 | — | — |
+| `lid_slope`       | — | — | 1.02e-09 | 1.02e-09 | — | — | 3.48e-05 | — | — |
+
+**How to read it.**
+
+1. **`flat` is bit-zero for every family.** `En = 0.000E+00` at every sample,
+   ten families, both outer schemes. That is the control: a family that moves
+   here has a defect that has nothing to do with topography, and none does.
+2. **`sigma`, `zstar` and `zstar_sigma` are byte-identical everywhere.** Three
+   names, one answer, to every printed digit, on every geometry — which is the
+   claim `CLAUDE.md` makes about `zstar` (it shares the `sigma` branch) and the
+   thing 21 shipped namelists selecting `zstar_sigma` do **not** know about
+   themselves. The matrix now pins it.
+3. **The `unstrat` control works.** `lid_slope` × `sigma` at `N² = 0` holds
+   `En = 4.45e-23` — machine zero, fourteen decades under the stratified twin
+   on the identical geometry. That is what says the stratified answer really is
+   the `ρ₀N²Δe³` truncation and not a mis-cancelled load.
+4. **`z_fixed` LEAKS.** It is the only family in the matrix whose `Salt` and
+   `Heat` budget residuals leave round-off — **1e-6 relative against a 1e-11
+   bar, five decades over** — and it does so on every geometry with vanishing
+   layers (slope, seamount, ice base), as a *step* at the first regrid rather
+   than a drift. It also makes new tracer extrema. Leading suspect: the
+   first-order boundary cell in the remap reconstruction, which is fixed on
+   `origin/fix/ale-remap-rest-amplifier` and is **not** in this tree — a
+   hypothesis, not a measurement, and the marker must be re-measured when that
+   branch lands.
+5. **The density-space coordinates are three to four decades worse than the
+   geometric ones on the identical problem.** `rho` is documented
+   validation-grade; `hycom` is the *production GVC coordinate* and its number
+   here is the one to watch.
+6. **`zstar_full` sits between them** — 3.2× (slope) to 46× (seamount_gentle)
+   above the `sigma` cell, because its per-column `z_ref` table gives two
+   neighbouring columns of different depth *different* interface depths. It is
+   the only geometric family whose interface offset does not shrink with the
+   bathymetric gradient.
+7. **Nothing survives the `rx0` ladder — not even at `rx0 = 0.1`, half the
+   Beckmann–Haidvogel bound.** A single 2 km face joining a 675 m column to an
+   825 m one already puts every family over the 1 mm/s bar (1.4e-6 to 7.6e-4
+   m² s⁻², i.e. 1.7 to 39 cm/s of current out of nothing), and from `rx0 = 0.4`
+   up every family goes non-finite inside the first day. `lagrangian` and
+   `eulerian_z` fail too, which is worth stating plainly: **there is no truly
+   geopotential coordinate in this tree** — `eulerian_z` is a stretched sigma
+   with `η` dropped, and `lagrangian` inherits the sigma-shaped initial
+   thickness and then never regrids. `z_fixed` is the closest thing to a z
+   coordinate, and on a single cliff it is the **worst** cell in the row
+   (7.6e-4 at `rx0 = 0.1`), because the staircase replaces the tilt rather than
+   removing it.
+8. **A cell being `xfail` does not excuse the case.** Every marker names the
+   assertions it covers, so a `zstar_full` cell that is `xfail` on
+   `energy:rest-settles` still gates `finite`, `conserve:*`, the level bar, the
+   tracer bounds and the counters. That scoping is what stops one documented
+   defect from hiding the next regression.
+
+## Adding a family or a problem
+
+* **A new coordinate family** — append it to `FAMILIES` in `vcoord_matrix.py`
+  with its `vcoord_type`, its status (`run` or `refused`), any extra
+  `&vcoord_nml` lines it needs, and a one-paragraph note saying what the row
+  *measures*. If it is refused under a cavity, it also belongs outside
+  `CAVITY_ACCEPTED`. [`docs/howto/add_vertical_coordinate.md`](../../docs/howto/add_vertical_coordinate.md)
+  makes this a required step: a family that is not in the matrix has no
+  envelope statement.
+* **A new problem** — append to `PROBLEMS` with its `class`, its `bar`
+  constant, its worst per-face `Δe` (used for the truncation estimate), its
+  `topo` configuration, and `tier2: True` only if it belongs in the CI slice.
+  A file-backed geometry adds a `bathy` entry and gets its NetCDF written by
+  the `setup` hook.
+* **Then re-measure.** The `MEASURED_XFAIL` table is *measurements*, so a new
+  cell's marker is written from a run, never chosen. Run the matrix, read the
+  numbers, write them down with the assertion list they came with.
+* **Never** close a cell by widening `en_rest_max`, by shortening the run, or
+  by putting viscosity into the template.
+
+## Tiers and cost
+
+| | tier 2 (CPU, the CI gate) | tier 1 (GPU, nightly) |
+|---|---|---|
+| geometries | `flat`, `slope`, `rx0_060` — one per geometry class | all eleven |
+| length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days |
+| rows | 63 (incl. the `__ssp_rk2` twins) | 115 (twins are tier-1-skipped by the curated scheme axis) |
+| measured | **+122 s** on 6 workers, on top of the pre-existing 163 s — 285 s for the whole tier-2 suite | see the tier-1 line below |
+| the rate gate | `SKIP … TIER 1 ONLY` — the bar is a 20-day e-folding | evaluated |
+
+## Not done, and not stubbed
+
+* **The NONLINEAR (exponential thermocline) stratification axis.**
+  `&ocean_zinit_nml source="linear"` is affine in `z` by construction and
+  `source="file"` aborts at `validate_config` (PR-23b), so there is no way to
+  lay a non-affine rest state today without a new analytic profile or the file
+  reader. The axis is absent rather than faked.
+* **The ADJUSTMENT problems and the RPE (spurious-mixing) diagnostic** — lock
+  exchange, internal seiche, overflow, and Winters et al. (1995,
+  *J. Fluid Mech.* **289**, 115–128) sorted-density background potential
+  energy as the per-family mixing metric (Ilicak, Adcroft, Griffies &
+  Hallberg 2012, *Ocean Modelling* **45–46**, 37–58; Petersen, Jacobsen,
+  Ringler, Hecht & Maltrud 2015, *Ocean Modelling* **86**, 93–113). Not
+  started. The rest matrix measures what a coordinate does to a fluid that
+  should not move; RPE measures what it does to one that does. They are
+  different questions and the second is a separate piece of work — it needs a
+  cadence-bounded host-side sort and a hypsometric fill, i.e. a Fortran
+  diagnostic, not a post-processor.
+
 ## Downscaling rules (`downscale.py`)
 
 **A tier-2 twin is built by preserving the dimensionless numbers, never by

@@ -119,6 +119,18 @@ def _case(name, nml, regime, t1_steps, t2_steps, **kw):
     }
     if regime == "rest":
         phys["en_rest_max"] = kw.pop("en_rest_max", REST_1MM_S)
+        # OPT-IN, per row. `rest_sigma_max` arms the fitted GROWTH-RATE gate
+        # and `matrix` arms the tracer-bound / thickness / counter gates that
+        # the vertical-coordinate matrix carries (`assert_matrix`). They are
+        # not switched on corpus-wide because several existing rest cases
+        # have scoped `known_failure`s that would not cover a NEW assertion,
+        # and an uncovered failure on a known-failing case turns the row red
+        # for the wrong reason. Extending them is a separate change with its
+        # own measurement.
+        for k in ("rest_sigma_max", "matrix_gates", "tracer_slack",
+                  "h_min_floor"):
+            if k in kw:
+                phys[k] = kw.pop(k)
     elif regime == "adiabatic":
         phys["en_growth_max"] = kw.pop("en_growth_max", 1.5)
     else:
@@ -169,7 +181,7 @@ def _case(name, nml, regime, t1_steps, t2_steps, **kw):
         }
         if "t2_physics" in kw:
             entry["tier2"]["physics_override"] = kw.pop("t2_physics")
-    for k in ("setup", "known_failure", "tags", "note"):
+    for k in ("setup", "known_failure", "tags", "note", "matrix"):
         if k in kw:
             entry[k] = kw.pop(k)
     if kw:
@@ -1042,6 +1054,40 @@ STABILITY_CASES = [
 # The skip is DERIVED from the namelist, not listed by hand, so a file that
 # gains or loses a pin cannot silently fall out of the axis.
 
+# ---------------------------------------------------------------------------
+# The VERTICAL-COORDINATE REST MATRIX
+# ---------------------------------------------------------------------------
+# Every case above runs its namelist under whatever vertical coordinate that
+# namelist chose. None of them runs the SAME problem under every coordinate,
+# which is the question "which coordinate is trustworthy on which geometry?"
+# and the question that hid five separate defects on the cavity branch (see
+# `vcoord_matrix.__doc__`).
+#
+# `vcoord_matrix.build_matrix` emits one namelist per (geometry x family x
+# stratification x EOS) cell into `tmp_local_artifacts/vcoord_matrix/` at
+# import time and returns the rows. The namelists are generated rather than
+# committed: dozens of near-identical files rot, and a reader cannot tell
+# which cell of the matrix a given file is. They are left on disk, so any
+# cell is reproducible by hand.
+import sys as _sys
+import os as _os
+
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import vcoord_matrix as _vcm  # noqa: E402
+
+
+class _Bars(object):
+    """The bar constants, handed to the generator so it cannot drift from
+    the values the rest of this file uses."""
+    REST_SEAMOUNT = REST_SEAMOUNT
+    REST_1MM_S = REST_1MM_S
+    REST_100UM_S = REST_100UM_S
+    REST_1UM_S = REST_1UM_S
+
+
+STABILITY_CASES += _vcm.build_matrix(_case, _Bars)
+
+
 SCHEME_AXIS_SCHEME = "ssp_rk2"
 
 # Cases whose tier-1 physics gates were calibrated under ONE scheme and whose
@@ -1187,6 +1233,27 @@ def _scheme_twin(case, scheme):
     kf = SCHEME_AXIS_KNOWN_FAILURE.get(case["name"])
     if kf:
         twin["known_failure"] = dict(kf)
+    elif case.get("matrix"):
+        # A vcoord-matrix row's marker carries to its twin, which is the
+        # OPPOSITE of the rule for every other case -- and deliberately:
+        #   * a REFUSAL row asserts that `validate_config` rejects the
+        #     configuration, which is a property of the CONFIGURATION and not
+        #     of the outer time-split, so both schemes must refuse it;
+        #   * a MEASURED-defect row is measuring the vertical coordinate's
+        #     pressure-gradient truncation over a geometry. The outer split
+        #     AMPLIFIES that (ssp_rk2's two-stage average manufactures
+        #     internal gravity waves) but does not create it -- substituted
+        #     and measured on the sibling cavity case, where dt 600 -> 150
+        #     reproduces the curve to 2%. A twin that dropped the marker
+        #     would report the SAME defect as a live FAIL under the other
+        #     scheme, which says nothing new and buries the rows that do.
+        # Where the two schemes genuinely DISAGREE the twin still turns red:
+        # the marker is scoped to the assertions the base case failed, so an
+        # ssp_rk2-only failure on any other assertion is uncovered and FAILs.
+        if case.get("known_failure"):
+            twin["known_failure"] = dict(case["known_failure"])
+        else:
+            twin.pop("known_failure", None)
     else:
         twin.pop("known_failure", None)
     return twin
