@@ -1451,7 +1451,23 @@ contains
          ! CFL bracket: the corrected velocity of EVERY layer must stay within
          ! RENORM_CFL.  A residual `uhbt` mismatch is preferable to handing a
          ! near-massless layer a super-CFL velocity (MOM6 does the same).
-         u_lim = RENORM_CFL/(dt*metrics%idxCu(i, j))
+         !
+         ! `max(..., H_DIV_EPS)` is a 1/0 guard and nothing else.  `idxCu` is
+         ! `1/dxCu` MULTIPLIED BY `wet_u` in `metrics_apply_land_mask`, so it
+         ! is EXACTLY zero on every land face — and this loop visits land
+         ! faces: it skips only the array edges and the two physical walls,
+         ! never the interior coastline.  Unguarded that is `0.25/0`, which
+         ! traps under `-ffpe-trap=zero` and otherwise makes `u_lim = +Inf`,
+         ! poisoning `du_hi`/`du_lo` with infinities on a face where the
+         ! answer is not used at all (`sum_h = 0` there, the Newton residual
+         ! is identically zero, and the flux stays zero because `h_face·w` is
+         ! zero).  On a WET face `dt·idxCu = dt/dxCu` is a physical rate,
+         ! decades above `H_DIV_EPS = 1e-20`, so the `max` selects the true
+         ! operand and the result is bit-identical.  `max` rather than `+`
+         ! deliberately: an additive guard perturbs the last bit once
+         ! `dt/dxCu` drops near `1e-16/1e-20`, which a long-dx, short-dt
+         ! configuration can reach.
+         u_lim = RENORM_CFL/max(dt*metrics%idxCu(i, j), H_DIV_EPS)
          du_hi = huge(1.0_wp)
          du_lo = -huge(1.0_wp)
          do k = 1, nz
@@ -1818,8 +1834,10 @@ contains
             end if
             cycle
          end if
-         ! CFL bracket, mirror of the zonal routine.
-         v_lim = RENORM_CFL/(dt*metrics%idyCv(i, j))
+         ! CFL bracket, mirror of the zonal routine — including its
+         ! land-face 1/0 guard: `idyCv` is zeroed at `wet_v == 0` by
+         ! `metrics_apply_land_mask`, exactly as `idxCu` is at `wet_u == 0`.
+         v_lim = RENORM_CFL/max(dt*metrics%idyCv(i, j), H_DIV_EPS)
          dv_hi = huge(1.0_wp)
          dv_lo = -huge(1.0_wp)
          do k = 1, nz
