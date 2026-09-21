@@ -61,7 +61,10 @@ module test_ocean_cavity_freshwater
    use rdb_ocean_cavity_flux, only: cavity_mass_apply_impl, cavity_mass_salt_mirror_impl, &
                                     cavity_mass_totals_impl, cavity_comp_apply_impl, &
                                     cavity_comp_scale_tracer_impl, &
-                                    cavity_comp_withdrawal, cavity_mass_thin_is_fatal
+                                    cavity_comp_withdrawal, cavity_mass_thin_is_fatal, &
+                                    H_CAVITY_FLOOR
+   use rdb_ocean_remap, only: ocean_remap_tracer_column
+   use rdb_constants, only: REMAP_PPM
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, parse_cavity_volume_comp, &
                                     CAVITY_FW_VIRTUAL, CAVITY_FW_MASS, CAVITY_FW_INVALID, &
                                     CAVITY_VC_NONE, CAVITY_VC_UNIFORM_OPEN, CAVITY_VC_INVALID
@@ -142,6 +145,14 @@ contains
                                test_freezing), &
                   new_unittest("freezing_through_h_vanished_is_clamped_counted_and_fatal", &
                                test_freezing_clamp), &
+                  new_unittest("clamped_layer_survives_the_next_ale_remap", &
+                               test_clamp_survives_remap), &
+                  new_unittest("clamped_column_ledger_closes_on_the_applied_dh", &
+                               test_clamp_ledger), &
+                  new_unittest("clamp_never_deposits_into_an_already_thin_column", &
+                               test_clamp_never_deposits), &
+                  new_unittest("compensation_clamp_clears_the_vanish_marker_too", &
+                               test_comp_clamp_floor), &
                   new_unittest("passive_tracer_is_diluted_by_the_added_volume", &
                                test_passive_dilution), &
                   new_unittest("pseudo_salt_mirror_matches_salinity_exactly", &
@@ -425,10 +436,11 @@ contains
 
    subroutine test_freezing_clamp(error)
       !! A freezing column whose top layer is thinner than `|m|dt/rho_0`
-      !! must NOT be driven through `H_VANISHED`.  The withdrawal is
-      !! clamped to what is there, the column is COUNTED, and the count
-      !! is FATAL (`cavity_mass_thin_is_fatal`) because a clamped
-      !! withdrawal no longer matches the tracked mass source.
+      !! must NOT be driven onto or through the vanish marker.  The
+      !! withdrawal is clamped to what is there ABOVE `H_CAVITY_FLOOR`,
+      !! the column is COUNTED, and the count is FATAL
+      !! (`cavity_mass_thin_is_fatal`) because a clamped withdrawal no
+      !! longer matches the tracked mass source.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
       real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
@@ -459,16 +471,244 @@ contains
 
       call check(error, n_thin == 1, "the starved column is counted")
       if (allocated(error)) return
-      call check(error, a_hl(1, 1, 1) >= H_VANISHED, &
-                 "and clamped AT the vanish marker, never through it")
+      call check(error, a_hl(1, 1, 1) > H_VANISHED, &
+                 "and clamped STRICTLY ABOVE the vanish marker, never onto or "// &
+                 "through it — every gate in the tree tests the marker with a "// &
+                 "strict `>`, so a layer left ON it reads as vanished")
       if (allocated(error)) return
-      call check(error, a_hl(1, 1, 1) == H_VANISHED, &
-                 "pinned EXACTLY at it, never a ulp below")
+      call check(error, a_hl(1, 1, 1) == H_CAVITY_FLOOR, &
+                 "pinned EXACTLY at H_CAVITY_FLOOR, never a ulp below")
       if (allocated(error)) return
       call check(error, cavity_mass_thin_is_fatal(1), "any clamped column is fatal")
       if (allocated(error)) return
       call check(error,.not. cavity_mass_thin_is_fatal(0), "zero is not")
    end subroutine test_freezing_clamp
+
+   subroutine test_clamp_survives_remap(error)
+      !! The damage the floor exists to prevent (audit V10), asserted end
+      !! to end rather than by inspecting the constant.
+      !!
+      !! The clamp fires, then the run aborts — but the abort happens
+      !! AFTER the state is written, and the ALE remap runs on the same
+      !! thermo step.  `H_VANISHED` is the D4 skip/merge MARKER and
+      !! `ocean_remap_tracer_column` gates its `c = hTr/h` on a strict
+      !! `>`, so a layer left EXACTLY on the marker comes back with
+      !! `hTr = 0`: the heat and salt the clamp was protecting are
+      !! deleted, silently, by an IDENTITY remap.
+      !!
+      !! So: run the clamped apply, hand the resulting `(h, hTr)` to the
+      !! production column remap with `h_new = h_old` (what a coordinate
+      !! at rest gives), and require the content back.  One ulp decides
+      !! this case, which is why it is worth its own gate.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
+      real(wp) :: h_col(1), hs_col(1), ht_col(1)
+      real(wp) :: h_small, big_melt
+      integer :: n_thin
+
+      h_small = 1.0e-3_wp
+      big_melt = -1.0_wp*RHO0/DTC
+      a_h(1, 1) = 1.0_wp
+      a_melt(1, 1) = big_melt
+      a_sfar(1, 1) = S0
+      a_tb(1, 1) = TB
+      a_hl(1, 1, 1) = h_small
+      a_hs(1, 1, 1) = h_small*S0
+      a_ht(1, 1, 1) = h_small*T0
+      a_sb(1, 1, 1) = 0.0_wp
+      a_hb(1, 1, 1) = 0.0_wp
+
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
+                                  a_h, a_melt, a_sfar, a_tb, &
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+      !$acc update self(a_hl, a_hs, a_ht)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+
+      call check(error, n_thin == 1, "the fixture must actually clamp")
+      if (allocated(error)) return
+
+      h_col(1) = a_hl(1, 1, 1)
+      hs_col(1) = a_hs(1, 1, 1)
+      ht_col(1) = a_ht(1, 1, 1)
+      call check(error, abs(hs_col(1)) > 0.0_wp, &
+                 "the clamped layer must still carry salt content to lose")
+      if (allocated(error)) return
+
+      call ocean_remap_tracer_column(1, h_col, h_col, hs_col, REMAP_PPM)
+      call ocean_remap_tracer_column(1, h_col, h_col, ht_col, REMAP_PPM)
+
+      call check(error, hs_col(1) == a_hs(1, 1, 1), &
+                 "an IDENTITY remap of the clamped layer must return its salt "// &
+                 "content unchanged — a layer left ON the vanish marker has it "// &
+                 "DELETED instead")
+      if (allocated(error)) return
+      call check(error, ht_col(1) == a_ht(1, 1, 1), &
+                 "and its heat content unchanged")
+   end subroutine test_clamp_survives_remap
+
+   subroutine test_clamp_ledger(error)
+      !! When the clamp fires, the three per-cell increments must still be
+      !! consistent with ONE applied `dh` — the budget principle in its
+      !! local form: mass, salt and heat all reference the same
+      !! withdrawal, so the residual against the APPLIED source is
+      !! round-off.  (It is the mismatch against the UNCLAMPED, tracked
+      !! source that makes the step fatal; that is the caller's decision,
+      !! and the state it aborts on still has to be self-consistent.)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
+      real(wp) :: h_small, big_melt, dh_applied, virt, undo
+      real(wp) :: d_hs, d_ht, scale_s, scale_t
+      integer :: n_thin
+
+      h_small = 1.0e-3_wp
+      big_melt = -1.0_wp*RHO0/DTC
+      a_h(1, 1) = 1.0_wp
+      a_melt(1, 1) = big_melt
+      a_sfar(1, 1) = S0
+      a_tb(1, 1) = TB
+      a_hl(1, 1, 1) = h_small
+      a_hs(1, 1, 1) = h_small*S0
+      a_ht(1, 1, 1) = h_small*T0
+      a_sb(1, 1, 1) = 0.0_wp
+      a_hb(1, 1, 1) = 0.0_wp
+
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
+                                  a_h, a_melt, a_sfar, a_tb, &
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+      !$acc update self(a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+
+      dh_applied = a_hl(1, 1, 1) - h_small
+      d_hs = a_hs(1, 1, 1) - h_small*S0
+      d_ht = a_ht(1, 1, 1) - h_small*T0
+      ! The kernel's salt increment is `-(dt/rho0)*virt + dh*s_ice`, and
+      ! `s_ice = 0` here, so the salt leg is purely the exact negation of
+      ! the virtual stamp.  The heat increment is `dh*T_b`, and it is the
+      ! one that has to follow the CLAMPED dh rather than the requested
+      ! one — the property this case exists to pin.
+      virt = -big_melt*(S0 - 0.0_wp)
+      undo = -(DTC/RHO0)*virt
+      scale_s = max(abs(undo), abs(h_small*S0))
+      scale_t = max(abs(dh_applied*TB), abs(h_small*T0))
+
+      call check(error, n_thin == 1, "the fixture must actually clamp")
+      if (allocated(error)) return
+      call check(error, dh_applied < 0.0_wp, "and the applied dh must be a WITHDRAWAL")
+      if (allocated(error)) return
+      call check(error, a_hl(1, 1, 1) == H_CAVITY_FLOOR, "landing exactly on the floor")
+      if (allocated(error)) return
+      call check(error, abs(d_ht - dh_applied*TB) <= 1.0e-13_wp*scale_t, &
+                 "the heat increment must be dh_APPLIED*T_b — the clamped "// &
+                 "withdrawal, not the requested one")
+      if (allocated(error)) return
+      call check(error, abs(d_hs - undo) <= 1.0e-13_wp*scale_s, &
+                 "the salt increment must be the exact negation of the virtual stamp")
+      if (allocated(error)) return
+      call check(error, a_sb(1, 1, 1) == d_hs, &
+                 "and the salt BUDGET contributor must equal it bit for bit")
+      if (allocated(error)) return
+      call check(error, a_hb(1, 1, 1) == d_ht, &
+                 "same for heat — the ledger names every gram it moved")
+   end subroutine test_clamp_ledger
+
+   subroutine test_clamp_never_deposits(error)
+      !! A column ALREADY at or below the floor when the withdrawal
+      !! arrives must have the withdrawal REFUSED, not turned into a
+      !! deposit.  Pinning `h` UP to the floor there would invent mass the
+      !! tracked source never named — a worse failure than the one the
+      !! floor prevents, and exactly what a bare `hn = floor` clamp does.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
+      real(wp) :: h_tiny
+      integer :: n_thin
+
+      h_tiny = 0.5_wp*H_VANISHED
+      a_h(1, 1) = 1.0_wp
+      a_melt(1, 1) = -1.0_wp*RHO0/DTC
+      a_sfar(1, 1) = S0
+      a_tb(1, 1) = TB
+      a_hl(1, 1, 1) = h_tiny
+      a_hs(1, 1, 1) = h_tiny*S0
+      a_ht(1, 1, 1) = h_tiny*T0
+      a_sb(1, 1, 1) = 0.0_wp
+      a_hb(1, 1, 1) = 0.0_wp
+
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+      call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
+                                  a_h, a_melt, a_sfar, a_tb, &
+                                  a_hl, a_hs, a_ht, a_sb, a_hb, n_thin)
+      !$acc update self(a_hl, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb)
+
+      call check(error, n_thin == 1, "the refusal is still counted (and so still fatal)")
+      if (allocated(error)) return
+      call check(error, a_hl(1, 1, 1) == h_tiny, &
+                 "an already-thin column must be left exactly where it was — the "// &
+                 "withdrawal refused, never converted into a deposit")
+      if (allocated(error)) return
+      call check(error, a_hb(1, 1, 1) == 0.0_wp, &
+                 "and a refused withdrawal moves no heat (dh = 0 exactly)")
+   end subroutine test_clamp_never_deposits
+
+   subroutine test_comp_clamp_floor(error)
+      !! The compensation sink carries the same clamp, so it needs the
+      !! same floor: its victim is an OPEN-OCEAN column, which is not
+      !! under the ice at all but is remapped by the same ALE pass.
+      !! Two columns — one deep enough to pay in full, one that cannot.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: wet(2, 1), cov(2, 1), scal(2, 1)
+      real(wp) :: hl(2, 1, 1), hs(2, 1, 1), ht(2, 1, 1)
+      real(wp) :: sb(2, 1, 1), hb(2, 1, 1)
+      real(wp) :: dw, h_deep, h_thin
+      integer :: n_thin
+
+      h_deep = 10.0_wp
+      h_thin = 1.0e-3_wp
+      dw = 0.5_wp
+      wet = 1.0_wp
+      cov = 0.0_wp
+      scal = 1.0_wp
+      hl(1, 1, 1) = h_deep
+      hl(2, 1, 1) = h_thin
+      hs(1, 1, 1) = h_deep*S0
+      hs(2, 1, 1) = h_thin*S0
+      ht(1, 1, 1) = h_deep*T0
+      ht(2, 1, 1) = h_thin*T0
+      sb = 0.0_wp
+      hb = 0.0_wp
+
+      !$acc enter data copyin(wet, cov, scal, hl, hs, ht, sb, hb)
+      !$acc update device(wet, cov, scal, hl, hs, ht, sb, hb)
+      call cavity_comp_apply_impl(2, 1, 1, dw, wet, cov, hl, hs, ht, sb, hb, &
+                                  scal, n_thin)
+      !$acc update self(hl, hs, scal)
+      !$acc exit data delete(wet, cov, scal, hl, hs, ht, sb, hb)
+
+      call check(error, n_thin == 1, "only the starved column is counted")
+      if (allocated(error)) return
+      call check(error, abs(hl(1, 1, 1) - (h_deep - dw)) < 1.0e-12_wp, &
+                 "the deep column pays in full")
+      if (allocated(error)) return
+      call check(error, hl(2, 1, 1) > H_VANISHED, &
+                 "the starved column is left STRICTLY above the vanish marker")
+      if (allocated(error)) return
+      call check(error, hl(2, 1, 1) == H_CAVITY_FLOOR, "exactly on H_CAVITY_FLOOR")
+      if (allocated(error)) return
+      ! And the concentration is untouched, which is the sink's contract.
+      call check(error, abs(hs(2, 1, 1)/hl(2, 1, 1) - S0) < 1.0e-10_wp, &
+                 "a clamped sink still carries the column's own S out")
+   end subroutine test_comp_clamp_floor
 
    subroutine test_passive_dilution(error)
       !! A passive tracer with ZERO concentration in the meltwater needs

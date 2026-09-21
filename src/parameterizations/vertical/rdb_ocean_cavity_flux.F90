@@ -325,6 +325,31 @@ module rdb_ocean_cavity_flux
    public :: cavity_comp_scale_tracer_impl
    public :: cavity_mass_thin_is_fatal
    public :: cavity_comp_withdrawal
+   public :: H_CAVITY_FLOOR
+
+   real(wp), parameter :: H_CAVITY_FLOOR = 2.0_wp*H_VANISHED
+      !! Thickness (m) a clamped top-layer WITHDRAWAL is allowed to leave
+      !! behind — one full marker ABOVE `H_VANISHED`, not on it.
+      !!
+      !! `H_VANISHED` is the D4 skip/merge MARKER, and every gate in the
+      !! tree tests it with a strict `>`: a layer sitting exactly ON the
+      !! marker reads as VANISHED.  So clamping a melt or compensation
+      !! withdrawal to `H_VANISHED` exactly — which is what these kernels
+      !! used to do, with an in-line comment arguing for landing on the
+      !! marker — hands the next ALE remap a layer it treats as empty:
+      !! `ocean_remap_tracer_column`'s `c = hTr/h` guard returns 0 there,
+      !! so the layer's heat and salt content is DELETED, silently and at
+      !! the next thermo step.  One ulp above the marker it is preserved.
+      !! A clamped withdrawal is already a fail-loud condition
+      !! (`cavity_mass_thin_is_fatal`), but the abort happens AFTER the
+      !! state is written, so the value written has to survive being read.
+      !!
+      !! `2*H_VANISHED` is the convention the rest of the tree already
+      !! uses where a producer must land ABOVE the marker on purpose —
+      !! `compute_target_h_rho_impl`'s `h_floor_eff = max(zstar_h_min,
+      !! 2*H_VANISHED)` and `seed_land_h_floor`'s `max(angstrom_h,
+      !! 2*H_VANISHED)`.  Written as a multiple of the constant of record
+      !! rather than as a literal, so it cannot drift from it.
 
    type :: ocean_cavity_flux_t
       !! Ice-shelf basal-melt slot: the 2-D interface state plus the
@@ -461,11 +486,12 @@ module rdb_ocean_cavity_flux
       integer :: n_thin_step = 0
          !! Columns this thermo step whose top layer could NOT give up
          !! the thickness the real-mass path asked of it without falling
-         !! through `H_VANISHED` — a FREEZING column (`m < 0`) whose top
-         !! layer is thinner than `|m|*dt/rho_0`, or a compensation sink
-         !! deeper than the open-ocean top layer.  The withdrawal is
-         !! CLAMPED to what is there (so `h` can never go vanished or
-         !! negative) and the count is FATAL: a clamped withdrawal is a
+         !! through `H_CAVITY_FLOOR` — a FREEZING column (`m < 0`) whose
+         !! top layer is thinner than `|m|*dt/rho_0`, or a compensation
+         !! sink deeper than the open-ocean top layer.  The withdrawal is
+         !! CLAMPED to what is there ABOVE the floor (so `h` stays
+         !! strictly above the vanish marker, never on or below it) and
+         !! the count is FATAL: a clamped withdrawal is a
          !! withdrawal the tracked mass source no longer matches, so
          !! continuing would print a budget that silently stopped
          !! closing.  Same stance as the non-finite melt column.
@@ -879,13 +905,23 @@ contains
       !! structural rather than a comment.
       !!
       !! FREEZING (`m < 0`) withdraws.  A column whose top layer cannot
-      !! give up `|dh|` without falling through `H_VANISHED` is CLAMPED
-      !! to what is there and COUNTED; the caller treats a non-zero count
-      !! as fatal (`cavity_mass_thin_is_fatal`), because a clamped
-      !! withdrawal no longer matches the tracked mass source.  The clamp
-      !! is a plain `max` on a quantity that has already been range-
-      !! tested, not a NaN-laundering `if/else` chain: a non-finite
-      !! `melt` is caught upstream by the solver's fatal status.
+      !! give up `|dh|` without falling through `H_CAVITY_FLOOR` is
+      !! CLAMPED to what is there above that floor and COUNTED; the
+      !! caller treats a non-zero count as fatal
+      !! (`cavity_mass_thin_is_fatal`), because a clamped withdrawal no
+      !! longer matches the tracked mass source.  The clamp is a plain
+      !! `max` on a quantity that has already been range-tested, not a
+      !! NaN-laundering `if/else` chain: a non-finite `melt` is caught
+      !! upstream by the solver's fatal status.
+      !!
+      !! The floor is `H_CAVITY_FLOOR`, not `H_VANISHED`, and that gap is
+      !! load-bearing: the abort fires AFTER this kernel has written the
+      !! state, so whatever it leaves behind gets read at least once more.
+      !! A layer left exactly ON the marker reads as VANISHED to every
+      !! strict-`>` gate downstream, and `ocean_remap_tracer_column` then
+      !! returns `hTr = 0` for it — the heat and salt the clamp was
+      !! protecting are deleted by the very next remap.  See
+      !! `H_CAVITY_FLOOR`.
       integer, intent(in) :: nx
          !! First dimension (ghosts included).
       integer, intent(in) :: ny
@@ -934,13 +970,26 @@ contains
             h0 = h_layer(i, j, nz)
             dh = melt(i, j)*dt_over_rho0
             hn = h0 + dh
-            if (hn < H_VANISHED) then
-               ! Pin the RESULT at the marker and derive the applied `dh`
+            if (dh < 0.0_wp .and. hn < H_CAVITY_FLOOR) then
+               ! Pin the RESULT at the floor and derive the applied `dh`
                ! from it, rather than pinning `dh` and adding: `h0 +
-               ! (H_VANISHED - h0)` rounds and can land a ulp BELOW the
-               ! marker, which is the one place a thin-layer gate must
+               ! (H_CAVITY_FLOOR - h0)` rounds and can land a ulp BELOW
+               ! the floor, which is the one place a thin-layer gate must
                ! never be.
-               hn = H_VANISHED
+               !
+               ! `min(h0, ...)` takes only what sits ABOVE the floor: a
+               ! column already at or below it has its withdrawal REFUSED
+               ! (`hn = h0`, `dh = 0`) rather than turned into a deposit.
+               ! Clamping `hn` UP to the floor there would invent mass the
+               ! tracked source does not name — a worse failure than the
+               ! one being prevented, and it is what the unconditional
+               ! `hn = marker` form used to do.
+               !
+               ! Gated on `dh < 0` for the same reason: a MELTING column
+               ! (`dh >= 0`) is adding mass, and a thin result then means
+               ! the layer was already thin on arrival — not this kernel's
+               ! doing, and not this kernel's to fabricate away.
+               hn = min(h0, H_CAVITY_FLOOR)
                dh = hn - h0
                c_thin = c_thin + 1
             end if
@@ -1112,7 +1161,8 @@ contains
       !! budget contributors: a parcel that carries `S` out of the domain
       !! changes the domain salt total, so the budget has to name it.
       !!
-      !! Same clamp + count + fatal policy as the mass source.
+      !! Same clamp (`H_CAVITY_FLOOR`, strictly above the vanish marker)
+      !! + count + fatal policy as the mass source.
       integer, intent(in) :: nx
          !! First dimension (ghosts included).
       integer, intent(in) :: ny
@@ -1147,11 +1197,17 @@ contains
          if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
             h0 = h_layer(i, j, nz)
             d = dw
-            if (h0 - d < H_VANISHED) then
-               d = h0 - H_VANISHED
+            hn = h0 - d
+            if (hn < H_CAVITY_FLOOR) then
+               ! Same floor and same refusal rule as the mass source: pin
+               ! the RESULT (never the increment — `h0 - (h0 - floor)`
+               ! rounds and can land a ulp below), take only what sits
+               ! ABOVE the floor, and take nothing at all from a column
+               ! already at or below it (`min(h0, ...)`, so `hn <= h0`
+               ! always and the sink can never become a deposit).
+               hn = min(h0, H_CAVITY_FLOOR)
                c_thin = c_thin + 1
             end if
-            hn = h0 - d
             if (h0 > H_DIV_EPS) then
                f = hn/h0
             else
@@ -1357,7 +1413,8 @@ contains
                                   "could not give up the requested thickness")
          call fail("&ocean_cavity_melt_nml freshwater='mass': "// &
                    to_string(cav%n_thin_step)//" column(s) would have been driven "// &
-                   "below H_VANISHED by the top-layer withdrawal (a freezing "// &
+                   "below H_CAVITY_FLOOR (2*H_VANISHED) by the top-layer "// &
+                   "withdrawal (a freezing "// &
                    "column thinner than |m|*dt/rho_0, or a compensation sink "// &
                    "deeper than the open-ocean top layer).  The withdrawal was "// &
                    "clamped so the state stays finite, but a clamped withdrawal "// &
