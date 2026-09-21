@@ -751,6 +751,31 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 
   The `documents_*` rows assert the CURRENT placement on purpose: the suite is
   green and the defect is pinned. The rigid-top slice must flip them.
+- **Which coordinate is trustworthy on which GEOMETRY — the rest-state
+  baseline table.** The per-family placement table above says where a family
+  puts its interfaces; it does not say what the resulting run *does*. The
+  vertical-coordinate **rest matrix** runs ONE problem — a motionless,
+  stably stratified, completely undamped f-plane ocean with the isopycnals
+  flat in geopotential `z` — under **every** family on **eleven** geometries
+  (flat; a constant-gradient slope; a Gaussian seamount at two steepnesses;
+  a stiffness ladder walking `rx0 = |dH|/(H_a+H_b)` through
+  0.1/0.2/0.4/0.6/0.8 past the Beckmann & Haidvogel (1993) bound of 0.2; and
+  a flat and a sloping ice lid), and gates the spurious energy's LEVEL, its
+  fitted exponential GROWTH RATE, the tracer bounds, the layer-thickness
+  positivity, the closed budgets and the solver's own truncation counters.
+  **The measured table is the envelope statement for each family** and lives
+  in [`tests/regression/README.md`](../tests/regression/README.md#the-baseline-table).
+  Headlines as measured on this branch (3.33 simulated days, gfortran 15.1
+  Release, `pred_corr`): every family is bit-zero on a FLAT bed;
+  `sigma`/`zstar`/`zstar_sigma` are byte-identical on every geometry;
+  `z_fixed` is the only family that LEAKS salt and heat (1e-6 relative
+  against a 1e-11 bar) wherever layers vanish; `rho`/`hycom` sit three to
+  four decades above the geometric families on the identical problem; and
+  **no family survives the stiffness ladder, not even at `rx0 = 0.1`** —
+  from `rx0 = 0.4` up every one of them goes non-finite inside the first
+  simulated day. Generated from one template by
+  `tests/regression/vcoord_matrix.py`; each failing cell is pinned as a
+  scoped XFAIL carrying its measured number.
 - **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =
   'zsigma'`), on the ocean path, with or without a cavity. Its deep branch reads
   `z_ref_global` as a table of absolute reference depths **in metres**

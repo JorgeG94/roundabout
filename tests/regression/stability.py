@@ -136,6 +136,15 @@ _CRASH_MARKERS = tuple(re.compile(p, re.IGNORECASE) for p in (
 # the run continues -- but it means non-finite values WERE produced and zeroed,
 # which is a finding in its own right, so it is counted and reported.
 _NAN_CATCH_RE = re.compile(r"\[nan-catch\]", re.IGNORECASE)
+# "CFL truncations:  3 this report (17 total)" -- the solver's own count of
+# faces whose velocity it had to truncate to hold the barotropic CFL. On a
+# REST case any non-zero value means the run was not resting; it is a
+# counter, not a controller (`dyn%ntrunc_total`), so nothing else reports it.
+_NTRUNC_RE = re.compile(r"CFL truncations:\s+\d+\s+this report\s+\((\d+)\s+total\)")
+# The configure-time terrain-following stiffness audit, which prints the
+# number the rx0 ladder is built to dial:
+#   "sigma stiffness rx0 = 0.726 at ... exceeds 0.200"
+_RX0_RE = re.compile(r"rx0\s*=\s*(" + _NUM + r")")
 # The model's authoritative end-of-run step count, independent of the [stats]
 # emission cadence (which lands on a stride and rarely on the very last step).
 _TOTAL_STEPS_RE = re.compile(r"^\s*Total steps:\s*(\d+)", re.MULTILINE)
@@ -201,8 +210,15 @@ def parse_series(text):
     mt = None
     for mm in _TOTAL_STEPS_RE.finditer(text):
         mt = int(mm.group(1))
+    ntrunc = 0
+    for mm in _NTRUNC_RE.finditer(text):
+        ntrunc = max(ntrunc, int(mm.group(1)))
+    rx0 = None
+    mm = _RX0_RE.search(text)
+    if mm:
+        rx0 = _f(mm.group(1))
     return {"stats": stats, "budget": budget, "diag": diag, "crash": crash,
-            "total_steps": mt,
+            "total_steps": mt, "ntrunc": ntrunc, "rx0": rx0,
             "nan_catch": len(_NAN_CATCH_RE.findall(text))}
 
 
@@ -472,6 +488,175 @@ def _efold_rate(days, en):
     if den == 0.0:
         return None
     return (n * sxy - sx * sy) / den
+
+
+def fit_log_rate(days, en, from_frac=0.4):
+    """Least-squares exponential rate of `En` over the TAIL of a run.
+
+    Returns `(sigma_amp, r2, n, (day_first, day_last))` where `sigma_amp` is
+    the AMPLITUDE rate in 1/s (`En ~ exp(2 sigma t)`), or
+    `(None, None, n, None)` when there is not enough positive signal.
+
+    Why the tail and not the whole run.  A rest case's `En` has two regimes:
+    an initial adjustment (the spurious pressure gradient spinning up its
+    geostrophic balance, over a few inertial periods) and then either a
+    PLATEAU or an EXPONENTIAL.  Only the second is the thing being measured,
+    and a whole-run fit mixes the two -- on the measured cavity case a
+    whole-run fit over days 0-60 reads 0.13/day against 0.333/day fitted
+    over the clean window, i.e. it understates the instability by 2.5x.
+    `from_frac = 0.4` drops the leading 40% of samples.
+
+    Why R^2 is returned and reported rather than gated.  A PLATEAU has a
+    near-zero slope and an essentially meaningless R^2; an INSTABILITY has a
+    slope and an R^2 near 1.  Reporting both lets a reader tell "flat, so the
+    rate is noise" from "exponential, and here is the rate" without the suite
+    having to pick a threshold for a quantity whose distribution under the
+    null is not known.  The GATE is on sigma alone.
+    """
+    pts = [(d * 86400.0, math.log(e)) for d, e in zip(days, en)
+           if _finite(d) and _finite(e) and e > 0.0]
+    if len(pts) < 6:
+        return None, None, len(pts), None
+    pts = pts[int(len(pts) * from_frac):]
+    if len(pts) < 4:
+        return None, None, len(pts), None
+    n = float(len(pts))
+    sx = sum(p[0] for p in pts)
+    sy = sum(p[1] for p in pts)
+    sxx = sum(p[0] * p[0] for p in pts)
+    sxy = sum(p[0] * p[1] for p in pts)
+    den = n * sxx - sx * sx
+    if den == 0.0:
+        return None, None, len(pts), None
+    slope = (n * sxy - sx * sy) / den
+    inter = (sy - slope * sx) / n
+    ybar = sy / n
+    ss_tot = sum((p[1] - ybar) ** 2 for p in pts)
+    ss_res = sum((p[1] - (slope * p[0] + inter)) ** 2 for p in pts)
+    r2 = (1.0 - ss_res / ss_tot) if ss_tot > 0.0 else 0.0
+    return slope / 2.0, r2, len(pts), (pts[0][0] / 86400.0, pts[-1][0] / 86400.0)
+
+
+def assert_matrix(series, res, phys, tier):
+    """The extra gates the VERTICAL-COORDINATE MATRIX rows carry.
+
+    Opt-in per row (`phys["matrix_gates"]`), deliberately: every one of these is a
+    correct thing to ask of ANY rest case, but switching them on for the
+    whole corpus at once would turn existing rows red on assertions their
+    scoped `known_failure`s do not cover, which is exactly the failure mode
+    `_status`'s assertion scoping exists to prevent.  Extending them to the
+    rest of the corpus is a separate change with its own measurement.
+
+    Four assertions, each answering something `energy:rest` cannot:
+
+      * `energy:rest-growth-rate` -- the RATE, not the level.  A spurious
+        pressure gradient that EQUILIBRATES is a tolerable discretisation
+        error; one that is still exponential at the end of the run is an
+        instability that happens to be small yet.  Measured on the cavity
+        case: a 10 900x smaller seed bought 143 days and the run still
+        breached the same level bar, because the RATE was unchanged.
+        TIER 1 ONLY -- a 3.3-day twin cannot fit an exponential whose bar is
+        a 20-day e-folding.
+      * `tracer:no-new-extrema` -- at rest, with no surface flux and no
+        mixing closure, T and S may not leave their initial range.  Spurious
+        diapycnal mixing from the coordinate's own regrid shows up here
+        before it shows up in the energy.
+      * `thickness:positive` -- the minimum `h_layer` over the run stays
+        strictly positive.  A coordinate that drives a layer to zero divides
+        by it downstream.
+      * `counters:no-truncation` -- a rest case that CFL-truncates is not
+        resting, whatever its energy says.
+    """
+    out = []
+    sig_bar = phys.get("rest_sigma_max")
+    if sig_bar:
+        if tier != 1:
+            out.append(Verdict(
+                "energy:rest-growth-rate", True,
+                "fitted amplitude rate <= {:.3g} 1/s".format(sig_bar),
+                "not measurable at tier-2 length (the bar is a 20-day "
+                "e-folding) -- TIER 1 ONLY", skipped=True))
+        else:
+            days = [s["day"] for s in series["stats"]]
+            en = [s["En"] for s in series["stats"]]
+            sig, r2, npts, span = fit_log_rate(days, en)
+            ok = sig is None or sig <= sig_bar
+            out.append(Verdict(
+                "energy:rest-growth-rate", ok,
+                "a resting case has NO energy source, so its spurious energy "
+                "must equilibrate rather than grow: fitted amplitude rate "
+                "<= {:.3g} 1/s (En e-folding >= {:.1f} days)".format(
+                    sig_bar, 1.0 / (2.0 * sig_bar) / 86400.0),
+                "sigma = {} 1/s ({}), R2 = {}, {} samples over days {}".format(
+                    _fmt(sig),
+                    "En e-folding {:.2f} days".format(
+                        1.0 / (2.0 * sig) / 86400.0)
+                    if sig and sig > 0 else "not growing",
+                    _fmt(r2), npts,
+                    "{:.1f}-{:.1f}".format(*span) if span else "?"),
+                "The spurious motion is still growing EXPONENTIALLY when the "
+                "run ends. A level bar cannot see this: weakening the source "
+                "only postpones it. On the measured cavity case a 10 900x "
+                "smaller seed bought 143 days and breached the same bar.",
+                "validation_examples/ocean/ice_shelf_cavity/README.md"))
+
+    if not phys.get("matrix_gates"):
+        return out
+
+    # --- tracer bounds -----------------------------------------------------
+    slack = phys.get("tracer_slack", 1.0e-6)
+    worst, worst_name = 0.0, None
+    seen = False
+    for name in ("temperature", "salinity"):
+        rows = [r for r in (series["diag"].get(name) or [])
+                if _finite(r["min"]) and _finite(r["max"])]
+        if len(rows) < 2:
+            continue
+        seen = True
+        lo0, hi0 = rows[0]["min"], rows[0]["max"]
+        for r in rows[1:]:
+            d = max(lo0 - r["min"], r["max"] - hi0, 0.0)
+            if d > worst:
+                worst, worst_name = d, name
+    if seen:
+        out.append(Verdict(
+            "tracer:no-new-extrema", worst <= slack,
+            "at rest, with no surface flux and no mixing closure, T and S "
+            "may not leave their INITIAL range by more than {:.1g}".format(slack),
+            "worst overshoot = {} ({})".format(
+                _fmt(worst), worst_name or "none"),
+            "A new tracer extremum in a motionless, unforced, unmixed ocean "
+            "was created by the coordinate's own regrid -- an unlimited "
+            "reconstruction, or a vanished layer the remap drained and "
+            "refilled. It is spurious diapycnal mixing, and it shows here "
+            "before it shows in the energy."))
+
+    # --- thickness positivity ----------------------------------------------
+    rows = [r for r in (series["diag"].get("h_layer") or []) if _finite(r["min"])]
+    if rows:
+        h_min = min(r["min"] for r in rows)
+        floor = phys.get("h_min_floor", 0.0)
+        out.append(Verdict(
+            "thickness:positive", h_min > floor,
+            "the minimum layer thickness over the run stays strictly above "
+            "{:.3g} m".format(floor),
+            "min h_layer = {} m over {} samples".format(_fmt(h_min), len(rows)),
+            "A layer reached zero or negative thickness. Every operator that "
+            "divides by h_layer is armoured at H_DIV_EPS = 1e-20, so this "
+            "does not crash -- it produces a plausible wrong answer."))
+
+    # --- the solver's own counters -----------------------------------------
+    nt = series.get("ntrunc", 0) or 0
+    out.append(Verdict(
+        "counters:no-truncation", nt == 0,
+        "a case that starts at rest and has no forcing must never hit the "
+        "barotropic CFL truncation",
+        "{} CFL truncation(s)".format(nt),
+        "The solver truncated a face velocity to hold the CFL. In a resting, "
+        "unforced ocean that velocity is entirely spurious, and the "
+        "truncation is a clamp -- it bounds the symptom and hides the size "
+        "of the error from every other assertion here."))
+    return out
 
 
 def _diag_amplitude_rate(series, field, fit_from_day=0.0):
@@ -1180,6 +1365,7 @@ def evaluate(case, tier, res, series):
         verdicts += assert_energy(series, phys, tier)
         verdicts += assert_cfl(series, phys)
         verdicts += assert_claims(series, phys, tier)
+        verdicts += assert_matrix(series, res, phys, tier)
     return verdicts, artifacts
 
 
@@ -1211,13 +1397,22 @@ def _force_scheme(case, scheme):
     return out
 
 
-def select_cases(tier, only=None):
+def select_cases(tier, only=None, tags=None):
+    """Cases runnable at `tier`, optionally filtered by NAME or by TAG.
+
+    The tag filter exists because the vertical-coordinate matrix is 115
+    cases whose names are generated: naming them all on a `--cases` line is
+    not something a human can type, and running the whole tier-1 corpus to
+    re-measure one table is an hour of GPU for nothing.
+    """
     out = []
     for c in manifest.STABILITY_CASES:
         spec = c.get("tier{}".format(tier))
         if not spec or spec.get("skip"):
             continue
         if only and c["name"] not in only:
+            continue
+        if tags and not (tags & set(c.get("tags") or ())):
             continue
         out.append(c)
     return out
@@ -1447,6 +1642,37 @@ def self_test():
     check("a quiescent spin-up climb at 0.2% of the ceiling PASSES",
           named(v, "cfl:no-runaway").ok)
 
+    # (7b) The REST GROWTH-RATE fit, against the two MEASURED series it has
+    #      to separate. Both are from
+    #      validation_examples/ocean/ice_shelf_cavity/README.md and the
+    #      cavity diagnosis: the sloping-lid sigma instability (En 1.030E-09
+    #      at day 1 rising to 3.894E-06 at day 60, sigma_En = 0.333/day over
+    #      the clean window) and the pred_corr residual creep on the resting
+    #      channel (En 1.21e-09 -> 4.82e-09 over 120 days, an 83-day
+    #      e-folding). The bar must fail the first and pass the second.
+    bar = 0.05 / 2.0 / 86400.0
+    inst = [(1.0, 1.030e-9), (5.0, 1.346e-9), (10.0, 1.626e-9),
+            (20.0, 2.070e-9), (25.0, 5.275e-9), (30.0, 3.043e-8),
+            (35.0, 1.901e-7), (40.0, 7.133e-7), (50.0, 2.770e-6),
+            (60.0, 3.894e-6)]
+    sig_i, r2_i, _n, _sp = fit_log_rate([d for d, _ in inst],
+                                        [e for _, e in inst])
+    check("the sloping-lid instability -> rest-growth-rate FAILS "
+          "(sigma_En {:.3f}/day, R2 {:.3f})".format(
+              (sig_i or 0) * 2 * 86400.0, r2_i or 0),
+          sig_i is not None and sig_i > bar)
+    creep = [(float(d), 1.21e-9 * math.exp(d / 83.0)) for d in range(0, 121, 5)]
+    sig_c, r2_c, _n, _sp = fit_log_rate([d for d, _ in creep],
+                                        [e for _, e in creep])
+    check("the pred_corr 83-day creep PASSES it "
+          "(sigma_En {:.4f}/day, R2 {:.3f})".format(
+              (sig_c or 0) * 2 * 86400.0, r2_c or 0),
+          sig_c is not None and sig_c <= bar)
+    flat = [(float(d), 1.7e-9 * (1.0 + 0.02 * math.sin(d))) for d in range(60)]
+    sig_f, _r2, _n, _sp = fit_log_rate([d for d, _ in flat],
+                                       [e for _, e in flat])
+    check("a PLATEAU reads as not growing", abs(sig_f or 0.0) <= bar)
+
     # (8) Every manifest twin satisfies the downscaling rules.
     bad = [c["name"] for c in manifest.STABILITY_CASES
            if c.get("tier2", {}).get("dimensionless")
@@ -1459,8 +1685,34 @@ def self_test():
     twins = [c for c in manifest.STABILITY_CASES if c.get("split_scheme")]
     n2 = sum(1 for c in manifest.STABILITY_CASES
              if not c["tier2"].get("skip"))
-    check("manifest covers 71 namelists ({} base cases, {} at tier 2)"
-          .format(len(base), n2), len(base) == 71)
+    # 71 shipped namelists + the 115 generated vertical-coordinate matrix
+    # cells. The tripwire is on the TOTAL so that a matrix cell silently
+    # disappearing (a template token renamed, a family dropped from the
+    # FAMILIES list) fails here rather than reporting a smaller green table.
+    vcm = [c for c in base if c.get("matrix")]
+    check("manifest covers 71 shipped namelists + the vcoord matrix "
+          "({} base cases, {} of them matrix cells, {} at tier 2)"
+          .format(len(base), len(vcm), n2),
+          len(base) - len(vcm) == 71 and len(vcm) == 115)
+    # Every matrix cell must name its coordinates in the table. Without this
+    # a row whose `matrix` block lost a key would simply vanish from the
+    # printed family x problem table with nothing said.
+    check("every vcoord-matrix row carries problem/family/expect",
+          all(set(("problem", "family", "expect", "stratification", "eos"))
+              <= set(c["matrix"]) for c in vcm))
+    # The REFUSAL rows are the ones that catch an envelope widening silently.
+    refused = [c for c in vcm if c["matrix"]["expect"] == "refused"]
+    check("the matrix asserts every by-design REFUSAL ({} rows)"
+          .format(len(refused)),
+          len(refused) >= 11
+          and all(c["known_failure"]["assertions"] == ["completed"]
+                  for c in refused))
+    # The rate gate is what this matrix adds over the existing rest gates;
+    # a refactor that dropped it would leave a table of level bars only.
+    rated = [c for c in vcm if c["physics"].get("rest_sigma_max")]
+    check("the matrix arms the fitted GROWTH-RATE gate on every runnable "
+          "cell ({} rows)".format(len(rated)),
+          len(rated) == len(vcm) - len(refused))
     # The scheme axis must EXIST -- a refactor that quietly stops building it
     # would leave the non-default scheme an untested branch of the dispatcher
     # while every report still said PASS.
@@ -1560,6 +1812,10 @@ def main(argv=None):
     p.add_argument("--jobs", type=int, default=1,
                    help="parallel CPU workers (GPU uses one worker per device).")
     p.add_argument("--cases", default=None, help="comma-separated name filter.")
+    p.add_argument("--tags", default=None,
+                   help="comma-separated TAG filter, e.g. `vcoord_matrix` to "
+                        "run only the vertical-coordinate rest matrix. "
+                        "Composes with --cases (both must match).")
     p.add_argument("--out", default=None, help="write JSON results here.")
     p.add_argument("--keep", action="store_true", help="keep NetCDF output.")
     p.add_argument("-v", "--verbose", action="store_true",
@@ -1597,7 +1853,8 @@ def main(argv=None):
         return 2
 
     only = {c.strip() for c in args.cases.split(",")} if args.cases else None
-    cases = select_cases(args.tier, only)
+    tags = {t.strip() for t in args.tags.split(",")} if args.tags else None
+    cases = select_cases(args.tier, only, tags)
     if args.split_scheme:
         cases = [_force_scheme(c, args.split_scheme) for c in cases]
     gpus = ([g.strip() for g in args.gpus.split(",")]
@@ -1679,6 +1936,10 @@ def main(argv=None):
         print("           " + "\n           ".join(_wrap(DIAG_MEAN_NAN_NOTE, 78)))
     print("=" * 92)
 
+    matrix_rows = _matrix_summary(results, args.tier)
+    if matrix_rows:
+        _print_matrix_table(matrix_rows, args.tier)
+
     if args.out:
         payload = []
         for n in order:
@@ -1700,10 +1961,99 @@ def main(argv=None):
             os.makedirs(out_dir, exist_ok=True)
         with open(args.out, "w") as fh:
             json.dump({"tier": args.tier, "wall_s": wall,
-                       "cases": payload}, fh, indent=1)
+                       "cases": payload, "vcoord_matrix": matrix_rows}, fh,
+                      indent=1)
         print("JSON: {}".format(args.out))
+        if matrix_rows:
+            mpath = os.path.splitext(args.out)[0] + "_vcoord_matrix.json"
+            with open(mpath, "w") as fh:
+                json.dump({"tier": args.tier, "rows": matrix_rows}, fh, indent=1)
+            print("JSON: {}  (the family x problem baseline table)".format(mpath))
 
     return 1 if counts.get("FAIL") else 0
+
+
+# ---------------------------------------------------------------------------
+# The vertical-coordinate matrix summary
+# ---------------------------------------------------------------------------
+def _matrix_summary(results, tier):
+    """One machine-readable record per matrix cell that ran.
+
+    Written next to the ordinary report so drift in the family x problem
+    table can be tracked over time -- the table IS the product of the
+    matrix, and a table that only ever appears in a terminal cannot be
+    diffed against last week's.
+    """
+    rows = []
+    for name, (case, res, verdicts, _art) in sorted(results.items()):
+        mx = case.get("matrix")
+        if not mx:
+            continue
+        status, failed = _status(case, verdicts, tier)
+        by = {v.name: v for v in verdicts}
+
+        def observed(key):
+            v = by.get(key)
+            return v.observed if v else None
+
+        rows.append({
+            "case": name,
+            "problem": mx["problem"], "family": mx["family"],
+            "stratification": mx["stratification"], "eos": mx["eos"],
+            "scheme": case.get("split_scheme") or _DEFAULT_SPLIT_SCHEME,
+            "expect": mx["expect"],
+            "status": status,
+            "failed": [v.name for v in failed],
+            "wall_s": res.get("wall_s"),
+            "rx0": res.get("rx0"),
+            "ntrunc": res.get("ntrunc"),
+            "en_rest": observed("energy:rest"),
+            "growth_rate": observed("energy:rest-growth-rate"),
+            "tracer": observed("tracer:no-new-extrema"),
+            "thickness": observed("thickness:positive"),
+            "truncation_estimate": mx.get("en_estimate"),
+        })
+    return rows
+
+
+def _print_matrix_table(rows, tier):
+    """The family x problem BASELINE TABLE, printed at the end of a run.
+
+    This is what a user reads to decide which coordinate to trust on which
+    geometry. One cell per (problem, family): the verdict, and the key
+    number behind it.
+    """
+    problems = sorted({r["problem"] for r in rows})
+    families = sorted({r["family"] for r in rows})
+    cell = {}
+    for r in rows:
+        key = (r["problem"], r["family"])
+        mark = {"PASS": "ok", "FAIL": "FAIL", "XFAIL": "xfail",
+                "XPASS": "XPASS"}[r["status"]]
+        if r["expect"] == "refused":
+            mark = "refused" if r["status"] == "XFAIL" else "NOT-REFUSED"
+        # A twin lands in the same cell; keep the worse verdict.
+        prev = cell.get(key)
+        rank = {"ok": 0, "xfail": 1, "refused": 0, "FAIL": 3, "XPASS": 2,
+                "NOT-REFUSED": 3}
+        if prev is None or rank[mark] > rank[prev]:
+            cell[key] = mark
+    w = max(12, max(len(f) for f in families) + 1)
+    print("\n" + "=" * 92)
+    print("VERTICAL-COORDINATE MATRIX -- tier {}   (family x problem)".format(tier))
+    print("  ok = every assertion passed   xfail = documented defect   "
+          "refused = rejected at configure, as designed")
+    print("  FAIL = a live defect          XPASS/NOT-REFUSED = the envelope "
+          "moved; re-measure")
+    print("-" * 92)
+    head = "{:<18}".format("problem") + "".join(
+        "{:<{w}}".format(f[:w - 1], w=w) for f in families)
+    print(head)
+    for p in problems:
+        line = "{:<18}".format(p) + "".join(
+            "{:<{w}}".format(cell.get((p, f), "-"), w=w) for f in families)
+        print(line)
+    print("=" * 92)
 
 
 if __name__ == "__main__":
