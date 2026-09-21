@@ -513,25 +513,53 @@ contains
          ! `u` as derived-type deep derefs and emits per-
          ! iteration descriptor-walk memcpys.
       else if (use_face_visc) then
-         call hvisc_compute_face_impl( &
-            u, v, &
-            lateral_mix%ah_face_x, lateral_mix%ah_face_y, &
-            this%du_visc%data, this%dv_visc%data, &
-            metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
-            metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
-            this%bound_kh, this%bound_coef, dt_local, &
-            metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
-            nx, ny, nz)
+         ! z-level closed faces: the mask actuals are ABSENT on the
+         ! default path (the `(1,1,1)` placeholder must never reach an
+         ! explicit-shape dummy), so the call is written twice rather
+         ! than the argument once.  Cold dispatcher code.
+         if (metrics%use_closed_faces) then
+            call hvisc_compute_face_impl( &
+               u, v, &
+               lateral_mix%ah_face_x, lateral_mix%ah_face_y, &
+               this%du_visc%data, this%dv_visc%data, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               this%bound_kh, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               nx, ny, nz, metrics%open_u, metrics%open_v)
+         else
+            call hvisc_compute_face_impl( &
+               u, v, &
+               lateral_mix%ah_face_x, lateral_mix%ah_face_y, &
+               this%du_visc%data, this%dv_visc%data, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               this%bound_kh, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               nx, ny, nz)
+         end if
       else
-         call hvisc_compute_scalar_impl( &
-            u, v, &
-            this%du_visc%data, this%dv_visc%data, &
-            nu_h, &
-            metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
-            metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
-            this%bound_kh, this%bound_coef, dt_local, &
-            metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
-            nx, ny, nz)
+         if (metrics%use_closed_faces) then
+            call hvisc_compute_scalar_impl( &
+               u, v, &
+               this%du_visc%data, this%dv_visc%data, &
+               nu_h, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               this%bound_kh, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               nx, ny, nz, metrics%open_u, metrics%open_v)
+         else
+            call hvisc_compute_scalar_impl( &
+               u, v, &
+               this%du_visc%data, this%dv_visc%data, &
+               nu_h, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               this%bound_kh, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               nx, ny, nz)
+         end if
       end if
 
       ! Biharmonic add-on.  Independent of the harmonic dispatch above
@@ -584,7 +612,7 @@ contains
                                            dx_dyT, dy_dxBu, iareaCv, &
                                            bound_kh, bound_coef, dt, &
                                            idxCu, idyCu, idxCv, idyCv, &
-                                           nx, ny, nz)
+                                           nx, ny, nz, open_u, open_v)
       !! Per-face metric Laplacian × spatially-varying viscosity.
       !! Explicit-shape dummies so NVHPC stdpar emits a device kernel
       !! without per-launch descriptor walks.  See
@@ -601,6 +629,31 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask
+         !! (`&vcoord_nml zfixed_closed_faces`).  ABSENT (the default
+         !! path) => the interior loops below are textually the ones this
+         !! routine has always run => bit-identical.
+         !!
+         !! PRESENT => the closed faces become FREE-SLIP walls, which is
+         !! what a z-level partial step is (Adcroft, Hill & Marshall
+         !! 1997).  Two things happen, and both are needed:
+         !!
+         !! 1. each neighbour difference is multiplied by the NEIGHBOUR
+         !!    face's open flag, so a closed neighbour -- whose velocity
+         !!    `mask_layer_velocities` has zeroed -- contributes nothing.
+         !!    Without it the zero reads as a Dirichlet-0 boundary, i.e.
+         !!    NO-SLIP: the wall would exert `nu*u/dx^2` of drag on the
+         !!    live face beside it every step, which is the opposite of
+         !!    the free-slip a partial step is supposed to be;
+         !! 2. the whole tendency is multiplied by the face's OWN open
+         !!    flag, so a closed face gets exactly zero viscous tendency
+         !!    (it is a wall; `mask_layer_velocities` would zero it
+         !!    anyway, but leaving a tendency there would make
+         !!    `ke_diss` -- which MEKE reads -- account for work done on
+         !!    water that is not there).
+      real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
+         !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
       real(wp) :: lap_u, lap_v, nu_eff, idt
 
@@ -608,18 +661,33 @@ contains
       if (dt > 0.0_wp) idt = 1.0_wp/dt
 
       ! u-face Laplacian interior + zero boundaries (curvilinear FV form)
-      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
-         lap_u = iareaCu(i, j)*( &
-                 (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
-                  dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-                 (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                  dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
-         nu_eff = ah_face_x(i, j, k)
-         if (bound_kh) then
-            nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
-         end if
-         du_visc(i, j, k) = nu_eff*lap_u
-      end do
+      if (present(open_u)) then
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
+            lap_u = iareaCu(i, j)*( &
+                    (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k))*open_u(i + 1, j, k) - &
+                     dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))*open_u(i - 1, j, k)) + &
+                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
+                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
+            nu_eff = ah_face_x(i, j, k)
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            end if
+            du_visc(i, j, k) = nu_eff*lap_u*open_u(i, j, k)
+         end do
+      else
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
+            lap_u = iareaCu(i, j)*( &
+                    (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
+                     dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
+                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+            nu_eff = ah_face_x(i, j, k)
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            end if
+            du_visc(i, j, k) = nu_eff*lap_u
+         end do
+      end if
       do concurrent(k=1:nz, j=1:ny)
          du_visc(1, j, k) = 0.0_wp
          du_visc(nx + 1, j, k) = 0.0_wp
@@ -630,18 +698,33 @@ contains
       end do
 
       ! v-face Laplacian interior + zero boundaries (curvilinear FV form)
-      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
-         lap_v = iareaCv(i, j)*( &
-                 (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
-                  dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-                 (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                  dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
-         nu_eff = ah_face_y(i, j, k)
-         if (bound_kh) then
-            nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
-         end if
-         dv_visc(i, j, k) = nu_eff*lap_v
-      end do
+      if (present(open_v)) then
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
+            lap_v = iareaCv(i, j)*( &
+                    (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k))*open_v(i, j + 1, k) - &
+                     dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))*open_v(i, j - 1, k)) + &
+                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
+                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
+            nu_eff = ah_face_y(i, j, k)
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            end if
+            dv_visc(i, j, k) = nu_eff*lap_v*open_v(i, j, k)
+         end do
+      else
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
+            lap_v = iareaCv(i, j)*( &
+                    (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
+                     dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
+                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+            nu_eff = ah_face_y(i, j, k)
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            end if
+            dv_visc(i, j, k) = nu_eff*lap_v
+         end do
+      end if
       do concurrent(k=1:nz, i=1:nx)
          dv_visc(i, 1, k) = 0.0_wp
          dv_visc(i, ny + 1, k) = 0.0_wp
@@ -658,7 +741,7 @@ contains
                                              dx_dyT, dy_dxBu, iareaCv, &
                                              bound_kh, bound_coef, dt, &
                                              idxCu, idyCu, idxCv, idyCv, &
-                                             nx, ny, nz)
+                                             nx, ny, nz, open_u, open_v)
       !! Per-face metric Laplacian × scalar viscosity.  Used when no
       !! lateral-mix closure is active — falls back to constant
       !! `nu_h`.  When `nu_h = 0` the kernel still zeros all interior +
@@ -675,6 +758,15 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask
+         !! (`&vcoord_nml zfixed_closed_faces`) — the FREE-SLIP closure
+         !! of a z-level partial step.  See `hvisc_compute_face_impl`'s
+         !! `open_u` docstring for the full argument; ABSENT (the default
+         !! path) ⇒ the loops below are textually unchanged ⇒
+         !! bit-identical.
+      real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
+         !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
       real(wp) :: lap_u, lap_v, nu_eff, idt
 
@@ -691,18 +783,33 @@ contains
          return
       end if
 
-      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
-         lap_u = iareaCu(i, j)*( &
-                 (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
-                  dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-                 (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                  dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
-         nu_eff = nu_h
-         if (bound_kh) then
-            nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
-         end if
-         du_visc(i, j, k) = nu_eff*lap_u
-      end do
+      if (present(open_u)) then
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
+            lap_u = iareaCu(i, j)*( &
+                    (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k))*open_u(i + 1, j, k) - &
+                     dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))*open_u(i - 1, j, k)) + &
+                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
+                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
+            nu_eff = nu_h
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            end if
+            du_visc(i, j, k) = nu_eff*lap_u*open_u(i, j, k)
+         end do
+      else
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(lap_u, nu_eff)
+            lap_u = iareaCu(i, j)*( &
+                    (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
+                     dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
+                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+            nu_eff = nu_h
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            end if
+            du_visc(i, j, k) = nu_eff*lap_u
+         end do
+      end if
       do concurrent(k=1:nz, j=1:ny)
          du_visc(1, j, k) = 0.0_wp
          du_visc(nx + 1, j, k) = 0.0_wp
@@ -712,18 +819,33 @@ contains
          du_visc(i, ny, k) = 0.0_wp
       end do
 
-      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
-         lap_v = iareaCv(i, j)*( &
-                 (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
-                  dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-                 (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                  dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
-         nu_eff = nu_h
-         if (bound_kh) then
-            nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
-         end if
-         dv_visc(i, j, k) = nu_eff*lap_v
-      end do
+      if (present(open_v)) then
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
+            lap_v = iareaCv(i, j)*( &
+                    (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k))*open_v(i, j + 1, k) - &
+                     dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))*open_v(i, j - 1, k)) + &
+                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
+                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
+            nu_eff = nu_h
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            end if
+            dv_visc(i, j, k) = nu_eff*lap_v*open_v(i, j, k)
+         end do
+      else
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(lap_v, nu_eff)
+            lap_v = iareaCv(i, j)*( &
+                    (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
+                     dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
+                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+            nu_eff = nu_h
+            if (bound_kh) then
+               nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            end if
+            dv_visc(i, j, k) = nu_eff*lap_v
+         end do
+      end if
       do concurrent(k=1:nz, i=1:nx)
          dv_visc(i, 1, k) = 0.0_wp
          dv_visc(i, ny + 1, k) = 0.0_wp

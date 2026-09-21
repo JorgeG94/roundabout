@@ -300,25 +300,9 @@ class Vcoord(Group):
         default=False,
     )
 
-    remap_boundary_extrap = Bool(
-        'remap_boundary_extrap',
-        doc='ALE remap: linear-exact one-sided reconstruction in the k=1/k=nz boundary cells (MOM6 BOUNDARY_EXTRAPOLATION)',
-        units='',
-        required=False,
-        default=False,
-    )
-
-    remap_nonuniform_weights = Bool(
-        'remap_nonuniform_weights',
-        doc='ALE remap: non-uniform-grid PLM slope + PPM edge weights (Colella-Woodward 1984 eqs 1.6-1.8) instead of the equal-thickness specialisations',
-        units='',
-        required=False,
-        default=False,
-    )
-
-    remap_check_preconditions = Bool(
-        'remap_check_preconditions',
-        doc="ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals)",
+    zfixed_closed_faces = Bool(
+        'zfixed_closed_faces',
+        doc='z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
         units='',
         required=False,
         default=False,
@@ -6143,4 +6127,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 672
+N_KNOBS = 670

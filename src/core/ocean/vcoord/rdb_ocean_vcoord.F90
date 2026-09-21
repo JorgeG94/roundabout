@@ -74,6 +74,8 @@ module rdb_ocean_vcoord
    public :: parse_ocean_vcoord_type
    public :: invert_density_targets
    public :: ocean_vcoord_z_fixed_target
+   public :: ocean_vcoord_closed_face_masks
+   public :: ocean_vcoord_count_ledges
    public :: VCOORD_EULERIAN_Z
    public :: VCOORD_LAGRANGIAN
    public :: VCOORD_Z_FIXED
@@ -339,6 +341,23 @@ module rdb_ocean_vcoord
          !! capped at a 1.25× rescale factor.  The barotropic/depth-mean
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
+      logical :: zfixed_closed_faces = .false.
+         !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
+         !! closure.  Only meaningful on `VCOORD_Z_FIXED`, where a layer
+         !! whose nominal geopotential range lies inside the bed or the
+         !! ice draft is an inert FILLER; a velocity face at which that
+         !! layer is a filler on EITHER side is a z-level WALL, not a
+         !! thin passage (Adcroft, Hill & Marshall 1997; Losch 2008).
+         !!
+         !! The per-layer 0/1 face mask itself lives on `ocean_metrics_t`
+         !! (`open_u`/`open_v`, built once at configure by
+         !! `ocean_vcoord_closed_face_masks` from THIS module's `z_fixed`
+         !! target at `eta = 0`).  The flag is carried here so the ALE
+         !! remap driver — which never sees `ocean_metrics_t` — can build
+         !! its FACE columns as `min(h_L, h_R)` and drop the closed
+         !! layers, instead of pouring momentum into water that is not
+         !! there.  Scalar on the type, reaches the device through the
+         !! existing `copyin(this)`.  Default `.false.` => bit-identical.
 
       ! ---- Cached extents (for kernel loops + sanity checks) ----
       integer :: nx_total = 0
@@ -1000,6 +1019,133 @@ contains
          end do
       end do
    end subroutine ocean_vcoord_z_fixed_target
+
+   pure subroutine ocean_vcoord_closed_face_masks(open_u, open_v, target_h, &
+                                                  nx, ny, nz, h_vanished)
+      !! Partial-step z-level FACE CLOSURE mask for `VCOORD_Z_FIXED`
+      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
+      !!
+      !! Under `z_fixed` a layer whose nominal geopotential range lies
+      !! inside the bed — or inside the ice draft — is an inert FILLER of
+      !! thickness `zstar_h_min` (`<= h_vanished`).  A velocity face at
+      !! which layer `k` is a filler on EITHER side is not a thin
+      !! passage: geometrically there is no water there on one side, so
+      !! it is a **WALL for that layer** — no normal velocity, no mass or
+      !! tracer flux, free-slip on the tangential component.  This marks
+      !! those faces.
+      !!
+      !! ### The rule, in one line
+      !!
+      !! ```
+      !! open_u(I,j,k) = 1  iff  target_h(I-1,j,k) > h_vanished
+      !!                   .and. target_h(I  ,j,k) > h_vanished
+      !! ```
+      !! and the v-face mirror.  The mask is **STATIC**: the bed and the
+      !! draft are static, and under `z_fixed` `η` is absorbed by the
+      !! first LIVE layer (the partial cell) — a filler's target is
+      !! `zstar_h_min` whatever `η` does — so the live/filler pattern
+      !! does not move.  Build it once, from
+      !! `ocean_vcoord_z_fixed_target` at `η = 0`, so there is exactly
+      !! ONE definition of "live" shared with the ALE regrid and the IC
+      !! seed.
+      !!
+      !! ### Composition
+      !!
+      !! The mask is a THIRD, independent factor on the face width, not a
+      !! replacement for either of the other two:
+      !! ```
+      !! dy_eff(I,j,k) = dy_cu(I,j) · por_face_area_u(I,j,k) · open_u(I,j,k)
+      !!                  land (2-D)     porous (subgrid)       z-level (per layer)
+      !! ```
+      !!
+      !! ### Array-edge faces
+      !!
+      !! `I = 1` and `I = nx+1` are left fully OPEN (1), exactly as the
+      !! porous kernel leaves them: their `dy_cu` is already zero and the
+      !! continuity wall zeroing owns them.  The PHYSICAL seam of a
+      !! periodic axis is an interior index (`nghost+1`), so it is
+      !! covered by the `2:nx` sweep — provided the caller built
+      !! `target_h` from GHOST-FILLED inputs (`bt_H_ref` and `z_top` are
+      !! periodic-wrapped + halo-exchanged before this runs).
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      real(wp), intent(out) :: open_u(nx + 1, ny, nz)
+         !! u-face 0/1 open mask.
+      real(wp), intent(out) :: open_v(nx, ny + 1, nz)
+         !! v-face 0/1 open mask.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! The `z_fixed` target thickness at `η = 0`.
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).  A layer is LIVE iff its
+         !! target thickness is strictly greater than this.
+      integer :: i, j, k
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+         open_u(i, j, k) = 1.0_wp
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+         open_v(i, j, k) = 1.0_wp
+      end do
+
+      do concurrent(k=1:nz, j=1:ny, i=2:nx)
+         if (target_h(i - 1, j, k) > h_vanished .and. &
+             target_h(i, j, k) > h_vanished) then
+            open_u(i, j, k) = 1.0_wp
+         else
+            open_u(i, j, k) = 0.0_wp
+         end if
+      end do
+
+      do concurrent(k=1:nz, j=2:ny, i=1:nx)
+         if (target_h(i, j - 1, k) > h_vanished .and. &
+             target_h(i, j, k) > h_vanished) then
+            open_v(i, j, k) = 1.0_wp
+         else
+            open_v(i, j, k) = 0.0_wp
+         end if
+      end do
+   end subroutine ocean_vcoord_closed_face_masks
+
+   pure function ocean_vcoord_count_ledges(open_u, open_v, target_h, &
+                                           nx, ny, nz, h_vanished) result(n_ledge)
+      !! Count LEDGE cells: a cell that is LIVE at layer `k` but all four
+      !! of whose own-layer faces are closed, i.e. water the mask has
+      !! isolated.  A ledge needs a one-cell-wide spike in the bed or the
+      !! draft; it is inert by construction (no flux in or out, and its
+      !! velocity is zeroed every stage), but a non-zero count is worth
+      !! saying out loud once at configure, because it means the mask is
+      !! walling off real water.
+      !!
+      !! Interior cells only (`2:nx-1`, `2:ny-1`) — the ghost ring has no
+      !! four-face neighbourhood of its own.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+      real(wp), intent(in) :: h_vanished
+      integer :: n_ledge
+      integer :: i, j, k
+
+      n_ledge = 0
+      do k = 1, nz
+         do j = 2, ny - 1
+            do i = 2, nx - 1
+               if (target_h(i, j, k) <= h_vanished) cycle
+               if (open_u(i, j, k) == 0.0_wp .and. &
+                   open_u(i + 1, j, k) == 0.0_wp .and. &
+                   open_v(i, j, k) == 0.0_wp .and. &
+                   open_v(i, j + 1, k) == 0.0_wp) then
+                  n_ledge = n_ledge + 1
+               end if
+            end do
+         end do
+      end do
+   end function ocean_vcoord_count_ledges
 
    pure subroutine ocean_vcoord_compute_target_h_rho(this, total_h, eta, T, S, eos, hybrid)
       !! Thin polymorphic wrapper for the isopycnal (`VCOORD_RHO`) and

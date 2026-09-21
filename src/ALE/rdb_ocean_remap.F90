@@ -252,7 +252,7 @@ contains
    end subroutine ocean_remap_tracer_field
 
    subroutine ocean_apply_ale_remap_faces(grid, h_old, h_new, u_face_x, v_face_y, method, &
-                                          conserve_ke, bnd_extrap, nonunif)
+                                          conserve_ke, zlevel_faces, bnd_extrap, nonunif)
       !! Face-velocity pass of the ALE remap. Remaps u_face_x_layer and
       !! v_face_y_layer h_old→h_new using arithmetic-mean face thicknesses and
       !! the per-column kernel. Public only for the unit-test suite.
@@ -271,6 +271,11 @@ contains
       logical, intent(in), optional :: conserve_ke
          !! Enable the KE-conserving baroclinic-anomaly rescale (default
          !! `.false.` ⇒ momentum-only remap, bit-identical).
+      logical, intent(in), optional :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — build the face columns as
+         !! `min(h_L, h_R)` and drop the closed layers, so the remap
+         !! neither fills nor drains an inert filler.  Default `.false.`
+         !! ⇒ bit-identical.  See `remap_x_face_velocity`.
       logical, intent(in), optional :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction (default `.false.`
          !! ⇒ the PCM flatten, bit-identical).
@@ -279,11 +284,13 @@ contains
          !! equal-thickness specialisations, bit-identical).
 
       integer :: m, nx, ny, nz
-      logical :: ke, be, nu
+      logical :: ke, zf, be, nu
       m = REMAP_PPM
       if (present(method)) m = method
       ke = .false.
       if (present(conserve_ke)) ke = conserve_ke
+      zf = .false.
+      if (present(zlevel_faces)) zf = zlevel_faces
       be = .false.
       if (present(bnd_extrap)) be = bnd_extrap
       nu = .false.
@@ -292,12 +299,12 @@ contains
       ny = grid%ny_total
       nz = size(u_face_x, 3)
 
-      call remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, m, ke, be, nu)
-      call remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, m, ke, be, nu)
+      call remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, m, ke, zf, be, nu)
+      call remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, m, ke, zf, be, nu)
    end subroutine ocean_apply_ale_remap_faces
 
    pure subroutine remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, method, &
-                                         conserve_ke, bnd_extrap, nonunif)
+                                         conserve_ke, zlevel_faces, bnd_extrap, nonunif)
       !! Flat-impl x-face remap. East faces at i+1/2; u_face_x(1..nx+1) covers
       !! west wall (I=1), interior (I=2..nx), east wall (I=nx+1).
       !! `conserve_ke` (default .false.): rescale the baroclinic anomaly so column
@@ -308,6 +315,27 @@ contains
       real(wp), intent(in) :: h_new(nx, ny, nz)
       real(wp), intent(inout) :: u_face_x(nx + 1, ny, nz)
       logical, intent(in) :: conserve_ke
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! Builds the face column as the OVERLAP of the two cell
+         !! columns, `min(h_L, h_R)`, instead of their arithmetic mean,
+         !! and then drops any layer at or below `H_VANISHED` from BOTH
+         !! the source and the target column.  A layer that is an inert
+         !! filler on one side then has an exactly-zero target thickness,
+         !! which is the one case every `remap_column` variant already
+         !! short-circuits (`dz_new <= 0 ⇒ q_new = 0`), so no momentum is
+         !! poured INTO a closed layer and none is carried OUT of one.
+         !!
+         !! With the arithmetic mean a one-sided filler gives
+         !! `0.5·h_live > 0` — an ordinary half-thickness live layer as
+         !! far as the column kernel is concerned — and the remap happily
+         !! deposits momentum in a cell that geometrically holds no
+         !! water.  `min` is also the standard partial-cell face
+         !! thickness, so this is not a special case bolted on: it is the
+         !! face thickness a z-level model has all along.
+         !!
+         !! `.false.` (default) ⇒ every expression is textually the
+         !! arithmetic-mean form ⇒ bit-identical.
       logical, intent(in) :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction in the column kernel.
       logical, intent(in) :: nonunif
@@ -329,6 +357,22 @@ contains
                h_old_face(k) = 0.5_wp*(h_old(I - 1, j, k) + h_old(I, j, k))
                h_new_face(k) = 0.5_wp*(h_new(I - 1, j, k) + h_new(I, j, k))
             end if
+            if (zlevel_faces) then
+               if (I == 1) then
+                  h_old_face(k) = h_old(1, j, k)
+                  h_new_face(k) = h_new(1, j, k)
+               else if (I == nx + 1) then
+                  h_old_face(k) = h_old(nx, j, k)
+                  h_new_face(k) = h_new(nx, j, k)
+               else
+                  h_old_face(k) = min(h_old(I - 1, j, k), h_old(I, j, k))
+                  h_new_face(k) = min(h_new(I - 1, j, k), h_new(I, j, k))
+               end if
+               if (h_old_face(k) <= H_VANISHED .or. h_new_face(k) <= H_VANISHED) then
+                  h_old_face(k) = 0.0_wp
+                  h_new_face(k) = 0.0_wp
+               end if
+            end if
             u_old_col(k) = u_face_x(I, j, k)
          end do
          call remap_column(method, nz, &
@@ -344,7 +388,7 @@ contains
    end subroutine remap_x_face_velocity
 
    pure subroutine remap_y_face_velocity(nx, ny, nz, h_old, h_new, v_face_y, method, &
-                                         conserve_ke, bnd_extrap, nonunif)
+                                         conserve_ke, zlevel_faces, bnd_extrap, nonunif)
       !! Flat-impl y-face remap, mirror of `remap_x_face_velocity`.  See
       !! that routine for the `conserve_ke` / `bnd_extrap` / `nonunif`
       !! semantics.
@@ -353,6 +397,27 @@ contains
       real(wp), intent(in) :: h_new(nx, ny, nz)
       real(wp), intent(inout) :: v_face_y(nx, ny + 1, nz)
       logical, intent(in) :: conserve_ke
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! Builds the face column as the OVERLAP of the two cell
+         !! columns, `min(h_L, h_R)`, instead of their arithmetic mean,
+         !! and then drops any layer at or below `H_VANISHED` from BOTH
+         !! the source and the target column.  A layer that is an inert
+         !! filler on one side then has an exactly-zero target thickness,
+         !! which is the one case every `remap_column` variant already
+         !! short-circuits (`dz_new <= 0 ⇒ q_new = 0`), so no momentum is
+         !! poured INTO a closed layer and none is carried OUT of one.
+         !!
+         !! With the arithmetic mean a one-sided filler gives
+         !! `0.5·h_live > 0` — an ordinary half-thickness live layer as
+         !! far as the column kernel is concerned — and the remap happily
+         !! deposits momentum in a cell that geometrically holds no
+         !! water.  `min` is also the standard partial-cell face
+         !! thickness, so this is not a special case bolted on: it is the
+         !! face thickness a z-level model has all along.
+         !!
+         !! `.false.` (default) ⇒ every expression is textually the
+         !! arithmetic-mean form ⇒ bit-identical.
       logical, intent(in) :: bnd_extrap
       logical, intent(in) :: nonunif
       integer :: i, J, k
@@ -371,6 +436,22 @@ contains
             else
                h_old_face(k) = 0.5_wp*(h_old(i, J - 1, k) + h_old(i, J, k))
                h_new_face(k) = 0.5_wp*(h_new(i, J - 1, k) + h_new(i, J, k))
+            end if
+            if (zlevel_faces) then
+               if (J == 1) then
+                  h_old_face(k) = h_old(i, 1, k)
+                  h_new_face(k) = h_new(i, 1, k)
+               else if (J == ny + 1) then
+                  h_old_face(k) = h_old(i, ny, k)
+                  h_new_face(k) = h_new(i, ny, k)
+               else
+                  h_old_face(k) = min(h_old(i, J - 1, k), h_old(i, J, k))
+                  h_new_face(k) = min(h_new(i, J - 1, k), h_new(i, J, k))
+               end if
+               if (h_old_face(k) <= H_VANISHED .or. h_new_face(k) <= H_VANISHED) then
+                  h_old_face(k) = 0.0_wp
+                  h_new_face(k) = 0.0_wp
+               end if
             end if
             v_old_col(k) = v_face_y(i, J, k)
          end do
@@ -556,9 +637,11 @@ contains
       conserve_ke = vcoord%remap_vel_conserve_ke
       if (allocated(ms%u_face_x_layer) .and. allocated(ms%v_face_y_layer)) then
          call remap_x_face_velocity(nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, &
-                                    ms%u_face_x_layer, m, conserve_ke, bnd_extrap, nonunif)
+                                    ms%u_face_x_layer, m, conserve_ke, &
+                                    vcoord%zfixed_closed_faces, bnd_extrap, nonunif)
          call remap_y_face_velocity(nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, &
-                                    ms%v_face_y_layer, m, conserve_ke, bnd_extrap, nonunif)
+                                    ms%v_face_y_layer, m, conserve_ke, &
+                                    vcoord%zfixed_closed_faces, bnd_extrap, nonunif)
       end if
 
       ! 6. h_layer = target_h; capture mass-budget delta

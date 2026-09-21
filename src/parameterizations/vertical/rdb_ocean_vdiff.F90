@@ -171,6 +171,15 @@ module rdb_ocean_vdiff
          !! flip-flops on roundoff velocities at (near-)rest and
          !! collapses the BBL glue at flipped faces (PGF_BUG.md §9.8) —
          !! the rest-state envelope runs with it off.
+      logical :: zlevel_faces = .false.
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! Latched by `configure_ocean_closed_faces`, forwarded as a
+         !! plain scalar to `diffuse_velocity_columns_impl`, where it
+         !! switches the face column to `min(h_L, h_R)` and CUTS the
+         !! tridiagonal coupling across any interface touching a closed
+         !! (inert-filler-on-one-side) layer.  See that routine's
+         !! `zlevel_faces` docstring for the full argument.  Default
+         !! `.false.` ⇒ bit-identical.
 
       ! ---- Tridiagonal scratch (cell-centred for tracers) ----
       ! Reused across all column solves in one tracer call.  The
@@ -510,7 +519,8 @@ contains
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, kv_source, ms%wet_mask, &
@@ -522,7 +532,8 @@ contains
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces)
       else
          ! Pure-vdiff no-op short-circuit ONLY when there is also no
          ! boundary forcing to fold; stress/drag/remnant must still be
@@ -545,7 +556,8 @@ contains
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, this%kv_scalar_buf%data, ms%wet_mask, &
@@ -557,7 +569,8 @@ contains
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces)
       end if
    end subroutine vdiff_apply_momentum
 
@@ -885,7 +898,8 @@ contains
                                                  do_remnant, visc_rem_out, &
                                                  hvel_mom6, hbbl_visc, &
                                                  bbl_glue, bbl_piston, hvel_upwind, &
-                                                 do_corner, kv_prandtl, kv_corner)
+                                                 do_corner, kv_prandtl, kv_corner, &
+                                                 zlevel_faces)
       !! Build + solve the tridiagonal system per face column.
       !! `u_face` is either `u_face_x_layer` (`x_face = .true.`,
       !! shape (nx+1, ny)) or `v_face_y_layer` (`x_face = .false.`,
@@ -979,6 +993,40 @@ contains
          !! surface → γ → 1).  Clamped to `min(γ, 1.0)` at production
          !! (cheap FP insurance on a quantity the maximum principle
          !! already bounds to (0, 1]).  Present iff `do_remnant`.
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !!
+         !! Changes TWO things about the face column, and only when on
+         !! (`.false.` ⇒ every expression below is textually and
+         !! bit-identically what it has always been):
+         !!
+         !! 1. the face thickness becomes `min(h_L, h_R)` instead of the
+         !!    arithmetic (or MOM6-harmonic) mean — the standard
+         !!    partial-cell choice, and the one that makes "this layer is
+         !!    an inert FILLER on at least one side" visible locally as
+         !!    `hvel(k) <= H_VANISHED`;
+         !! 2. the tridiagonal coupling across an interface touching such
+         !!    a layer is CUT (`alpha = beta = 0`), and the layer's own
+         !!    row is forced to the identity.
+         !!
+         !! Without (2) an OPEN layer is frictionally coupled, every
+         !! single step, to the CLOSED layer above or below it — whose
+         !! velocity `mask_layer_velocities` has just zeroed — so the
+         !! wall acts as a spurious side drag instead of as free-slip.
+         !! The floor `max(hvel, H_VANISHED)` does not save it: it makes
+         !! the coupling huge-but-finite (`dt·nu/1.5e-4`), i.e. a rigid
+         !! glue to zero, which is the worst of the three options.
+         !!
+         !! This is the DYNAMIC twin of `metrics%open_u/open_v`: "filler
+         !! on either side" is `min(h_L,h_R) <= H_VANISHED` here and
+         !! `target_h <= H_VANISHED` on either side there, and under
+         !! `z_fixed` the two agree (η is absorbed by the first LIVE
+         !! layer).  It is derived locally rather than threaded as a 3-D
+         !! mask because this kernel is reached through four flat-impl
+         !! call sites and five dispatcher call sites, none of which sees
+         !! `ocean_metrics_t`, and a scalar costs nothing.
+         !! The equivalent tracer decoupling already exists, unconditionally,
+         !! in `build_factorize_tracer_matrix`.
       logical, intent(in) :: do_corner
          !! Add the corner-staggered viscosity to every face interface.
          !! Gated INSIDE the single DC (no split loop — NVHPC penalty);
@@ -1095,6 +1143,11 @@ contains
             else
                hvel(k) = 0.5_wp*(hl_c + hr_c)
             end if
+            ! z-level partial steps: the face column is the OVERLAP of the
+            ! two cell columns, so its thickness is the min.  A filler on
+            ! either side then reads at or below H_VANISHED and the
+            ! coupling gates below cut it out of the solve.
+            if (zlevel_faces) hvel(k) = min(hl_c, hr_c)
          end do
 
          ! ---- k = 1: bed BC, no flux below ----
@@ -1156,6 +1209,12 @@ contains
                end if
             end if
             alpha = dt*nu_face_kp1/(hf_k*dz_top)
+            ! z-level partial steps: no shear across an interface that
+            ! touches a CLOSED face layer.  The tracer twin does exactly
+            ! this, unconditionally, in `build_factorize_tracer_matrix`.
+            if (zlevel_faces) then
+               if (hvel(1) <= H_VANISHED .or. hvel(2) <= H_VANISHED) alpha = 0.0_wp
+            end if
          end if
          a_diag(i, j, 1) = 0.0_wp
          c_diag(i, j, 1) = -alpha
@@ -1231,6 +1290,11 @@ contains
             end if
             beta = dt*nu_face_k/(hf_k*dz_bot)
             alpha = dt*nu_face_kp1/(hf_k*dz_top)
+            ! z-level partial steps — see the bed row.
+            if (zlevel_faces) then
+               if (hvel(k) <= H_VANISHED .or. hvel(k - 1) <= H_VANISHED) beta = 0.0_wp
+               if (hvel(k) <= H_VANISHED .or. hvel(k + 1) <= H_VANISHED) alpha = 0.0_wp
+            end if
             a_diag(i, j, k) = -beta
             c_diag(i, j, k) = -alpha
             b_diag(i, j, k) = 1.0_wp + alpha + beta
@@ -1273,6 +1337,10 @@ contains
                end if
             end if
             beta = dt*nu_face_k/(hf_k*dz_bot)
+            ! z-level partial steps — see the bed row.
+            if (zlevel_faces) then
+               if (hvel(nz) <= H_VANISHED .or. hvel(nz - 1) <= H_VANISHED) beta = 0.0_wp
+            end if
             a_diag(i, j, nz) = -beta
             c_diag(i, j, nz) = 0.0_wp
             b_diag(i, j, nz) = 1.0_wp + beta
