@@ -379,11 +379,55 @@ contains
       type(ocean_vdiff_t), intent(inout) :: this
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
-      real(wp), intent(in), optional :: kv_source(:, :, :)
-      real(wp), intent(in), optional :: tau_u(:, :), tau_v(:, :)
-      real(wp), intent(in), optional :: lambda_bot_u(:, :), lambda_bot_v(:, :)
-      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
-      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
+      ! EXPLICIT SHAPE — not `(:, :)` — on every optional array below, and
+      ! the same on the two `rdb_ocean_dyn` frames that FORWARD them
+      ! (`vmix_apply_in_stage`, `visc_rem_precompute`).  Load-bearing, not
+      ! decoration.  Each of these is handed straight on to the
+      ! EXPLICIT-SHAPE `(nu, nv)` / `(nx, ny, nz)` dummies of
+      ! `diffuse_velocity_columns_impl`, i.e. sequence-associated.  An
+      ! ASSUMED-SHAPE actual in that position forces the compiler to decide,
+      ! at the call, whether the descriptor is contiguous or has to be
+      ! packed into a temporary — and gfortran 15 computes that decision
+      ! UNCONDITIONALLY, from descriptor extents/strides it only loaded
+      ! under the `present()` guard.  An ABSENT optional therefore leaves
+      ! the packing flag uninitialised, and the post-call cleanup
+      ! (`if (.not. packed .and. ptr /= NULL) free(ptr)`) branches on it:
+      ! 160 valgrind "conditional jump depends on uninitialised value(s)"
+      ! from 10 contexts on `test_driver_ocean`, all rooted in this
+      ! routine's stack frame.  Benign (the null check still gates the free)
+      ! but real, and it is the compiler reading OUR uninitialised stack.
+      !
+      ! Declaring the shape removes the decision at its source: an
+      ! explicit-shape dummy is contiguous by definition, so there is no
+      ! flag, no temporary, no free, nothing to read — and, unlike the
+      ! CONTIGUOUS attribute (reverted in 852802b7f), it keeps working on
+      ! nvfortran.  CONTIGUOUS on an assumed-shape OPTIONAL makes nvfortran
+      ! 26.5 hand the callee an offset-adjusted, NON-NULL address for an
+      ! ABSENT actual; the implicit present-or-copyin the compiler emits for
+      ! the impl's explicit-shape dummy then loses its null short-circuit
+      ! and issues a real `cuMemcpyHtoD` off that garbage pointer
+      ! (`__pgi_uacc_dataonb ... 'tau_face(:,:)'` -> SIGSEGV, 44/220 tests
+      ! on `-stdpar=gpu -gpu=cc70,mem:separate`).  An explicit-shape dummy
+      ! carries no descriptor at all, so an absent actual stays a clean
+      ! null and the runtime skips it, exactly as it does today.
+      !
+      ! The bounds are the ones the body already derives and the impl
+      ! already assumes: `multilayer_state_t%init` allocates the u-face
+      ! arrays `(nx_total + 1, ny_total, nz_ml)` and the v-face arrays
+      ! `(nx_total, ny_total + 1, nz_ml)` off this same `grid`.  Every
+      ! actual is a whole allocatable slot component or a whole local array,
+      ! never a strided section (the GPU path already requires that: these
+      ! arrays are device-mapped whole).  Bit-identical: the packing path
+      ! was never taken, only speculated about.
+      real(wp), intent(in), optional :: kv_source(grid%nx_total, grid%ny_total, ms%nz_ml + 1)
+      real(wp), intent(in), optional :: tau_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: tau_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: lambda_bot_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_bot_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
       real(wp), intent(in), optional :: rho0
          !! Boussinesq reference density for the implicit surface-stress
          !! fold, `dt*(tau/rho0)/h_nz`.  READ ONLY when that fold is active
@@ -396,17 +440,22 @@ contains
          !! back to a silent literal 1035, which is how a run configured at
          !! a different rho_0 could fold its wind stress in on the wrong
          !! one.
-      real(wp), intent(inout), optional :: visc_rem_u(:, :, :), visc_rem_v(:, :, :)
+      real(wp), intent(inout), optional :: visc_rem_u(grid%nx_total + 1, grid%ny_total, ms%nz_ml)
+      real(wp), intent(inout), optional :: visc_rem_v(grid%nx_total, grid%ny_total + 1, ms%nz_ml)
+         !! Explicit-shape for the reason spelled out on the argument list
+         !! above.
       logical, intent(in), optional :: remnant_only
          !! `.true.` = build the matrices and (re)fill `visc_rem_u/v`
          !! WITHOUT solving for / modifying the velocities — the
          !! pre-substep visc_rem refresh (PGF_BUG.md §9; MOM6 computes
          !! `vertvisc_coef` before `btstep`, so its BT weights never lag).
          !! Requires both `visc_rem_u/v` present.  Default `.false.`.
-      real(wp), intent(in), optional :: kv_corner_source(:, :, :)
+      real(wp), intent(in), optional :: kv_corner_source(grid%nx_total + 1, grid%ny_total + 1, ms%nz_ml + 1)
          !! Corner-staggered interface viscosity source, `(nx+1, ny+1,
          !! nz+1)` — see the corner add-on note above.  Typically the
          !! vertex kappa-shear `kd_corner` carrier (device-resident).
+         !! Explicit-shape for the reason spelled out on the argument list
+         !! above.
       real(wp), intent(in), optional :: kv_corner_prandtl
          !! Scale applied to `kv_corner_source` (Kv = Pr·Kd; the vertex
          !! kappa-shear `prandtl_turb`).  Default 1.
