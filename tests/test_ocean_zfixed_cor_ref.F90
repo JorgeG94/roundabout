@@ -40,7 +40,7 @@
 !! is exponential and why `f` appears steeply.  On a partial-step face
 !! `φ` is O(0.5), not O(1 − 1e-4).
 !!
-!! ### The three assertions, what each one gates, and which two carry it
+!! ### The four assertions, and what each one gates
 !!
 !! **`cor_ref_is_open_column_mean`** — the DIRECT statement, on a
 !! hand-built column with a known mask: `cor_ref_u` from
@@ -60,31 +60,50 @@
 !! matching the derived `f·(1−φ)·V = 2e-4 · 0.25 · 5e-3` to four figures
 !! — against a `5.7E-20` round-off bound after it.
 !!
-!! Those two are the gate.  The third is not, and says so:
+!! Those two gate the reference.  The next two gate the ENERGY of the
+!! closed-face rotating basin over a real run:
 !!
 !! **`rotating_staircase_no_growth`** — the integration case (closed
 !! rotating basin, no wind, drag, viscosity, tracer diffusion, vertical
-!! mixing or thermodynamics, uniform density) asserting that `KE + PE`
-!! does not grow over `N_PERIODS` seiche periods.  It is a CATASTROPHE
-!! guard, NOT the discriminator, and the distinction is measured rather
-!! than assumed: at this horizon it reads ~1.0 both with and without the
-!! fix, and pushed out to 2000 outer steps it reads 25x fixed against
-!! 55x unfixed — still growing on BOTH.  The reason is a SECOND,
-!! independent amplifier on the `pred_corr` × closed-faces × rotation
-!! path that this fix does not touch: it is linear (seed-independent
-!! from `V0 = 1e-3` down to `1e-6`), absent at `f = 0` (ratio 0.97),
-!! absent with the mask all-open (1.11 at 1700 steps) and absent under
-!! `ssp_rk2` (0.69).  It is a separate finding and a separate slice; it
-!! is recorded here so that nobody reads this assertion as evidence the
-!! closed-face barotropic path is clean.  Do NOT tighten this bar
-!! expecting it to catch the reference defect — the two above do that,
-!! exactly and cheaply.
+!! mixing or thermodynamics, uniform density, diagonal bed-layer ledge
+!! so `φ_u ≠ φ_v`) with PRODUCTION solid walls, asserting that `KE + PE`
+!! does not grow over `N_GATE_STEPS` outer steps under `pred_corr` —
+!! against a DERIVED bar of `1 + ω·dt_inner/2 = 1.023` (see
+!! `ENERGY_NONINCREASE_BAR`).
 !!
-!! `ssp_rk2` runs first as a control.  It takes the OTHER branch of
-!! `set_cor_ref_velocity` — a plain COPY of `bt_ubt`, which IS the
-!! open-column mean — so it cannot have the defect by construction, and
-!! requiring it to clear the same bar proves the bar is achievable on
-!! this case rather than merely tight.
+!! **`unmasked_walls_documents_growth`** — the SAME basin with the
+!! solid walls left unmasked, which is what this file used to run and
+!! what a run gets with `&ocean_bc_nml mask_wall_velocity = .false.`.
+!! It asserts the energy DOES grow, so the bar above is shown to be
+!! reachable from this case rather than vacuous.
+!!
+!! ### The "second amplifier" this file used to report
+!!
+!! This file previously recorded a second `pred_corr` × closed-faces ×
+!! rotation amplifier on this basin (25x over 2000 steps with the
+!! reference fixed, 55x without; linear; dead at `f = 0`, with the mask
+!! all-open, and under `ssp_rk2`).  Localised, it is NOT a mode of the
+!! closed-face dynamics.  It lives entirely on the SOLID-WALL faces,
+!! which this basin never masked: `make_cartesian_metrics` leaves
+!! `wet_u = wet_v = 1` there unless asked, while a configured run masks
+!! them (`mask_wall_velocity` defaults ON).  An unmasked wall face
+!! carries a layer velocity that moves no mass (continuity zeroes the
+!! wall flux) and whose depth mean the BT fold resets every stage — but
+!! whose BAROCLINIC part nothing restores under `pred_corr`, because the
+!! slow Coriolis reads `u_av`, and the transport renormaliser, which is
+!! the only writer of `u_av`, skips the wall faces.  So `u_av` there is
+!! the step-1 copy forever and the wall velocity never sees its own
+!! rotation: it integrates the layer Coriolis of its interior neighbour
+!! — made baroclinic by the closed bed layer — without bound.  Measured
+!! (gfortran, 4000 outer steps): total `KE+PE` x1783 while the energy on
+!! the interior faces is x1.24; masked walls, x0.74 and x0.80.  The
+!! growth is polynomial, not modal: `(KE+PE) − 1` grows x13.7 from 1000
+!! to 2000 steps and x25 from 2000 to 4000, where a normal mode would
+!! give the square of the first factor for the doubled interval (x188).
+!! `ssp_rk2` evaluates the Coriolis on the prognostic, so the wall
+!! velocity rotates with its neighbour and stays bounded (7e-4 m/s).  `validate_config` now refuses the combination
+!! (`pred_corr` + `zfixed_closed_faces` + `mask_wall_velocity =
+!! .false.`).
 module test_ocean_zfixed_cor_ref
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
@@ -108,9 +127,11 @@ module test_ocean_zfixed_cor_ref
    use rdb_ocean_vdiff, only: ocean_vdiff_t
    use rdb_ocean_vmix, only: ocean_vmix_t
    use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step_split, ocean_porous_refresh, &
-                            SPLIT_SCHEME_PRED_CORR, SPLIT_SCHEME_SSP_RK2
+                            SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_Z_FIXED, &
                                ocean_vcoord_z_fixed_target
+   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
    private
@@ -178,25 +199,49 @@ module test_ocean_zfixed_cor_ref
    real(wp), parameter :: JET_CELLS = 8.0_wp
    real(wp), parameter :: PI_L = 3.14159265358979324_wp
 
-   integer, parameter :: N_PERIODS = 22
-      !! Seiche periods to integrate, `T = 2L/√(g·H_eff)` on the mean
-      !! depth — at least the 20 the gate asks for, with headroom, and
-      !! the same clock the sibling staircase-seiche test uses.  The
-      !! barotropic mode is what the residual feeds on (it is `∝ v̄`), so
-      !! the seiche period is the honest clock.  The inertial period
-      !! (`2π/f = 31416 s`) is 13x longer, and running that far lets the
-      !! undamped zero-viscosity jet cascade to the grid scale, which
-      !! manufactures energy of its own and swamps the signal — measured:
-      !! at 20 inertial periods BOTH legs read a ratio of ~31.
+   integer, parameter :: N_GATE_STEPS = 750
+      !! Outer steps for the two energy assertions: 2.6 d, 7.2 inertial
+      !! periods.  Long enough that the unmasked-wall integrator reads
+      !! x2.8 (so the anti-vacuity case is decisive), short enough that
+      !! the two runs cost a few seconds.  MEASURED (gfortran 15.1
+      !! Release): `pred_corr` solid walls 0.972; `pred_corr` unmasked
+      !! walls 2.816 (`ssp_rk2` solid walls, for reference, 0.810).  The `pred_corr`
+      !! solid-wall ratio over the horizon: 1.003 (250 steps), 0.989
+      !! (500), 0.972 (750), 0.925 (1500), 0.842 (3000).
 
-   real(wp), parameter :: ENERGY_GROWTH_BAR = 2.0_wp
-      !! Bar for `(KE+PE)_end / (KE+PE)_0` over `N_PERIODS` seiche
-      !! periods, for the CATASTROPHE guard only.  MEASURED on this case
-      !! (gfortran 15.1 Release host build, 150 outer steps): `pred_corr`
-      !! 1.01, `ssp_rk2` 0.80 — and 1.01 again with the reference defect
-      !! reintroduced, which is exactly why this assertion is documented
-      !! as a guard and not as the gate (see the module docstring).  It
-      !! must never be widened to make a run pass.
+   real(wp), parameter :: OMEGA_SEICHE = PI_L*62.6311_wp/(real(NXP, wp)*DX)
+      !! Gravest seiche frequency `π·c/L` (1/s), `c = √(g·H0) = 62.63 m/s`
+      !! written as a literal (an intrinsic `sqrt` in a constant
+      !! expression is F2008 but not every toolchain here folds it).
+
+   real(wp), parameter :: ENERGY_NONINCREASE_BAR = &
+                          1.0_wp + 0.5_wp*OMEGA_SEICHE*DT/real(N_INNER, wp)
+      !! Bar for `(KE+PE)_end / (KE+PE)_0` under `pred_corr`, DERIVED,
+      !! not fitted: `1 + ω·dt_inner/2 = 1.023`.
+      !!
+      !! The basin is closed, unforced and inviscid with uniform density,
+      !! so the continuous energy is exactly conserved and the only
+      !! discrete sources are the time schemes.  The slow Coriolis is the
+      !! MOM6 predictor-corrector: `u* = u + β·dt·L(u)`,
+      !! `u^{n+1} = u + dt·L(u*)` gives, for an oscillation at `ω`,
+      !! `G = 1 − βθ² + iθ` with `θ = ω·dt`, so
+      !!
+      !! ```
+      !! |G|² = 1 − (2β − 1)·θ² + β²·θ⁴  <  1   for  θ² < (2β − 1)/β²
+      !! ```
+      !!
+      !! which at `β = pc_be = 0.6` is `θ < 0.745`; here `θ = f·dt = 0.06`.
+      !! It cannot GROW anything.  The barotropic gravity wave lives in
+      !! the forward-backward substep, which is neutral (`c·dt_inner·√2/dx
+      !! = 0.66 < 2`) but conserves a MODIFIED energy, not `KE+PE`
+      !! itself: the two differ by the `u^n·∇η^{n+1}·dt_inner` cross
+      !! term, so the sampled `KE+PE` of a wave at `ω` oscillates about
+      !! the conserved value by up to `ω·dt_inner/2` of the energy it
+      !! carries.  The gravest seiche is the largest `ω` that holds a
+      !! finite share of this seed's energy, so `1 + ω·dt_inner/2` is
+      !! what a scheme that manufactures NOTHING can read (it reads 1.003
+      !! at 250 steps, inside it, then decays).  The seed is linear
+      !! (`V0/(f·L) = 3e-4`), so no nonlinear allowance is owed.
 
 contains
 
@@ -205,7 +250,9 @@ contains
       testsuite = [ &
                   new_unittest("cor_ref_is_open_column_mean", test_cor_ref_open_mean), &
                   new_unittest("bt_coriolis_residual_is_roundoff", test_bt_cor_residual), &
-                  new_unittest("rotating_staircase_no_growth", test_rotating_staircase) &
+                  new_unittest("rotating_staircase_no_growth", test_rotating_staircase), &
+                  new_unittest("unmasked_walls_documents_growth", test_unmasked_walls), &
+                  new_unittest("unmasked_walls_refused_under_pred_corr", test_unmasked_walls_refused) &
                   ]
    end subroutine collect_ocean_zfixed_cor_ref_tests
 
@@ -526,10 +573,17 @@ contains
    !  2. The energetic statement, over a real run.
    ! ---------------------------------------------------------------
 
-   subroutine run_basin(split_scheme, finite, energy_ratio, n_closed)
-      !! Integrate the rotating staircase basin and report
-      !! `(KE+PE)_end / (KE+PE)_0` plus the anti-vacuity mask census.
+   subroutine run_basin(split_scheme, solid_walls, finite, energy_ratio, n_closed)
+      !! Integrate the rotating staircase basin for `N_GATE_STEPS` outer
+      !! steps and report `(KE+PE)_end / (KE+PE)_0` plus the anti-vacuity
+      !! mask census.
       integer, intent(in) :: split_scheme
+      logical, intent(in) :: solid_walls
+         !! `.true.` ⇒ the production solid-wall convention
+         !! (`mask_wall_velocity`, default ON): `wet_u`/`wet_v` are 0 on
+         !! the four wall faces and `mask_layer_velocities` clears them.
+         !! `.false.` ⇒ the legacy unmasked walls — see the module
+         !! docstring for what that manufactures under `pred_corr`.
       logical, intent(out) :: finite
       real(wp), intent(out) :: energy_ratio
       integer, intent(out) :: n_closed
@@ -553,7 +607,7 @@ contains
       type(ocean_vcoord_t) :: vc
 
       integer :: i, j, k, ig, i0, i1, j0, j1, step, n_steps, nx_t, ny_t
-      real(wp) :: energy0, energy1, x_f, vjet, period_seiche, h_eff
+      real(wp) :: energy0, energy1, x_f, vjet
       real(wp), allocatable :: tgt(:, :, :), tot_h(:, :), eta0f(:, :), z_top(:, :)
       logical, allocatable :: shelf(:, :)
 
@@ -599,7 +653,10 @@ contains
       i0 = ig + 1; i1 = ig + NXP
       j0 = ig + 1; j1 = ig + NYP
 
-      call make_cartesian_metrics(metrics, grid)
+      ! Metrics + the z-level masks are sized BEFORE the device map
+      ! (`nz_closed`), and the wall convention is applied there too;
+      ! the ledge is then written on the host and pushed to the device.
+      call make_cartesian_metrics(metrics, grid, nz_closed=NZ, solid_walls=solid_walls)
 
       ! ---- flat bed, z_fixed target, and a DIAGONAL bed-layer ledge ----
       allocate (tot_h(nx_t, ny_t), source=H0)
@@ -607,12 +664,11 @@ contains
       allocate (z_top(nx_t, ny_t), source=0.0_wp)
       allocate (tgt(nx_t, ny_t, NZ), source=0.0_wp)
       allocate (shelf(nx_t, ny_t), source=.false.)
-      h_eff = H0
       call ocean_vcoord_z_fixed_target(tgt, tot_h, eta0f, z_top, &
                                        nx_t, ny_t, NZ, H_NOM, H_MIN)
 
-      call metrics_closed_faces_alloc(metrics, grid, NZ)
       call build_ledge_mask(metrics, shelf, nx_t, ny_t, ig, n_closed)
+      !$acc update device(metrics%open_u, metrics%open_v)
 
       ! ---- seed: a depth-uniform sinusoidal v-jet on the OPEN layers ----
       ! Masked at seed time so the initial state is the one
@@ -636,7 +692,7 @@ contains
             vjet = V0*sin(2.0_wp*PI_L*x_f/JET_CELLS)
             ms%u_face_x_layer(i, j, :) = 0.0_wp
             do k = 1, NZ
-               ms%v_face_y_layer(i, j, k) = vjet*metrics%open_v(i, j, k)
+               ms%v_face_y_layer(i, j, k) = vjet*metrics%open_v(i, j, k)*metrics%wet_v(i, j)
             end do
             dyn%bt_work%bt_H_ref(i, j) = tot_h(i, j)
          end do
@@ -644,8 +700,7 @@ contains
       ms%u_face_x_layer(nx_t + 1, :, :) = 0.0_wp
       ms%v_face_y_layer(:, ny_t + 1, :) = 0.0_wp
 
-      period_seiche = 2.0_wp*real(NXP, wp)*DX/sqrt(GRAV*h_eff)
-      n_steps = nint(real(N_PERIODS, wp)*period_seiche/DT)
+      n_steps = N_GATE_STEPS
 
       energy0 = basin_energy(ms, dyn, i0, i1, j0, j1)
 
@@ -735,53 +790,139 @@ contains
    end function basin_energy
 
    subroutine test_rotating_staircase(error)
-      !! The CATASTROPHE guard, not the discriminator -- read the module
-      !! docstring before touching this bar.  `ssp_rk2` control first (it
-      !! takes the copy-of-`bt_ubt` branch and so cannot have the defect),
-      !! then `pred_corr` on the identical configuration.
+      !! The ENERGY gate on the closed-face rotating basin, with the
+      !! production solid walls: `pred_corr` against the DERIVED bar
+      !! `ENERGY_NONINCREASE_BAR = 1 + ω·dt_inner/2 = 1.023`.
       !!
-      !! What it does gate: that a closed-face rotating basin still
-      !! completes, stays finite, and does not blow up over
-      !! `N_PERIODS` seiche periods.  What it does NOT gate is the
-      !! Coriolis reference -- measured, it reads the same ratio with and
-      !! without the reference defect, because a SECOND `pred_corr` x
-      !! closed-faces x rotation amplifier of comparable strength lives on
-      !! this path and neither test nor fix addresses it yet.
+      !! Fails before / passes after, measured (gfortran 15.1 Release,
+      !! `N_GATE_STEPS = 750`): with the walls unmasked, as this file ran
+      !! them until the "second amplifier" was localised to them,
+      !! `pred_corr` reads 2.816; with the walls masked, 0.972.
       type(error_type), allocatable, intent(out) :: error
-      logical :: fin_pc, fin_rk2
-      real(wp) :: ratio_pc, ratio_rk2
-      integer :: n_closed_pc, n_closed_rk2
-      character(len=440) :: msg
+      logical :: fin_pc
+      real(wp) :: ratio_pc
+      integer :: n_closed_pc
+      character(len=760) :: msg
 
-      call run_basin(SPLIT_SCHEME_SSP_RK2, fin_rk2, ratio_rk2, n_closed_rk2)
+      call run_basin(SPLIT_SCHEME_PRED_CORR, .true., fin_pc, ratio_pc, n_closed_pc)
 
       write (msg, '("the staircase closed ",I0," interior u-face entries. Zero ", &
             &"means the geometry stopped producing a staircase, phi == 1 and ", &
             &"every assertion below is vacuous -- fix the GEOMETRY, not the bar.")') &
-         n_closed_rk2
-      call check(error, n_closed_rk2 > 0, trim(msg))
+         n_closed_pc
+      call check(error, n_closed_pc > 0, trim(msg))
       if (allocated(error)) return
-
-      call check(error, fin_rk2, "ssp_rk2 rotating staircase: the control went non-finite")
-      if (allocated(error)) return
-      write (msg, '("ssp_rk2 rotating staircase control: KE+PE ratio = ",es11.3, &
-            &" (the control must itself not grow, else the case is unusable)")') ratio_rk2
-      call check(error, ratio_rk2 < ENERGY_GROWTH_BAR, trim(msg))
-      if (allocated(error)) return
-
-      call run_basin(SPLIT_SCHEME_PRED_CORR, fin_pc, ratio_pc, n_closed_pc)
       call check(error, fin_pc, &
                  "pred_corr rotating staircase: went non-finite (the mode blew up)")
       if (allocated(error)) return
 
-      write (msg, '("pred_corr rotating staircase: KE+PE ratio = ",es11.3," vs ssp_rk2 ", &
-            &es11.3," over ",I0," seiche periods. Closed basin, unforced and ", &
-            &"undamped, so growth is MANUFACTURED energy. This is the CATASTROPHE ", &
-            &"guard, not the Coriolis-reference gate -- that is ", &
-            &"cor_ref_is_open_column_mean and bt_coriolis_residual_is_roundoff. Do ", &
-            &"NOT widen this bar; find what started manufacturing energy.")') &
-         ratio_pc, ratio_rk2, N_PERIODS
-      call check(error, ratio_pc < ENERGY_GROWTH_BAR, trim(msg))
+      write (msg, '("pred_corr rotating staircase (solid walls): KE+PE ratio = ",es11.3, &
+            &" over ",I0," outer steps; derived bar ",f6.4,". ", &
+            &"Closed, unforced, inviscid, uniform density, and pc_be = 0.6 damps every ", &
+            &"linear mode (|G|^2 = 1 - 0.2*theta^2 + 0.36*theta^4 at theta = f*dt = 0.06), ", &
+            &"and the sampled KE+PE of the FB substep can exceed its conserved energy by at most ", &
+            &"omega*dt_inner/2 -- anything above that is manufactured. If it sits on wall faces, ", &
+            &"suspect the wall mask; otherwise find what started manufacturing energy. ", &
+            &"Do NOT widen this bar.")') &
+         ratio_pc, N_GATE_STEPS, ENERGY_NONINCREASE_BAR
+      call check(error, ratio_pc <= ENERGY_NONINCREASE_BAR, trim(msg))
    end subroutine test_rotating_staircase
+
+   subroutine test_unmasked_walls(error)
+      !! Anti-vacuity for the gate above: the SAME basin with the solid
+      !! walls left unmasked (legacy `mask_wall_velocity = .false.`) MUST
+      !! read above the bar under `pred_corr`, so the bar is shown to be
+      !! reachable from this case.  Measured 2.816 at `N_GATE_STEPS`, the
+      !! growth all on the wall faces (module docstring).
+      !!
+      !! This pins a configuration `validate_config` now REFUSES; it is
+      !! kept because it is the only thing that proves the energy gate can
+      !! fail here.  If it ever reads <= 1, the wall integrator is gone —
+      !! re-derive the anti-vacuity rather than deleting the row.
+      type(error_type), allocatable, intent(out) :: error
+      logical :: fin
+      real(wp) :: ratio
+      integer :: n_closed
+      character(len=420) :: msg
+
+      call run_basin(SPLIT_SCHEME_PRED_CORR, .false., fin, ratio, n_closed)
+      call check(error, fin, "pred_corr unmasked-wall basin went non-finite")
+      if (allocated(error)) return
+      write (msg, '("pred_corr with UNMASKED solid walls: KE+PE ratio = ",es11.3, &
+            &" over ",I0," steps, expected > ",f6.4," (measured 2.816). At or below it, ", &
+            &"the energy gate rotating_staircase_no_growth is no longer shown to be ", &
+            &"able to fail on this basin.")') ratio, N_GATE_STEPS, ENERGY_NONINCREASE_BAR
+      call check(error, ratio > ENERGY_NONINCREASE_BAR, trim(msg))
+   end subroutine test_unmasked_walls
+
+   subroutine test_unmasked_walls_refused(error)
+      !! `validate_config` refuses exactly the combination the module
+      !! docstring localises the wall integrator to — `pred_corr` +
+      !! `zfixed_closed_faces` + `mask_wall_velocity = .false.` — and
+      !! nothing adjacent to it: the default walls, the same walls under
+      !! `ssp_rk2`, and the unmasked walls with the face mask off all
+      !! still configure.  The accept rows are what stop the refusal from
+      !! silently widening.
+      type(error_type), allocatable, intent(out) :: error
+
+      call expect_status(error, zfixed_nml("", ""), .true., &
+                         "pred_corr + closed faces + DEFAULT (masked) walls")
+      if (allocated(error)) return
+      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", ""), .false., &
+                         "pred_corr + closed faces + UNMASKED walls")
+      if (allocated(error)) return
+      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", &
+                                           "split_scheme = 'ssp_rk2'"), .true., &
+                         "ssp_rk2 + closed faces + unmasked walls")
+      if (allocated(error)) return
+      call expect_status(error, zfixed_nml("mask_wall_velocity = .false.", "", &
+                                           closed=.false.), .true., &
+                         "pred_corr + face mask OFF + unmasked walls")
+   end subroutine test_unmasked_walls_refused
+
+   pure function zfixed_nml(bc_body, bt_body, closed) result(nml)
+      !! A minimal in-envelope `z_fixed` namelist; `bc_body`/`bt_body`
+      !! are the `&ocean_bc_nml` / extra `&ocean_bt_nml` entries under
+      !! test (empty ⇒ defaults).
+      character(len=*), intent(in) :: bc_body, bt_body
+      logical, intent(in), optional :: closed
+      character(len=:), allocatable :: nml
+      character(len=:), allocatable :: closed_s, bt_l
+      closed_s = ".true."
+      if (present(closed)) then
+         if (.not. closed) closed_s = ".false."
+      end if
+      bt_l = "auto_n_inner = .false., n_inner = 8"
+      if (len_trim(bt_body) > 0) bt_l = bt_l//", "//bt_body
+      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
+            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
+            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = "//closed_s// &
+            " /"//new_line("a")// &
+            "&ocean_bt_nml "//bt_l//" /"//new_line("a")// &
+            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+            "&output_nml output_to_file = .false. /"//new_line("a")
+      if (len_trim(bc_body) > 0) nml = nml//"&ocean_bc_nml "//bc_body//" /"//new_line("a")
+   end function zfixed_nml
+
+   subroutine expect_status(error, nml, valid, what)
+      type(error_type), allocatable, intent(inout) :: error
+      character(len=*), intent(in) :: nml, what
+      logical, intent(in) :: valid
+      type(config_t) :: cfg
+      integer :: ierr
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
+      if (allocated(error)) return
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      if (valid) then
+         call check(error, ierr == OCEAN_STATUS_OK, "must CONFIGURE: "//what)
+      else
+         call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "must be REFUSED: "//what)
+      end if
+   end subroutine expect_status
 
 end module test_ocean_zfixed_cor_ref

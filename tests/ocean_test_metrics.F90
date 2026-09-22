@@ -29,7 +29,7 @@ module ocean_test_metrics
 
 contains
 
-   subroutine make_cartesian_metrics(metrics, grid, wet_mask, nz_closed)
+   subroutine make_cartesian_metrics(metrics, grid, wet_mask, nz_closed, solid_walls)
       !! Init + cartesian-fill + finalize [+ land-mask] + device-map a
       !! metrics slot.
       !!
@@ -60,6 +60,18 @@ contains
       !! whose identity depends only on the allocation order.  The
       !! `metrics_closed_faces_alloc` docstring states the rule; this is
       !! how a test obeys it.
+      !!
+      !! `solid_walls` (optional, default `.false.`) applies the PRODUCTION
+      !! solid-wall convention — `&ocean_bc_nml mask_wall_velocity`, which
+      !! defaults ON — to all four array edges: `metrics_apply_land_mask`
+      !! with `mask_wall_velocity = .true.` zeroes the wet mask in the
+      !! ghost band, so `wet_u`/`wet_v` (and the six face metrics) are 0
+      !! at the wall faces and `mask_layer_velocities` clears the
+      !! wall-normal velocity every stage.  Absent, the wall faces keep
+      !! `wet = 1` — flux-masked by continuity but carrying a free layer
+      !! velocity, which is the LEGACY convention and not what a
+      !! configured run gets.  Combines with `wet_mask` (the island mask
+      !! and the wall fill are one call).
       type(ocean_metrics_t), intent(inout) :: metrics
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in), optional :: wet_mask(:, :)
@@ -67,11 +79,28 @@ contains
          !! all and the slot keeps its unmasked fill (`init` sources
          !! `wet_*` to 1), which is what every pre-existing caller gets.
       integer, intent(in), optional :: nz_closed
+      logical, intent(in), optional :: solid_walls
+      logical :: walls
+      real(wp), allocatable :: all_wet(:, :)
+      walls = .false.
+      if (present(solid_walls)) walls = solid_walls
       call metrics%init(grid)
       if (present(nz_closed)) call metrics_closed_faces_alloc(metrics, grid, nz_closed)
       call metrics_fill_cartesian(metrics, grid, grid%dx, grid%dy)
       call metrics_finalize(metrics)
-      if (present(wet_mask)) then
+      if (walls) then
+         if (present(wet_mask)) then
+            call metrics_apply_land_mask(metrics, wet_mask, grid, &
+                                         periodic_x=.false., periodic_y=.false., &
+                                         north_fold=.false., mask_wall_velocity=.true.)
+         else
+            allocate (all_wet(grid%nx_total, grid%ny_total), source=1.0_wp)
+            call metrics_apply_land_mask(metrics, all_wet, grid, &
+                                         periodic_x=.false., periodic_y=.false., &
+                                         north_fold=.false., mask_wall_velocity=.true.)
+            deallocate (all_wet)
+         end if
+      else if (present(wet_mask)) then
          call metrics_apply_land_mask(metrics, wet_mask, grid, &
                                       periodic_x=.false., periodic_y=.false., &
                                       north_fold=.false.)
