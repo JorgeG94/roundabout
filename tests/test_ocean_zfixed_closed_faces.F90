@@ -30,11 +30,25 @@
 !!     use, so "live" has one definition.  A stepped bed under a flat lid
 !!     is laid with that kernel and the mask cross-checked against the
 !!     target it came from.
+!!   * `refuses_correction_bc_pgf` / `refuses_substep_drag` /
+!!     `refuses_wave_drag` — the three barotropic paths that still weight
+!!     by the FULL column (`compute_pbce` + `compute_gtot_faces` + the
+!!     bc-PGF `du_bc` block; `compute_bt_rem`; `compute_bt_rem_wave_drag`)
+!!     are FAIL-LOUD at configure under the knob, and the SAME request
+!!     with the knob off is accepted (so the refusal is the knob's, not
+!!     the path's).
 module test_ocean_zfixed_closed_faces
    use rdb_constants, only: wp, H_VANISHED
    use rdb_ocean_vcoord, only: ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_count_ledges, &
                                ocean_vcoord_z_fixed_target
+   use rdb_ocean_vcoord, only: VCOORD_Z_FIXED
+   use rdb_config, only: config_t, read_config_from_string
+   use rdb_grid, only: hgrid_t
+   use rdb_ocean_state, only: ocean_state_t
+   use rdb_ocean_setup, only: configure_ocean_closed_faces
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
+   use rdb_error_ring, only: error_ring_get, error_ring_clear
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -55,7 +69,10 @@ contains
                   new_unittest("periodic_wrap_seam", test_periodic_seam), &
                   new_unittest("array_edge_faces_stay_open", test_array_edges), &
                   new_unittest("all_live_is_all_open", test_all_live), &
-                  new_unittest("mask_matches_the_z_fixed_target", test_from_target) &
+                  new_unittest("mask_matches_the_z_fixed_target", test_from_target), &
+                  new_unittest("refuses_correction_bc_pgf", test_refuses_bc_pgf), &
+                  new_unittest("refuses_substep_drag", test_refuses_substep_drag), &
+                  new_unittest("refuses_wave_drag", test_refuses_wave_drag) &
                   ]
    end subroutine collect_ocean_zfixed_closed_faces_tests
 
@@ -303,5 +320,90 @@ contains
       call check(error, ou(3, 1, 1) == 0.0_wp, &
                  "the bed face into the 120 m column must be CLOSED")
    end subroutine test_from_target
+
+   subroutine test_refuses_bc_pgf(error)
+      !! `correction_bc_pgf`: `compute_pbce`, `compute_gtot_faces` and the
+      !! bc-PGF `du_bc` block weight by the FULL column, so the
+      !! correction's depth-mean-zero identity is not the OPEN column's.
+      type(error_type), allocatable, intent(out) :: error
+      call check_refusal(error, "&ocean_bt_nml correction_bc_pgf = .true. /", &
+                         "correction_bc_pgf")
+   end subroutine test_refuses_bc_pgf
+
+   subroutine test_refuses_substep_drag(error)
+      !! `substep_drag`: `compute_bt_rem` damps on the FULL-column depth.
+      type(error_type), allocatable, intent(out) :: error
+      call check_refusal(error, "&ocean_bt_nml substep_drag = .true. /"// &
+                         new_line("a")//'&ocean_bdrag_nml form = "linear", '// &
+                         "r = 1.0e-4, hbbl = 10.0 /", "substep_drag")
+   end subroutine test_refuses_substep_drag
+
+   subroutine test_refuses_wave_drag(error)
+      !! `wave_drag`: `compute_bt_rem_wave_drag` damps on the FULL-column
+      !! depth.
+      type(error_type), allocatable, intent(out) :: error
+      call check_refusal(error, "&ocean_bt_nml wave_drag = .true., "// &
+                         "wave_drag_r_uniform = 1.0e-3 /", "wave_drag")
+   end subroutine test_refuses_wave_drag
+
+   subroutine check_refusal(error, extra, knob)
+      !! Configure the closed faces on a bare state that passes every
+      !! EARLIER guard of `configure_ocean_closed_faces` (multilayer
+      !! initialised, `z_fixed`, a resolved `z_fixed_h_ref`, no BT
+      !! workstate yet) with `extra` on top, and assert:
+      !!
+      !!   1. with `zfixed_closed_faces = .true.` the call is REFUSED with
+      !!      `OCEAN_STATUS_ERR_SETUP` and the message names `knob`;
+      !!   2. with the knob off the same request is accepted (the routine
+      !!      returns before touching the grid, which is why a bare
+      !!      `hgrid_t` suffices for both legs).
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: extra, knob
+      type(config_t) :: cfg
+      type(ocean_state_t) :: st
+      type(hgrid_t) :: grid
+      integer :: ierr
+      character(len=:), allocatable :: msg
+
+      st%multilayer%is_init = .true.
+      st%vcoord%coord_type = VCOORD_Z_FIXED
+      st%vcoord%z_fixed_h_ref = 400.0_wp
+
+      call parse_case(cfg, extra, .true.)
+      call error_ring_clear()
+      call configure_ocean_closed_faces(cfg, st, grid, 1, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_SETUP, &
+                 "zfixed_closed_faces with "//knob//" must be REFUSED at configure")
+      if (allocated(error)) return
+      msg = trim(error_ring_get(0))
+      call check(error, index(msg, "zfixed_closed_faces") > 0 .and. &
+                 index(msg, knob) > 0, &
+                 "the refusal must name both zfixed_closed_faces and "//knob// &
+                 "; got: "//msg)
+      if (allocated(error)) return
+      call check(error,.not. st%metrics%use_closed_faces, &
+                 "a refused configure must not latch use_closed_faces")
+      if (allocated(error)) return
+
+      call parse_case(cfg, extra, .false.)
+      call configure_ocean_closed_faces(cfg, st, grid, 1, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 knob//" without zfixed_closed_faces must be accepted here")
+   end subroutine check_refusal
+
+   subroutine parse_case(cfg, extra, closed)
+      type(config_t), intent(out) :: cfg
+      character(len=*), intent(in) :: extra
+      logical, intent(in) :: closed
+      character(len=:), allocatable :: nml
+      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
+            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+            '&vcoord_nml vcoord_type = "z_fixed", zfixed_closed_faces = '// &
+            merge(".true. ", ".false.", closed)//" /"//new_line("a")// &
+            extra//new_line("a")
+      call read_config_from_string(nml, cfg)
+   end subroutine parse_case
 
 end module test_ocean_zfixed_closed_faces
