@@ -587,6 +587,16 @@ contains
       !! the reduction can run on-device; three scalars come back rather than
       !! a per-column field, so a thermo-cadence call costs one pass plus a
       !! tiny D→H.  Public for the unit-test suite.
+      !!
+      !! CALLER CONTRACT under `-gpu=...,mem:separate`: `h_old` and `h_new`
+      !! must be device-present — the reduction declares them `present` rather
+      !! than letting them copy in, so a caller that forgot the map ABORTS
+      !! instead of silently scanning stale host values and reporting a clean
+      !! bill of health.  Production satisfies it through
+      !! `ocean_vcoord_enter_data_impl`, which maps `remap_h_old` and
+      !! `target_h`; a host-side caller must add its own
+      !! `!$acc enter data copyin(...)` plus an `update device` after every
+      !! host edit.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
          !! Source thicknesses (the pre-remap `h_layer` snapshot).
