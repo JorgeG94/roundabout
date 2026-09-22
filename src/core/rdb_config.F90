@@ -5420,32 +5420,58 @@ contains
                ! `cavity_sloping_lid_rest_zfixed.nml` it is 47x the sigma
                ! leg's resting pressure-gradient residual at step 1 and
                ! ends in a non-finite state on day 18 (gfortran) or a
-               ! saturated En = 3.8E-04 (nvfortran GPU).
+               ! saturated En = 3.8E-04 (nvfortran GPU).  That is the
+               ! knob-OFF state.  `&vcoord_nml zfixed_closed_faces`
+               ! (Adcroft, Hill & Marshall 1997 partial steps) closes the
+               ! staircase faces, and with it the same file completes 30
+               ! days and ISOMIP+ Ocean0 runs 30 days — but the residual on
+               ! the faces left open is still ~2 decades above the sigma
+               ! leg, so the warning stays, reworded for each state.
                !
                ! WARNING, not a refusal, deliberately: those corrections
                ! are the next slices and they need this configuration to
                ! be runnable to be developed and measured against.  What
                ! the user must not do is walk into it silently.
                if (.not. cavity_draft_is_uniform(cfg)) then
-                  call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
-                                      "&ocean_cavity_dyn_nml with a draft that VARIES "// &
-                                      "(draft_config='"// &
-                                      trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
-                                      "') is NOT VALIDATED.  Only a UNIFORM draft is: "// &
-                                      "there every column vanishes the same layers and "// &
-                                      "cuts at the same depth, so the answer is "// &
-                                      "bit-zero at rest.  Where the draft crosses a "// &
-                                      "nominal level the filler count changes column "// &
-                                      "to column and the ice-base STAIRCASE drives a "// &
-                                      "spurious pressure gradient this build cannot "// &
-                                      "arrest: the top-side mass weighting (MWIPG) and "// &
-                                      "the interior reference interface — Yung, "// &
-                                      "Hallberg, Adcroft & Morrison (2026), JAMES 18, "// &
-                                      "e2025MS005645, sections 3.3.2 and 3.2 — are not "// &
-                                      "implemented.  Measured at rest: 47x the sigma "// &
-                                      "leg's step-1 residual, and the run does not "// &
-                                      "survive 30 days.  Use vcoord_type='sigma' for a "// &
-                                      "sloping lid until those land.")
+                  if (cfg%zfixed_closed_faces) then
+                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                         "(draft_config='"// &
+                                         trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                         "') is EXPERIMENTAL.  &vcoord_nml "// &
+                                         "zfixed_closed_faces=.true. closes the ice-base "// &
+                                         "STAIRCASE faces, which is what makes this "// &
+                                         "configuration runnable: the sloping-lid rest "// &
+                                         "case completes 30 days and ISOMIP+ Ocean0 runs "// &
+                                         "30 days.  It does not remove the staircase "// &
+                                         "residual on the faces that stay open — the "// &
+                                         "top-side mass weighting (MWIPG) and the interior "// &
+                                         "reference interface, Yung, Hallberg, Adcroft & "// &
+                                         "Morrison (2026), JAMES 18, e2025MS005645, "// &
+                                         "sections 3.3.2 and 3.2, are not implemented — so "// &
+                                         "the resting sloping-lid case still carries about "// &
+                                         "two decades more spurious energy than its sigma "// &
+                                         "leg.  Only a UNIFORM draft is bit-zero at rest.")
+                  else
+                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                         "(draft_config='"// &
+                                         trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                         "') and &vcoord_nml zfixed_closed_faces=.false. "// &
+                                         "is NOT VALIDATED.  Only a UNIFORM draft is: "// &
+                                         "there every column vanishes the same layers and "// &
+                                         "cuts at the same depth, so the answer is "// &
+                                         "bit-zero at rest.  Where the draft crosses a "// &
+                                         "nominal level the filler count changes column "// &
+                                         "to column and the FV pressure gradient across "// &
+                                         "the open ice-base STAIRCASE drives a spurious "// &
+                                         "flow: measured at rest, 47x the sigma leg's "// &
+                                         "step-1 residual, and the run does not survive "// &
+                                         "30 days.  Set zfixed_closed_faces=.true. (the "// &
+                                         "partial-step face closure, with which a varying "// &
+                                         "draft does survive 30 days), or use "// &
+                                         "vcoord_type='sigma' for a sloping lid.")
+                  end if
                end if
                ! ---- z_fixed × cavity, v1 envelope ----
                !
