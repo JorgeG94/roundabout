@@ -26,6 +26,12 @@
 !!      Closes the "both ends pass, the wire is never exercised" gap the
 !!      first four cases share (PR-29 plan §2.4) — for the ORIGINAL
 !!      `bt_substep_drag` knob too, not only the newer wave-drag one.
+!!   6. `warns_when_bdrag_not_linear` — `compute_bt_rem` reads only the
+!!      LINEAR coefficient `r`, so `substep_drag` under
+!!      `&ocean_bdrag_nml form /= "linear"` is a no-op (r = 0) or a drag
+!!      the slow step never applies.  `validate_config` WARNS (does not
+!!      refuse); this pins the predicate behind that warning and that the
+!!      configuration still validates.
 module test_ocean_bt_substep_drag
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
@@ -38,6 +44,9 @@ module test_ocean_bt_substep_drag
    use rdb_coriolis_adv, only: coriolis_adv_t
    use rdb_ocean_dyn, only: ocean_dyn_t
    use rdb_barotropic_substep, only: barotropic_substep_nonlinear_interior
+   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+                         substep_drag_ignores_bdrag_form
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
    implicit none
    private
 
@@ -55,7 +64,8 @@ contains
                   new_unittest("compute_bt_rem_formula", test_bt_rem_formula), &
                   new_unittest("compute_bt_rem_zero_drag", test_bt_rem_zero_drag), &
                   new_unittest("compute_bt_rem_walls_unity", test_bt_rem_walls), &
-                  new_unittest("substep_applies_bt_rem", test_substep_applies_bt_rem) &
+                  new_unittest("substep_applies_bt_rem", test_substep_applies_bt_rem), &
+                  new_unittest("warns_when_bdrag_not_linear", test_warns_bdrag_not_linear) &
                   ]
    end subroutine collect_bt_substep_drag_tests
 
@@ -221,5 +231,57 @@ contains
       call dyn%destroy(); call cor%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_substep_applies_bt_rem
+
+   subroutine test_warns_bdrag_not_linear(error)
+      !! The predicate behind the `substep_drag` x non-linear bottom-drag
+      !! configure warning.  Tested rather than the log line because the
+      !! predicate is the contract; the sentence is its rendering.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+
+      checks: block
+         ! Default bottom drag is QUADRATIC: the warning must fire.
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /")
+         call check(error, substep_drag_ignores_bdrag_form(cfg), &
+                    "substep_drag under the default (quadratic) bottom drag "// &
+                    "must trip the warning")
+         if (allocated(error)) exit checks
+         ! A warning, NOT a refusal: the configuration still validates.
+         call validate_config(cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, &
+                    "substep_drag x quadratic drag must WARN, not refuse")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /"//new_line("a")// &
+                         '&ocean_bdrag_nml form = "quadratic", cd = 2.5e-3, r = 1.0e-4, '// &
+                         "hbbl = 10.0 /")
+         call check(error, substep_drag_ignores_bdrag_form(cfg), &
+                    "a nonzero r under quadratic drag is still the wrong operator")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /"//new_line("a")// &
+                         '&ocean_bdrag_nml form = "linear", r = 1.0e-4, hbbl = 10.0 /')
+         call check(error,.not. substep_drag_ignores_bdrag_form(cfg), &
+                    "substep_drag under LINEAR drag is the supported pairing")
+         if (allocated(error)) exit checks
+
+         call parse_case(cfg, '&ocean_bdrag_nml form = "quadratic", cd = 2.5e-3 /')
+         call check(error,.not. substep_drag_ignores_bdrag_form(cfg), &
+                    "no warning when substep_drag is off")
+      end block checks
+   end subroutine test_warns_bdrag_not_linear
+
+   subroutine parse_case(cfg, extra)
+      type(config_t), intent(out) :: cfg
+      character(len=*), intent(in) :: extra
+      character(len=:), allocatable :: nml
+      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
+            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 3 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+            extra//new_line("a")
+      call read_config_from_string(nml, cfg)
+   end subroutine parse_case
 
 end module test_ocean_bt_substep_drag
