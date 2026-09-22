@@ -1520,6 +1520,22 @@ def self_test():
     check("...and no twin is built from a namelist that pins the scheme",
           not any(_stab_manifest._nml_pins_scheme(t["nml"])
                   for t in twins))
+    # The remap precondition guard rides every run whose coordinate remaps,
+    # and no run whose coordinate does not (there it would judge stale
+    # scratch).  Derived per tier from the namelist + overrides.
+    _knob = _stab_manifest.REMAP_CHECK_KNOB
+    _bad = []
+    for c in manifest.STABILITY_CASES:
+        for t in ("tier1", "tier2"):
+            s = c.get(t)
+            if not s or s.get("skip"):
+                continue
+            on = bool((s.get("overrides") or {}).get("vcoord_nml", {})
+                      .get(_knob, False))
+            if on != _stab_manifest._case_remaps(c, s):
+                _bad.append("{}:{}".format(c["name"], t))
+    check("{} is ON exactly where the coordinate remaps".format(_knob),
+          not _bad)
 
     print("\nself-test: {}".format(
         "ALL PASS" if not fails else "{} FAILED".format(len(fails))))
