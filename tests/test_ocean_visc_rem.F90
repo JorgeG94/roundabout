@@ -50,6 +50,8 @@ module test_ocean_visc_rem
    use rdb_barotropic_workstate, only: barotropic_workstate_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t, vdiff_apply_momentum
    use rdb_barotropic_coupling, only: apply_bt_correction
+   use rdb_ocean_metrics, only: ocean_metrics_t
+   use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
    private
 
@@ -444,6 +446,7 @@ contains
       type(ocean_vdiff_t) :: vd
       type(multilayer_state_t) :: ms_a, ms_b
       type(barotropic_workstate_t) :: bt
+      type(ocean_metrics_t) :: metrics
       integer, parameter :: NZ = 4
       real(wp), parameter :: DT = 600.0_wp, LAM_STRONG = 0.05_wp
       real(wp), parameter :: U0 = 0.5_wp
@@ -457,6 +460,7 @@ contains
       call bt%init(grid, nz_ml=NZ)
       ms_a%nz_ml = NZ; ms_b%nz_ml = NZ
       call ms_a%init(grid); call ms_b%init(grid)
+      call make_cartesian_metrics(metrics, grid)
       checks: block
          vd%K_v_momentum = 5.0e-2_wp
          vd%implicit_drag = .true.
@@ -499,9 +503,9 @@ contains
          bt%F_bt_u = 0.0_wp; bt%F_bt_v = 0.0_wp
          bt%bt_H_ref = 100.0_wp; bt%bt_eta_end = 0.0_wp
 
-         call apply_bt_correction(bt, ms_a, DT, skip_h_rescale=.true., &
+         call apply_bt_correction(bt, ms_a, DT, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true., use_visc_rem=.false.)
-         call apply_bt_correction(bt, ms_b, DT, skip_h_rescale=.true., &
+         call apply_bt_correction(bt, ms_b, DT, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true., use_visc_rem=.true.)
 
          du_bed_a = ms_a%u_face_x_layer(ig, jg, 1) - U0
@@ -520,6 +524,7 @@ contains
                     "visc_rem run: depth-mean must STILL equal bt_ubt_end")
       end block checks
       if (allocated(lam_u)) deallocate (lam_u, lam_v)
+      call destroy_cartesian_metrics(metrics)
       call bt%destroy()
       call vd%destroy(); call ms%destroy()
       call ms_a%destroy(); call ms_b%destroy()

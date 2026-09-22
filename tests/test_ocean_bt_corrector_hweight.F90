@@ -17,6 +17,8 @@ module test_ocean_bt_corrector_hweight
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
    use rdb_barotropic_coupling, only: apply_bt_correction
+   use rdb_ocean_metrics, only: ocean_metrics_t
+   use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_positive_inf, ieee_is_finite
    implicit none
    private
@@ -63,11 +65,13 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms_a, ms_b
       type(barotropic_workstate_t) :: bt_a, bt_b
+      type(ocean_metrics_t) :: metrics
       real(wp) :: max_diff
       integer :: k
       checks: block
          call build_state(grid, ms_a, bt_a, 3)
          call build_state(grid, ms_b, bt_b, 3)
+         call make_cartesian_metrics(metrics, grid)
 
          ms_a%h_layer = 100.0_wp
          ms_b%h_layer = 100.0_wp
@@ -86,14 +90,15 @@ contains
          bt_b%F_bt_u = 0.0_wp; bt_b%F_bt_v = 0.0_wp
          bt_b%bt_H_ref = 300.0_wp; bt_b%bt_eta_end = 0.0_wp
 
-         call apply_bt_correction(bt_a, ms_a, 100.0_wp, skip_h_rescale=.true.)
-         call apply_bt_correction(bt_b, ms_b, 100.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt_a, ms_a, 100.0_wp, metrics, skip_h_rescale=.true.)
+         call apply_bt_correction(bt_b, ms_b, 100.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true.)
 
          max_diff = maxval(abs(ms_a%u_face_x_layer - ms_b%u_face_x_layer))
          call check(error, max_diff < 1.0e-12_wp, &
                     "uniform h: h-weighted should equal uniform-Δu")
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms_a, bt_a); call cleanup(ms_b, bt_b)
    end subroutine test_uniform_h_match
 
@@ -104,10 +109,12 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt
+      type(ocean_metrics_t) :: metrics
       real(wp) :: du_bed, du_surf, ratio
       integer :: i, j
       checks: block
          call build_state(grid, ms, bt, 3)
+         call make_cartesian_metrics(metrics, grid)
          ! Layer thicknesses: k=1 thin (10m), k=2 medium (100m), k=3 thick (200m)
          ms%h_layer(:, :, 1) = 10.0_wp
          ms%h_layer(:, :, 2) = 100.0_wp
@@ -120,7 +127,7 @@ contains
          bt%F_bt_u = 0.0_wp; bt%F_bt_v = 0.0_wp
          bt%bt_H_ref = 310.0_wp; bt%bt_eta_end = 0.0_wp
 
-         call apply_bt_correction(bt, ms, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt, ms, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true.)
 
          ! Pick an interior u-face.
@@ -142,6 +149,7 @@ contains
          call check(error, abs(ratio - 10.0_wp/200.0_wp) < 1.0e-12_wp, &
                     "stratified h: Δu_bed/Δu_surf should equal h_bed/h_surf")
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms, bt)
    end subroutine test_stratified_h
 
@@ -152,10 +160,12 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt
+      type(ocean_metrics_t) :: metrics
       real(wp) :: u_mean, h_total, err_max
       integer :: i, j, k, nz
       checks: block
          call build_state(grid, ms, bt, 4)
+         call make_cartesian_metrics(metrics, grid)
          nz = ms%nz_ml
          ms%h_layer(:, :, 1) = 5.0_wp     ! thin bed
          ms%h_layer(:, :, 2) = 30.0_wp
@@ -169,7 +179,7 @@ contains
          bt%F_bt_u = 0.0_wp; bt%F_bt_v = 0.0_wp
          bt%bt_H_ref = 985.0_wp; bt%bt_eta_end = 0.0_wp
 
-         call apply_bt_correction(bt, ms, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt, ms, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true.)
 
          ! Compute depth-mean at one interior u-face.
@@ -191,6 +201,7 @@ contains
          call check(error, err_max < 1.0e-12_wp, &
                     "h-weighted: depth-mean of u_layer should equal bt_ubt_end")
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms, bt)
    end subroutine test_depth_mean
 
@@ -215,11 +226,13 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms_a, ms_b
       type(barotropic_workstate_t) :: bt_a, bt_b
+      type(ocean_metrics_t) :: metrics
       real(wp) :: max_diff
       integer :: k
       checks: block
          call build_state(grid, ms_a, bt_a, 3)
          call build_state(grid, ms_b, bt_b, 3)
+         call make_cartesian_metrics(metrics, grid)
 
          ! Stratified h so the h-weighted path actually does something
          do k = 1, 3
@@ -241,9 +254,9 @@ contains
 
          ! Both runs: h-weighted ON.  bt_b also sets use_visc_rem ON
          ! but visc_rem stays at its init value 1.0 ⇒ should match.
-         call apply_bt_correction(bt_a, ms_a, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt_a, ms_a, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true.)
-         call apply_bt_correction(bt_b, ms_b, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt_b, ms_b, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true., use_visc_rem=.true.)
 
          max_diff = max(maxval(abs(ms_a%u_face_x_layer - ms_b%u_face_x_layer)), &
@@ -251,6 +264,7 @@ contains
          call check(error, max_diff < 1.0e-12_wp, &
                     "visc_rem ≡ 1: use_visc_rem=.true. must be bit-identical to .false.")
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms_a, bt_a); call cleanup(ms_b, bt_b)
    end subroutine test_vr_unity_matches
 
@@ -264,11 +278,13 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms_a, ms_b
       type(barotropic_workstate_t) :: bt_a, bt_b
+      type(ocean_metrics_t) :: metrics
       real(wp) :: ubt_mean_a, ubt_mean_b, du_bed_a, du_bed_b
       integer :: k, i_probe, j_probe
       checks: block
          call build_state(grid, ms_a, bt_a, 3)
          call build_state(grid, ms_b, bt_b, 3)
+         call make_cartesian_metrics(metrics, grid)
          i_probe = grid%nghost + 2; j_probe = grid%nghost + 2
 
          ! Uniform h, uniform initial u
@@ -290,9 +306,9 @@ contains
          bt_b%visc_rem_u(:, :, 1) = 0.5_wp
          ! Layers 2 + 3 stay at the init 1.0
 
-         call apply_bt_correction(bt_a, ms_a, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt_a, ms_a, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true.)
-         call apply_bt_correction(bt_b, ms_b, 1.0_wp, skip_h_rescale=.true., &
+         call apply_bt_correction(bt_b, ms_b, 1.0_wp, metrics, skip_h_rescale=.true., &
                                   use_h_weighted=.true., use_visc_rem=.true.)
 
          ! Bed-layer Δu — bt_b should have SMALLER delta than bt_a
@@ -317,6 +333,7 @@ contains
          call check(error, abs(ubt_mean_b - 1.0_wp) < 1.0e-12_wp, &
                     "visc_rem run: depth-mean must STILL equal bt_ubt_end")
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms_a, bt_a); call cleanup(ms_b, bt_b)
    end subroutine test_vr_bed_damped
 
@@ -331,11 +348,13 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt
+      type(ocean_metrics_t) :: metrics
       real(wp) :: pinf, u_bad_before, u_good_before, u_bad_after, u_good_after
       integer :: nnf, ib, jb, ig, jg, k
       character(len=160) :: msg
       checks: block
          call build_state(grid, ms, bt, 3)
+         call make_cartesian_metrics(metrics, grid)
          ms%h_layer = 100.0_wp
          ms%u_face_x_layer = 0.5_wp
          ms%v_face_y_layer = 0.0_wp
@@ -352,7 +371,7 @@ contains
          u_bad_before = ms%u_face_x_layer(ib, jb, 1)   ! 0.5
          u_good_before = ms%u_face_x_layer(ig, jg, 1)  ! 0.5
 
-         call apply_bt_correction(bt, ms, 1.0_wp, skip_h_rescale=.true., n_nonfin=nnf)
+         call apply_bt_correction(bt, ms, 1.0_wp, metrics, skip_h_rescale=.true., n_nonfin=nnf)
 
          u_bad_after = ms%u_face_x_layer(ib, jb, 1)
          u_good_after = ms%u_face_x_layer(ig, jg, 1)
@@ -376,6 +395,7 @@ contains
          write (msg, '("skip: n_nonfin=", i0, " (want 1)")') nnf
          call check(error, nnf == 1, trim(msg))
       end block checks
+      call destroy_cartesian_metrics(metrics)
       call cleanup(ms, bt)
    end subroutine test_skip_nonfinite
 

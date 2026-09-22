@@ -289,7 +289,7 @@ contains
          call compute_gtot_faces(grid, bt_b, ms_b)
          bt_b%e_anom = 0.0_wp     ! the critical setting
 
-         call apply_bt_correction(bt_a, ms_a, 1.0_wp, skip_h_rescale=.true.)
+         call apply_bt_correction(bt_a, ms_a, 1.0_wp, metrics, skip_h_rescale=.true.)
          call apply_bt_correction(bt_b, ms_b, 1.0_wp, skip_h_rescale=.true., &
                                   grid=grid, use_bc_pgf=.true., metrics=metrics)
 
