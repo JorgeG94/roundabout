@@ -1276,7 +1276,8 @@ contains
          !! it, a one-stage (Δt/2) lag (see the step-9 call site below).
          !! Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.
 
-      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
          !! Ice-shelf top-drag Rayleigh rate (1/s) at u / v faces — the
          !! `ocean_top_drag_t` slot's `lambda_top_u/v`, forwarded
          !! verbatim to `vdiff_apply_momentum`'s `k = nz` diagonal fold.
@@ -1285,10 +1286,17 @@ contains
          !! ARRAY dummy on to another optional dummy is legal Fortran,
          !! whereas dereferencing an absent derived-type dummy is not.
          !! Absent, or `vd%implicit_top_drag` off ⇒ bit-identical.
-      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
+         !!
+         !! EXPLICIT SHAPE, not `(:, :)`: the attribute has to hold on
+         !! EVERY frame that forwards the optional, or gfortran reinstates
+         !! the speculative pack (and its uninitialised packing flag) in
+         !! whichever frame still hands an assumed-shape actual down.  The
+         !! whole argument is written out on `vdiff_apply_momentum`.
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
          !! Face ice-cover masks (the OR of the two abutting cells).
          !! Present together with `lambda_top_*`; used to mask the wind
-         !! RHS off on covered faces.
+         !! RHS off on covered faces.  Explicit-shape for the same reason.
       logical, intent(in), optional :: apply_tracers
          !! `.false.` = momentum-only: skip the tracer vdiff + KPP
          !! non-local applies regardless of the thermo gate.  The pred_corr
@@ -1526,13 +1534,16 @@ contains
       type(ocean_kappa_shear_t), intent(in), optional :: kshear
          !! Kappa-shear slot; only read when enabled + vertex mode
          !! (supplies the corner Kv source).
-      real(wp), intent(in), optional :: lambda_top_u(:, :), lambda_top_v(:, :)
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
          !! Ice-shelf top-drag Rayleigh rate — forwarded so the REMNANT
          !! is built from the same operator the stage-end momentum solve
          !! will build.  A remnant built without a sink the solve has
          !! would weight the barotropic corrector with a friction
-         !! operator that is not the one applied.
-      real(wp), intent(in), optional :: cover_u(:, :), cover_v(:, :)
+         !! operator that is not the one applied.  EXPLICIT SHAPE for the
+         !! reason spelled out on `vmix_apply_in_stage`'s twin dummies.
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
          !! Face ice-cover masks, same reason.
 
       logical :: vertex_kv
