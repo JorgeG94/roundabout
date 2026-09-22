@@ -89,6 +89,7 @@ module rdb_config
    public :: resolve_bt_halo
    public :: bt_halo_auto_exclusion
    public :: p_top_has_producer
+   public :: substep_drag_ignores_bdrag_form
    public :: cavity_draft_is_uniform
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
@@ -4855,6 +4856,18 @@ contains
                              "then carries no drag, so visc_rem = 1 identically and the "// &
                              "BT corrector reduces to the plain h-weighted path")
       end if
+      if (substep_drag_ignores_bdrag_form(cfg)) then
+         call logger%warning("&ocean_bt_nml substep_drag=.true. with "// &
+                             "&ocean_bdrag_nml form='"// &
+                             trim(adjustl(cfg%ocean%bdrag%form))//"': the "// &
+                             "barotropic substep damping is built from the "// &
+                             "LINEAR coefficient &ocean_bdrag_nml r (times hbbl) "// &
+                             "only, so it does NOT follow this bottom drag — "// &
+                             "with r = 0 (the default) substep_drag is a no-op, "// &
+                             "otherwise it damps the barotropic mode with a "// &
+                             "linear drag the slow step never applies.  Use "// &
+                             "form='linear', or drop substep_drag")
+      end if
 
       ! Equilibrium tide (C1) requires lat/lon — meaningless on a
       ! cartesian grid (geolatT/geolonT stay 0).  Fail loud rather than
@@ -7200,6 +7213,27 @@ contains
       logical :: has
       has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
    end function p_top_has_producer
+
+   pure function substep_drag_ignores_bdrag_form(cfg) result(ignores)
+      !! Is `&ocean_bt_nml substep_drag` blind to the configured bottom
+      !! drag?
+      !!
+      !! `compute_bt_rem` builds the barotropic substep damping
+      !! `Htot/(Htot + r·hbbl·dt_inner)` from the LINEAR coefficient
+      !! `&ocean_bdrag_nml r` alone.  Under any `form` other than
+      !! `"linear"` the slow bottom drag is not that operator, so the
+      !! knob either does nothing at all (`r = 0`, the default — the
+      !! factor is identically 1) or damps the barotropic mode with a
+      !! linear drag the slow step never applies.  Neither is what the
+      !! user asked for; the configure WARNING that names both knobs
+      !! reads this predicate.  A warning, not a refusal: the knob is
+      !! harmless-if-useless in the default case, and a deliberate
+      !! BT-only linear sponge is a legitimate (if unusual) request.
+      type(config_t), intent(in) :: cfg
+      logical :: ignores
+      ignores = cfg%ocean%bt%substep_drag .and. &
+                trim(adjustl(cfg%ocean%bdrag%form)) /= "linear"
+   end function substep_drag_ignores_bdrag_form
 
    pure function cavity_draft_is_uniform(cfg) result(uniform)
       !! Is the configured ice-shelf draft UNIFORM over the whole array?
