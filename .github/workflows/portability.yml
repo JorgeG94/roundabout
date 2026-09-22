@@ -63,15 +63,19 @@ jobs:
       matrix:
         include:
           # Known-good baseline: 187/187 (NetCDF on; 186 without pytest).
+          # `-march=x86-64-v3` pins the CPU target: the GNU Release flags carry
+          # `-march=native`, and the runner pool is heterogeneous, so a binary
+          # built on one host can die with SIGILL (ctest "ILLEGAL") on
+          # another — the same failure `-tp=haswell` guards for nvfortran.
           - toolchain: {compiler: gcc, version: 15}
             exploratory: false
-            extra_flags: ''
+            extra_flags: '-march=x86-64-v3'
           # Promoted 2026-09-18 on its first green run: ifx builds and passes
           # the suite with NetCDF on, so a regression here should block a PR
           # rather than be reported and ignored.
           - toolchain: {compiler: intel, version: '2025.0'}
             exploratory: false
-            extra_flags: ''
+            extra_flags: '-march=x86-64-v3'
           # `-tp=haswell` pins the CPU target. nvfortran targets the BUILD
           # HOST's CPU by default -- nothing in compiler_flags.cmake sets `-tp`,
           # and neither `-fast` nor the build type changes that -- which makes
