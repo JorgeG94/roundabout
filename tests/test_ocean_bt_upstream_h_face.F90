@@ -405,6 +405,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       real(wp), parameter :: bt_ubt_target = 0.10_wp
       real(wp) :: u_bed, u_surf, h_up_bed, h_up_surf, depth_mean
 
@@ -420,8 +421,12 @@ contains
       ! Set the corrector target.  bt_ubt_at_n = 0 + dt·F_bt_u = 0
       ! ⇒ delta_bar = bt_ubt_end.
       bt_work%bt_ubt_end(2, 1) = bt_ubt_target
-      call apply_bt_correction(bt_work, ms, 1.0_wp, &
+      ! `metrics` is REQUIRED; all-open (`use_closed_faces = .false.`)
+      ! selects the full-column fold this test asserts.
+      call make_cartesian_metrics(metrics, grid)
+      call apply_bt_correction(bt_work, ms, 1.0_wp, metrics, &
                                skip_h_rescale=.true.)
+      call destroy_cartesian_metrics(metrics)
 
       u_bed = ms%u_face_x_layer(2, 1, 1)
       u_surf = ms%u_face_x_layer(2, 1, 2)

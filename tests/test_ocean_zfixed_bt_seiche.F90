@@ -667,8 +667,11 @@ contains
 
       ! ---- the SPIKE's combination, for contrast ----
       call seed_profile(ms, nx_t, ny_t)
-      ! Uniform Δu into every layer (no `metrics` => no open branch)...
-      call apply_bt_correction(dyn%bt_work, ms, 1.0_wp, skip_h_rescale=.true.)
+      ! Uniform Δu into every layer: the full-column fold, reached by
+      ! clearing the LATCH (`metrics` is REQUIRED — see below)...
+      metrics%use_closed_faces = .false.
+      call apply_bt_correction(dyn%bt_work, ms, 1.0_wp, metrics, skip_h_rescale=.true.)
+      metrics%use_closed_faces = .true.
       u_closed_uniform_fold = ms%u_face_x_layer(iface, jface, 1)
       ! ...then the mask takes it back out of the closed ones...
       call mask_layer_velocities(grid, metrics, ms)

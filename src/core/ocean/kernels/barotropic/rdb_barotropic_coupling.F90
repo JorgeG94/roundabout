@@ -1009,8 +1009,8 @@ contains
       end if
    end subroutine face_depth_mean_v
 
-   pure subroutine apply_bt_correction(bt_work, ms, dt, skip_h_rescale, use_h_weighted, &
-                                       grid, use_bc_pgf, use_visc_rem, metrics, scale, n_nonfin)
+   pure subroutine apply_bt_correction(bt_work, ms, dt, metrics, skip_h_rescale, use_h_weighted, &
+                                       grid, use_bc_pgf, use_visc_rem, scale, n_nonfin)
       !! Replace the bt mode in the per-layer face velocities with the
       !! barotropic-substep end-step value, adding Δu = u_bt_end − u_bt_at_n −
       !! dt·F_bt_u to every layer (same for v). Split-explicit convention
@@ -1031,21 +1031,24 @@ contains
       !! `use_bc_pgf` — add the per-layer baroclinic-PGF retro-correction
       !!   Δu_bc = -dt·((pbce(R,k)-gtot_W(R))·e_anom(R) -
       !!   (pbce(L,k)-gtot_E(L))·e_anom(L))/dx. Depth-mean zero by construction,
-      !!   so the mass-flux invariant survives. Requires `grid`+`metrics` present
+      !!   so the mass-flux invariant survives. Requires `grid` present
       !!   and pbce/gtot_*/e_anom populated by the caller. No-op when omitted.
       type(barotropic_workstate_t), intent(in) :: bt_work
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
-      logical, intent(in), optional :: skip_h_rescale
-      logical, intent(in), optional :: use_h_weighted
-      type(hgrid_t), intent(in), optional :: grid
-      logical, intent(in), optional :: use_bc_pgf
-      logical, intent(in), optional :: use_visc_rem
-      type(ocean_metrics_t), intent(in), optional :: metrics
-         !! Curvilinear horizontal metrics — required when
-         !! `use_bc_pgf = .true.` (the per-face bc-PGF retro-correction
-         !! divides the e_anom gradient by `idxCu`/`idyCv`), and the
-         !! carrier of the z-level closed-face mask.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! Curvilinear horizontal metrics — read by the bc-PGF
+         !! retro-correction (`use_bc_pgf = .true.` divides the e_anom
+         !! gradient by `idxCu`/`idyCv`), and the carrier of the z-level
+         !! closed-face mask.
+         !!
+         !! **REQUIRED**, like the same argument of
+         !! `derive_bt_from_layers`, `face_depth_mean_u/v` and
+         !! `set_cor_ref_velocity`: an OPTIONAL `metrics` that silently
+         !! selects the full-column fold when omitted is the defect class
+         !! that shipped the `set_cor_ref_velocity` bug.  A caller that
+         !! wants the full-column fold passes a metrics object whose
+         !! `use_closed_faces` latch is `.false.` (the default).
          !!
          !! When `metrics%use_closed_faces` is set the fold takes a THIRD
          !! branch: OPEN-LAYER.  A CLOSED layer gets `wt = 0` and
@@ -1066,6 +1069,11 @@ contains
          !! never receive the increment in the first place, so the mask
          !! that follows is a no-op on the fold and the two systems cannot
          !! drift apart.
+      logical, intent(in), optional :: skip_h_rescale
+      logical, intent(in), optional :: use_h_weighted
+      type(hgrid_t), intent(in), optional :: grid
+      logical, intent(in), optional :: use_bc_pgf
+      logical, intent(in), optional :: use_visc_rem
       real(wp), intent(in), optional :: scale
          !! Multiplier on the Δu correction (default 1, bit-identical).
          !! The pred_corr PREDICTOR passes `BE` so the provisional velocity
@@ -1099,13 +1107,9 @@ contains
       if (present(use_visc_rem)) do_visc_rem = use_visc_rem
       du_scale = 1.0_wp
       if (present(scale)) du_scale = scale
-      do_open = .false.
-      if (present(metrics)) do_open = metrics%use_closed_faces
+      do_open = metrics%use_closed_faces
       if (do_bc_pgf .and. .not. present(grid)) then
          error stop "apply_bt_correction: use_bc_pgf=.true. requires grid"
-      end if
-      if (do_bc_pgf .and. .not. present(metrics)) then
-         error stop "apply_bt_correction: use_bc_pgf=.true. requires metrics"
       end if
 
       nu = size(ms%u_face_x_layer, 1)
