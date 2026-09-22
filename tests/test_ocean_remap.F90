@@ -771,11 +771,17 @@ contains
       !! field, count exactly the offending columns, and report magnitudes
       !! large enough to identify the producer — a relative column-total
       !! mismatch and the most negative thickness.
+      !!
+      !! The sweep is a `present`-clause device reduction (production feeds it
+      !! `vcoord%remap_h_old` / `vcoord%target_h`, both mapped by
+      !! `ocean_vcoord_enter_data_impl`), so under `-gpu=mem:separate` these
+      !! host fixtures must be mapped too and re-pushed after every host edit
+      !! — otherwise the kernel aborts on a missing `h_old`.  All the
+      !! directives below are inert no-ops on the host/multicore builds.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NX = 5, NY = 4, NZ = 6
       real(wp) :: h_old(NX, NY, NZ), h_new(NX, NY, NZ)
-      integer :: i, j, k, n_bad
-      real(wp) :: worst_rel, worst_neg
+      integer :: i, j, k
 
       ! Healthy: stretched source, differently stretched target, equal totals.
       do k = 1, NZ
@@ -786,7 +792,29 @@ contains
             end do
          end do
       end do
-      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+
+      ! The cases live in a helper so the early `return` on the first failed
+      ! check cannot skip the unmap and leave a stale device block bound to
+      ! this stack address for whatever test runs next.
+      !$acc enter data copyin(h_old, h_new)
+      call precondition_scan_cases(error, NX, NY, NZ, h_old, h_new)
+      !$acc exit data delete(h_old, h_new)
+   end subroutine test_precondition_scan
+
+   subroutine precondition_scan_cases(error, nx, ny, nz, h_old, h_new)
+      !! The four `ocean_remap_scan_preconditions` cases, on fields the caller
+      !! has already mapped.  Every host edit below is pushed to the device
+      !! before the next sweep — `h_old`/`h_new` are `copyin`, not managed, so
+      !! a host-only assignment would otherwise be scanned as the old values.
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(inout) :: h_old(nx, ny, nz)
+      real(wp), intent(inout) :: h_new(nx, ny, nz)
+
+      integer :: n_bad
+      real(wp) :: worst_rel, worst_neg
+
+      call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
       call check(error, n_bad == 0, "a healthy field must report no bad columns")
@@ -797,7 +825,8 @@ contains
       ! One column 10% short in the TARGET: the sweep would delete that
       ! tenth of the column's tracer content with no diagnostic at all.
       h_new(2, 3, :) = h_new(2, 3, :)*0.9_wp
-      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+      !$acc update device(h_new)
+      call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
       call check(error, n_bad == 1, "exactly one short column must be counted")
@@ -812,7 +841,8 @@ contains
       ! mass rather than losing it.
       h_old(4, 2, 3) = -2.0_wp
       h_old(4, 2, 4) = h_old(4, 2, 4) + 10.0_wp
-      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+      !$acc update device(h_old)
+      call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
       call check(error, n_bad == 2, "the negative-thickness column must be counted too")
@@ -825,10 +855,11 @@ contains
       ! the relative test must not trip on a 0/0.
       h_old = 0.0_wp
       h_new = 0.0_wp
-      call ocean_remap_scan_preconditions(NX, NY, NZ, h_old, h_new, &
+      !$acc update device(h_old, h_new)
+      call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
       call check(error, n_bad == 0, "an all-land field must pass, not divide by zero")
-   end subroutine test_precondition_scan
+   end subroutine precondition_scan_cases
 
 end module test_ocean_remap
