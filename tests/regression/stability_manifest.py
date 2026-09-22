@@ -1284,6 +1284,97 @@ def _build_scheme_axis():
     return out
 
 
+# ---------------------------------------------------------------------------
+# Remap precondition guard -- ON in every case whose coordinate REMAPS
+# ---------------------------------------------------------------------------
+# `&vcoord_nml remap_check_preconditions` asserts, once per ALE remap, the two
+# things the overlap sweep has always ASSUMED: non-negative source and target
+# thicknesses, and matching column totals. Outside them the sweep silently
+# creates or deletes tracer mass -- no NaN, no bounds hit, no budget entry --
+# so a stability run is exactly where the check earns its cost (one device
+# reduction per thermo step). It is switched on here, by OVERRIDE, never by
+# editing the shipped namelists: it is a diagnostic, not physics, and default
+# off is what users get.
+#
+# Which families: `ocean_apply_ale_remap_step` returns before touching
+# anything for `eulerian_z` and `lagrangian` (the former holds h at H*dsig by
+# vertical-advection cancellation, the latter's target IS the current h), so
+# the pair the check judges (`remap_h_old`, `target_h`) is never written
+# there and the check would assert on stale scratch. Every other family --
+# sigma (the namelist default), zsigma, zstar, zstar_sigma, zstar_full,
+# z_fixed, rho, hycom -- relayers every thermo step and gets the guard.
+#
+# DERIVED from the namelist (plus any tier override of `vcoord_type`), not
+# listed by hand, so a file that changes coordinate falls in or out on its
+# own.
+#
+# `&vcoord_nml check_vanished_content` (the vanished-layer content assertion)
+# is NOT switched on: it lands with `fix/remap-vanished-layer-content`, which
+# is not on this branch's base. Add it alongside this one when it merges.
+REMAP_CHECK_KNOB = "remap_check_preconditions"
+_NO_REMAP_VCOORDS = ("lagrangian", "isopycnal", "eulerian_z", "z")
+_REMAP_VCOORDS = ("sigma", "zsigma", "z-sigma", "z_sigma", "zstar", "z-star",
+                  "z_star", "zstar_lite", "zstar_full", "z-star-full",
+                  "z_star_full", "zstarfull", "zstar_sigma", "z-star-sigma",
+                  "z_star_sigma", "zstarsigma", "z_fixed", "z_levels",
+                  "gprime", "rho", "isopycnic", "rho_target", "hycom",
+                  "hybrid")
+
+
+def _nml_vcoord_type(path):
+    """`&vcoord_nml vcoord_type` of the COMMITTED namelist, lower-cased.
+
+    Absent => "sigma", the `config_t` default (`rdb_config`).
+    """
+    import os
+    full = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, path)
+    group = None
+    with open(full) as fh:
+        for line in fh:
+            bare = line.split("!", 1)[0].strip()
+            if bare.startswith("&"):
+                group = bare[1:].split()[0].lower() if len(bare) > 1 else None
+                continue
+            if bare.startswith("/"):
+                group = None
+                continue
+            if group == "vcoord_nml" and "=" in bare:
+                key, val = bare.split("=", 1)
+                if key.strip().lower() == "vcoord_type":
+                    return val.strip().rstrip(",").rstrip("/").strip() \
+                              .strip("'\"").strip().lower()
+    return "sigma"
+
+
+def _case_remaps(case, spec):
+    over = (spec.get("overrides") or {}).get("vcoord_nml", {})
+    vc = over.get("vcoord_type")
+    if vc is None:
+        vc = _nml_vcoord_type(case["nml"])
+    vc = str(vc).strip("'\"").strip().lower()
+    if vc in _NO_REMAP_VCOORDS:
+        return False
+    if vc in _REMAP_VCOORDS:
+        return True
+    raise ValueError("{}: unknown vcoord_type {!r} -- teach "
+                     "_REMAP_VCOORDS / _NO_REMAP_VCOORDS about it".format(
+                         case["name"], vc))
+
+
+def _add_remap_checks():
+    for case in STABILITY_CASES:
+        for tier in ("tier1", "tier2"):
+            spec = case.get(tier)
+            if not spec or spec.get("skip"):
+                continue
+            if not _case_remaps(case, spec):
+                continue
+            spec.setdefault("overrides", {}).setdefault(
+                "vcoord_nml", {})[REMAP_CHECK_KNOB] = True
+
+
+_add_remap_checks()
 STABILITY_CASES += _build_scheme_axis()
 
 
