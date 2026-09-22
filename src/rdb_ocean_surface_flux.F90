@@ -48,6 +48,35 @@
 !!       source owns the enthalpy of the mass it injects; the ocean can
 !!       only compute the enthalpy of mass it loses, `heat_content_massout`,
 !!       which the assembler derives from SST — never write it yourself);
+!! **Ice-shelf cover (`&ocean_cavity_dyn_nml`).**  Under a shelf there
+!! is no atmosphere, so every ATMOSPHERIC contribution must be zero in a
+!! covered cell and unchanged everywhere else, while the cavity's own
+!! `heat_cavity` / `salt_cavity` must NOT be masked.  The mask is an
+!! OPTIONAL `cover_frac` argument (absent ⇒ the original kernel,
+!! byte-identical) and it is applied in the **assembler**, not at apply
+!! time.  That choice is load-bearing, for two reasons:
+!!
+!!   1. `Q_heat` / `Q_salt` are not only the apply kernel's input — they
+!!      are what KPP and EPBL read to build `B_0`.  Masking at apply
+!!      time would leave both boundary-layer schemes forced by an
+!!      atmosphere that is not there, with the tracer deposit correct
+!!      and the mixing wrong: a plausible, publishable, wrong answer.
+!!   2. The assembler is the ONE place where the atmospheric bands and
+!!      the cavity bands are still distinguishable.  After it, `Q_heat`
+!!      is a sum, and any factor applied to the sum would also scale
+!!      `heat_cavity` — i.e. mask away the melt flux the cover is
+!!      supposed to admit.
+!!
+!! The two surface kernels that do NOT route through `Q_heat`/`Q_salt`
+!! carry the same optional argument and mask themselves:
+!! `ocean_surface_flux_apply_sw_penetration` (it reads `q_sw`, a
+!! pristine INPUT component, on the `sw_source="q_sw"` branch — and even
+!! on the `net_heat` branch it must not *move* heat that the masked
+!! deposit never added) and `ocean_surface_restore_apply_tracers` (it
+!! forms its flux in-kernel from the live SST/SSS).  With the component
+!! set OFF there is no assembler, so the static `Q_heat`/`Q_salt` fill is
+!! masked once at configure by `ocean_surface_flux_apply_cover_const`.
+!!
 !!   (e) register your component in the restart registry if it is
 !!       time-varying (`registry_register_2d`, `optional=.true.`,
 !!       `device_mapped=.true.`) — the assembler's own outputs
@@ -67,6 +96,7 @@ module rdb_ocean_surface_flux
    public :: ocean_surface_flux_apply_sw_penetration
    public :: ocean_surface_restore_apply_tracers
    public :: ocean_surface_flux_assemble
+   public :: ocean_surface_flux_apply_cover_const
    public :: sw_transmission
    public :: sw_pe_cost_shape
    public :: sw_source_is_implemented
@@ -217,6 +247,19 @@ module rdb_ocean_surface_flux
          !! either sign; MOM6 `heat_added`).  The v1 ice coupler's
          !! `heat_flux_diag` lands here (§5.4 of the PR-12 plan) —
          !! it is already a net W/m^2, not further decomposable.
+      real(wp), allocatable :: heat_cavity(:, :)
+         !! **Ice-shelf cavity basal-melt heat component** (W/m^2, same
+         !! positive-DOWN-into-the-ocean convention as every other heat
+         !! band; `&ocean_cavity_melt_nml`).  OWNED by
+         !! `rdb_ocean_cavity_flux`; written `heat_cavity = -q_ocean`,
+         !! where `q_ocean = rho_w*c_w*gamma_t*(T_w - T_b) > 0` is the
+         !! kernel's turbulent heat flux OCEAN -> INTERFACE, so warm
+         !! water under a shelf COOLS the top of the column.  It is a
+         !! SEPARATE field from `heat_added` precisely because the
+         !! sea-ice coupler full-overwrites `heat_added` — two writers
+         !! on one slot clobber silently (cavity x sea ice is refused
+         !! today, but the ownership rule must not depend on that).
+         !! Zero unless a cavity melt step ran.
 
       real(wp), allocatable :: evap(:, :)
          !! Evaporative mass flux (kg/m^2/s, **<= 0** — MOM6 convention,
@@ -272,6 +315,36 @@ module rdb_ocean_surface_flux
          !! salinifies**) — a filler writes this (e.g. the ice brine
          !! coupler); the assembler adds `Q_salt_const` to produce
          !! `Q_salt`.  Virtual in v1 (no column-mass change).
+      real(wp), allocatable :: salt_cavity(:, :)
+         !! **Ice-shelf cavity basal-melt salt component**, same units
+         !! and sign as `salt_flux` (positive salinifies;
+         !! `&ocean_cavity_melt_nml`).  OWNED by `rdb_ocean_cavity_flux`
+         !! and never written by the ice coupler, which full-overwrites
+         !! `salt_flux`.
+         !!
+         !! **The fixed-mass dilution equivalent.**
+         !!
+         !!   `salt_cavity = -m_mass*(S_far - s_ice)`
+         !!
+         !! is the exact fixed-mass equivalent of adding mass `m_mass` at
+         !! salinity `s_ice` — see the derivation in
+         !! `rdb_ocean_cavity_flux`'s module docstring.  Melting
+         !! (`m_mass > 0`, `S_far > s_ice`) therefore FRESHENS.
+         !!
+         !! Under `&ocean_cavity_melt_nml freshwater="virtual"` (the
+         !! default) that IS the meltwater's whole effect: no mass moves.
+         !!
+         !! Under `freshwater="mass"` the meltwater is a REAL volume
+         !! source on the top layer and this component is NOT the
+         !! salinity tendency any more — but it is STILL assembled into
+         !! `Q_salt` unchanged, because `Q_salt` is also what KPP and
+         !! EPBL read to build `B_0`, and this term is the dominant
+         !! (freshening) part of the surface buoyancy flux there.
+         !! `ocean_cavity_mass_step` takes the increment back out of the
+         !! SALINITY TRACER (and out of the pseudo-salt mirror) in the
+         !! same stage, as the exact negation of what
+         !! `apply_surface_src_2d_impl` stamped.  So: one field, two
+         !! readers, and only the tracer reader is corrected.
 
       real(wp), allocatable :: p_surf_atm(:, :)
          !! **Input component.**  Atmospheric surface-pressure load
@@ -329,6 +402,7 @@ contains
       if (allocated(this%q_lat)) deallocate (this%q_lat)
       if (allocated(this%q_sens)) deallocate (this%q_sens)
       if (allocated(this%heat_added)) deallocate (this%heat_added)
+      if (allocated(this%heat_cavity)) deallocate (this%heat_cavity)
       if (allocated(this%evap)) deallocate (this%evap)
       if (allocated(this%lprec)) deallocate (this%lprec)
       if (allocated(this%fprec)) deallocate (this%fprec)
@@ -345,6 +419,7 @@ contains
       if (allocated(this%heat_content_massin)) deallocate (this%heat_content_massin)
       if (allocated(this%heat_content_massout)) deallocate (this%heat_content_massout)
       if (allocated(this%salt_flux)) deallocate (this%salt_flux)
+      if (allocated(this%salt_cavity)) deallocate (this%salt_cavity)
       if (allocated(this%p_surf_atm)) deallocate (this%p_surf_atm)
       if (allocated(this%p_surf)) deallocate (this%p_surf)
    end subroutine ocean_surfflux_dealloc_components
@@ -366,21 +441,25 @@ contains
       !$acc update device(this%Q_heat, this%Q_salt)
       if (this%use_components) then
          !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&                  this%heat_added, this%evap, this%lprec, this%fprec, &
+         !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
+         !$acc&                  this%lprec, this%fprec, &
          !$acc&                  this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&                  this%heat_content_lprec, this%heat_content_fprec, &
          !$acc&                  this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&                  this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                  this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                  this%salt_flux, this%p_surf_atm, this%p_surf)
+         !$acc&                  this%salt_flux, this%salt_cavity, &
+         !$acc&                  this%p_surf_atm, this%p_surf)
          !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&               this%heat_added, this%evap, this%lprec, this%fprec, &
+         !$acc&               this%heat_added, this%heat_cavity, this%evap, &
+         !$acc&               this%lprec, this%fprec, &
          !$acc&               this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&               this%heat_content_lprec, this%heat_content_fprec, &
          !$acc&               this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&               this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&               this%heat_content_massin, this%heat_content_massout, &
-         !$acc&               this%salt_flux, this%p_surf_atm, this%p_surf)
+         !$acc&               this%salt_flux, this%salt_cavity, &
+         !$acc&               this%p_surf_atm, this%p_surf)
       end if
    end subroutine ocean_surfflux_enter_data_impl
 
@@ -396,13 +475,15 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: this
       if (this%use_components) then
          !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&                 this%heat_added, this%evap, this%lprec, this%fprec, &
+         !$acc&                 this%heat_added, this%heat_cavity, this%evap, &
+         !$acc&                 this%lprec, this%fprec, &
          !$acc&                 this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&                 this%heat_content_lprec, this%heat_content_fprec, &
          !$acc&                 this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&                 this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                 this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                 this%salt_flux, this%p_surf_atm, this%p_surf)
+         !$acc&                 this%salt_flux, this%salt_cavity, &
+         !$acc&                 this%p_surf_atm, this%p_surf)
       end if
       !$acc exit data delete(this%Q_heat, this%Q_salt)
    end subroutine ocean_surfflux_exit_data_impl
@@ -531,7 +612,7 @@ contains
    end subroutine ocean_surfflux_set_components
 
    subroutine ocean_surfflux_alloc_components(this, grid)
-      !! Allocate the 20-field component set + the two `p_surf*` fields,
+      !! Allocate the 22-field component set + the two `p_surf*` fields,
       !! all `source=0.0_wp`, shape `(nx_total, ny_total)`.  Private —
       !! called only from `set_components`.
       class(ocean_surface_flux_t), intent(inout) :: this
@@ -544,6 +625,7 @@ contains
       allocate (this%q_lat(nx, ny), source=0.0_wp)
       allocate (this%q_sens(nx, ny), source=0.0_wp)
       allocate (this%heat_added(nx, ny), source=0.0_wp)
+      allocate (this%heat_cavity(nx, ny), source=0.0_wp)
       allocate (this%evap(nx, ny), source=0.0_wp)
       allocate (this%lprec(nx, ny), source=0.0_wp)
       allocate (this%fprec(nx, ny), source=0.0_wp)
@@ -560,6 +642,7 @@ contains
       allocate (this%heat_content_massin(nx, ny), source=0.0_wp)
       allocate (this%heat_content_massout(nx, ny), source=0.0_wp)
       allocate (this%salt_flux(nx, ny), source=0.0_wp)
+      allocate (this%salt_cavity(nx, ny), source=0.0_wp)
       allocate (this%p_surf_atm(nx, ny), source=0.0_wp)
       allocate (this%p_surf(nx, ny), source=0.0_wp)
    end subroutine ocean_surfflux_alloc_components
@@ -630,13 +713,13 @@ contains
             call apply_surface_src_2d_dyn_impl(ms%tracers(idx_T)%hTr, &
                                                ms%heat_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_heat, &
-                                               dt/(sf%rho0*sf%cp), nz, nx, ny)
+                                               dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
          end if
          if (idx_S > 0 .and. sf%has_salt) then
             call apply_surface_src_2d_dyn_impl(ms%tracers(idx_S)%hTr, &
                                                ms%salt_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_salt, &
-                                               dt/sf%rho0, nz, nx, ny)
+                                               dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
          ! Pseudo-salt mirror: exactly salinity's surface salt flux,
          ! but through the NOBUDGET twin — budget_id = NONE so it must
@@ -645,7 +728,7 @@ contains
          if (idx_ps > 0 .and. sf%has_salt) then
             call apply_surface_src_2d_dyn_nobudget_impl(ms%tracers(idx_ps)%hTr, &
                                                         ms%wet_mask, wet_dyn, sf%Q_salt, &
-                                                        dt/sf%rho0, nz, nx, ny)
+                                                        dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
          return
       end if
@@ -653,28 +736,41 @@ contains
          call apply_surface_src_2d_impl(ms%tracers(idx_T)%hTr, &
                                         ms%heat_budget_surface, &
                                         ms%wet_mask, sf%Q_heat, &
-                                        dt/(sf%rho0*sf%cp), nz, nx, ny)
+                                        dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
       end if
       if (idx_S > 0 .and. sf%has_salt) then
          call apply_surface_src_2d_impl(ms%tracers(idx_S)%hTr, &
                                         ms%salt_budget_surface, &
                                         ms%wet_mask, sf%Q_salt, &
-                                        dt/sf%rho0, nz, nx, ny)
+                                        dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
       ! Pseudo-salt mirror (plain, static-mask path) — see note above.
       if (idx_ps > 0 .and. sf%has_salt) then
          call apply_surface_src_2d_nobudget_impl(ms%tracers(idx_ps)%hTr, &
                                                  ms%wet_mask, sf%Q_salt, &
-                                                 dt/sf%rho0, nz, nx, ny)
+                                                 dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
    end subroutine ocean_surface_flux_apply_tracers
 
    pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, &
-                                             inv_scale, nz, nx, ny)
-      !! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the top
-      !! layer (k = nz) of a tracer's hTr array, mirror into the matching
-      !! budget contributor.  Explicit-shape dummies so NVHPC stdpar can
-      !! compile device kernels against static bounds.
+                                             inv_scale, k_top, nz, nx, ny)
+      !! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the first
+      !! LIVE layer (`k_top(i,j)`) of a tracer's hTr array, mirror into
+      !! the matching budget contributor.  Explicit-shape dummies so
+      !! NVHPC stdpar can compile device kernels against static bounds.
+      !!
+      !! **Why `k_top` and not `nz`.** Under a quasi-geopotential
+      !! coordinate beneath an ice shelf the layers inside the draft are
+      !! inert fillers, so on a covered column `k = nz` carries
+      !! `zstar_h_min` of water.  A flux stamped there is neither
+      !! diffused down (the vdiff tracer matrix decouples a vanished row
+      !! to the identity) nor kept (the next ALE remap drains it on
+      !! `h_old <= H_FLOOR`) — but the budget mirror on the line below
+      !! still counts it, so the column leaks exactly the deposit, every
+      !! thermo step.  The atmospheric part of `Q_field` is zero under
+      !! cover, but the cavity's own `heat_cavity`/`salt_cavity` pass
+      !! through `ocean_surface_flux_assemble` UNMASKED, which is why
+      !! this is the load-bearing site of the whole `k_top` slice.
       !!
       !! `inv_scale` = dt/(rho0·cp) for heat, dt/rho0 for salt — a
       !! column-invariant multiplier that the caller derives from `sf`.
@@ -688,17 +784,23 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top` — the first LIVE layer counting down from the top.
+         !! `nz` on every column that has no top-side filler (which is
+         !! every column on every coordinate but `z_fixed` under a rigid
+         !! top), so this reads the same memory as the literal `nz` it
+         !! replaced and the arithmetic is bit-identical.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
-         budget(i, j, nz) = budget(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_impl
 
    pure subroutine apply_surface_src_2d_dyn_impl(hTr, budget, wet_mask, wet_dyn, &
-                                                 Q_field, inv_scale, nz, nx, ny)
+                                                 Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry variant of `apply_surface_src_2d_impl`: the DYNAMIC cell
       !! wet mask composes multiplicatively with the static one, so a
       !! dynamically dry column (total depth below `&ocean_wetdry_nml
@@ -714,17 +816,19 @@ contains
       real(wp), intent(in)    :: wet_dyn(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
-         budget(i, j, nz) = budget(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_dyn_impl
 
    pure subroutine apply_surface_src_2d_nobudget_impl(hTr, wet_mask, Q_field, &
-                                                      inv_scale, nz, nx, ny)
+                                                      inv_scale, k_top, nz, nx, ny)
       !! Byte-for-byte copy of `apply_surface_src_2d_impl` with the
       !! `budget` dummy and its accumulation line removed — the
       !! pseudo-salt mirror of salinity's surface flux, which by
@@ -739,16 +843,20 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.  The SAME index salinity
+         !! used, so the pseudo-salt increment stays bit-identical to
+         !! salinity's and the deviation keeps measuring transport.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_nobudget_impl
 
    pure subroutine apply_surface_src_2d_dyn_nobudget_impl(hTr, wet_mask, wet_dyn, &
-                                                          Q_field, inv_scale, nz, nx, ny)
+                                                          Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry NOBUDGET twin — see `apply_surface_src_2d_nobudget_impl`
       !! and `apply_surface_src_2d_dyn_impl`.
       integer, intent(in)    :: nz, nx, ny
@@ -757,15 +865,17 @@ contains
       real(wp), intent(in)    :: wet_dyn(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
+      integer, intent(in)    :: k_top(nx, ny)
+         !! See `apply_surface_src_2d_impl`.
       integer :: i, j
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + cell
+         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
-   subroutine ocean_surface_flux_apply_sw_penetration(grid, sf, ms, dt, active)
+   subroutine ocean_surface_flux_apply_sw_penetration(grid, sf, ms, dt, active, cover_frac)
       !! Additive correction that redistributes the penetrating
       !! shortwave fraction of `Q_heat` through the upper water column
       !! as a two-band exponential (Paulson & Simpson 1977; Jerlov
@@ -800,8 +910,22 @@ contains
       logical, intent(in), optional :: active
          !! Optional thermo-cadence gate.  Present-and-false ⇒ early
          !! return; absent ⇒ kernel runs.
+      real(wp), intent(in), optional :: cover_frac(:, :)
+         !! Optional ice-shelf cover fraction (`metrics%cover_frac`,
+         !! v1 binary).  Present ⇒ the penetrating irradiance is scaled
+         !! by `1 - cover_frac`, so a covered column absorbs NOTHING —
+         !! no sunlight reaches the ocean through several hundred metres
+         !! of ice.  Needed even on the `sw_source="net_heat"` branch,
+         !! where `Q_heat` is already assembler-masked: this kernel's
+         !! job is to MOVE a surface lump down the column, and on a
+         !! masked column the lump it would remove was never deposited
+         !! (the same argument `&ocean_wetdry_nml` makes for a dry
+         !! column).  Absent ⇒ the original kernel, byte-identical.
+      ! assumed-shape-ok: thermo-cadence shim, forwarded to an
+      ! explicit-shape `_impl` before the device loop.
 
       integer :: nx, ny, nz, idx_T
+      logical :: masked
 
       if (present(active)) then
          if (.not. active) return
@@ -826,6 +950,28 @@ contains
       ! enable_components when sw_source="q_sw", making this total).  The
       ! additive-correction identity `-I0 + Σ_k I0·(T_top - T_bot) = 0`
       ! holds for ANY I0, so the source swap cannot break conservation.
+      masked = .false.
+      if (present(cover_frac)) then
+         masked = (size(cover_frac, 1) == nx .and. size(cover_frac, 2) == ny)
+      end if
+      if (masked) then
+         if (sf%sw_from_qsw) then
+            call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%hTr, &
+                                                 ms%heat_budget_surface, &
+                                                 ms%h_layer, ms%wet_mask, cover_frac, sf%q_sw, &
+                                                 dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
+                                                 sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
+                                                 nz, nx, ny)
+         else
+            call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%hTr, &
+                                                 ms%heat_budget_surface, &
+                                                 ms%h_layer, ms%wet_mask, cover_frac, sf%Q_heat, &
+                                                 dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
+                                                 sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
+                                                 nz, nx, ny)
+         end if
+         return
+      end if
       if (sf%sw_from_qsw) then
          call apply_sw_penetration_impl(ms%tracers(idx_T)%hTr, &
                                         ms%heat_budget_surface, &
@@ -945,7 +1091,56 @@ contains
       end do
    end subroutine apply_sw_penetration_impl
 
-   subroutine ocean_surface_restore_apply_tracers(grid, sf, ms, dt, active)
+   pure subroutine apply_sw_penetration_cover_impl(hTr, budget, h_layer, wet_mask, &
+                                                   cover_frac, sw_src, inv_scale, &
+                                                   sw_pen_frac, R, zeta1, zeta2, nz, nx, ny)
+      !! Ice-shelf-cover twin of `apply_sw_penetration_impl`: the
+      !! open-water factor `1 - cover_frac` composes multiplicatively
+      !! with `wet_mask` into the column irradiance `I0`, so a fully
+      !! covered column neither removes the surface lump nor deposits a
+      !! profile — it is left EXACTLY untouched.  Separate `_impl`, not
+      !! an in-loop `present()` test (house idiom, see
+      !! `apply_surface_src_2d_dyn_impl`) — the cover-off path keeps the
+      !! original kernel byte-identical.
+      !!
+      !! The additive-correction conservation identity
+      !! `-I0 + Σ_k I0·(T_top - T_bot) = 0` holds for ANY `I0`, and
+      !! `I0 = 0` is the degenerate case of it, so scaling the source
+      !! cannot break column heat conservation.
+      integer, intent(in)    :: nz, nx, ny
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: budget(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      real(wp), intent(in)    :: wet_mask(nx, ny)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      real(wp), intent(in)    :: sw_src(nx, ny)
+      real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
+      integer :: i, j, k
+      real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
+
+      do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
+                                          trans_bot, absorbed, add, k)
+         i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
+         d_top = 0.0_wp
+         do k = nz, 1, -1
+            d_bot = d_top + h_layer(i, j, k)
+            trans_top = sw_transmission(d_top, R, zeta1, zeta2)
+            if (k > 1) then
+               trans_bot = sw_transmission(d_bot, R, zeta1, zeta2)
+            else
+               trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
+            end if
+            absorbed = i0col*(trans_top - trans_bot)
+            add = inv_scale*absorbed
+            if (k == nz) add = add - inv_scale*i0col   ! remove the surface lump
+            hTr(i, j, k) = hTr(i, j, k) + add
+            budget(i, j, k) = budget(i, j, k) + add
+            d_top = d_bot
+         end do
+      end do
+   end subroutine apply_sw_penetration_cover_impl
+
+   subroutine ocean_surface_restore_apply_tracers(grid, sf, ms, dt, active, cover_frac)
       !! Surface buoyancy restoring (MOM6 `RESTOREBUOY`): relax the
       !! top-layer (`k = nz`) temperature / salinity toward scalar
       !! targets with a piston velocity `p` [m/s].  Unlike
@@ -997,8 +1192,19 @@ contains
       logical, intent(in), optional :: active
          !! Optional thermo-cadence gate.  Present-and-false ⇒ early
          !! return; absent ⇒ kernel runs.
+      real(wp), intent(in), optional :: cover_frac(:, :)
+         !! Optional ice-shelf cover fraction (`metrics%cover_frac`,
+         !! v1 binary).  Present ⇒ the restoring increment is scaled by
+         !! `1 - cover_frac`, so a covered column is NOT relaxed toward
+         !! an atmospheric target — under a shelf the surface is a
+         !! melting ice interface, and restoring there would overwhelm
+         !! the melt signal with a number the atmosphere never set.
+         !! Absent ⇒ the original kernel, byte-identical.
+      ! assumed-shape-ok: thermo-cadence shim, forwarded to an
+      ! explicit-shape `_impl` before the device loop.
 
       integer :: nx, ny, nz, idx_T, idx_S
+      logical :: masked
 
       if (present(active)) then
          if (.not. active) return
@@ -1012,6 +1218,30 @@ contains
       nz = ms%nz_ml
       idx_T = ms%idx_temperature
       idx_S = ms%idx_salinity
+
+      masked = .false.
+      if (present(cover_frac)) then
+         masked = (size(cover_frac, 1) == nx .and. size(cover_frac, 2) == ny)
+      end if
+      if (masked) then
+         if (idx_T > 0 .and. sf%has_restore_T) then
+            call apply_surface_restore_2d_cover_impl(ms%tracers(idx_T)%hTr, &
+                                                     ms%heat_budget_surface, &
+                                                     ms%h_layer, ms%wet_mask, cover_frac, &
+                                                     dt*sf%restore_piston_T, &
+                                                     sf%restore_T_target, sf%h_min, &
+                                                     nz, nx, ny)
+         end if
+         if (idx_S > 0 .and. sf%has_restore_S) then
+            call apply_surface_restore_2d_cover_impl(ms%tracers(idx_S)%hTr, &
+                                                     ms%salt_budget_surface, &
+                                                     ms%h_layer, ms%wet_mask, cover_frac, &
+                                                     dt*sf%restore_piston_S, &
+                                                     sf%restore_S_target, sf%h_min, &
+                                                     nz, nx, ny)
+         end if
+         return
+      end if
 
       ! Shim+_impl split: keep the `tracers(idx)%hTr` registry deref on
       ! the host (array-of-DT indirection blocks NVHPC device codegen).
@@ -1066,6 +1296,33 @@ contains
       end do
    end subroutine apply_surface_restore_2d_impl
 
+   pure subroutine apply_surface_restore_2d_cover_impl(hTr, budget, h_layer, &
+                                                       wet_mask, cover_frac, dt_piston, &
+                                                       tgt, h_min, nz, nx, ny)
+      !! Ice-shelf-cover twin of `apply_surface_restore_2d_impl`: the
+      !! open-water factor `1 - cover_frac` composes multiplicatively
+      !! with `wet_mask`, so a covered column receives EXACTLY zero
+      !! restoring — and, because the same factor multiplies the budget
+      !! mirror, exactly zero restoring shows up in the heat/salt
+      !! surface budget there too.  Separate `_impl`, not an in-loop
+      !! `present()` test (house idiom).
+      integer, intent(in)    :: nz, nx, ny
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: budget(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      real(wp), intent(in)    :: wet_mask(nx, ny)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      real(wp), intent(in)    :: dt_piston, tgt, h_min
+      integer :: i, j
+      real(wp) :: surf, inc
+      do concurrent(j=1:ny, i=1:nx) local(surf, inc)
+         surf = hTr(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         inc = dt_piston*(tgt - surf)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
+         hTr(i, j, nz) = hTr(i, j, nz) + inc
+         budget(i, j, nz) = budget(i, j, nz) + inc
+      end do
+   end subroutine apply_surface_restore_2d_cover_impl
+
    pure function ocean_surface_flux_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the surface flux slot
       !! (0 when unallocated). One arr_bytes term per array — add a
@@ -1077,6 +1334,7 @@ contains
                + arr_bytes(this%q_sw) + arr_bytes(this%q_lw) &
                + arr_bytes(this%q_lat) + arr_bytes(this%q_sens) &
                + arr_bytes(this%heat_added) &
+               + arr_bytes(this%heat_cavity) &
                + arr_bytes(this%evap) + arr_bytes(this%lprec) &
                + arr_bytes(this%fprec) + arr_bytes(this%vprec) &
                + arr_bytes(this%lrunoff) + arr_bytes(this%frunoff) &
@@ -1090,10 +1348,62 @@ contains
                + arr_bytes(this%heat_content_massin) &
                + arr_bytes(this%heat_content_massout) &
                + arr_bytes(this%salt_flux) &
+               + arr_bytes(this%salt_cavity) &
                + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf)
    end function ocean_surface_flux_bytes
 
-   pure subroutine ocean_surface_flux_assemble(grid, sf, ms, active)
+   pure subroutine ocean_surface_flux_apply_cover_const(sf, cover_frac)
+      !! Mask the STATIC scalar `Q_heat` / `Q_salt` fill with the
+      !! ice-shelf cover, for the `use_components = .false.` path only.
+      !!
+      !! With the component set on, `Q_heat`/`Q_salt` are assembler
+      !! outputs and the mask belongs there (`ocean_surface_flux_assemble`'s
+      !! `cover_frac`); writing them here would be a second writer on an
+      !! assembler-owned slot, which the fill contract forbids.  With the
+      !! component set OFF there is no assembler, `Q_heat`/`Q_salt` are
+      !! the configure-time `set_surface_flux_const` fill and nothing
+      !! rewrites them per step — so masking them once, at configure
+      !! after the cover is built, is the whole job.  Without this, a
+      !! geometry-only cavity run (`&ocean_cavity_dyn_nml` with no melt)
+      !! would still push a uniform `&ocean_thermo_nml q_heat` through
+      !! the ice.
+      !!
+      !! No-op when the component set is on, when the fields are
+      !! unallocated, or when `cover_frac` is the `(1,1)` placeholder.
+      !! Idempotent (multiplies by 0 or 1).  Host-side at configure —
+      !! call BEFORE `enter_data` (or follow with an `!$acc update
+      !! device`).
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      real(wp), intent(in) :: cover_frac(:, :)
+         !! Ice-cover fraction at cell centres (`metrics%cover_frac`).
+      ! assumed-shape-ok: configure-time, one call per run.
+      integer :: nx, ny
+
+      if (sf%use_components) return
+      if (.not. allocated(sf%Q_heat) .or. .not. allocated(sf%Q_salt)) return
+      nx = size(sf%Q_heat, 1)
+      ny = size(sf%Q_heat, 2)
+      if (size(cover_frac, 1) /= nx .or. size(cover_frac, 2) /= ny) return
+      call ocean_surfflux_cover_const_impl(sf%Q_heat, sf%Q_salt, cover_frac, nx, ny)
+   end subroutine ocean_surface_flux_apply_cover_const
+
+   pure subroutine ocean_surfflux_cover_const_impl(Q_heat, Q_salt, cover_frac, nx, ny)
+      !! Flat `do concurrent` kernel behind
+      !! `ocean_surface_flux_apply_cover_const` — explicit-shape dummies,
+      !! integer dims first (decl-order, ifx #8586).
+      integer, intent(in)    :: nx, ny
+      real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      integer :: i, j
+      real(wp) :: open_f
+      do concurrent(j=1:ny, i=1:nx) local(open_f)
+         open_f = 1.0_wp - cover_frac(i, j)
+         Q_heat(i, j) = Q_heat(i, j)*open_f
+         Q_salt(i, j) = Q_salt(i, j)*open_f
+      end do
+   end subroutine ocean_surfflux_cover_const_impl
+
+   pure subroutine ocean_surface_flux_assemble(grid, sf, ms, active, cover_frac)
       !! **The single gate** that derives `Q_heat`/`Q_salt` from the
       !! component set (§3.1/§3.3 of the PR-12 plan) — the exact analogue
       !! of `vmix_assemble`: fillers contribute components, this routine
@@ -1104,12 +1414,12 @@ contains
       !!
       !! Net surface heat into the ocean:
       !!   Q_heat = Q_heat_const + q_sw + q_lw + q_lat + q_sens + heat_added
-      !!          + heat_content_massin + heat_content_massout
+      !!          + heat_cavity + heat_content_massin + heat_content_massout
       !!   heat_content_massin  = Σ heat_content_{lprec,fprec,vprec,
       !!                            lrunoff,frunoff,seaice_melt}
       !!   heat_content_massout = SEAWATER_CP * T_sst * evap
       !! Net surface salt flux:
-      !!   Q_salt = Q_salt_const + salt_flux
+      !!   Q_salt = Q_salt_const + salt_flux + salt_cavity
       !! All four outputs multiplied by `ms%wet_mask` (land carries
       !! exactly zero; interior loop bounds are NOT restricted — see
       !! CLAUDE.md's "nghost and the assembler loop bounds" gotcha).
@@ -1137,8 +1447,22 @@ contains
          !! Optional thermo-cadence gate.  Present-and-false ⇒ early
          !! return; absent ⇒ kernel runs (matches
          !! `ocean_surface_flux_apply_tracers`'s convention).
+      real(wp), intent(in), optional :: cover_frac(:, :)
+         !! Optional ice-shelf cover fraction (`metrics%cover_frac`,
+         !! v1 binary).  Present ⇒ every ATMOSPHERIC contribution
+         !! (`Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`,
+         !! `heat_added`, both mass-enthalpy terms, `Q_salt_const`,
+         !! `salt_flux`) is scaled by `1 - cover_frac`, while the
+         !! cavity's OWN `heat_cavity` / `salt_cavity` pass through
+         !! unmasked.  This is the single place those two groups are
+         !! still distinguishable — see the module docstring for why the
+         !! mask lives here and not at apply time.  Absent ⇒ the
+         !! original kernel, byte-identical.
+      ! assumed-shape-ok: thermo-cadence shim, forwarded to an
+      ! explicit-shape `_impl` before the device loop.
 
       integer :: nx, ny, nz, idx_T
+      logical :: masked
 
       if (.not. sf%use_components) return
       if (present(active)) then
@@ -1152,22 +1476,41 @@ contains
       ny = grid%ny_total
       nz = ms%nz_ml
 
+      masked = .false.
+      if (present(cover_frac)) then
+         masked = (size(cover_frac, 1) == nx .and. size(cover_frac, 2) == ny)
+      end if
+      if (masked) then
+         call ocean_surfflux_assemble_cover_impl( &
+            sf%heat_content_massin, sf%heat_content_massout, sf%Q_heat, sf%Q_salt, &
+            sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%heat_added, sf%heat_cavity, &
+            sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
+            sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
+            sf%evap, sf%salt_flux, sf%salt_cavity, &
+            ms%tracers(idx_T)%hTr, ms%h_layer, ms%wet_mask, cover_frac, &
+            sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
+         return
+      end if
+
       call ocean_surfflux_assemble_impl( &
          sf%heat_content_massin, sf%heat_content_massout, sf%Q_heat, sf%Q_salt, &
-         sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%heat_added, &
+         sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%heat_added, sf%heat_cavity, &
          sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
          sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
-         sf%evap, sf%salt_flux, ms%tracers(idx_T)%hTr, ms%h_layer, ms%wet_mask, &
+         sf%evap, sf%salt_flux, sf%salt_cavity, &
+         ms%tracers(idx_T)%hTr, ms%h_layer, ms%wet_mask, &
          sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
    end subroutine ocean_surface_flux_assemble
 
    pure subroutine ocean_surfflux_assemble_impl(heat_content_massin, heat_content_massout, &
                                                 Q_heat, Q_salt, &
                                                 q_sw, q_lw, q_lat, q_sens, heat_added, &
+                                                heat_cavity, &
                                                 heat_content_lprec, heat_content_fprec, &
                                                 heat_content_vprec, heat_content_lrunoff, &
                                                 heat_content_frunoff, heat_content_seaice_melt, &
-                                                evap, salt_flux, hTr_T, h_layer, wet_mask, &
+                                                evap, salt_flux, salt_cavity, &
+                                                hTr_T, h_layer, wet_mask, &
                                                 Q_heat_const, Q_salt_const, cp, h_min, &
                                                 nz, nx, ny)
       !! Flat `do concurrent` kernel — explicit-shape dummies, integer
@@ -1178,11 +1521,11 @@ contains
       real(wp), intent(inout) :: heat_content_massin(nx, ny), heat_content_massout(nx, ny)
       real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
       real(wp), intent(in)    :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
-      real(wp), intent(in)    :: heat_added(nx, ny)
+      real(wp), intent(in)    :: heat_added(nx, ny), heat_cavity(nx, ny)
       real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
       real(wp), intent(in)    :: heat_content_vprec(nx, ny), heat_content_lrunoff(nx, ny)
       real(wp), intent(in)    :: heat_content_frunoff(nx, ny), heat_content_seaice_melt(nx, ny)
-      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny)
+      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_cavity(nx, ny)
       real(wp), intent(in)    :: hTr_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
       integer :: i, j
@@ -1198,9 +1541,75 @@ contains
          heat_content_massout(i, j) = wet_mask(i, j)*massout
          Q_heat(i, j) = wet_mask(i, j)* &
                         (Q_heat_const + q_sw(i, j) + q_lw(i, j) + q_lat(i, j) + &
-                         q_sens(i, j) + heat_added(i, j) + massin + massout)
-         Q_salt(i, j) = wet_mask(i, j)*(Q_salt_const + salt_flux(i, j))
+                         q_sens(i, j) + heat_added(i, j) + heat_cavity(i, j) + &
+                         massin + massout)
+         Q_salt(i, j) = wet_mask(i, j)*(Q_salt_const + salt_flux(i, j) + &
+                                        salt_cavity(i, j))
       end do
    end subroutine ocean_surfflux_assemble_impl
+
+   pure subroutine ocean_surfflux_assemble_cover_impl(heat_content_massin, &
+                                                      heat_content_massout, &
+                                                      Q_heat, Q_salt, &
+                                                      q_sw, q_lw, q_lat, q_sens, heat_added, &
+                                                      heat_cavity, &
+                                                      heat_content_lprec, heat_content_fprec, &
+                                                      heat_content_vprec, heat_content_lrunoff, &
+                                                      heat_content_frunoff, heat_content_seaice_melt, &
+                                                      evap, salt_flux, salt_cavity, &
+                                                      hTr_T, h_layer, wet_mask, cover_frac, &
+                                                      Q_heat_const, Q_salt_const, cp, h_min, &
+                                                      nz, nx, ny)
+      !! Ice-shelf-cover twin of `ocean_surfflux_assemble_impl`: the
+      !! open-water factor `open_f = 1 - cover_frac` multiplies the
+      !! ATMOSPHERIC group and NOT the cavity group.  Grouping, spelt
+      !! out because it is the whole point of this kernel:
+      !!
+      !!   masked   — `Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`,
+      !!              `heat_added`, `heat_content_massin` (the six
+      !!              mass-enthalpy companions), `heat_content_massout`
+      !!              (`cp·SST·evap`), `Q_salt_const`, `salt_flux`;
+      !!   UNmasked — `heat_cavity`, `salt_cavity`.
+      !!
+      !! The two `heat_content_mass*` OUTPUTS carry the factor too: they
+      !! are diagnostics of atmospheric mass exchange, which under a
+      !! shelf is zero, and reporting the unmasked value next to a
+      !! masked `Q_heat` would make the ledger not add up.
+      !!
+      !! Separate `_impl`, not an in-loop `present()` test (house
+      !! idiom) — the cover-off path keeps the production assembler
+      !! byte-identical.
+      integer, intent(in)    :: nz, nx, ny
+      real(wp), intent(inout) :: heat_content_massin(nx, ny), heat_content_massout(nx, ny)
+      real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
+      real(wp), intent(in)    :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
+      real(wp), intent(in)    :: heat_added(nx, ny), heat_cavity(nx, ny)
+      real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
+      real(wp), intent(in)    :: heat_content_vprec(nx, ny), heat_content_lrunoff(nx, ny)
+      real(wp), intent(in)    :: heat_content_frunoff(nx, ny), heat_content_seaice_melt(nx, ny)
+      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_cavity(nx, ny)
+      real(wp), intent(in)    :: hTr_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
+      integer :: i, j
+      real(wp) :: sst, massin, massout, open_f
+
+      do concurrent(j=1:ny, i=1:nx) local(sst, massin, massout, open_f)
+         open_f = 1.0_wp - cover_frac(i, j)
+         massin = open_f*(heat_content_lprec(i, j) + heat_content_fprec(i, j) &
+                          + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
+                          + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j))
+         sst = hTr_T(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         massout = open_f*cp*sst*evap(i, j)
+         heat_content_massin(i, j) = wet_mask(i, j)*massin
+         heat_content_massout(i, j) = wet_mask(i, j)*massout
+         Q_heat(i, j) = wet_mask(i, j)* &
+                        (open_f*(Q_heat_const + q_sw(i, j) + q_lw(i, j) + q_lat(i, j) + &
+                                 q_sens(i, j) + heat_added(i, j)) + &
+                         heat_cavity(i, j) + massin + massout)
+         Q_salt(i, j) = wet_mask(i, j)*(open_f*(Q_salt_const + salt_flux(i, j)) + &
+                                        salt_cavity(i, j))
+      end do
+   end subroutine ocean_surfflux_assemble_cover_impl
 
 end module rdb_ocean_surface_flux

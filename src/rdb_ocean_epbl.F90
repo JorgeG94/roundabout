@@ -207,6 +207,30 @@ module rdb_ocean_epbl
          !! guard in the TKE decay scale; MOM6 derives ~1e-10).
       real(wp) :: prandtl = 1.0_wp
          !! Kv = prandtl * Kd into the momentum solve.
+      logical :: in_eos = .false.
+         !! `&ocean_psurf_nml in_eos` (E3): start this scheme's column
+         !! pressure stack at `multilayer_state_t%p_top` (the ice-shelf
+         !! load + surface pressure, Pa) instead of at 0 Pa.
+         !!
+         !! The stack has TWO consumers here and the knob moves BOTH,
+         !! deliberately: the IN-SITU pressure argument of
+         !! `eos_specvol_derivs`, and the PE weight
+         !! `dpe_* = dmass*p_mid*dsv_*`.  They are the same pressure --
+         !! the weight is the hydrostatic load the layer's centre of mass
+         !! has to lift, and under a floating shelf the ice is part of
+         !! that load.  Splitting them would put two pressure conventions
+         !! in one column, which is the failure the `p_top` seam contract
+         !! exists to prevent.
+         !!
+         !! Host scalar, assigned by `configure_ocean_epbl` BEFORE
+         !! `enter_data`, and passed BY VALUE into the column kernel --
+         !! never read through the device-mapped handle.
+         !!
+         !! `.false.` (default) ⇒ the stack starts at 0 Pa, character for
+         !! character the pre-E3 arithmetic.  It is NOT enough that
+         !! `p_top` be the zero array: under a cavity `p_top` is the ice
+         !! load whether or not `in_eos` is set, so this gate is what
+         !! keeps an existing cavity + EPBL run bit-identical.
       logical :: tke_diags = .false.
          !! Compute + store the per-column TKE budget terms (W/m^2).
          !! The column ledger closes to round-off — see the design
@@ -857,7 +881,7 @@ contains
                                  sf%Q_salt, 1.0_wp/this%rho0, &
                                  sf%q_sw, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
-                                 ms%wet_mask, nx, ny)
+                                 ms%wet_mask, this%in_eos, nx, ny)
       else
          call epbl_column_kernel(grid, this, ms, &
                                  ms%tracers(ms%idx_temperature)%hTr, &
@@ -867,7 +891,7 @@ contains
                                  sf%Q_salt, 1.0_wp/this%rho0, &
                                  sf%Q_heat, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
-                                 ms%wet_mask, nx, ny)
+                                 ms%wet_mask, this%in_eos, nx, ny)
       end if
    end subroutine epbl_compute
 
@@ -876,7 +900,7 @@ contains
                                       Q_salt_field, inv_rho0, &
                                       sw_src_field, sw_ctke_active, sw_pen_frac, &
                                       sw_R, sw_zeta1, sw_zeta2, wet_mask_field, &
-                                      nx_arg, ny_arg)
+                                      p_top_in_eos, nx_arg, ny_arg)
       !! Per-column EPBL solve.  One `do concurrent (j, i)` with the
       !! serial work in k inside (j -> i -> k ordering); ALL sweep
       !! state is carried in scalars (design doc D6) — the only
@@ -935,6 +959,10 @@ contains
       real(wp), intent(in) :: wet_mask_field(:, :)   ! assumed-shape-ok: outer-shim pass; thermo cadence
          !! (PR-21) Wet mask — mirrors the deposition kernel's I0 gate so
          !! the ledger and the tracer field account the same heat.
+      logical, intent(in) :: p_top_in_eos
+         !! (E3) Seed the column pressure stack at `ms%p_top(i,j)` rather
+         !! than at 0 Pa — `&ocean_psurf_nml in_eos`, by value.  `.false.`
+         !! ⇒ the pre-E3 arithmetic, character for character.
       integer, intent(in) :: nx_arg, ny_arg
          !! Grid extents — used to bounds-check Q_* indexing.
 
@@ -1001,7 +1029,18 @@ contains
                ctke_sw_kb, r_sw)
 
          ! ---- Column prep: T0/S0 + PE/steric weights (downward) ----
+         ! (E3) The top of this column.  0 Pa at a free surface; the
+         ! ice-shelf load + surface pressure `ms%p_top(i,j)` under a lid,
+         ! when `&ocean_psurf_nml in_eos` is set.  Everything below
+         ! accumulates `g*rho_0*h` downward from here, so `p_mid` is a
+         ! true per-layer hydrostatic pressure either way — which is the
+         ! test the `p_top` seam contract applies to a joining builder.
+         ! It reaches BOTH consumers of the stack (the in-situ EOS
+         ! argument and the PE weight `dmass*p_mid*dsv`), because they
+         ! are the same pressure: the load a layer's centre of mass has
+         ! to lift, ice included.
          pres = 0.0_wp
+         if (p_top_in_eos) pres = ms%p_top(i, j)
          h_sum = 0.0_wp
          dsv_dt_sfc = 0.0_wp
          dsv_ds_sfc = 0.0_wp
@@ -1104,7 +1143,13 @@ contains
          ! (ocean_surface_stress_set_derived) — the inner sqrt(tau_xc^2 +
          ! tau_yc^2) below IS stress_mag, computed with the identical FP
          ! op order, so this substitution is bit-identical (§7.5).
-         ustar = max(sqrt(ss%stress_mag(i, j)/this%rho0), this%ustar_min)
+         ! Phase 4b: `stress_shelf` adds the ICE-SHELF base stress, which
+         ! is not in `tau` (the cover mask zeroes the wind there).  The
+         ! supports are disjoint, the field is always allocated, and it
+         ! is the zero array without a cavity — `x + 0.0` is `x`.  See
+         ! the contract in `rdb_ocean_surface_stress`.
+         ustar = max(sqrt((ss%stress_mag(i, j) + ss%stress_shelf(i, j))/ &
+                          this%rho0), this%ustar_min)
          absf = sqrt((1.0_wp - this%omega_frac)*this%f_centre(i, j)**2 + &
                      this%omega_frac*4.0_wp*this%omega**2)
          idecay = this%tke_decay*absf/ustar

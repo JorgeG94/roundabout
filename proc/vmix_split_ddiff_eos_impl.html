@@ -1,0 +1,1478 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>vmix_split_ddiff_eos_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>vmix_split_ddiff_eos_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">65 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_vmix.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_vmix.f90.html'>rdb_ocean_vmix.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></li>
+            <li class="breadcrumb-item active" aria-current="page">vmix_split_ddiff_eos_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-adt~2">adT</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-alpha_i">alpha_i</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-bds~2">bdS</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-beta_i">beta_i</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-ddiff~2">ddiff</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-hl~2">hl</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-hu~4">hu</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-i~167">i</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-j~161">j</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-k~101">k</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-kd_s~2">kd_s</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-kd_t~2">kd_t</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-kt_pre~2">kt_pre</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-nz~120">nz</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-p_int~2">p_int</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-rrho~2">rrho</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-s_l">s_l</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-s_u">s_u</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-t_l">t_l</a>
+            <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#variable-t_u">t_u</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/vmix_split_ddiff_eos_impl.html#src">vmix_split_ddiff_eos_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine vmix_split_ddiff_eos_impl(nx, ny, nzp1, kt, ks, temp_h, salt_h, h_layer, p_top, eos, rho0, p_top_in_eos, strat_param_max, kappa_s, exp1, exp2, param1, param2, param3, mol_diff, use_k90)  
+</h2>
+    
+
+    <p><code>buoyancy_coeffs = "eos"</code> twin of <code>vmix_split_ddiff_impl</code> — the
+SAME CVMix closed forms, the same branch structure, the same
+outputs; the only change is where <code>α</code> and <code>β</code> come from.</p>
+<p>The constant version forms <code>adT = α·ΔT</code> and <code>bdS = β·ΔS</code> with one
+scalar pair for the whole domain.  Here both are evaluated at the
+INTERFACE&rsquo;s own state — <code>eos_buoyancy_coeffs</code> at the mean of the
+two abutting layer (T, S) and at the in-situ hydrostatic pressure
+there.  The stratification parameter the closure actually
+branches on is the density ratio <code>R_ρ = α·ΔT / β·ΔS</code>, and under a
+nonlinear EOS α varies by a factor of several between a 25 degC
+surface and a −1.9 degC cavity, and again with depth, so a single
+α can put an interface in the wrong REGIME (fingering vs
+diffusive convection), not merely off by a coefficient.</p>
+<p><strong>Pressure.</strong> Seeded from <code>p_top</code> (the E3 surface-load seam) and
+accumulated DOWNWARD as <code>g·ρ₀·h</code>, exactly the way EPBL seeds and
+walks its <code>p_mid</code> stack — a true per-interface hydrostatic
+pressure, which is the test the <code>p_top</code> seam contract applies to
+any joining builder.  <code>eos%p_ref</code> deliberately does NOT enter: an
+interior interface has a real depth of its own, and adding a
+potential-density reference on top of it would double-count.
+(KPP&rsquo;s <code>B_0</code> is the other way round — it is a SURFACE flux with
+no depth of its own, so it falls back to <code>p_ref</code>.)</p>
+<p><strong>Why the loop nest differs from the constant twin.</strong> The
+pressure is a running sum down the column, so <code>k</code> cannot be part
+of the concurrent index set.  The constant path keeps its fully
+collapsed <code>(i, j, k)</code> launch untouched; this one is
+<code>do concurrent(j, i)</code> with a serial surface→bed <code>k</code> sweep, the
+same shape as <code>epbl_column_kernel</code> and <code>ks_solve_column</code>.</p>
+<p>Interface <code>k</code> sits at the BOTTOM of layer <code>k</code>, between layer <code>k</code>
+(upper, surfaceward — <code>hu</code>) and layer <code>k-1</code> (lower, bedward —
+<code>hl</code>); <code>k = nzp1</code> is the free surface and <code>k = 1</code> the bed, and
+both are left at <code>kd = 0</code> exactly as the constant twin leaves
+them, which is what preserves the closed-BC invariant.</p>
+<p>Explicit-shape dummies throughout (no assumed-shape in a
+<code>do concurrent</code>); <code>eos</code> is a flat POD passed by value, so the
+device copy is register-resident and <code>eos_buoyancy_coeffs</code> is
+reachable as an <code>!$acc routine seq</code> from the same shared library.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~178"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~178"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzp1~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzp1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong>(nx,ny,nzp1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ks~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ks</strong>(nx,ny,nzp1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-temp_h~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>temp_h</strong>(nx,ny,nzp1-1)</td>
+            <td>
+                <p><code>hTr</code> of temperature (degC·m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-salt_h~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>salt_h</strong>(nx,ny,nzp1-1)</td>
+            <td>
+                <p><code>hTr</code> of salinity (PSU·m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~30"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nzp1-1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_top~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_top</strong>(nx,ny)</td>
+            <td>
+                <p>Surface load (Pa) — <code>multilayer_state_t%p_top</code>, the zero array
+unless <code>&amp;ocean_psurf_nml in_eos</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~15"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                <p>Active EOS handle, by value.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+                <p>Boussinesq reference density for the hydrostatic accumulation
+(the one configured ρ₀ of record, via <code>vmix%rho0</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_top_in_eos~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_top_in_eos</strong></td>
+            <td>
+                <p>Whether to seed the stack from <code>p_top</code> — mirrors EPBL&rsquo;s gate.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strat_param_max~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strat_param_max</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_s~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_s</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-exp1~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>exp1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-exp2~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>exp2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-param1~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>param1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-param2~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>param2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-param3~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>param3</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mol_diff~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mol_diff</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_k90~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_k90</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_split_ddiff_eos_impl~~CallsGraph Pages: 1 -->
+<svg id="procvmix_split_ddiff_eos_implCallsGraph" width="456pt" height="74pt"
+ viewBox="0.00 0.00 456.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~vmix_split_ddiff_eos_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 452,-70 452,4 -4,4"/>
+<!-- proc~vmix_split_ddiff_eos_impl -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node1" class="node">
+<title>proc~vmix_split_ddiff_eos_impl</title>
+<polygon fill="none" stroke="black" points="147,-45 0,-45 0,-21 147,-21 147,-45"/>
+<text text-anchor="middle" x="73.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_split_ddiff_eos_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="273,-66 219,-66 219,-42 273,-42 273,-66"/>
+<text text-anchor="middle" x="246" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~vmix_split_ddiff_eos_impl&#45;&gt;local -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_edge1" class="edge">
+<title>proc~vmix_split_ddiff_eos_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M147.3,-41.97C168.49,-44.58 190.72,-47.31 208.62,-49.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="208.26,-53 218.61,-50.75 209.11,-46.05 208.26,-53"/>
+</g>
+<!-- proc~eos_buoyancy_coeffs -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node3" class="node">
+<title>proc~eos_buoyancy_coeffs</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node3"><a xlink:href="../proc/eos_buoyancy_coeffs.html" xlink:title="eos_buoyancy_coeffs">
+<polygon fill="#d9534f" stroke="#d9534f" points="309,-24 183,-24 183,0 309,0 309,-24"/>
+<text text-anchor="middle" x="246" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_buoyancy_coeffs</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_ddiff_eos_impl&#45;&gt;proc~eos_buoyancy_coeffs -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_edge2" class="edge">
+<title>proc~vmix_split_ddiff_eos_impl&#45;&gt;proc~eos_buoyancy_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M147.3,-24.03C155.73,-22.99 164.33,-21.94 172.75,-20.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.42,-24.34 182.91,-19.65 172.56,-17.4 173.42,-24.34"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node4" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CallsGraph_node4"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="448,-24 345,-24 345,0 448,0 448,-24"/>
+<text text-anchor="middle" x="396.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CallsGraph_edge3" class="edge">
+<title>proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#00ffff" d="M309.12,-12C317.59,-12 326.28,-12 334.74,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="334.89,-15.5 344.89,-12 334.89,-8.5 334.89,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~vmix_split_ddiff_eos_impl~~CalledByGraph Pages: 1 -->
+<svg id="procvmix_split_ddiff_eos_implCalledByGraph" width="641pt" height="53pt"
+ viewBox="0.00 0.00 641.00 53.48" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 70)">
+<title>proc~~vmix_split_ddiff_eos_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 883,-70 883,4 -4,4"/>
+<!-- proc~vmix_split_ddiff_eos_impl -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node1" class="node">
+<title>proc~vmix_split_ddiff_eos_impl</title>
+<polygon fill="none" stroke="black" points="879,-45 732,-45 732,-21 879,-21 879,-45"/>
+<text text-anchor="middle" x="805.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_split_ddiff_eos_impl</text>
+</g>
+<!-- proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node2" class="node">
+<title>proc~vmix_split_kd_heat_salt</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node2"><a xlink:href="../proc/vmix_split_kd_heat_salt.html" xlink:title="vmix_split_kd_heat_salt">
+<polygon fill="#d9534f" stroke="#d9534f" points="696,-45 560,-45 560,-21 696,-21 696,-45"/>
+<text text-anchor="middle" x="628" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_kd_heat_salt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_eos_impl -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_eos_impl</title>
+<path fill="none" stroke="#ff0000" d="M696.1,-33C704.52,-33 713.2,-33 721.82,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="721.89,-36.5 731.89,-33 721.89,-29.5 721.89,-36.5"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node3" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node3"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="524,-45 402,-45 402,-21 524,-21 524,-45"/>
+<text text-anchor="middle" x="463" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_split_kd_heat_salt</title>
+<path fill="none" stroke="#ff0000" d="M524.23,-33C532.58,-33 541.24,-33 549.84,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="549.88,-36.5 559.88,-33 549.88,-29.5 549.88,-36.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node4" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node4"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="352.5,-66 287.5,-66 287.5,-42 352.5,-42 352.5,-66"/>
+<text text-anchor="middle" x="320" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M352.64,-49.29C364.34,-47.55 378.11,-45.49 391.86,-43.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="392.46,-46.9 401.84,-41.96 391.43,-39.97 392.46,-46.9"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node5" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node5"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="366,-24 274,-24 274,0 366,0 366,-24"/>
+<text text-anchor="middle" x="320" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#ff0000" d="M366,-18.7C374.32,-19.94 383.18,-21.26 392.03,-22.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.58,-26.05 401.99,-24.06 392.61,-19.13 391.58,-26.05"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="224.5,-66 126.5,-66 126.5,-42 224.5,-42 224.5,-66"/>
+<text text-anchor="middle" x="175.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M224.74,-54C241.7,-54 260.6,-54 277,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="277.37,-57.5 287.37,-54 277.37,-50.5 277.37,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="238,-24 113,-24 113,0 238,0 238,-24"/>
+<text text-anchor="middle" x="175.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M238.17,-12C246.73,-12 255.47,-12 263.9,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="263.99,-15.5 273.99,-12 263.99,-8.5 263.99,-15.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node8" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_node8"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="77,-45 0,-45 0,-21 77,-21 77,-45"/>
+<text text-anchor="middle" x="38.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M77.11,-38.85C89.29,-40.75 103.1,-42.89 116.42,-44.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="116.05,-48.45 126.47,-46.53 117.13,-41.53 116.05,-48.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_split_ddiff_eos_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M77.11,-27.15C85.15,-25.9 93.91,-24.54 102.77,-23.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="103.44,-26.6 112.78,-21.6 102.36,-19.68 103.44,-26.6"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_split_ddiff_eos_implCalledByGraph = svgPanZoom('#procvmix_split_ddiff_eos_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-adt~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>adT</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-alpha_i"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>alpha_i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bds~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bdS</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-beta_i"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>beta_i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ddiff~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ddiff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hu~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~167"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~161"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~101"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd_s~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kd_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd_t~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kd_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt_pre~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt_pre</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~120"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_int~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_int</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rrho~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rrho</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_u"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_u"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">vmix_split_ddiff_eos_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="n">temp_h</span><span class="p">,</span><span class="w"> </span><span class="n">salt_h</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">p_top</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">p_top_in_eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">strat_param_max</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_s</span><span class="p">,</span><span class="w"> </span><span class="n">exp1</span><span class="p">,</span><span class="w"> </span><span class="n">exp2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">param1</span><span class="p">,</span><span class="w"> </span><span class="n">param2</span><span class="p">,</span><span class="w"> </span><span class="n">param3</span><span class="p">,</span><span class="w"> </span><span class="n">mol_diff</span><span class="p">,</span><span class="w"> </span><span class="n">use_k90</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `buoyancy_coeffs = "eos"` twin of `vmix_split_ddiff_impl` — the</span>
+<span class="w">      </span><span class="c">!! SAME CVMix closed forms, the same branch structure, the same</span>
+<span class="w">      </span><span class="c">!! outputs; the only change is where `α` and `β` come from.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The constant version forms `adT = α·ΔT` and `bdS = β·ΔS` with one</span>
+<span class="w">      </span><span class="c">!! scalar pair for the whole domain.  Here both are evaluated at the</span>
+<span class="w">      </span><span class="c">!! INTERFACE's own state — `eos_buoyancy_coeffs` at the mean of the</span>
+<span class="w">      </span><span class="c">!! two abutting layer (T, S) and at the in-situ hydrostatic pressure</span>
+<span class="w">      </span><span class="c">!! there.  The stratification parameter the closure actually</span>
+<span class="w">      </span><span class="c">!! branches on is the density ratio `R_ρ = α·ΔT / β·ΔS`, and under a</span>
+<span class="w">      </span><span class="c">!! nonlinear EOS α varies by a factor of several between a 25 degC</span>
+<span class="w">      </span><span class="c">!! surface and a −1.9 degC cavity, and again with depth, so a single</span>
+<span class="w">      </span><span class="c">!! α can put an interface in the wrong REGIME (fingering vs</span>
+<span class="w">      </span><span class="c">!! diffusive convection), not merely off by a coefficient.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Pressure.** Seeded from `p_top` (the E3 surface-load seam) and</span>
+<span class="w">      </span><span class="c">!! accumulated DOWNWARD as `g·ρ₀·h`, exactly the way EPBL seeds and</span>
+<span class="w">      </span><span class="c">!! walks its `p_mid` stack — a true per-interface hydrostatic</span>
+<span class="w">      </span><span class="c">!! pressure, which is the test the `p_top` seam contract applies to</span>
+<span class="w">      </span><span class="c">!! any joining builder.  `eos%p_ref` deliberately does NOT enter: an</span>
+<span class="w">      </span><span class="c">!! interior interface has a real depth of its own, and adding a</span>
+<span class="w">      </span><span class="c">!! potential-density reference on top of it would double-count.</span>
+<span class="w">      </span><span class="c">!! (KPP's `B_0` is the other way round — it is a SURFACE flux with</span>
+<span class="w">      </span><span class="c">!! no depth of its own, so it falls back to `p_ref`.)</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Why the loop nest differs from the constant twin.** The</span>
+<span class="w">      </span><span class="c">!! pressure is a running sum down the column, so `k` cannot be part</span>
+<span class="w">      </span><span class="c">!! of the concurrent index set.  The constant path keeps its fully</span>
+<span class="w">      </span><span class="c">!! collapsed `(i, j, k)` launch untouched; this one is</span>
+<span class="w">      </span><span class="c">!! `do concurrent(j, i)` with a serial surface→bed `k` sweep, the</span>
+<span class="w">      </span><span class="c">!! same shape as `epbl_column_kernel` and `ks_solve_column`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Interface `k` sits at the BOTTOM of layer `k`, between layer `k`</span>
+<span class="w">      </span><span class="c">!! (upper, surfaceward — `hu`) and layer `k-1` (lower, bedward —</span>
+<span class="w">      </span><span class="c">!! `hl`); `k = nzp1` is the free surface and `k = 1` the bed, and</span>
+<span class="w">      </span><span class="c">!! both are left at `kd = 0` exactly as the constant twin leaves</span>
+<span class="w">      </span><span class="c">!! them, which is what preserves the closed-BC invariant.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Explicit-shape dummies throughout (no assumed-shape in a</span>
+<span class="w">      </span><span class="c">!! `do concurrent`); `eos` is a flat POD passed by value, so the</span>
+<span class="w">      </span><span class="c">!! device copy is register-resident and `eos_buoyancy_coeffs` is</span>
+<span class="w">      </span><span class="c">!! reachable as an `!$acc routine seq` from the same shared library.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ks</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">temp_h</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `hTr` of temperature (degC·m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">salt_h</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `hTr` of salinity (PSU·m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Surface load (Pa) — `multilayer_state_t%p_top`, the zero array</span>
+<span class="w">         </span><span class="c">!! unless `&amp;ocean_psurf_nml in_eos`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">         </span><span class="c">!! Active EOS handle, by value.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho0</span>
+<span class="w">         </span><span class="c">!! Boussinesq reference density for the hydrostatic accumulation</span>
+<span class="w">         </span><span class="c">!! (the one configured ρ₀ of record, via `vmix%rho0`).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_top_in_eos</span>
+<span class="w">         </span><span class="c">!! Whether to seed the stack from `p_top` — mirrors EPBL's gate.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">strat_param_max</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_s</span><span class="p">,</span><span class="w"> </span><span class="n">exp1</span><span class="p">,</span><span class="w"> </span><span class="n">exp2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">param1</span><span class="p">,</span><span class="w"> </span><span class="n">param2</span><span class="p">,</span><span class="w"> </span><span class="n">param3</span><span class="p">,</span><span class="w"> </span><span class="n">mol_diff</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_k90</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kt_pre</span><span class="p">,</span><span class="w"> </span><span class="n">adT</span><span class="p">,</span><span class="w"> </span><span class="n">bdS</span><span class="p">,</span><span class="w"> </span><span class="n">rrho</span><span class="p">,</span><span class="w"> </span><span class="n">ddiff</span><span class="p">,</span><span class="w"> </span><span class="n">kd_t</span><span class="p">,</span><span class="w"> </span><span class="n">kd_s</span><span class="p">,</span><span class="w"> </span><span class="n">hu</span><span class="p">,</span><span class="w"> </span><span class="n">hl</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_int</span><span class="p">,</span><span class="w"> </span><span class="n">t_u</span><span class="p">,</span><span class="w"> </span><span class="n">t_l</span><span class="p">,</span><span class="w"> </span><span class="n">s_u</span><span class="p">,</span><span class="w"> </span><span class="n">s_l</span><span class="p">,</span><span class="w"> </span><span class="n">alpha_i</span><span class="p">,</span><span class="w"> </span><span class="n">beta_i</span>
+
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nzp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kt_pre</span><span class="p">,</span><span class="w"> </span><span class="n">adT</span><span class="p">,</span><span class="w"> </span><span class="n">bdS</span><span class="p">,</span><span class="w"> </span><span class="n">rrho</span><span class="p">,</span><span class="w"> </span><span class="n">ddiff</span><span class="p">,</span><span class="w"> </span><span class="n">kd_t</span><span class="p">,</span><span class="w"> </span><span class="n">kd_s</span><span class="p">,</span><span class="w"> </span><span class="n">hu</span><span class="p">,</span><span class="w"> </span><span class="n">hl</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">p_int</span><span class="p">,</span><span class="w"> </span><span class="n">t_u</span><span class="p">,</span><span class="w"> </span><span class="n">t_l</span><span class="p">,</span><span class="w"> </span><span class="n">s_u</span><span class="p">,</span><span class="w"> </span><span class="n">s_l</span><span class="p">,</span><span class="w"> </span><span class="n">alpha_i</span><span class="p">,</span><span class="w"> </span><span class="n">beta_i</span><span class="p">)</span>
+<span class="w">         </span><span class="n">p_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p_top_in_eos</span><span class="p">)</span><span class="w"> </span><span class="n">p_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nzp1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="c">! Walk down from the free surface: stepping from interface</span>
+<span class="w">            </span><span class="c">! k+1 to interface k crosses layer k, so charge its weight</span>
+<span class="w">            </span><span class="c">! first.  At k = nzp1 nothing has been crossed yet and p_int</span>
+<span class="w">            </span><span class="c">! is still the surface load.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="n">p_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_int</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho0</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+
+<span class="w">            </span><span class="n">kt_pre</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">kd_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">kd_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">hu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w">      </span><span class="c">! upper layer (toward surface)</span>
+<span class="w">               </span><span class="n">hl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w">  </span><span class="c">! lower layer</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hu</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">hl</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">t_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">temp_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">hu</span>
+<span class="w">                  </span><span class="n">t_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">temp_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">hl</span>
+<span class="w">                  </span><span class="n">s_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">salt_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">hu</span>
+<span class="w">                  </span><span class="n">s_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">salt_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="n">hl</span>
+<span class="w">                  </span><span class="c">! α, β at the interface state: the mean of the two</span>
+<span class="w">                  </span><span class="c">! abutting layer centres (the same two-point average</span>
+<span class="w">                  </span><span class="c">! the ΔT / ΔS below are differences of), at the in-situ</span>
+<span class="w">                  </span><span class="c">! interface pressure.</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">eos_buoyancy_coeffs</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">t_u</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t_l</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">s_u</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s_l</span><span class="p">),</span><span class="w"> </span><span class="n">p_int</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">alpha_i</span><span class="p">,</span><span class="w"> </span><span class="n">beta_i</span><span class="p">)</span>
+<span class="w">                  </span><span class="c">! alpha*dT and beta*dS across interface k (upper - lower)</span>
+<span class="w">                  </span><span class="n">adT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">alpha_i</span><span class="o">*</span><span class="p">(</span><span class="n">t_u</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_l</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">bdS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">beta_i</span><span class="o">*</span><span class="p">(</span><span class="n">s_u</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_l</span><span class="p">)</span>
+
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">adT</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">bdS</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">bdS</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                     </span><span class="c">! ---- salt fingering (R_rho &gt;= 1) ----</span>
+<span class="w">                     </span><span class="n">rrho</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">adT</span><span class="o">/</span><span class="n">bdS</span>
+<span class="w">                     </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rrho</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">strat_param_max</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">ddiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">((</span><span class="n">rrho</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span><span class="o">/</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="p">(</span><span class="n">strat_param_max</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">))</span><span class="o">**</span><span class="n">exp1</span><span class="p">)</span><span class="o">**</span><span class="n">exp2</span>
+<span class="w">                        </span><span class="n">kd_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa_s</span><span class="o">*</span><span class="n">ddiff</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                     </span><span class="n">kd_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.7_wp</span><span class="o">*</span><span class="n">kd_s</span>
+<span class="w">                  </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">adT</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">bdS</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">adT</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                     </span><span class="c">! ---- diffusive convection (0 &lt; R_rho &lt; 1) ----</span>
+<span class="w">                     </span><span class="n">rrho</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">adT</span><span class="o">/</span><span class="n">bdS</span>
+<span class="w">                     </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_k90</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">ddiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mol_diff</span><span class="o">*</span><span class="mf">8.7_wp</span><span class="o">*</span><span class="n">rrho</span><span class="o">**</span><span class="mf">1.1_wp</span>
+<span class="w">                     </span><span class="k">else</span>
+<span class="k">                        </span><span class="n">ddiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mol_diff</span><span class="o">*</span><span class="n">param1</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="nb">exp</span><span class="p">(</span><span class="n">param2</span><span class="o">*</span><span class="nb">exp</span><span class="p">(</span><span class="n">param3</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">rrho</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)))</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                     </span><span class="n">kd_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ddiff</span>
+<span class="w">                     </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rrho</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">kd_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.15_wp</span><span class="o">*</span><span class="n">rrho</span><span class="o">*</span><span class="n">ddiff</span>
+<span class="w">                     </span><span class="k">else</span>
+<span class="k">                        </span><span class="n">kd_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.85_wp</span><span class="o">*</span><span class="n">rrho</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.85_wp</span><span class="p">)</span><span class="o">*</span><span class="n">ddiff</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                  end if</span>
+<span class="k">               end if</span>
+<span class="k">            end if</span>
+
+<span class="k">            </span><span class="n">ks</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt_pre</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">kd_s</span>
+<span class="w">            </span><span class="n">kt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt_pre</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">kd_t</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">vmix_split_ddiff_eos_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-22 21:08 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

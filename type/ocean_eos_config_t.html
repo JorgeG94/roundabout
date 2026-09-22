@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.1% of total for derived types.</p>Including implementation: 4 statements,  0.1% of total for derived types.">4 statements</a>
+                 title="<p> 0.2% of total for derived types.</p>Including implementation: 5 statements,  0.1% of total for derived types.">5 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,8 +134,9 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-eos">eos</a>
-            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-p_ref">p_ref</a>
+            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-eos~52">eos</a>
+            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-p_ref~4">p_ref</a>
+            <a class="list-group-item" href="../type/ocean_eos_config_t.html#variable-tfreeze_set">tfreeze_set</a>
         </div>
       </div>
     </div>
@@ -313,7 +314,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos"></span>
+              <span class="anchor" id="variable-eos~52"></span>
               character(len=16),
             </td>
               <td>public</td>
@@ -333,7 +334,7 @@ with the &ldquo;fv_wright&rdquo; PGF (fails loud at configure).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-p_ref"></span>
+              <span class="anchor" id="variable-p_ref~4"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -373,6 +374,61 @@ because a diagnostic remap to a different reference is a
 legitimate request.</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tfreeze_set"></span>
+              character(len=16),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tfreeze_set</strong></td>
+<td> =</td>
+                <td>&#34;seaice&#34;</td>
+            <td>
+                <p>Named seawater freezing-point (liquidus) coefficient set for
+<code>eos_freezing_point</code>, which evaluates the linear form</p>
+<p>T_f = λ1·S + λ2 + λ3·p</p>
+<p>for every EOS variant (MOM6 keeps <code>TFREEZE_FORM = "LINEAR"</code>
+as its default under any density branch).</p>
+<ul>
+<li><code>"seaice"</code> (DEFAULT ⇒ bit-identical) — the SIS2/MOM6
+    sea-ice liquidus, λ = (−0.054 °C/PSU, 0 °C,
+    −7.53e-8 °C/Pa).  <code>T_f(35 PSU, 0 Pa) = −1.89 °C</code>.  This is
+    the set the shipped sea-ice column model was ported and
+    tested against.</li>
+<li><code>"isomip"</code> — the ISOMIP+ protocol liquidus (Asay-Davis et
+    al. 2016, GMD 9, Table 4 p. 2483; consumed in their
+    eq. (25) p. 2485), λ = (−0.0573 °C/PSU, 0.0832 °C,
+    −7.53e-8 °C/Pa).  Required for an ice-shelf-cavity run
+    claiming ISOMIP+ compliance, and the value the ice-shelf
+    literature is unanimous on.</li>
+</ul>
+<p>WHY IT MATTERS.  At S = 34.5 the two sets differ by ~0.03 °C
+— a few percent of a typical Antarctic thermal driving, and
+enough to flip the SIGN of a basal melt rate over a 0.03 °C
+band of ocean temperature.  A mistyped value is therefore a
+fail-loud <code>validate_config</code> error, never a silent fallback.</p>
+<p>NAMED SETS ONLY, on purpose: λ1/λ2/λ3 are a fitted triple and
+there is no free-form coefficient knob, so a configuration
+cannot mix λ1 from one source with λ2 from another.  A
+NONLINEAR liquidus (MOM6 <code>MILLERO_78</code>, a TEOS-10 polynomial)
+is a different functional form and would arrive as its own
+<code>form</code> selector at the documented seam in
+<code>eos_freezing_point</code>, not as another member of this list.</p>
+<p>SCOPE: this is the OCEAN-side liquidus only — what
+<code>eos_freezing_point</code> returns, i.e. the sea-surface freezing
+temperature the frazil, frazil-uptake and basal-flux kernels
+work against.  The SIS2 ice model&rsquo;s INTERNAL brine-pocket
+liquidus slope (<code>ICE_DTF_DS</code>, <code>rdb_ice_enthalpy</code>) is baked
+into its closed-form enthalpy&lt;-&gt;temperature map and is NOT
+switched here; under <code>"isomip"</code> the two therefore disagree by
+~0.03 °C.  The ISOMIP+ set is for ice-shelf-cavity work, where
+the sea-ice column model is normally off.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -390,6 +446,50 @@ legitimate request.</p>
 <span class="w">         </span><span class="c">!! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.</span>
 <span class="w">         </span><span class="c">!! 2015 specific-volume polynomial).  "roquet_spv" is incompatible</span>
 <span class="w">         </span><span class="c">!! with the "fv_wright" PGF (fails loud at configure).</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tfreeze_set</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"seaice"</span>
+<span class="w">         </span><span class="c">!! Named seawater freezing-point (liquidus) coefficient set for</span>
+<span class="w">         </span><span class="c">!! `eos_freezing_point`, which evaluates the linear form</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!!   T_f = λ1·S + λ2 + λ3·p</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! for every EOS variant (MOM6 keeps `TFREEZE_FORM = "LINEAR"`</span>
+<span class="w">         </span><span class="c">!! as its default under any density branch).</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!!   * `"seaice"` (DEFAULT ⇒ bit-identical) — the SIS2/MOM6</span>
+<span class="w">         </span><span class="c">!!     sea-ice liquidus, λ = (−0.054 °C/PSU, 0 °C,</span>
+<span class="w">         </span><span class="c">!!     −7.53e-8 °C/Pa).  `T_f(35 PSU, 0 Pa) = −1.89 °C`.  This is</span>
+<span class="w">         </span><span class="c">!!     the set the shipped sea-ice column model was ported and</span>
+<span class="w">         </span><span class="c">!!     tested against.</span>
+<span class="w">         </span><span class="c">!!   * `"isomip"` — the ISOMIP+ protocol liquidus (Asay-Davis et</span>
+<span class="w">         </span><span class="c">!!     al. 2016, GMD 9, Table 4 p. 2483; consumed in their</span>
+<span class="w">         </span><span class="c">!!     eq. (25) p. 2485), λ = (−0.0573 °C/PSU, 0.0832 °C,</span>
+<span class="w">         </span><span class="c">!!     −7.53e-8 °C/Pa).  Required for an ice-shelf-cavity run</span>
+<span class="w">         </span><span class="c">!!     claiming ISOMIP+ compliance, and the value the ice-shelf</span>
+<span class="w">         </span><span class="c">!!     literature is unanimous on.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! WHY IT MATTERS.  At S = 34.5 the two sets differ by ~0.03 °C</span>
+<span class="w">         </span><span class="c">!! — a few percent of a typical Antarctic thermal driving, and</span>
+<span class="w">         </span><span class="c">!! enough to flip the SIGN of a basal melt rate over a 0.03 °C</span>
+<span class="w">         </span><span class="c">!! band of ocean temperature.  A mistyped value is therefore a</span>
+<span class="w">         </span><span class="c">!! fail-loud `validate_config` error, never a silent fallback.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! NAMED SETS ONLY, on purpose: λ1/λ2/λ3 are a fitted triple and</span>
+<span class="w">         </span><span class="c">!! there is no free-form coefficient knob, so a configuration</span>
+<span class="w">         </span><span class="c">!! cannot mix λ1 from one source with λ2 from another.  A</span>
+<span class="w">         </span><span class="c">!! NONLINEAR liquidus (MOM6 `MILLERO_78`, a TEOS-10 polynomial)</span>
+<span class="w">         </span><span class="c">!! is a different functional form and would arrive as its own</span>
+<span class="w">         </span><span class="c">!! `form` selector at the documented seam in</span>
+<span class="w">         </span><span class="c">!! `eos_freezing_point`, not as another member of this list.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! SCOPE: this is the OCEAN-side liquidus only — what</span>
+<span class="w">         </span><span class="c">!! `eos_freezing_point` returns, i.e. the sea-surface freezing</span>
+<span class="w">         </span><span class="c">!! temperature the frazil, frazil-uptake and basal-flux kernels</span>
+<span class="w">         </span><span class="c">!! work against.  The SIS2 ice model's INTERNAL brine-pocket</span>
+<span class="w">         </span><span class="c">!! liquidus slope (`ICE_DTF_DS`, `rdb_ice_enthalpy`) is baked</span>
+<span class="w">         </span><span class="c">!! into its closed-form enthalpy&lt;-&gt;temperature map and is NOT</span>
+<span class="w">         </span><span class="c">!! switched here; under `"isomip"` the two therefore disagree by</span>
+<span class="w">         </span><span class="c">!! ~0.03 °C.  The ISOMIP+ set is for ice-shelf-cavity work, where</span>
+<span class="w">         </span><span class="c">!! the sea-ice column model is normally off.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
 <span class="w">         </span><span class="c">!! Reference pressure (Pa, `&gt;= 0`) at which the model's POTENTIAL</span>
 <span class="w">         </span><span class="c">!! density `ms%rho_layer` is evaluated.  Default 0 (surface</span>
@@ -443,7 +543,7 @@ legitimate request.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

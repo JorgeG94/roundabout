@@ -1,0 +1,1384 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>configure_ocean_closed_faces &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>configure_ocean_closed_faces
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">127 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_setup.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_setup.f90.html'>rdb_ocean_setup.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></li>
+            <li class="breadcrumb-item active" aria-current="page">configure_ocean_closed_faces</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-eta0~2">eta0</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-h_face~6">h_face</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-h_min~7">h_min</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-h_nominal~2">h_nominal</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-i~124">i</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-j~120">j</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-k~85">k</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-n_closed_u">n_closed_u</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-n_closed_v">n_closed_v</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-n_ledge">n_ledge</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-n_open_u">n_open_u</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-n_open_v">n_open_v</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-nx~130">nx</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-ny~130">ny</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-nz~97">nz</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-sum_all">sum_all</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-sum_open">sum_open</a>
+            <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#variable-tgt~8">tgt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/configure_ocean_closed_faces.html#src">configure_ocean_closed_faces</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)  
+</h2>
+    
+
+    <p>Build the static partial-step z-level FACE-CLOSURE mask
+(<code>&amp;vcoord_nml zfixed_closed_faces</code>; Adcroft, Hill &amp; Marshall
+1997; Losch 2008 §2.1 for the ice-shelf cavity).</p>
+<p>Under <code>vcoord_type = "z_fixed"</code> a layer whose nominal
+geopotential range lies inside the bed — or inside the ice draft
+— carries an inert FILLER of thickness <code>zstar_h_min</code>
+(<code>&lt;= H_VANISHED</code>).  A velocity face at which layer <code>k</code> is a
+filler on EITHER side stays OPEN today, and the FV pressure
+gradient evaluated across that staircase step drives
+<code>a = |ρ′|·g·Δz_step/(ρ₀·dx)</code> out of a resting stratified state —
+independent of the filler thickness, so no <code>h</code>-gate can reach
+it.  A z-LEVEL model treats such a face as a WALL for that
+layer: no normal velocity, no mass or tracer flux, free-slip.</p>
+<p>This fills <code>metrics%open_u/open_v</code> with that wall, ONCE, from
+<code>ocean_vcoord_z_fixed_target</code> at <code>η = 0</code> — the same kernel the
+ALE regrid and the IC seed use, so there is no second definition
+of &ldquo;live&rdquo;.  The mask is STATIC: the bed and the draft are
+static, and under <code>z_fixed</code> <code>η</code> is absorbed by the first LIVE
+layer (the partial cell), so the live/filler pattern does not
+move.</p>
+<p>It also seeds the barotropic face widths <code>dy_cu_bt</code>/<code>dx_cv_bt</code>
+with the OPEN-depth fraction of the face, so the barotropic
+solve is not blind to the closed layers.  That seed is refreshed
+from the LIVE <code>h</code> every outer step by <code>ocean_porous_refresh</code>;
+this is only the <code>η = 0</code> value the first stage reads.</p>
+<p><strong>Ordering.</strong> MUST run AFTER <code>configure_ocean_cavity</code> (which
+fills <code>vcoord%z_top</code>), after <code>configure_ocean_bt_split</code> (which
+lays <code>bt_H_ref</code>) and after <code>configure_ocean_land_mask</code> and the
+periodic-wrap / halo pass (the target is built from GHOST-FILLED
+<code>bt_H_ref</code> and <code>z_top</code>, which is what makes the mask correct at
+a periodic seam — the physical seam face is an interior index).
+And BEFORE <code>ocean_state_enter_data</code>: the host fill is what the
+<code>copyin</code> captures, and <code>metrics_closed_faces_alloc</code> reallocs.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~31"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ocean_state~19"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ocean_state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~91"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-compute_rank~19"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>compute_rank</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~35"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                <p>Non-zero on a configuration conflict when present; absent
+behaves as today (<code>error stop</code>).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_closed_faces~~CallsGraph Pages: 1 -->
+<svg id="procconfigure_ocean_closed_facesCallsGraph" width="546pt" height="326pt"
+ viewBox="0.00 0.00 546.00 326.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 322)">
+<title>proc~~configure_ocean_closed_faces~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-322 542,-322 542,4 -4,4"/>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node1" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<polygon fill="none" stroke="black" points="175,-171 0,-171 0,-147 175,-147 175,-171"/>
+<text text-anchor="middle" x="87.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_closed_faces</text>
+</g>
+<!-- info -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node2" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="335.5,-318 281.5,-318 281.5,-294 335.5,-294 335.5,-318"/>
+<text text-anchor="middle" x="308.5" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;info -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge1" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M96.65,-171.34C114.24,-196.94 158.45,-255.82 211,-285 229.47,-295.25 252.5,-300.5 271.44,-303.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.13,-306.68 281.48,-304.43 271.99,-299.73 271.13,-306.68"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node3" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node3"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="335.5,-276 281.5,-276 281.5,-252 335.5,-252 335.5,-276"/>
+<text text-anchor="middle" x="308.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~fail -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge2" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M102.13,-171.03C123.69,-189.41 167.68,-224.29 211,-243 230.04,-251.22 252.62,-256.36 271.16,-259.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="270.84,-262.99 281.27,-261.08 271.93,-256.07 270.84,-262.99"/>
+</g>
+<!-- proc~metrics_closed_faces_alloc -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node4" class="node">
+<title>proc~metrics_closed_faces_alloc</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node4"><a xlink:href="../proc/metrics_closed_faces_alloc.html" xlink:title="metrics_closed_faces_alloc">
+<polygon fill="#d9534f" stroke="#d9534f" points="387,-234 230,-234 230,-210 387,-210 387,-234"/>
+<text text-anchor="middle" x="308.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_closed_faces_alloc</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~metrics_closed_faces_alloc -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge3" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~metrics_closed_faces_alloc</title>
+<path fill="none" stroke="#ff0000" d="M120.42,-171.08C144.96,-180.09 179.82,-192.29 211,-201 219.4,-203.35 228.27,-205.59 237.09,-207.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="236.48,-211.12 247.01,-209.96 238.05,-204.3 236.48,-211.12"/>
+</g>
+<!-- proc~ocean_vcoord_closed_face_masks -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node5" class="node">
+<title>proc~ocean_vcoord_closed_face_masks</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node5"><a xlink:href="../proc/ocean_vcoord_closed_face_masks.html" xlink:title="ocean_vcoord_closed_face_masks">
+<polygon fill="#d9534f" stroke="#d9534f" points="406,-192 211,-192 211,-168 406,-168 406,-192"/>
+<text text-anchor="middle" x="308.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_closed_face_masks</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_closed_face_masks -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge4" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_closed_face_masks</title>
+<path fill="none" stroke="#ff0000" d="M175.05,-167.3C183.48,-168.11 192.09,-168.93 200.68,-169.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.45,-173.25 210.74,-170.72 201.12,-166.28 200.45,-173.25"/>
+</g>
+<!-- proc~ocean_vcoord_count_ledges -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node6" class="node">
+<title>proc~ocean_vcoord_count_ledges</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node6"><a xlink:href="../proc/ocean_vcoord_count_ledges.html" xlink:title="ocean_vcoord_count_ledges">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="390,-150 227,-150 227,-126 390,-126 390,-150"/>
+<text text-anchor="middle" x="308.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_count_ledges</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_count_ledges -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge5" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_count_ledges</title>
+<path fill="none" stroke="#ff0000" d="M175.05,-150.7C188.81,-149.38 203.08,-148.01 216.92,-146.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="217.3,-150.17 226.92,-145.73 216.63,-143.2 217.3,-150.17"/>
+</g>
+<!-- proc~ocean_vcoord_z_fixed_target -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node7" class="node">
+<title>proc~ocean_vcoord_z_fixed_target</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node7"><a xlink:href="../proc/ocean_vcoord_z_fixed_target.html" xlink:title="ocean_vcoord_z_fixed_target">
+<polygon fill="#d9534f" stroke="#d9534f" points="392,-108 225,-108 225,-84 392,-84 392,-108"/>
+<text text-anchor="middle" x="308.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_z_fixed_target</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge6" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
+<path fill="none" stroke="#ff0000" d="M120.42,-146.92C144.96,-137.91 179.82,-125.71 211,-117 219.4,-114.65 228.27,-112.41 237.09,-110.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="238.05,-113.7 247.01,-108.04 236.48,-106.88 238.05,-113.7"/>
+</g>
+<!-- to_string -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node8" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="337.5,-66 279.5,-66 279.5,-42 337.5,-42 337.5,-66"/>
+<text text-anchor="middle" x="308.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;to_string -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge7" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M102.13,-146.97C123.69,-128.59 167.68,-93.71 211,-75 229.38,-67.06 251.06,-62 269.21,-58.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="269.85,-62.28 279.16,-57.23 268.73,-55.37 269.85,-62.28"/>
+</g>
+<!-- warning -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node9" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="336,-24 281,-24 281,0 336,0 336,-24"/>
+<text text-anchor="middle" x="308.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;warning -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge8" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;warning</title>
+<path fill="none" stroke="#ff0000" d="M96.65,-146.66C114.24,-121.06 158.45,-62.18 211,-33 229.21,-22.89 251.87,-17.64 270.66,-14.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.16,-18.39 280.64,-13.66 270.28,-11.44 271.16,-18.39"/>
+</g>
+<!-- error -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node10" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="517,-297 463,-297 463,-273 517,-273 517,-297"/>
+<text text-anchor="middle" x="490" y="-282.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge9" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#ffbf00" d="M335.6,-267.05C366.44,-270.66 417.94,-276.69 452.67,-280.75"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="452.53,-284.26 462.87,-281.94 453.34,-277.3 452.53,-284.26"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node12" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CallsGraph_node12"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="538,-255 442,-255 442,-231 538,-231 538,-255"/>
+<text text-anchor="middle" x="490" y="-240.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge10" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#ffbf00" d="M335.6,-260.95C360.69,-258.01 399.46,-253.47 431.75,-249.7"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="432.45,-253.14 441.98,-248.5 431.64,-246.19 432.45,-253.14"/>
+</g>
+<!-- local -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_node11" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="517,-108 463,-108 463,-84 517,-84 517,-108"/>
+<text text-anchor="middle" x="490" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_vcoord_z_fixed_target&#45;&gt;local -->
+<g id="proc~~configure_ocean_closed_faces~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_vcoord_z_fixed_target&#45;&gt;local</title>
+<path fill="none" stroke="#003fff" d="M392.16,-96C413.34,-96 435.05,-96 452.54,-96"/>
+<polygon fill="#003fff" stroke="#003fff" points="452.83,-99.5 462.83,-96 452.83,-92.5 452.83,-99.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~configure_ocean_closed_faces~~CalledByGraph Pages: 1 -->
+<svg id="procconfigure_ocean_closed_facesCalledByGraph" width="641pt" height="108pt"
+ viewBox="0.00 0.00 641.00 108.08" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph" class="graph" transform="scale(0.93 0.93) rotate(0) translate(4 112)">
+<title>proc~~configure_ocean_closed_faces~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 684,-112 684,4 -4,4"/>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node1" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<polygon fill="none" stroke="black" points="680,-45 505,-45 505,-21 680,-21 680,-45"/>
+<text text-anchor="middle" x="592.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">configure_ocean_closed_faces</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-45 385,-45 385,-21 469,-21 469,-45"/>
+<text text-anchor="middle" x="427" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#ff0000" d="M469.26,-33C477.23,-33 485.89,-33 494.8,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.93,-36.5 504.93,-33 494.93,-29.5 494.93,-36.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-44.05C357.85,-42.8 366.62,-41.54 374.97,-40.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.51,-43.8 384.91,-38.91 374.51,-36.87 375.51,-43.8"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-24 226,-24 226,0 332,0 332,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-19.52C345.99,-21.49 360.74,-23.61 374.4,-25.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.19,-29.08 384.59,-27.04 375.19,-22.16 374.19,-29.08"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-24 53,-24 53,0 120,0 120,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-12C146.45,-12 183.96,-12 215.83,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-15.5 225.95,-12 215.95,-8.5 215.95,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-108 11,-108 11,-84 162,-84 162,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-83.96C164.41,-79.04 190.39,-73.31 213.63,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-71.61 223.4,-66.04 212.88,-64.77 214.39,-71.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~configure_ocean_closed_faces~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-66 0,-66 0,-42 173,-42 173,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~configure_ocean_closed_faces~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-54C181.77,-54 190.37,-54 198.79,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-57.5 208.97,-54 198.97,-50.5 198.97,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocconfigure_ocean_closed_facesCalledByGraph = svgPanZoom('#procconfigure_ocean_closed_facesCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>eta0</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_face~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_face</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~7"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_nominal~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_nominal</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~124"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~120"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~85"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_closed_u"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_closed_u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_closed_v"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_closed_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_ledge"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_ledge</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_open_u"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_open_u</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_open_v"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_open_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~130"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~130"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~97"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sum_all"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sum_all</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sum_open"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sum_open</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tgt~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>tgt</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">configure_ocean_closed_faces</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">compute_rank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Build the static partial-step z-level FACE-CLOSURE mask</span>
+<span class="w">      </span><span class="c">!! (`&amp;vcoord_nml zfixed_closed_faces`; Adcroft, Hill &amp; Marshall</span>
+<span class="w">      </span><span class="c">!! 1997; Losch 2008 §2.1 for the ice-shelf cavity).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Under `vcoord_type = "z_fixed"` a layer whose nominal</span>
+<span class="w">      </span><span class="c">!! geopotential range lies inside the bed — or inside the ice draft</span>
+<span class="w">      </span><span class="c">!! — carries an inert FILLER of thickness `zstar_h_min`</span>
+<span class="w">      </span><span class="c">!! (`&lt;= H_VANISHED`).  A velocity face at which layer `k` is a</span>
+<span class="w">      </span><span class="c">!! filler on EITHER side stays OPEN today, and the FV pressure</span>
+<span class="w">      </span><span class="c">!! gradient evaluated across that staircase step drives</span>
+<span class="w">      </span><span class="c">!! `a = |ρ′|·g·Δz_step/(ρ₀·dx)` out of a resting stratified state —</span>
+<span class="w">      </span><span class="c">!! independent of the filler thickness, so no `h`-gate can reach</span>
+<span class="w">      </span><span class="c">!! it.  A z-LEVEL model treats such a face as a WALL for that</span>
+<span class="w">      </span><span class="c">!! layer: no normal velocity, no mass or tracer flux, free-slip.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! This fills `metrics%open_u/open_v` with that wall, ONCE, from</span>
+<span class="w">      </span><span class="c">!! `ocean_vcoord_z_fixed_target` at `η = 0` — the same kernel the</span>
+<span class="w">      </span><span class="c">!! ALE regrid and the IC seed use, so there is no second definition</span>
+<span class="w">      </span><span class="c">!! of "live".  The mask is STATIC: the bed and the draft are</span>
+<span class="w">      </span><span class="c">!! static, and under `z_fixed` `η` is absorbed by the first LIVE</span>
+<span class="w">      </span><span class="c">!! layer (the partial cell), so the live/filler pattern does not</span>
+<span class="w">      </span><span class="c">!! move.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! It also seeds the barotropic face widths `dy_cu_bt`/`dx_cv_bt`</span>
+<span class="w">      </span><span class="c">!! with the OPEN-depth fraction of the face, so the barotropic</span>
+<span class="w">      </span><span class="c">!! solve is not blind to the closed layers.  That seed is refreshed</span>
+<span class="w">      </span><span class="c">!! from the LIVE `h` every outer step by `ocean_porous_refresh`;</span>
+<span class="w">      </span><span class="c">!! this is only the `η = 0` value the first stage reads.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Ordering.** MUST run AFTER `configure_ocean_cavity` (which</span>
+<span class="w">      </span><span class="c">!! fills `vcoord%z_top`), after `configure_ocean_bt_split` (which</span>
+<span class="w">      </span><span class="c">!! lays `bt_H_ref`) and after `configure_ocean_land_mask` and the</span>
+<span class="w">      </span><span class="c">!! periodic-wrap / halo pass (the target is built from GHOST-FILLED</span>
+<span class="w">      </span><span class="c">!! `bt_H_ref` and `z_top`, which is what makes the mask correct at</span>
+<span class="w">      </span><span class="c">!! a periodic seam — the physical seam face is an interior index).</span>
+<span class="w">      </span><span class="c">!! And BEFORE `ocean_state_enter_data`: the host fill is what the</span>
+<span class="w">      </span><span class="c">!! `copyin` captures, and `metrics_closed_faces_alloc` reallocs.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_state</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_rank</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">         </span><span class="c">!! Non-zero on a configuration conflict when present; absent</span>
+<span class="w">         </span><span class="c">!! behaves as today (`error stop`).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_closed_u</span><span class="p">,</span><span class="w"> </span><span class="n">n_closed_v</span><span class="p">,</span><span class="w"> </span><span class="n">n_open_u</span><span class="p">,</span><span class="w"> </span><span class="n">n_open_v</span><span class="p">,</span><span class="w"> </span><span class="n">n_ledge</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_nominal</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">h_face</span><span class="p">,</span><span class="w"> </span><span class="n">sum_all</span><span class="p">,</span><span class="w"> </span><span class="n">sum_open</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tgt</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">eta0</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">zfixed_closed_faces</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces requires the ocean "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"multilayer path (the mask is per-layer)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">coord_type</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">VCOORD_Z_FIXED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces is only defined for "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"vcoord_type='z_fixed': the live/filler staircase it "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"closes is a z-level artefact, and on a terrain-following "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"or z* family every layer is live on every wet face"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">z_fixed_h_ref</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces needs a resolved "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"z_fixed_h_ref (set &amp;ocean_topo_nml max_depth): without "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"it the z_fixed target degenerates to uniform sigma, "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"there are no fillers, and the mask would close nothing"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="nb">maxval</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_H_ref</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces: bt_H_ref is empty — "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"the barotropic datum must be built (&amp;ocean_bt_nml "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="s2">"n_inner &gt;= 1) before the static face mask can be laid"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">wetdry</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces is incompatible with "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"&amp;ocean_wetdry_nml enable: wet/dry moves the live/filler "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"pattern under the running state and the mask is static"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bt</span><span class="p">%</span><span class="n">bt_halo</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces is incompatible with "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"&amp;ocean_bt_nml bt_halo &gt; 0: the wide-halo barotropic "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"clone carries its own metrics and no face mask, so the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"wide BT loop would transport through closed faces "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"(the same argument &amp;ocean_porous_nml already makes)"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">redi</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">          </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">foxkemper</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces does not yet compose "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"with GM / Redi / MLE: all three form their face fluxes "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"from a 2-D `wet_u`/`wet_v` gate and fold them into "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"mass_flux_*_layer AFTER continuity has applied the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"per-layer mask, so their transports would leak through "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"a closed face.  Per-layer seams in those three kernels "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"are the follow-up slice"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">nu_4</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">stress_tensor</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces does not yet compose "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"with the BIHARMONIC viscosity (&amp;ocean_hvisc_nml nu_4) or "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"with stress_tensor: the free-slip closure of a closed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"face is implemented for the HARMONIC velocity-Laplacian "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"kernels only (scalar nu_h and the per-face ah_face_*), "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"and a mirror-Neumann biharmonic pass or a wet_q-style "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"corner factor needs its own derivation and its own "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"test.  Use a harmonic closure, or land that slice first"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="n">h_nominal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">z_fixed_h_ref</span><span class="o">/</span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">h_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">zstar_h_min</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">metrics_closed_faces_alloc</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">tgt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">eta0</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_vcoord_z_fixed_target</span><span class="p">(</span><span class="n">tgt</span><span class="p">,</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_H_ref</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">eta0</span><span class="p">,</span><span class="w"> </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">z_top</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_nominal</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_vcoord_closed_face_masks</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">tgt</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Seed the BAROTROPIC face widths with the eta = 0 open-depth</span>
+<span class="w">      </span><span class="c">! fraction.  `ocean_porous_refresh` recomputes them from the live</span>
+<span class="w">      </span><span class="c">! `h` every outer step; this is only what stage 1 of step 1 reads.</span>
+<span class="w">      </span><span class="c">! The width and the depth are the same number here: the BT</span>
+<span class="w">      </span><span class="c">! transport is `ubt * FA * dy_cu_bt` with `FA = sum_k h_face`, so</span>
+<span class="w">      </span><span class="c">! `dy_cu_bt = dy_cu * (sum_open h_face)/(sum_k h_face)` makes that</span>
+<span class="w">      </span><span class="c">! product identically `ubt * (sum_open h_face) * dy_cu`.</span>
+<span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">            </span><span class="n">sum_all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">sum_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">tgt</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tgt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">sum_all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_all</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">sum_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_open</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">sum_all</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu_bt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">dy_cu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">sum_open</span><span class="o">/</span><span class="n">sum_all</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">      do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">            </span><span class="n">sum_all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">sum_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">h_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">tgt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tgt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">sum_all</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_all</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">sum_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum_open</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_face</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">sum_all</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv_bt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">dx_cv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">sum_open</span><span class="o">/</span><span class="n">sum_all</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+
+<span class="w">      </span><span class="c">! Cheap one-shot census for the configure line: how much of the</span>
+<span class="w">      </span><span class="c">! array the mask actually closes, and whether it isolated any</span>
+<span class="w">      </span><span class="c">! water.  Host-side, once, O(nx*ny*nz) — not a per-step diagnostic.</span>
+<span class="w">      </span><span class="n">n_closed_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">n_open_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_u</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">n_open_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_open_u</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">n_closed_u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_closed_u</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">      </span><span class="n">n_closed_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">n_open_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">n_open_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_open_v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">n_closed_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_closed_v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">      </span><span class="n">n_ledge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_vcoord_count_ledges</span><span class="p">(</span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">open_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">tgt</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">tgt</span><span class="p">,</span><span class="w"> </span><span class="n">eta0</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Flip the switches LAST — every consumer branches on them, and the</span>
+<span class="w">      </span><span class="c">! mask has to be in place before any of them can read a closed face.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_closed_faces</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vcoord</span><span class="p">%</span><span class="n">zfixed_closed_faces</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">ocean_state</span><span class="p">%</span><span class="n">vdiff</span><span class="p">%</span><span class="n">zlevel_faces</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"z_fixed closed faces: ON (partial steps, "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">"Adcroft/Hill/Marshall 1997) — u closed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_closed_u</span><span class="p">)</span><span class="o">//</span><span class="s2">"/"</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_closed_u</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">n_open_u</span><span class="p">)</span><span class="o">//</span><span class="s2">", v closed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_closed_v</span><span class="p">)</span><span class="o">//</span><span class="s2">"/"</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_closed_v</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">n_open_v</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="s2">", isolated ledge cells "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">n_ledge</span><span class="p">))</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_ledge</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"z_fixed closed faces: "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">n_ledge</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" LIVE cells have all four own-layer faces "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"closed — the mask has isolated water.  They "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"are inert (no flux in or out, velocity zeroed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"every stage) but a one-cell spike in the bed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"or the draft is worth looking at."</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">configure_ocean_closed_faces</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-22 21:08 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

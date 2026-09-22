@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.9% of total for modules and submodules.">498 statements</a>
+                 title=" 0.9% of total for modules and submodules.">560 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -126,7 +126,19 @@
         <div id="sidebar">
       <h3>Contents</h3>
   
-  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_sponge.html#variable-sponge_ramp_cosine">SPONGE_RAMP_COSINE</a>
+            <a class="list-group-item" href="../module/rdb_ocean_sponge.html#variable-sponge_ramp_linear">SPONGE_RAMP_LINEAR</a>
+        </div>
+      </div>
+    </div>
+
   
   
   
@@ -154,6 +166,7 @@
       </a>
       <div id="funcs-0" class="collapse">
         <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-sponge_band_alpha">sponge_band_alpha</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_bytes">ocean_sponge_bytes</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-relax_one">relax_one</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-relax_toward">relax_toward</a>
@@ -171,6 +184,7 @@
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_apply">ocean_sponge_apply</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_apply_maps">ocean_sponge_apply_maps</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_apply_tracers">ocean_sponge_apply_tracers</a>
+            <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_refresh_target">ocean_sponge_refresh_target</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_snapshot_reference">ocean_sponge_snapshot_reference</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_destroy">ocean_sponge_destroy</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_enter_data">ocean_sponge_enter_data</a>
@@ -178,6 +192,7 @@
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_exit_data">ocean_sponge_exit_data</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_exit_data_impl">ocean_sponge_exit_data_impl</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-ocean_sponge_init">ocean_sponge_init</a>
+            <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-refresh_linear_z_impl">refresh_linear_z_impl</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-relax_band_x_impl">relax_band_x_impl</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-relax_band_y_impl">relax_band_y_impl</a>
             <a class="list-group-item" href="../module/rdb_ocean_sponge.html#proc-relax_map_tracer_budget_impl">relax_map_tracer_budget_impl</a>
@@ -228,15 +243,27 @@ A per-cell inverse-damping-time map (<code>idamp_h</code>/<code>idamp_u</code>/<
 bookkeeping) relaxes momentum toward a 3-D <code>u_ref</code>/<code>v_ref</code> (not zero)
 and every registered tracer toward a 3-D <code>ref_tracer(i,j,k,it)</code>
 concentration field (not a scalar). <code>damp_source="band"</code> (the only
-implemented source in v1) fills the maps from the same cosine ramp as
-the legacy kernel, at the exact cell/u-face/v-face offsets the legacy
-kernel touches, so <code>enable=.true., damp_source="band"</code> is <em>physically</em>
-the same band as today (see <code>sponge_source_is_implemented</code> /
-<code>rdb_ocean_setup::configure_ocean_sponge</code>). <code>target_source="ic"</code> (the
-only implemented target in v1) snapshots the reference from the
-seeded initial condition via <code>ocean_sponge_snapshot_reference</code> —
-reachable as a &ldquo;nudge toward a parent climatology&rdquo; via
-<code>&amp;ocean_zinit_nml</code> with no new file reader.</p>
+implemented source) fills the maps from a ramp off every
+<code>OBC_SPONGE</code>-tagged edge, at the exact cell/u-face/v-face offsets
+the legacy kernel touches, so <code>enable=.true., damp_source="band",
+ramp="cosine"</code> is <em>physically</em> the same band as today (see
+<code>sponge_source_is_implemented</code> /
+<code>rdb_ocean_setup::configure_ocean_sponge</code>). <code>ramp="linear"</code> swaps the
+cosine for ISOMIP+ Eq. (20)&rsquo;s linear rise — see <code>sponge_band_alpha</code>.</p>
+<p>Two reference states ship:</p>
+<ul>
+<li><code>target_source="ic"</code> (default) snapshots the reference from the
+    seeded initial condition via <code>ocean_sponge_snapshot_reference</code> —
+    reachable as a &ldquo;nudge toward a parent climatology&rdquo; via
+    <code>&amp;ocean_zinit_nml</code> with no new file reader.</li>
+<li><code>target_source="linear_z"</code> builds an ANALYTIC affine
+    geopotential T(z)/S(z) profile, re-evaluated on the LIVE layer
+    geometry once per outer step by <code>ocean_sponge_refresh_target</code>.
+    The target is then INDEPENDENT of the initial condition, which
+    is what makes an ISOMIP+ Ocean1/Ocean2 (restore to a different
+    water mass than you start from) expressible at all. Non-S/T
+    tracers and <code>u_ref</code>/<code>v_ref</code> still come from the IC snapshot.</li>
+</ul>
 <p>Divergences from MOM6&rsquo;s ALE-sponge / sponge approach (deliberate,
 documented per CLAUDE.md &ldquo;cite the paper not other codebases&rdquo; — this
 list records WHERE we differ, not MOM6&rsquo;s implementation):
@@ -249,12 +276,16 @@ list records WHERE we differ, not MOM6&rsquo;s implementation):
      <code>Iresttime_col</code>/<code>Ref_val%p(k,c)</code> sparse structure — a
      gather/scatter indirection is worse than <code>idamp=0</code> (one multiply,
      race-free <code>do concurrent</code>) on GPU.
-  3. The reference is snapshotted ONCE on model layers at seed time,
-     not held on a source z-grid and remapped to the live column every
-     apply (MOM6&rsquo;s <code>Ref_dz</code> + <code>remapping_core_h</code>). Valid because
-     Roundabout&rsquo;s ALE remap pins layer depths to the coordinate every
-     thermo step; the residual motion is far below the target&rsquo;s own
-     vertical resolution.
+  3. Under <code>target_source="ic"</code> the reference is snapshotted ONCE on
+     model layers at seed time, not held on a source z-grid and
+     remapped to the live column every apply (MOM6&rsquo;s <code>Ref_dz</code> +
+     <code>remapping_core_h</code>). Valid because Roundabout&rsquo;s ALE remap pins
+     layer depths to the coordinate every thermo step; the residual
+     motion is far below the target&rsquo;s own vertical resolution.
+     <code>target_source="linear_z"</code> does NOT take that shortcut — it
+     rebuilds the profile on the live geometry every outer step,
+     which is cheaper here than a remap because the source is a
+     closed-form function of depth rather than a table.
   4. Applied at <code>dt</code> (every RK2 stage), not MOM6&rsquo;s diabatic/thermo
      cadence.</p>
 <p>Restart contract (mirrors <code>rdb_ocean_surface_flux</code>&rsquo;s docstring): the
@@ -274,12 +305,12 @@ it).</p>
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
-                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_boundary_types.html'>rdb_ocean_boundary_types</a></li>
                   <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
                   <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
                   <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
-                  <li class="list-inline-item"><a href='rdb_ocean_boundary_types.html'>rdb_ocean_boundary_types</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -714,243 +745,252 @@ large graphs.</div>
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: module~~rdb_ocean_sponge~~UsedByGraph Pages: 1 -->
-<svg id="modulerdb_ocean_spongeUsedByGraph" width="641pt" height="159pt"
- viewBox="0.00 0.00 641.00 159.04" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="module~~rdb_ocean_sponge~~UsedByGraph" class="graph" transform="scale(0.58 0.58) rotate(0) translate(4 270.41)">
+<svg id="modulerdb_ocean_spongeUsedByGraph" width="641pt" height="154pt"
+ viewBox="0.00 0.00 641.00 154.25" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph" class="graph" transform="scale(0.58 0.58) rotate(0) translate(4 262.14)">
 <title>module~~rdb_ocean_sponge~~UsedByGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-270.41 1102,-270.41 1102,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-262.14 1102,-262.14 1102,4 -4,4"/>
 <!-- module~rdb_ocean_sponge -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_node1" class="node">
 <title>module~rdb_ocean_sponge</title>
-<polygon fill="none" stroke="black" points="113,-58.14 0,-58.14 0,-34.14 113,-34.14 113,-58.14"/>
-<text text-anchor="middle" x="56.5" y="-43.74" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_sponge</text>
+<polygon fill="none" stroke="black" points="113,-169.43 0,-169.43 0,-145.43 113,-145.43 113,-169.43"/>
+<text text-anchor="middle" x="56.5" y="-155.03" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_sponge</text>
 </g>
 <!-- module~rdb_ocean_dyn -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_node2" class="node">
 <title>module~rdb_ocean_dyn</title>
 <g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
-<polygon fill="#337ab7" stroke="#337ab7" points="243,-78.14 149,-78.14 149,-54.14 243,-54.14 243,-78.14"/>
-<text text-anchor="middle" x="196" y="-63.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+<polygon fill="#337ab7" stroke="#337ab7" points="243,-189.43 149,-189.43 149,-165.43 243,-165.43 243,-189.43"/>
+<text text-anchor="middle" x="196" y="-175.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_sponge -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_edge1" class="edge">
 <title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_sponge</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M148.83,-59.42C140.64,-58.23 131.98,-56.97 123.37,-55.72"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="123.73,-52.23 113.33,-54.26 122.72,-59.16 123.73,-52.23"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M148.83,-170.71C140.64,-169.52 131.98,-168.26 123.37,-167.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="123.73,-163.53 113.33,-165.55 122.72,-170.45 123.73,-163.53"/>
 </g>
 <!-- module~rdb_ocean_engine -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_node3" class="node">
 <title>module~rdb_ocean_engine</title>
 <g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
-<polygon fill="#337ab7" stroke="#337ab7" points="862,-116.14 751,-116.14 751,-92.14 862,-92.14 862,-116.14"/>
-<text text-anchor="middle" x="806.5" y="-101.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+<polygon fill="#337ab7" stroke="#337ab7" points="862,-149.43 751,-149.43 751,-125.43 862,-125.43 862,-149.43"/>
+<text text-anchor="middle" x="806.5" y="-135.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_sponge -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_edge2" class="edge">
 <title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_sponge</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M774.57,-92.07C766.61,-88.4 758.25,-84.03 751,-79.14 732.76,-66.83 735.3,-53.64 715,-45.14 502.52,43.89 427.38,-26.93 197,-26.14"/>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M195,-26.14C171.36,-26.4 145.67,-29.4 122.97,-32.99"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="122.39,-29.54 113.1,-34.62 123.53,-36.44 122.39,-29.54"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M750.99,-139.69C685.67,-141.87 572.95,-143.98 476.5,-137.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M474.5,-137.43C431.17,-134.1 422.2,-121.12 379,-116.43 334.82,-111.63 323.1,-110.87 279,-116.43 241.67,-121.13 234.53,-134.75 197,-137.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M195,-137.43C171.5,-138.6 145.94,-141.79 123.3,-145.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="122.45,-141.87 113.13,-146.9 123.55,-148.78 122.45,-141.87"/>
 </g>
 <!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge6" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge7" class="edge">
 <title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M642.5,-188.14C542.45,-206.21 515.76,-198.54 415,-212.14 377.06,-217.26 365.66,-240.07 330,-226.14"/>
-</g>
-<!-- module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node4" class="node">
-<title>module~rdb_ocean_state</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
-<polygon fill="#337ab7" stroke="#337ab7" points="379,-78.14 279,-78.14 279,-54.14 379,-54.14 379,-78.14"/>
-<text text-anchor="middle" x="329" y="-63.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
-</a>
-</g>
-</g>
-<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge16" class="edge">
-<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M750.69,-106.59C719.54,-107.55 679.81,-108.01 644.5,-106.14"/>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M642.5,-106.14C566.72,-102.11 552.26,-70.63 476.5,-66.14"/>
-</g>
-<!-- module~rdb_ocean_diag_derived -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node8" class="node">
-<title>module~rdb_ocean_diag_derived</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
-<polygon fill="#337ab7" stroke="#337ab7" points="715,-78.14 572,-78.14 572,-54.14 715,-54.14 715,-78.14"/>
-<text text-anchor="middle" x="643.5" y="-63.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
-</a>
-</g>
-</g>
-<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge20" class="edge">
-<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
-<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M754.56,-92.11C738.92,-88.42 721.55,-84.32 705.32,-80.49"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="705.92,-77.04 695.39,-78.15 704.31,-83.85 705.92,-77.04"/>
-</g>
-<!-- module~rdb_ocean_diag_fills -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node9" class="node">
-<title>module~rdb_ocean_diag_fills</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
-<polygon fill="#337ab7" stroke="#337ab7" points="536,-118.14 415,-118.14 415,-94.14 536,-94.14 536,-118.14"/>
-<text text-anchor="middle" x="475.5" y="-103.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
-</a>
-</g>
-</g>
-<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge23" class="edge">
-<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M642.5,-106.14C610.96,-104.46 576.01,-104.22 546.34,-104.49"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="546.04,-100.99 536.08,-104.61 546.12,-107.99 546.04,-100.99"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M642.5,-217.43C569.79,-238.45 552.07,-251.17 476.5,-255.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M474.5,-255.43C382.97,-260.59 280.33,-218.42 229.36,-194.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.69,-190.77 220.16,-189.54 227.62,-197.07 230.69,-190.77"/>
 </g>
 <!-- module~rdb_ocean_setup -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node10" class="node">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node4" class="node">
 <title>module~rdb_ocean_setup</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
-<polygon fill="#337ab7" stroke="#337ab7" points="527,-160.14 424,-160.14 424,-136.14 527,-136.14 527,-160.14"/>
-<text text-anchor="middle" x="475.5" y="-145.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="527,-227.43 424,-227.43 424,-203.43 527,-203.43 527,-227.43"/>
+<text text-anchor="middle" x="475.5" y="-213.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge24" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge13" class="edge">
 <title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
-<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M790.24,-116.21C762.95,-136.81 703.14,-177.55 644.5,-188.14"/>
-<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M642.5,-188.14C619.59,-192.27 562.32,-176.28 521.46,-163.3"/>
-<polygon fill="#ff00ff" stroke="#ff00ff" points="522.31,-159.9 511.72,-160.16 520.17,-166.56 522.31,-159.9"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M786.6,-149.66C757.42,-167.87 699.07,-201.65 644.5,-217.43"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M642.5,-217.43C608.65,-227.22 569.27,-227.2 537.36,-224.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="537.56,-221.02 527.28,-223.55 536.9,-227.98 537.56,-221.02"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="379,-149.43 279,-149.43 279,-125.43 379,-125.43 379,-149.43"/>
+<text text-anchor="middle" x="329" y="-135.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M474.5,-137.43C446.55,-135.53 415.49,-135.29 389.34,-135.62"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="389.16,-132.12 379.21,-135.78 389.27,-139.12 389.16,-132.12"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="715,-109.43 572,-109.43 572,-85.43 715,-85.43 715,-109.43"/>
+<text text-anchor="middle" x="643.5" y="-95.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M757.19,-125.43C740.08,-121.18 720.64,-116.35 702.78,-111.91"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="703.6,-108.51 693.05,-109.49 701.91,-115.3 703.6,-108.51"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="536,-71.43 415,-71.43 415,-47.43 536,-47.43 536,-71.43"/>
+<text text-anchor="middle" x="475.5" y="-57.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M775.67,-125.35C767.38,-121.42 758.57,-116.7 751,-111.43 732.69,-98.68 734.4,-87.47 715,-76.43 686.79,-60.38 676.48,-62.93 644.5,-57.43"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_sponge -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_sponge</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M433.68,-203.4C404.89,-195.23 365.33,-184.65 330,-177.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M328,-177.43C268.36,-165.24 257.72,-133.1 197,-137.43"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M328,-177.43C303.83,-172.49 276.63,-171.74 253.31,-172.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="253.07,-169.02 243.23,-172.94 253.37,-176.01 253.07,-169.02"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M443.62,-203.42C434.22,-199.38 424.01,-194.57 415,-189.43 397.86,-179.64 395.76,-173.86 379,-163.43 373.97,-160.3 368.53,-157.17 363.17,-154.23"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="364.77,-151.12 354.3,-149.48 361.46,-157.29 364.77,-151.12"/>
 </g>
 <!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_sponge -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge3" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge4" class="edge">
 <title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_sponge</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M303.57,-53.97C277.75,-42.25 235.52,-26.27 197,-26.14"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M278.8,-135.78C254.2,-135.37 224,-135.5 197,-137.43"/>
 </g>
 <!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge8" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge9" class="edge">
 <title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M278.85,-66.14C270.59,-66.14 261.96,-66.14 253.53,-66.14"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="253.39,-62.64 243.39,-66.14 253.39,-69.64 253.39,-62.64"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M288.7,-149.43C275.48,-153.47 260.55,-158.03 246.64,-162.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.27,-159.03 236.73,-165.3 247.32,-165.73 245.27,-159.03"/>
 </g>
 <!-- module~rdb_driver -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node5" class="node">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node6" class="node">
 <title>module~rdb_driver</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node5"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
-<polygon fill="#337ab7" stroke="#337ab7" points="968,-216.14 901,-216.14 901,-192.14 968,-192.14 968,-216.14"/>
-<text text-anchor="middle" x="934.5" y="-201.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node6"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="968,-188.43 901,-188.43 901,-164.43 968,-164.43 968,-188.43"/>
+<text text-anchor="middle" x="934.5" y="-174.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge4" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge5" class="edge">
 <title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M474.5,-226.14C413.1,-207.32 389.46,-250.41 330,-226.14"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M805.5,-216.43C732.95,-228.99 717.99,-251.05 644.5,-255.43"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M642.5,-255.43C568.85,-259.82 550.25,-257.51 476.5,-255.43"/>
 </g>
 <!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge9" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge10" class="edge">
 <title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
-<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M918.05,-191.87C896.21,-174.54 856.13,-142.73 830.7,-122.55"/>
-<polygon fill="#00ff00" stroke="#00ff00" points="832.69,-119.66 822.68,-116.19 828.34,-125.14 832.69,-119.66"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M900.72,-166.28C887.09,-162.06 870.97,-157.08 856.01,-152.45"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="856.97,-149.08 846.38,-149.47 854.9,-155.77 856.97,-149.08"/>
 </g>
 <!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge12" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge14" class="edge">
 <title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M900.99,-212.15C825.18,-229.45 631.39,-265.67 476.5,-226.14"/>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M474.5,-226.14C406.17,-205.19 359.38,-126.49 340.02,-87.83"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="343,-85.96 335.48,-78.5 336.7,-89.02 343,-85.96"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M904.59,-188.46C879.44,-198.22 841.76,-211.2 807.5,-216.43"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M805.5,-216.43C795.23,-218 514.54,-169.56 389.32,-147.78"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="389.59,-144.27 379.14,-146.01 388.39,-151.17 389.59,-144.27"/>
 </g>
 <!-- module~rdb_handle -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node6" class="node">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node7" class="node">
 <title>module~rdb_handle</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node6"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
-<polygon fill="#337ab7" stroke="#337ab7" points="971,-116.14 898,-116.14 898,-92.14 971,-92.14 971,-116.14"/>
-<text text-anchor="middle" x="934.5" y="-101.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node7"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="971,-69.43 898,-69.43 898,-45.43 971,-45.43 971,-69.43"/>
+<text text-anchor="middle" x="934.5" y="-55.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge10" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge11" class="edge">
 <title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
-<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M897.73,-104.14C889.78,-104.14 881.12,-104.14 872.4,-104.14"/>
-<polygon fill="#00ff00" stroke="#00ff00" points="872.19,-100.64 862.19,-104.14 872.19,-107.64 872.19,-100.64"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M916.81,-69.5C910.85,-73.85 904.1,-78.83 898,-83.43 881.82,-95.64 879.25,-100.78 862,-111.43 856.61,-114.75 850.74,-117.96 844.9,-120.91"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="843.29,-117.8 835.84,-125.33 846.36,-124.09 843.29,-117.8"/>
 </g>
 <!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge13" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge15" class="edge">
 <title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M900.39,-92.13C858.07,-77.5 782.24,-53.69 715,-45.14 582.7,-28.31 547.65,-38.3 415,-52.14 406.66,-53.01 397.9,-54.17 389.3,-55.45"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="388.65,-52.01 379.31,-57 389.73,-58.92 388.65,-52.01"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M897.72,-45.61C810.4,-18.91 581.37,38 415,-38.43 380.26,-54.39 354.39,-92.33 340.79,-116.33"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="337.57,-114.91 335.87,-125.37 343.72,-118.25 337.57,-114.91"/>
 </g>
 <!-- module~rdb_ocean_api -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_node7" class="node">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_node8" class="node">
 <title>module~rdb_ocean_api</title>
-<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
-<polygon fill="#337ab7" stroke="#337ab7" points="1098,-136.14 1007,-136.14 1007,-112.14 1098,-112.14 1098,-136.14"/>
-<text text-anchor="middle" x="1052.5" y="-121.74" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+<g id="a_module~~rdb_ocean_sponge~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1098,-109.43 1007,-109.43 1007,-85.43 1098,-85.43 1098,-109.43"/>
+<text text-anchor="middle" x="1052.5" y="-95.03" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
 </a>
 </g>
 </g>
 <!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge5" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge6" class="edge">
 <title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1045.38,-136.26C1033.88,-157.72 1006.96,-202.29 971,-225.14 907.95,-265.2 882.21,-264.14 807.5,-264.14 807.5,-264.14 807.5,-264.14 642.5,-264.14 502.59,-264.14 459.53,-279.02 330,-226.14"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1045.02,-109.55C1033.16,-130.59 1005.92,-173.87 971,-197.43 848.82,-279.86 791.62,-246.66 644.5,-255.43"/>
 </g>
 <!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge11" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge12" class="edge">
 <title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
-<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1006.91,-135.34C985.47,-139.83 959.31,-143.98 935.5,-144.14"/>
-<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M933.5,-144.14C900.47,-144.35 864.77,-131.68 839.82,-120.55"/>
-<polygon fill="#00ff00" stroke="#00ff00" points="841.04,-117.26 830.49,-116.23 838.1,-123.61 841.04,-117.26"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M933.5,-97.43C901.79,-99.89 867.48,-111.41 842.68,-121.46"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="841.22,-118.28 833.34,-125.36 843.92,-124.74 841.22,-118.28"/>
 </g>
 <!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge18" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge20" class="edge">
 <title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
-<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1006.98,-116.46C998.53,-115 989.68,-113.48 981.2,-112.02"/>
-<polygon fill="#ffff00" stroke="#ffff00" points="981.53,-108.52 971.08,-110.27 980.34,-115.42 981.53,-108.52"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1016.7,-85.43C1005.22,-81.47 992.29,-77.01 980.17,-72.83"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="981.27,-69.51 970.68,-69.56 978.99,-76.13 981.27,-69.51"/>
 </g>
 <!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge19" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge21" class="edge">
 <title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
-<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1033.21,-112C1017.46,-102.25 993.73,-89.22 971,-83.14 889.38,-61.29 792.29,-59.1 725.31,-61.1"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="725.12,-57.6 715.24,-61.43 725.35,-64.6 725.12,-57.6"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M805.5,-97.43C779.39,-95.83 750.86,-95.4 725.16,-95.5"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="725.07,-92 715.09,-95.57 725.11,-99 725.07,-92"/>
 </g>
 <!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge21" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge23" class="edge">
 <title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M933.5,-144.14C772.48,-145.17 732.12,-137.16 572,-120.14 563.62,-119.24 554.84,-118.16 546.15,-117"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="546.4,-113.5 536.01,-115.6 545.44,-120.44 546.4,-113.5"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1006.82,-95.82C985.24,-95.45 958.99,-95.61 935.5,-97.43"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M933.5,-97.43C877.67,-101.77 863.4,-100.85 807.5,-97.43"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M805.5,-97.43C768.7,-95.18 680.83,-63.68 644.5,-57.43"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M642.5,-57.43C611.25,-52.05 576.2,-51.67 546.38,-52.98"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="545.88,-49.5 536.07,-53.5 546.24,-56.49 545.88,-49.5"/>
 </g>
 <!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge14" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge16" class="edge">
 <title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M571.77,-67.98C542.29,-68.27 507.71,-67.99 476.5,-66.14"/>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M474.5,-66.14C446.53,-64.48 415.47,-64.27 389.33,-64.55"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="389.15,-61.06 379.2,-64.69 389.25,-68.06 389.15,-61.06"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M571.93,-104.59C526.95,-109.37 467.46,-116.12 415,-123.43 406.7,-124.59 397.95,-125.91 389.36,-127.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="388.7,-123.83 379.38,-128.87 389.81,-130.74 388.7,-123.83"/>
 </g>
 <!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge22" class="edge">
+<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge24" class="edge">
 <title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M592.69,-78.14C574.97,-82.41 554.82,-87.26 536.34,-91.72"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="535.46,-88.33 526.56,-94.07 537.1,-95.13 535.46,-88.33"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M589.98,-85.41C573.7,-81.68 555.61,-77.54 538.74,-73.68"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="539.5,-70.26 528.97,-71.44 537.93,-77.08 539.5,-70.26"/>
 </g>
 <!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge15" class="edge">
-<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M431.15,-94.13C416.28,-90.02 399.46,-85.36 383.86,-81.05"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="384.39,-77.56 373.82,-78.27 382.53,-84.31 384.39,-77.56"/>
-</g>
-<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
-<g id="module~~rdb_ocean_sponge~~UsedByGraph_edge7" class="edge">
-<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M444.77,-160.18C435.14,-164.33 424.5,-169.19 415,-174.14 375.73,-194.61 371.25,-242.25 330,-226.14"/>
-<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M328,-226.14C264.73,-201.42 223.42,-125.83 206.18,-88.08"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="209.19,-86.24 201.95,-78.51 202.79,-89.07 209.19,-86.24"/>
-</g>
-<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
 <g id="module~~rdb_ocean_sponge~~UsedByGraph_edge17" class="edge">
-<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
-<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M435.42,-136.13C428.47,-133.5 421.41,-130.48 415,-127.14 392.24,-115.26 368.69,-97.9 352.18,-84.73"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="354.19,-81.86 344.22,-78.28 349.78,-87.3 354.19,-81.86"/>
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M444.77,-71.47C435.14,-75.62 424.5,-80.48 415,-85.43 394.94,-95.89 373.19,-109.23 356.71,-119.78"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="354.65,-116.95 348.15,-125.32 358.45,-122.83 354.65,-116.95"/>
 </g>
 </g>
 </svg>
@@ -1038,6 +1078,58 @@ large graphs.</div>
       <br>
 
 
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sponge_ramp_cosine"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>SPONGE_RAMP_COSINE</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p><code>&amp;ocean_sponge_nml ramp = "cosine"</code> (default): the legacy band
+kernel&rsquo;s <code>0.5*(1 + cos(pi*d/band))</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sponge_ramp_linear"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>SPONGE_RAMP_LINEAR</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p><code>&amp;ocean_sponge_nml ramp = "linear"</code>: <code>(band - d - 0.5)/band</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
 
 
 
@@ -1072,7 +1164,7 @@ divergences. Value-semantics slot (no <code>CS</code> pointer, no
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-damp_source~2"></span>
+              <span class="anchor" id="variable-damp_source"></span>
               character(len=16),
             </td>
               <td>public</td>
@@ -1093,7 +1185,7 @@ value implemented in v1): cosine ramp from every
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-enable~37"></span>
+              <span class="anchor" id="variable-enable~3"></span>
               logical,
             </td>
               <td>public</td>
@@ -1111,7 +1203,7 @@ unchanged ⇒ existing nmls + tests are bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-idamp_h~3"></span>
+              <span class="anchor" id="variable-idamp_h"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1131,7 +1223,7 @@ width/extent bookkeeping).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-idamp_u~3"></span>
+              <span class="anchor" id="variable-idamp_u"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1149,7 +1241,7 @@ width/extent bookkeeping).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-idamp_v~3"></span>
+              <span class="anchor" id="variable-idamp_v"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1167,7 +1259,44 @@ width/extent bookkeeping).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-is_init~39"></span>
+              <span class="anchor" id="variable-idx_s"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_s</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Tracer-registry index of salinity; see <code>idx_t</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_t"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_t</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Tracer-registry index of temperature, latched at configure so
+the per-step refresh needs no registry walk (and no
+array-of-derived-types device indirection). <code>0</code> = not
+registered ⇒ the temperature refresh is skipped.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_init~5"></span>
               logical,
             </td>
               <td>public</td>
@@ -1186,7 +1315,75 @@ sponge never allocates the (potentially large) <code>ref_tracer</code>).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n_tracers~4"></span>
+              <span class="anchor" id="variable-lin_ds_dz"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_ds_dz</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p><code>target_source="linear_z"</code>: dS/dz (PSU/m), z positive UP.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_dt_dz"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_dt_dz</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p><code>target_source="linear_z"</code>: dT/dz (degC/m), <strong>z positive UP</strong>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_s_ref"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_s_ref</strong></td>
+<td> =</td>
+                <td>35.0_wp</td>
+            <td>
+<p><code>target_source="linear_z"</code>: S (PSU) at the <code>z = 0</code> datum.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_t_ref"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_t_ref</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p><code>target_source="linear_z"</code>: T (degC) at the <code>z = 0</code> datum.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_tracers"></span>
               integer,
             </td>
               <td>public</td>
@@ -1223,7 +1420,7 @@ index (matches <code>ms%idx_salinity</code> / <code>ms%idx_temperature</code>).<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-relax_h~2"></span>
+              <span class="anchor" id="variable-relax_h"></span>
               logical,
             </td>
               <td>public</td>
@@ -1243,7 +1440,7 @@ relax_h=.true.</code> aborts fail-loud at <code>validate_config</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-relax_tracers~2"></span>
+              <span class="anchor" id="variable-relax_tracers"></span>
               logical,
             </td>
               <td>public</td>
@@ -1261,7 +1458,7 @@ relax_h=.true.</code> aborts fail-loud at <code>validate_config</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-relax_uv~2"></span>
+              <span class="anchor" id="variable-relax_uv"></span>
               logical,
             </td>
               <td>public</td>
@@ -1281,7 +1478,7 @@ thing today&rsquo;s sponge always damps); MOM6&rsquo;s <code>SPONGE_UV</code> de
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-target_source~2"></span>
+              <span class="anchor" id="variable-target_source"></span>
               character(len=16),
             </td>
               <td>public</td>
@@ -1293,15 +1490,18 @@ thing today&rsquo;s sponge always damps); MOM6&rsquo;s <code>SPONGE_UV</code> de
 <td> =</td>
                 <td>&#34;ic&#34;</td>
             <td>
-<p>Reference-state source. <code>"ic"</code> (only value implemented in v1):
+<p>Reference-state source. <code>"ic"</code>:
 <code>ocean_sponge_snapshot_reference</code> copies the seeded initial
-condition. <code>"file"</code> recognised but aborts at <code>validate_config</code>
-(PR-23b).</p>
+condition. <code>"linear_z"</code>: the analytic affine geopotential
+profile below, re-evaluated on the LIVE layer geometry by
+<code>ocean_sponge_refresh_target</code> once per outer step — see that
+routine&rsquo;s docstring for why re-evaluated rather than frozen.
+<code>"file"</code> recognised but aborts at <code>validate_config</code> (PR-23b).</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-u_ref~2"></span>
+              <span class="anchor" id="variable-u_ref"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1319,7 +1519,7 @@ matches <code>ms%u_face_x_layer</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-v_ref~2"></span>
+              <span class="anchor" id="variable-v_ref"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1335,6 +1535,31 @@ matches <code>ms%u_face_x_layer</code>.</p>
 matches <code>ms%v_face_y_layer</code>.</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_top"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>z_top</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Geopotential DEPTH of the top of the water column (m, positive
+down), shape <code>(nx_total, ny_total)</code>. <code>0</code> in the open ocean (the
+free-surface datum), <code>metrics%z_draft(i,j)</code> under an ice shelf.
+Latched ONCE at configure — the draft is static by design — so
+the per-step <code>linear_z</code> refresh is self-contained and the
+sponge slot never has to reach into <code>ocean_metrics_t</code>. Same
+role <code>z_top</code> plays in <code>rdb_ocean_z_init::build_z_ctr</code>; without
+it a geopotential target would land <code>z_draft</code> metres too
+shallow on every shelf column and tilt with the ice base.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -1346,27 +1571,27 @@ matches <code>ms%v_face_y_layer</code>.</p>
           <tbody>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-bytes~47'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_bytes.html'>ocean_sponge_bytes</a></td>
+  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-bytes~11'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_bytes.html'>ocean_sponge_bytes</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-destroy~42'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_destroy.html'>ocean_sponge_destroy</a></td>
+  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-destroy~5'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_destroy.html'>ocean_sponge_destroy</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-enter_data~33'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_enter_data.html'>ocean_sponge_enter_data</a></td>
+  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-enter_data~5'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_enter_data.html'>ocean_sponge_enter_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-exit_data~33'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_exit_data.html'>ocean_sponge_exit_data</a></td>
+  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-exit_data~5'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_exit_data.html'>ocean_sponge_exit_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-init~42'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_init.html'>ocean_sponge_init</a></td>
+  <strong><a href='../type/ocean_sponge_t.html#boundprocedure-init~5'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_sponge_init.html'>ocean_sponge_init</a></td>
                   <td></td>
               </tr>
           </tbody>
@@ -1379,6 +1604,83 @@ matches <code>ms%v_face_y_layer</code>.</p>
 
         <section>
           <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-sponge_band_alpha"></span> <h3>public pure function <a href='../proc/sponge_band_alpha.html'>sponge_band_alpha</a>(d, band, ramp) result(alpha)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Shape factor of the <code>damp_source="band"</code> ramp at cell offset <code>d</code>
+(0 = hard against the sponge-tagged wall) for a band of <code>band</code>
+cells.  The per-cell rate is <code>sponge_strength * alpha</code>.</p><a href="../proc/sponge_band_alpha.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-band"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>band</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ramp"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ramp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
               <div class="card">
     <div class="card-header codesum"><span class="anchor" id="proc-ocean_sponge_bytes"></span> <h3>private pure function <a href='../proc/ocean_sponge_bytes.html'>ocean_sponge_bytes</a>(this) result(nbytes)  
 </h3></div>
@@ -1401,7 +1703,7 @@ reconciles this against the measured device mapping.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~457"></span>
+              <span class="anchor" id="variable-this~49"></span>
               class(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1467,7 +1769,7 @@ same <code>cur*decay + tgt*(1-decay)</code> update).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tgt~17"></span>
+              <span class="anchor" id="variable-tgt~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1482,7 +1784,7 @@ same <code>cur*decay + tgt*(1-decay)</code> update).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-strength~10"></span>
+              <span class="anchor" id="variable-strength~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1497,7 +1799,7 @@ same <code>cur*decay + tgt*(1-decay)</code> update).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-d~25"></span>
+              <span class="anchor" id="variable-d~5"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1512,7 +1814,7 @@ same <code>cur*decay + tgt*(1-decay)</code> update).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-band~10"></span>
+              <span class="anchor" id="variable-band~8"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1527,7 +1829,7 @@ same <code>cur*decay + tgt*(1-decay)</code> update).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~119"></span>
+              <span class="anchor" id="variable-dt~29"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1578,7 +1880,7 @@ per the plan (§3.1 / step 10).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-cur~3"></span>
+              <span class="anchor" id="variable-cur"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1593,7 +1895,7 @@ per the plan (§3.1 / step 10).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tgt~16"></span>
+              <span class="anchor" id="variable-tgt~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1659,7 +1961,7 @@ No-op when no edge is OBC_SPONGE.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~255"></span>
+              <span class="anchor" id="variable-grid~19"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1674,7 +1976,7 @@ No-op when no edge is OBC_SPONGE.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bc~31"></span>
+              <span class="anchor" id="variable-bc"></span>
               type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1689,7 +1991,7 @@ No-op when no edge is OBC_SPONGE.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~122"></span>
+              <span class="anchor" id="variable-ms~12"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1704,7 +2006,7 @@ No-op when no edge is OBC_SPONGE.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~113"></span>
+              <span class="anchor" id="variable-dt~23"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1753,7 +2055,7 @@ legacy band / map-driven path runs).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~254"></span>
+              <span class="anchor" id="variable-grid~18"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1768,7 +2070,7 @@ legacy band / map-driven path runs).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-sp~4"></span>
+              <span class="anchor" id="variable-sp~3"></span>
               type(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1783,7 +2085,7 @@ legacy band / map-driven path runs).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~121"></span>
+              <span class="anchor" id="variable-ms~11"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1798,7 +2100,7 @@ legacy band / map-driven path runs).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~108"></span>
+              <span class="anchor" id="variable-dt~18"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1842,7 +2144,7 @@ array-of-derived-types registry).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~256"></span>
+              <span class="anchor" id="variable-grid~20"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1857,7 +2159,7 @@ array-of-derived-types registry).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bc~32"></span>
+              <span class="anchor" id="variable-bc~2"></span>
               type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1872,7 +2174,7 @@ array-of-derived-types registry).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~123"></span>
+              <span class="anchor" id="variable-ms~13"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1887,7 +2189,7 @@ array-of-derived-types registry).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~114"></span>
+              <span class="anchor" id="variable-dt~24"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1896,6 +2198,78 @@ array-of-derived-types registry).</p>
             </td>
             <td>::</td>
             <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_sponge_refresh_target"></span> <h3>public pure subroutine <a href='../proc/ocean_sponge_refresh_target.html'>ocean_sponge_refresh_target</a>(grid, sp, ms)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Re-evaluate the ANALYTIC <code>target_source="linear_z"</code> reference on
+the LIVE layer geometry: for every sponge cell (<code>idamp_h &gt; 0</code>)
+and every layer,</p><a href="../proc/ocean_sponge_refresh_target.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~17"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sp~2"></span>
+              type(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~10"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
             <td>
 
             </td>
@@ -1931,7 +2305,7 @@ implemented source in v1). HOST-side, plain <code>do</code> loops (mirrors
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-sp~3"></span>
+              <span class="anchor" id="variable-sp"></span>
               type(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1946,7 +2320,7 @@ implemented source in v1). HOST-side, plain <code>do</code> loops (mirrors
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~253"></span>
+              <span class="anchor" id="variable-grid~16"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1961,7 +2335,7 @@ implemented source in v1). HOST-side, plain <code>do</code> loops (mirrors
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~120"></span>
+              <span class="anchor" id="variable-ms~9"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2001,7 +2375,7 @@ implemented source in v1). HOST-side, plain <code>do</code> loops (mirrors
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~452"></span>
+              <span class="anchor" id="variable-this~44"></span>
               class(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2044,7 +2418,7 @@ box (AMD libomptarget cross-slot-overlap fix; copied verbatim from
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~453"></span>
+              <span class="anchor" id="variable-this~45"></span>
               class(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2084,7 +2458,7 @@ box (AMD libomptarget cross-slot-overlap fix; copied verbatim from
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~454"></span>
+              <span class="anchor" id="variable-this~46"></span>
               type(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2124,7 +2498,7 @@ box (AMD libomptarget cross-slot-overlap fix; copied verbatim from
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~455"></span>
+              <span class="anchor" id="variable-this~47"></span>
               class(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2164,7 +2538,7 @@ box (AMD libomptarget cross-slot-overlap fix; copied verbatim from
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~456"></span>
+              <span class="anchor" id="variable-this~48"></span>
               type(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2210,7 +2584,7 @@ trips a zero-extent allocate.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~451"></span>
+              <span class="anchor" id="variable-this~43"></span>
               class(<a href='../type/ocean_sponge_t.html'>ocean_sponge_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2225,7 +2599,7 @@ trips a zero-extent allocate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~252"></span>
+              <span class="anchor" id="variable-grid~15"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2240,7 +2614,7 @@ trips a zero-extent allocate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~50"></span>
+              <span class="anchor" id="variable-nz_ml~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2255,7 +2629,7 @@ trips a zero-extent allocate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n_tracers~5"></span>
+              <span class="anchor" id="variable-n_tracers~2"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2264,6 +2638,201 @@ trips a zero-extent allocate.</p>
             </td>
             <td>::</td>
             <td><strong>n_tracers</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-refresh_linear_z_impl"></span> <h3>private pure subroutine <a href='../proc/refresh_linear_z_impl.html'>refresh_linear_z_impl</a>(ref_tracer, h_layer, z_top, idamp_h, it, n_tr, v_ref, dv_dz, nx, ny, nz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>One tracer plane of the <code>linear_z</code> target.  Explicit-shape
+dummies, dims declared first (<code>decl-order</code> hook).  <code>ref_tracer</code>
+is passed WHOLE and indexed by the scalar <code>it</code> inside the kernel
+— never sliced by the caller (the descriptor-walk trap the
+<code>dc-assumed-shape</code> hook exists to catch), matching
+<code>relax_map_tracer_impl</code>.</p><a href="../proc/refresh_linear_z_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ref_tracer~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ref_tracer</strong>(nx,ny,nz,n_tr)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_top~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_top</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idamp_h~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idamp_h</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_tr"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_tr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_ref~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_ref</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dv_dz"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dv_dz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~58"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~58"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~31"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
             <td>
 
             </td>
@@ -2299,7 +2868,7 @@ slice is passed by the caller, never dereferenced inside the DC).
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr~49"></span>
+              <span class="anchor" id="variable-htr~3"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2314,7 +2883,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~92"></span>
+              <span class="anchor" id="variable-h_layer~8"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2329,7 +2898,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx_total~69"></span>
+              <span class="anchor" id="variable-nx_total~3"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2344,7 +2913,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_total~69"></span>
+              <span class="anchor" id="variable-ny_total~3"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2359,7 +2928,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~355"></span>
+              <span class="anchor" id="variable-nz~41"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2374,7 +2943,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j0~42"></span>
+              <span class="anchor" id="variable-j0~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2389,1216 +2958,7 @@ slice is passed by the caller, never dereferenced inside the DC).
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j1~35"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>j1</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-wall_face~7"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>wall_face</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-band~8"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>band</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-side~5"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>side</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-strength~8"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>strength</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-c_bc~4"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>C_bc</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~117"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-budget~12"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout),</td>
-              <td>optional</td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>budget</strong>(nx_total,ny_total,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-relax_band_y_impl"></span> <h3>private pure subroutine <a href='../proc/relax_band_y_impl.html'>relax_band_y_impl</a>(hTr, h_layer, nx_total, ny_total, nz, i0, i1, wall_face, band, side, strength, C_bc, dt, budget)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Cosine-ramp tracer relaxation in a south/north sponge band.
-Mirror of <code>relax_band_x_impl</code> for the y-direction; see its
-docstring for the optional <code>budget</code> mirror (PR-23).</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-htr~50"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>hTr</strong>(nx_total,ny_total,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-h_layer~93"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>h_layer</strong>(nx_total,ny_total,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nx_total~70"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nx_total</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ny_total~70"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ny_total</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~356"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-i0~43"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>i0</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-i1~35"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>i1</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-wall_face~8"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>wall_face</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-band~9"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>band</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-side~6"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>side</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-strength~9"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>strength</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-c_bc~5"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>C_bc</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~118"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-budget~13"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout),</td>
-              <td>optional</td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>budget</strong>(nx_total,ny_total,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_tracer_budget_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_tracer_budget_impl.html'>relax_map_tracer_budget_impl</a>(hTr, h_layer, ref_tracer, it, n_tr, idamp_h, budget, nx, ny, nz, dt)  
-</h3></div>
-    <div class="card-body">
-          
-  <p><code>relax_map_tracer_impl</code> + mirror the per-cell increment into
-<code>budget</code> (salt or heat), the S/T budget-instrumented variant —
-mirrors <code>apply_geothermal_src_impl</code>&rsquo;s host-shim + flat-impl +
-budget-mirror shape. <code>delta</code> is the ALGEBRAIC increment
-<code>hTr_new - hTr_old = (1-decay)*(tgt-hTr_old)</code>, written once and
-used for BOTH the state update and the budget mirror so the two
-stay exactly consistent (no independent recomputation to drift).</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-htr~48"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>hTr</strong>(nx,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-h_layer~91"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>h_layer</strong>(nx,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ref_tracer~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ref_tracer</strong>(nx,ny,nz,n_tr)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-it~48"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>it</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-n_tr~11"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>n_tr</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-idamp_h~5"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>idamp_h</strong>(nx,ny)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-budget~11"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>budget</strong>(nx,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nx~409"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nx</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ny~409"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ny</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~350"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~112"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_tracer_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_tracer_impl.html'>relax_map_tracer_impl</a>(hTr, h_layer, ref_tracer, it, n_tr, idamp_h, nx, ny, nz, dt)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Relax one tracer&rsquo;s <code>hTr</code> toward <code>ref_tracer(:,:,:,it)*h_layer</code> at
-rate <code>idamp_h</code>, no budget mirror (every tracer except S/T — see
-<code>relax_map_tracer_budget_impl</code>). <code>ref_tracer</code> is passed WHOLE +
-indexed by the scalar <code>it</code> inside the kernel — never sliced by the
-caller (§6.4: a device array section of a mapped array is the
-descriptor-walk trap the <code>dc-assumed-shape</code> hook exists to catch).</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-htr~47"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>hTr</strong>(nx,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-h_layer~90"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>h_layer</strong>(nx,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ref_tracer~2"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ref_tracer</strong>(nx,ny,nz,n_tr)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-it~47"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>it</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-n_tr~10"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>n_tr</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-idamp_h~4"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>idamp_h</strong>(nx,ny)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nx~408"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nx</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ny~408"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ny</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~349"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~111"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_u_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_u_impl.html'>relax_map_u_impl</a>(u, u_ref, idamp_u, nxu, ny, nz, dt)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Relax <code>u_face_x_layer</code> toward <code>u_ref</code> at rate <code>idamp_u</code>. Explicit-
-shape dummies, dims declared first (decl-order hook). <code>idamp_u(i,j)
-&lt;= 0</code> is a bit-exact no-op (Idamp = 0 IS the sponge mask; also
-guarantees <code>sponge_idamp_zero_is_exact_identity</code>, since <code>decay =
-exp(-0*dt) = 1.0</code> exactly would already be a no-op algebraically —
-the early <code>if</code> skips the arithmetic entirely instead of relying on
-that).</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-u~31"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>u</strong>(nxu,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-u_ref~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>u_ref</strong>(nxu,ny,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-idamp_u~4"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>idamp_u</strong>(nxu,ny)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nxu"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nxu</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ny~407"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ny</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~347"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~109"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_v_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_v_impl.html'>relax_map_v_impl</a>(v, v_ref, idamp_v, nx, nyv, nz, dt)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Relax <code>v_face_y_layer</code> toward <code>v_ref</code> at rate <code>idamp_v</code>. Mirror of
-<code>relax_map_u_impl</code> for the y-direction.</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-v~31"></span>
-              real(kind=wp),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>v</strong>(nx,nyv,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-v_ref~3"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>v_ref</strong>(nx,nyv,nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-idamp_v~4"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>idamp_v</strong>(nx,nyv)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nx~407"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nx</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nyv"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nyv</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~348"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-dt~110"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>dt</strong></td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-snapshot_column_concentration"></span> <h3>private pure subroutine <a href='../proc/snapshot_column_concentration.html'>snapshot_column_concentration</a>(conc, hTr_col, h_col, nz)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Fill one water column&rsquo;s reference concentration from <code>hTr/h</code>,
-falling back to the nearest massive layer (<code>h &gt; H_VANISHED</code>) for
-any vanished layer — bed-up pass first, then a surface-down pass
-to backfill any vanished layers below the first massive one.
-Plain host loop (called from a host <code>do i,j</code> loop, never <code>do
-concurrent</code> — this is configure-time setup, not a per-step kernel).</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-conc~11"></span>
-              real(kind=wp),
-            </td>
-<td>intent(out)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>conc</strong>(nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-htr_col~2"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>hTr_col</strong>(nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-h_col~6"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>h_col</strong>(nz)</td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~345"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-    </tbody>
-  </table>
-
-
-    </div>
-  </div>
-
-              <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-sponge_relax_band_x_tracer"></span> <h3>private  subroutine <a href='../proc/sponge_relax_band_x_tracer.html'>sponge_relax_band_x_tracer</a>(ms, it, nx_total, ny_total, nz, j0, j1, wall_face, band, side, strength, C_bc, dt)  
-</h3></div>
-    <div class="card-body">
-          
-  <p>Host dispatch for one tracer&rsquo;s <code>relax_band_x_impl</code> call: routes the
-salinity/temperature budget mirror (PR-23) so the legacy band
-sponge&rsquo;s tracer sink is instrumented exactly like the map-driven
-path, without threading an <code>if</code>-branch into every one of the four
-edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
-
-  <h4>Arguments</h4>
-      <table class="table table-striped varlist">
-    <thead>
-      <tr>
-        <th scope="col">Type</th>
-<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
-        <th scope="col"></th>
-        <th scope="col">Name</th>
-        <th scope="col"></th>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ms~124"></span>
-              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
-            </td>
-<td>intent(inout)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ms</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-it~50"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>it</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nx_total~67"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nx_total</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-ny_total~67"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>ny_total</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-nz~353"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>nz</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-j0~41"></span>
-              integer,
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>j0</strong></td>
-            <td>
-
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-j1~34"></span>
+              <span class="anchor" id="variable-j1~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3658,7 +3018,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-strength~6"></span>
+              <span class="anchor" id="variable-strength~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3673,7 +3033,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-c_bc~2"></span>
+              <span class="anchor" id="variable-c_bc~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3688,7 +3048,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~115"></span>
+              <span class="anchor" id="variable-dt~27"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3701,6 +3061,21 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
 
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget</strong>(nx_total,ny_total,nz)</td>
+            <td>
+
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -3709,11 +3084,13 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
   </div>
 
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-sponge_relax_band_y_tracer"></span> <h3>private  subroutine <a href='../proc/sponge_relax_band_y_tracer.html'>sponge_relax_band_y_tracer</a>(ms, it, nx_total, ny_total, nz, i0, i1, wall_face, band, side, strength, C_bc, dt)  
+    <div class="card-header codesum"><span class="anchor" id="proc-relax_band_y_impl"></span> <h3>private pure subroutine <a href='../proc/relax_band_y_impl.html'>relax_band_y_impl</a>(hTr, h_layer, nx_total, ny_total, nz, i0, i1, wall_face, band, side, strength, C_bc, dt, budget)  
 </h3></div>
     <div class="card-body">
           
-  <p>Mirror of <code>sponge_relax_band_x_tracer</code> for the y-direction.</p>
+  <p>Cosine-ramp tracer relaxation in a south/north sponge band.
+Mirror of <code>relax_band_x_impl</code> for the y-direction; see its
+docstring for the optional <code>budget</code> mirror (PR-23).</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -3728,37 +3105,37 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~125"></span>
-              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+              <span class="anchor" id="variable-htr~4"></span>
+              real(kind=wp),
             </td>
 <td>intent(inout)</td>
               <td></td>            <td>
               
             </td>
             <td>::</td>
-            <td><strong>ms</strong></td>
+            <td><strong>hTr</strong>(nx_total,ny_total,nz)</td>
             <td>
 
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-it~51"></span>
-              integer,
+              <span class="anchor" id="variable-h_layer~9"></span>
+              real(kind=wp),
             </td>
 <td>intent(in)</td>
               <td></td>            <td>
               
             </td>
             <td>::</td>
-            <td><strong>it</strong></td>
+            <td><strong>h_layer</strong>(nx_total,ny_total,nz)</td>
             <td>
 
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx_total~68"></span>
+              <span class="anchor" id="variable-nx_total~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3773,7 +3150,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_total~68"></span>
+              <span class="anchor" id="variable-ny_total~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3788,7 +3165,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~354"></span>
+              <span class="anchor" id="variable-nz~42"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3803,7 +3180,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i0~42"></span>
+              <span class="anchor" id="variable-i0~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3818,7 +3195,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i1~34"></span>
+              <span class="anchor" id="variable-i1~4"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -3878,7 +3255,1199 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-strength~7"></span>
+              <span class="anchor" id="variable-strength~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strength</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_bc~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>C_bc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~28"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget</strong>(nx_total,ny_total,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_tracer_budget_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_tracer_budget_impl.html'>relax_map_tracer_budget_impl</a>(hTr, h_layer, ref_tracer, it, n_tr, idamp_h, budget, nx, ny, nz, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>relax_map_tracer_impl</code> + mirror the per-cell increment into
+<code>budget</code> (salt or heat), the S/T budget-instrumented variant —
+mirrors <code>apply_geothermal_src_impl</code>&rsquo;s host-shim + flat-impl +
+budget-mirror shape. <code>delta</code> is the ALGEBRAIC increment
+<code>hTr_new - hTr_old = (1-decay)*(tgt-hTr_old)</code>, written once and
+used for BOTH the state update and the budget mirror so the two
+stay exactly consistent (no independent recomputation to drift).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ref_tracer~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ref_tracer</strong>(nx,ny,nz,n_tr)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~7"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_tr~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_tr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idamp_h~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idamp_h</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~62"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~62"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~36"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_tracer_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_tracer_impl.html'>relax_map_tracer_impl</a>(hTr, h_layer, ref_tracer, it, n_tr, idamp_h, nx, ny, nz, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Relax one tracer&rsquo;s <code>hTr</code> toward <code>ref_tracer(:,:,:,it)*h_layer</code> at
+rate <code>idamp_h</code>, no budget mirror (every tracer except S/T — see
+<code>relax_map_tracer_budget_impl</code>). <code>ref_tracer</code> is passed WHOLE +
+indexed by the scalar <code>it</code> inside the kernel — never sliced by the
+caller (§6.4: a device array section of a mapped array is the
+descriptor-walk trap the <code>dc-assumed-shape</code> hook exists to catch).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ref_tracer~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ref_tracer</strong>(nx,ny,nz,n_tr)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_tr~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_tr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idamp_h~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idamp_h</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~61"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~61"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~35"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~21"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_u_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_u_impl.html'>relax_map_u_impl</a>(u, u_ref, idamp_u, nxu, ny, nz, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Relax <code>u_face_x_layer</code> toward <code>u_ref</code> at rate <code>idamp_u</code>. Explicit-
+shape dummies, dims declared first (decl-order hook). <code>idamp_u(i,j)
+&lt;= 0</code> is a bit-exact no-op (Idamp = 0 IS the sponge mask; also
+guarantees <code>sponge_idamp_zero_is_exact_identity</code>, since <code>decay =
+exp(-0*dt) = 1.0</code> exactly would already be a no-op algebraically —
+the early <code>if</code> skips the arithmetic entirely instead of relying on
+that).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong>(nxu,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_ref~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_ref</strong>(nxu,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idamp_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idamp_u</strong>(nxu,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxu"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxu</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~60"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~33"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~19"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-relax_map_v_impl"></span> <h3>private pure subroutine <a href='../proc/relax_map_v_impl.html'>relax_map_v_impl</a>(v, v_ref, idamp_v, nx, nyv, nz, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Relax <code>v_face_y_layer</code> toward <code>v_ref</code> at rate <code>idamp_v</code>. Mirror of
+<code>relax_map_u_impl</code> for the y-direction.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong>(nx,nyv,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_ref~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_ref</strong>(nx,nyv,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idamp_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idamp_v</strong>(nx,nyv)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~60"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyv"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyv</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~34"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~20"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-snapshot_column_concentration"></span> <h3>private pure subroutine <a href='../proc/snapshot_column_concentration.html'>snapshot_column_concentration</a>(conc, hTr_col, h_col, nz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Fill one water column&rsquo;s reference concentration from <code>hTr/h</code>,
+falling back to the nearest massive layer (<code>h &gt; H_VANISHED</code>) for
+any vanished layer — bed-up pass first, then a surface-down pass
+to backfill any vanished layers below the first massive one.
+Plain host loop (called from a host <code>do i,j</code> loop, never <code>do
+concurrent</code> — this is configure-time setup, not a per-step kernel).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_col"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_col</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_col"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_col</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~29"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-sponge_relax_band_x_tracer"></span> <h3>private  subroutine <a href='../proc/sponge_relax_band_x_tracer.html'>sponge_relax_band_x_tracer</a>(ms, it, nx_total, ny_total, nz, j0, j1, wall_face, band, side, strength, C_bc, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Host dispatch for one tracer&rsquo;s <code>relax_band_x_impl</code> call: routes the
+salinity/temperature budget mirror (PR-23) so the legacy band
+sponge&rsquo;s tracer sink is instrumented exactly like the map-driven
+path, without threading an <code>if</code>-branch into every one of the four
+edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~14"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~39"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j0~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j0</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j1~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_face~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_face</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-band~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>band</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-side"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>side</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strength~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strength</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_bc~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>C_bc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-sponge_relax_band_y_tracer"></span> <h3>private  subroutine <a href='../proc/sponge_relax_band_y_tracer.html'>sponge_relax_band_y_tracer</a>(ms, it, nx_total, ny_total, nz, i0, i1, wall_face, band, side, strength, C_bc, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Mirror of <code>sponge_relax_band_x_tracer</code> for the y-direction.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~15"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~10"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~40"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i0~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i0</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i1~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_face~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_face</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-band~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>band</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-side~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>side</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strength~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3908,7 +4477,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~116"></span>
+              <span class="anchor" id="variable-dt~26"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -3951,7 +4520,7 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

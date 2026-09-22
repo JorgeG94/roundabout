@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">30 statements</a>
+                 title=" 0.1% of total for procedures.">31 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,12 +134,12 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-i~528">i</a>
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-j~456">j</a>
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nu~11">nu</a>
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nv~6">nv</a>
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nx~451">nx</a>
-            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-ny~451">ny</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-i~343">i</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-j~308">j</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nu~6">nu</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nv~5">nv</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-nx~295">nx</a>
+            <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-ny~295">ny</a>
             <a class="list-group-item" href="../proc/set_cor_ref_velocity.html#variable-use_av">use_av</a>
         </div>
       </div>
@@ -176,7 +176,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av)  
+    <h2>public pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av, metrics)  
 </h2>
     
 
@@ -209,6 +209,22 @@ loop instability).</p>
   <code>ubt_Cor = Σ_k wt_u·U_Cor</code> with <code>U_Cor = u_av</code>, the velocity
   its <code>CorAdCalc</code> used.</li>
 </ul>
+<p><strong>Under <code>&amp;vcoord_nml zfixed_closed_faces</code> &ldquo;the same weights&rdquo; is
+load-bearing and was, for one release, wrong here.</strong>  A closed
+layer carries exactly zero velocity (<code>mask_layer_velocities</code>)
+but a non-zero <code>h_face</code>, so with
+<code>φ = Σ_k h_face·open / Σ_k h_face</code> a FULL-column mean of <code>u_av</code>
+returns <code>φ·ū_open</code>, not <code>ū_open</code>.  The fast loop meanwhile
+integrates its live <code>(ζ+f)·v̄ − ∇KE</code> on <code>bt_ubt = ū_open</code>, so
+<code>subtract_fast_cor_ref</code> would remove <code>f·φ·v̄</code> where it must
+remove <code>f·v̄</code>, leaving <code>Δa_u = +f·(1−φ)·v̄</code> forcing EVERY
+barotropic substep <em>proportionally to the barotropic velocity</em> —
+an amplifier, not a seed.  Measured on ISOMIP+ Ocean0 (melt off,
+30 d): <code>En</code> <code>1.295E-06 → 5.711E-08</code> and barotropic KE ×195
+smaller once <code>metrics</code> is passed, matching the <code>ssp_rk2</code> twin
+(whose <code>.false.</code> branch below is a plain copy of <code>bt_ubt</code>, and so
+could never have the defect) to 2.7 %.  <code>φ</code> is O(0.5) on a
+partial-step face, not O(1 − 1e-4).</p>
 
 
     <h3>Arguments</h3>
@@ -224,7 +240,7 @@ loop instability).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~277"></span>
+              <span class="anchor" id="variable-grid~168"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -239,7 +255,7 @@ loop instability).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_work~20"></span>
+              <span class="anchor" id="variable-bt_work~13"></span>
               type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -254,7 +270,7 @@ loop instability).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~142"></span>
+              <span class="anchor" id="variable-ms~89"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -280,6 +296,24 @@ loop instability).</p>
             <td><strong>from_u_av</strong></td>
             <td>
                 <p><code>.true.</code> under <code>split_scheme = "pred_corr"</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~52"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                <p>The closed-face mask carrier, REQUIRED — see the paragraph
+above, and <code>face_depth_mean_u</code>&rsquo;s own <code>metrics</code> docstring.
+Knob off ⇒ the depth means take their original branch and
+this is byte-identical.</p>
             </td>
         </tr>
     </tbody>
@@ -697,7 +731,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~528"></span>
+              <span class="anchor" id="variable-i~343"></span>
               integer,
             </td>
               <td>private</td>
@@ -714,7 +748,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~456"></span>
+              <span class="anchor" id="variable-j~308"></span>
               integer,
             </td>
               <td>private</td>
@@ -731,7 +765,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nu~11"></span>
+              <span class="anchor" id="variable-nu~6"></span>
               integer,
             </td>
               <td>private</td>
@@ -748,7 +782,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nv~6"></span>
+              <span class="anchor" id="variable-nv~5"></span>
               integer,
             </td>
               <td>private</td>
@@ -765,7 +799,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~451"></span>
+              <span class="anchor" id="variable-nx~295"></span>
               integer,
             </td>
               <td>private</td>
@@ -782,7 +816,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~451"></span>
+              <span class="anchor" id="variable-ny~295"></span>
               integer,
             </td>
               <td>private</td>
@@ -830,7 +864,7 @@ large graphs.</div>
     
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
-    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">set_cor_ref_velocity</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">from_u_av</span><span class="p">)</span>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">set_cor_ref_velocity</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">from_u_av</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! Fill `bt_work%cor_ref_u/v` — the barotropic velocity at which</span>
 <span class="w">      </span><span class="c">!! `subtract_fast_cor_ref` evaluates the Coriolis/advection</span>
 <span class="w">      </span><span class="c">!! reference it removes from the substep forcing (MOM6</span>
@@ -860,11 +894,33 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!   forcing_visc_rem`).  MOM6 does the same by construction:</span>
 <span class="w">      </span><span class="c">!!   `ubt_Cor = Σ_k wt_u·U_Cor` with `U_Cor = u_av`, the velocity</span>
 <span class="w">      </span><span class="c">!!   its `CorAdCalc` used.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Under `&amp;vcoord_nml zfixed_closed_faces` "the same weights" is</span>
+<span class="w">      </span><span class="c">!! load-bearing and was, for one release, wrong here.**  A closed</span>
+<span class="w">      </span><span class="c">!! layer carries exactly zero velocity (`mask_layer_velocities`)</span>
+<span class="w">      </span><span class="c">!! but a non-zero `h_face`, so with</span>
+<span class="w">      </span><span class="c">!! `φ = Σ_k h_face·open / Σ_k h_face` a FULL-column mean of `u_av`</span>
+<span class="w">      </span><span class="c">!! returns `φ·ū_open`, not `ū_open`.  The fast loop meanwhile</span>
+<span class="w">      </span><span class="c">!! integrates its live `(ζ+f)·v̄ − ∇KE` on `bt_ubt = ū_open`, so</span>
+<span class="w">      </span><span class="c">!! `subtract_fast_cor_ref` would remove `f·φ·v̄` where it must</span>
+<span class="w">      </span><span class="c">!! remove `f·v̄`, leaving `Δa_u = +f·(1−φ)·v̄` forcing EVERY</span>
+<span class="w">      </span><span class="c">!! barotropic substep *proportionally to the barotropic velocity* —</span>
+<span class="w">      </span><span class="c">!! an amplifier, not a seed.  Measured on ISOMIP+ Ocean0 (melt off,</span>
+<span class="w">      </span><span class="c">!! 30 d): `En` `1.295E-06 → 5.711E-08` and barotropic KE ×195</span>
+<span class="w">      </span><span class="c">!! smaller once `metrics` is passed, matching the `ssp_rk2` twin</span>
+<span class="w">      </span><span class="c">!! (whose `.false.` branch below is a plain copy of `bt_ubt`, and so</span>
+<span class="w">      </span><span class="c">!! could never have the defect) to 2.7 %.  `φ` is O(0.5) on a</span>
+<span class="w">      </span><span class="c">!! partial-step face, not O(1 − 1e-4).</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">barotropic_workstate_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_work</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
 <span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">from_u_av</span>
 <span class="w">         </span><span class="c">!! `.true.` under `split_scheme = "pred_corr"`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">         </span><span class="c">!! The closed-face mask carrier, REQUIRED — see the paragraph</span>
+<span class="w">         </span><span class="c">!! above, and `face_depth_mean_u`'s own `metrics` docstring.</span>
+<span class="w">         </span><span class="c">!! Knob off ⇒ the depth means take their original branch and</span>
+<span class="w">         </span><span class="c">!! this is byte-identical.</span>
 
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
 <span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_av</span>
@@ -875,12 +931,14 @@ large graphs.</div>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_av</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_forcing_visc_rem</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">            call </span><span class="n">face_depth_mean_rem_u</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                       </span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_u</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
+<span class="w">                                       </span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_u</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
 <span class="w">            </span><span class="k">call </span><span class="n">face_depth_mean_rem_v</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                       </span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_v</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
+<span class="w">                                       </span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_v</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
 <span class="w">         </span><span class="k">else</span>
-<span class="k">            call </span><span class="n">face_depth_mean_u</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_u</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
-<span class="w">            </span><span class="k">call </span><span class="n">face_depth_mean_v</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_v</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">)</span>
+<span class="k">            call </span><span class="n">face_depth_mean_u</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">face_depth_mean_v</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bt_work</span><span class="p">%</span><span class="n">cor_ref_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
 <span class="w">         </span><span class="k">end if</span>
 <span class="k">      else</span>
 <span class="k">         </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">bt_work</span><span class="p">%</span><span class="n">bt_ubt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
@@ -918,7 +976,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

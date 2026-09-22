@@ -7,6 +7,7 @@
 !! `ice_conc`/`ice_thick` fills live in `rdb_ocean_diag_fills` (module-
 !! cycle rule: this module USES that one).
 module rdb_ocean_diag_derived
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp, GRAVITY
    use rdb_ocean_state, only: ocean_state_t
    use rdb_ocean_diag, only: ocean_diag_t, diag_fill_proc, diag_remap_proc, &
@@ -23,11 +24,24 @@ module rdb_ocean_diag_derived
 
    public :: derived_entry_t
    public :: register_derived, apply_diag_selection
-   public :: derived_catalog_size, derived_catalog_name
+   public :: derived_catalog_size, derived_catalog_name, derived_catalog_requires
    public :: fill_h_layer, fill_rho_layer, fill_vorticity_z
    public :: fill_ke_total, fill_transport_x, fill_transport_y
    public :: fill_mld_density
    public :: fill_ice_speed, fill_ice_u, fill_ice_v
+   public :: fill_melt, fill_melt_m_per_yr, fill_thermal_driving
+   public :: fill_haline_driving, fill_tbdry, fill_sbdry, fill_tfreeze_ib
+   public :: fill_exch_vel_t, fill_exch_vel_s, fill_ustar_shelf
+   public :: fill_cavity_melt_status, fill_z_draft, fill_water_column
+   public :: cavity_mask_impl, melt_m_per_yr_factor
+
+   integer, parameter, public :: DERIVED_REQ_NONE = 0
+      !! No prerequisite — the entry reads state that always exists.
+   integer, parameter, public :: DERIVED_REQ_CAVITY_DYN = 1
+      !! Needs `&ocean_cavity_dyn_nml enable` (the draft geometry).
+   integer, parameter, public :: DERIVED_REQ_CAVITY_MELT = 2
+      !! Needs `&ocean_cavity_melt_nml enable` (the melt slot), which in
+      !! turn requires `&ocean_cavity_dyn_nml`.
 
    type :: derived_entry_t
       !! One entry in the static catalog.  Buffer layout is implicit
@@ -38,14 +52,34 @@ module rdb_ocean_diag_derived
       character(len=64)  :: standard_name = ""
       procedure(diag_fill_proc), pointer, nopass :: fill => null()
       logical :: is_layered = .true.
+      integer :: requires = DERIVED_REQ_NONE
+         !! Prerequisite knob, if any.  Registering an entry whose
+         !! prerequisite is off FAILS LOUD at configure — the same
+         !! stance `register_derived` already takes on an unknown name,
+         !! and for the same reason: a requested diagnostic that comes
+         !! back as a plane of missing values, or worse as a plane of
+         !! zeros, is indistinguishable from a physical answer.
    end type derived_entry_t
 
-   integer, parameter :: N_CATALOG = 10
+   integer, parameter :: N_CATALOG = 23
    type(derived_entry_t) :: CATALOG(N_CATALOG)
    logical :: catalog_initialised = .false.
 
    real(wp), parameter :: MLD_DENSITY_THRESHOLD = 0.03_wp
       !! De Boyer Montégut (2004) MLD criterion: Δσ_0 = 0.03 kg/m³ vs surface.
+
+   real(wp), parameter :: RHO_FRESHWATER_ISOMIP = 1000.0_wp
+      !! Freshwater density (kg/m³) the ISOMIP+ melt-rate CONVENTION
+      !! divides by — Asay-Davis et al. (2016), *GMD* **9**, 2471–2497,
+      !! §3.3: melt rates are reported in m/yr of ICE-EQUIVALENT
+      !! freshwater.  It is a reporting convention, deliberately NOT the
+      !! model's Boussinesq `rho_0` (1035) and NOT the melt law's own
+      !! `const%rho_w`: quoting `melt_m_per_yr` against anything else
+      !! puts the number 3.5 % off every published ISOMIP+ figure.
+   real(wp), parameter :: SECONDS_PER_YEAR = 365.0_wp*86400.0_wp
+      !! 365-day year, the ISOMIP+ protocol's own calendar.  A Julian
+      !! year (365.25 d) would move every melt rate by 0.07 %, which is
+      !! below the noise but not below the reader's attention.
 
 contains
 
@@ -113,6 +147,102 @@ contains
                     units="m s-1", &
                     standard_name="sea_ice_y_velocity", &
                     fill=fill_ice_v, is_layered=.false.)
+      ! ---- Ice-shelf cavity (P2c).  Eleven melt-interface fields, all
+      ! gated on `&ocean_cavity_melt_nml enable`, plus two GEOMETRY
+      ! fields that need only `&ocean_cavity_dyn_nml`.  Every one is
+      ! NaN outside the cover, so a domain mean over the output is a
+      ! mean over the CAVITY — see `cavity_mask_impl`.
+      CATALOG(11) = derived_entry_t( &
+                    name="melt", &
+                    long_name="ice_shelf_basal_melt_mass_flux", &
+                    units="kg m-2 s-1", &
+                    standard_name="water_flux_into_sea_water_from_ice_shelf", &
+                    fill=fill_melt, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(12) = derived_entry_t( &
+                    name="melt_m_per_yr", &
+                    long_name="ice_shelf_basal_melt_rate_isomip_convention", &
+                    units="m yr-1", &
+                    standard_name="ice_shelf_basal_melt_rate", &
+                    fill=fill_melt_m_per_yr, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(13) = derived_entry_t( &
+                    name="thermal_driving", &
+                    long_name="far_field_thermal_driving_above_in_situ_freezing_point", &
+                    units="degC", &
+                    standard_name="ocean_thermal_driving", &
+                    fill=fill_thermal_driving, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(14) = derived_entry_t( &
+                    name="haline_driving", &
+                    long_name="far_field_haline_driving_above_interface_salinity", &
+                    units="g kg-1", &
+                    standard_name="ocean_haline_driving", &
+                    fill=fill_haline_driving, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(15) = derived_entry_t( &
+                    name="tbdry", &
+                    long_name="ice_ocean_interface_temperature", &
+                    units="degC", &
+                    standard_name="sea_water_temperature_at_ice_shelf_base", &
+                    fill=fill_tbdry, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(16) = derived_entry_t( &
+                    name="sbdry", &
+                    long_name="ice_ocean_interface_salinity", &
+                    units="g kg-1", &
+                    standard_name="sea_water_salinity_at_ice_shelf_base", &
+                    fill=fill_sbdry, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(17) = derived_entry_t( &
+                    name="tfreeze_ib", &
+                    long_name="in_situ_freezing_point_of_the_far_field_at_the_ice_base", &
+                    units="degC", &
+                    standard_name="sea_water_freezing_temperature", &
+                    fill=fill_tfreeze_ib, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(18) = derived_entry_t( &
+                    name="exch_vel_t", &
+                    long_name="thermal_exchange_velocity_at_the_ice_base", &
+                    units="m s-1", &
+                    standard_name="ocean_thermal_exchange_velocity", &
+                    fill=fill_exch_vel_t, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(19) = derived_entry_t( &
+                    name="exch_vel_s", &
+                    long_name="haline_exchange_velocity_at_the_ice_base", &
+                    units="m s-1", &
+                    standard_name="ocean_haline_exchange_velocity", &
+                    fill=fill_exch_vel_s, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(20) = derived_entry_t( &
+                    name="ustar_shelf", &
+                    long_name="friction_velocity_of_the_ice_shelf_melt_law", &
+                    units="m s-1", &
+                    standard_name="ocean_friction_velocity_at_ice_shelf_base", &
+                    fill=fill_ustar_shelf, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(21) = derived_entry_t( &
+                    name="cavity_melt_status", &
+                    long_name="per_column_basal_melt_solver_status_code", &
+                    units="1", &
+                    standard_name="ocean_basal_melt_solver_status", &
+                    fill=fill_cavity_melt_status, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_MELT)
+      CATALOG(22) = derived_entry_t( &
+                    name="z_draft", &
+                    long_name="ice_shelf_draft_below_the_geoid", &
+                    units="m", &
+                    standard_name="ice_shelf_draft", &
+                    fill=fill_z_draft, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_DYN)
+      CATALOG(23) = derived_entry_t( &
+                    name="water_column", &
+                    long_name="water_column_thickness_under_the_ice_shelf", &
+                    units="m", &
+                    standard_name="sea_water_column_thickness", &
+                    fill=fill_water_column, is_layered=.false., &
+                    requires=DERIVED_REQ_CAVITY_DYN)
       catalog_initialised = .true.
    end subroutine ensure_catalog_initialised
 
@@ -130,6 +260,25 @@ contains
       call ensure_catalog_initialised()
       name = CATALOG(i)%name
    end function derived_catalog_name
+
+   function derived_catalog_requires(name) result(req)
+      !! The `DERIVED_REQ_*` code a catalog entry is gated on, `-1` for
+      !! an unknown name.  The DECISION `register_derived` fails loud on,
+      !! exposed as a lookup so the suite can assert it without
+      !! provoking `error stop` — the repo's standing pattern for
+      !! testing a fail-loud rule.
+      character(len=*), intent(in) :: name
+      integer :: req
+      integer :: i
+      call ensure_catalog_initialised()
+      req = -1
+      do i = 1, N_CATALOG
+         if (trim(CATALOG(i)%name) == trim(name)) then
+            req = CATALOG(i)%requires
+            return
+         end if
+      end do
+   end function derived_catalog_requires
 
    subroutine register_derived(state, name, time_op, dt_out, coord)
       !! Register ONE derived diagnostic by catalog `name` (used by
@@ -165,6 +314,25 @@ contains
       end if
       entry = CATALOG(idx)
 
+      ! Prerequisite gate.  FAIL LOUD, never a silent plane of zeros or
+      ! of missing values: a user who asked for `melt` on a run with no
+      ! melt slot has made a configuration error, and handing them a
+      ! NetCDF variable full of `_FillValue` would let it reach a figure.
+      select case (entry%requires)
+      case (DERIVED_REQ_CAVITY_DYN)
+         if (.not. state%metrics%use_cavity) then
+            call derived_requires_fail(trim(entry%name), "&ocean_cavity_dyn_nml enable", &
+                                       "the ice-shelf draft geometry")
+         end if
+      case (DERIVED_REQ_CAVITY_MELT)
+         if (.not. state%cavity_flux%enable) then
+            call derived_requires_fail(trim(entry%name), "&ocean_cavity_melt_nml enable", &
+                                       "the basal-melt interface slot")
+         end if
+      case default
+         continue
+      end select
+
       nx = size(state%barotropic%h, 1)
       ny = size(state%barotropic%h, 2)
       nz = state%multilayer%nz_ml
@@ -185,13 +353,40 @@ contains
                                   has_missing=(diag_mask_vanished_is_on() .and. &
                                                ocoord /= DIAG_VGRID_DENSITY))
       else
+         ! Every cavity entry writes the NaN sentinel outside the cover
+         ! (`cavity_mask_impl`), so the NetCDF variable must advertise a
+         ! `_FillValue` — unconditionally, not via
+         ! `diag_mask_vanished_is_on()`, which gates the REMAP path's
+         ! below-target fill and has nothing to do with a calving front.
          call state%diag%register(name=trim(entry%name), units=trim(entry%units), &
                                   fill=entry%fill, n1=nx, n2=ny, n3=n3, &
                                   long_name=trim(entry%long_name), &
                                   standard_name=trim(entry%standard_name), &
-                                  time_op=time_op, dt_out=dt_out)
+                                  time_op=time_op, dt_out=dt_out, &
+                                  has_missing=(entry%requires /= DERIVED_REQ_NONE))
       end if
    end subroutine register_derived
+
+   subroutine derived_requires_fail(name, knob, what)
+      !! Fail loud on a derived diagnostic whose prerequisite knob is
+      !! off.  Same three-step shape `register_derived` uses for an
+      !! unknown name — error ring, logger, `error stop` — so the C ABI
+      !! and the console both see it.
+      character(len=*), intent(in) :: name
+         !! Catalog name the user asked for.
+      character(len=*), intent(in) :: knob
+         !! The namelist key that has to be on.
+      character(len=*), intent(in) :: what
+         !! One phrase naming what that knob builds.
+      character(len=:), allocatable :: msg
+      msg = "&ocean_diag_nml diags requested '"//name//"', which reads "//what// &
+            " and therefore requires "//knob//"=.true.  Refused rather than "// &
+            "registered: the fill would be a plane of missing values, which is "// &
+            "indistinguishable from a physical answer once it reaches a figure."
+      call error_ring_push(msg)
+      call global_logger%error(msg)
+      error stop "register_derived: derived diagnostic requires a knob that is off"
+   end subroutine derived_requires_fail
 
    subroutine apply_diag_selection(state, spec, dt_out, default_coord)
       !! Configure the ocean diagnostic set from the unified
@@ -510,32 +705,37 @@ contains
          end if
          call fill_mld_density_impl(state%multilayer%h_layer, &
                                     state%multilayer%rho_layer, &
+                                    state%multilayer%k_top, &
                                     nz_ml, buf)
       end select
       if (.false.) buf(1, 1, 1) = GRAVITY  ! keep GRAVITY import live
    end subroutine fill_mld_density
 
-   pure subroutine fill_mld_density_impl(h_layer, rho_layer, nz_ml, buf)
-      !! Per-column scan from surface (k=nz_ml) toward bed; first layer
-      !! whose ρ exceeds (surface ρ + MLD_DENSITY_THRESHOLD) marks the
-      !! MLD as the cumulative h-sum above it.  No crossing → MLD = full
-      !! column depth.  Threshold met at the surface itself → MLD = 0.
+   pure subroutine fill_mld_density_impl(h_layer, rho_layer, k_top, nz_ml, buf)
+      !! Per-column scan from the first LIVE layer (`k_top`, which is
+      !! `nz_ml` unless a rigid top has vanished the layers above it)
+      !! toward the bed; first layer whose ρ exceeds (surface ρ +
+      !! MLD_DENSITY_THRESHOLD) marks the MLD as the cumulative h-sum
+      !! above it.  No crossing → MLD = full column depth.  Threshold met
+      !! at the surface itself → MLD = 0.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: h_layer(:, :, :), rho_layer(:, :, :)
+      integer, intent(in)    :: k_top(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer, intent(in)    :: nz_ml
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
-      integer :: i, j, k, nx, ny
+      integer :: i, j, k, kt, nx, ny
       real(wp) :: rho_surf, d_acc, mld
       logical :: crossed
       nx = min(size(buf, 1), size(rho_layer, 1))
       ny = min(size(buf, 2), size(rho_layer, 2))
       do concurrent(j=1:ny, i=1:nx) &
-         local(rho_surf, d_acc, mld, crossed, k)
-         rho_surf = rho_layer(i, j, nz_ml)
+         local(rho_surf, d_acc, mld, crossed, k, kt)
+         kt = k_top(i, j)
+         rho_surf = rho_layer(i, j, kt)
          d_acc = 0.0_wp
          mld = 0.0_wp
          crossed = .false.
-         do k = nz_ml, 1, -1
+         do k = kt, 1, -1
             if (rho_layer(i, j, k) - rho_surf >= MLD_DENSITY_THRESHOLD) then
                mld = d_acc
                crossed = .true.
@@ -625,6 +825,367 @@ contains
          call fill_ice_v_impl(state%ice%v_ice, buf)
       end select
    end subroutine fill_ice_v
+
+   ! ---------------------------------------------------------------------
+   ! Ice-shelf cavity (P2c)
+   ! ---------------------------------------------------------------------
+   !
+   ! Eleven melt-interface fields and two geometry fields.  Three rules
+   ! run through all of them:
+   !
+   !   MISSING OUTSIDE THE CAVITY.  Every melt field is IEEE NaN where
+   !   the column was not solved, the same sentinel `fill_tracer_impl`
+   !   writes for a vanished layer, so a domain mean over the output is
+   !   a mean over the CAVITY and not a cavity average diluted by a
+   !   basin of zeros.  The console reduction already skips non-finite
+   !   cells and reports how many it skipped, and the NetCDF writer tags
+   !   the variable with `_FillValue` (`has_missing` above).  A zero
+   !   would be much worse than absent here: zero melt is a LEGAL
+   !   answer, and 0 m/yr averaged over open ocean is how a 30 m/yr
+   !   shelf gets published as 2.
+   !
+   !   THE MASK IS `cavity_flux%active`, NOT `cover_frac`.  `active` is
+   !   what the kernel was actually handed — covered AND wet AND "the
+   !   far-field sample found mass" — so a covered column that was
+   !   skipped reads missing rather than reading the zeros its outputs
+   !   were left at.
+   !
+   !   NOTHING IS RE-DERIVED.  `exch_vel_t`/`exch_vel_s` come off the
+   !   slot because under `hj99`/`yung25` they are implicit functions of
+   !   the converged interface state; `tfreeze_ib` goes through the same
+   !   `eos_freezing_point` handle the solve used.  A diagnostic that
+   !   rebuilt either one would be a second, divergent implementation of
+   !   the physics.
+
+   pure subroutine cavity_mask_impl(src, active, buf)
+      !! Copy a 2-D cavity field into the diag buffer, writing IEEE NaN
+      !! wherever the column was not solved.  Every cavity fill that is
+      !! a plain read of a slot array routes through here, so the
+      !! missing-value convention cannot drift between them.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: src(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(src, 1), size(active, 1))
+      ny = min(size(buf, 2), size(src, 2), size(active, 2))
+      ! Sentinel computed once on the HOST before the device loop —
+      ! `ieee_value` is a host intrinsic (the `fill_tracer_impl` pattern).
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = src(i, j)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine cavity_mask_impl
+
+   pure function melt_m_per_yr_factor() result(f)
+      !! The ISOMIP+ melt-rate conversion, `kg m-2 s-1` → `m yr-1` of
+      !! ice-equivalent freshwater: `f = SECONDS_PER_YEAR / rho_fw`.
+      !!
+      !! Asay-Davis et al. (2016), *GMD* **9**, 2471–2497 §3.3.  With
+      !! `rho_fw = 1000 kg/m^3` and a 365-day year,
+      !! `f = 31 536 000 / 1000 = 31 536 m yr-1 per kg m-2 s-1`, i.e. a
+      !! melt flux of 1e-3 kg/m^2/s is 31.536 m/yr — hand-checkable, and
+      !! the test checks it by hand.
+      !!
+      !! A function rather than a parameter so the test can assert the
+      !! CONVERSION rather than re-typing the same two constants and
+      !! asserting its own arithmetic.
+      real(wp) :: f
+      f = SECONDS_PER_YEAR/RHO_FRESHWATER_ISOMIP
+   end function melt_m_per_yr_factor
+
+   subroutine fill_melt(state_handle, buf)
+      !! Basal melt mass flux (kg m-2 s-1), **positive = melting**.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%melt, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_melt
+
+   subroutine fill_melt_m_per_yr(state_handle, buf)
+      !! Basal melt rate in the ISOMIP+ reporting unit (m yr-1 of
+      !! ice-equivalent freshwater) — see `melt_m_per_yr_factor`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_scale_impl(state%cavity_flux%melt, state%cavity_flux%active, &
+                                melt_m_per_yr_factor(), buf)
+      end select
+   end subroutine fill_melt_m_per_yr
+
+   pure subroutine cavity_scale_impl(src, active, scale, buf)
+      !! `cavity_mask_impl` with a constant multiplier folded in.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: src(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: scale
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(src, 1), size(active, 1))
+      ny = min(size(buf, 2), size(src, 2), size(active, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = scale*src(i, j)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine cavity_scale_impl
+
+   subroutine fill_thermal_driving(state_handle, buf)
+      !! `T* = T_far − T_f(S_far, p_top)` (degC) — the far-field
+      !! temperature above the IN-SITU freezing point at the interface
+      !! pressure.  Positive drives melting.  This is the single number
+      !! the melt rate is roughly linear in, so it is the first thing to
+      !! look at when a melt rate looks wrong.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call thermal_driving_impl(state%cavity_flux%t_far, state%cavity_flux%s_far, &
+                                   state%multilayer%p_top, state%cavity_flux%active, &
+                                   state%eos, buf)
+      end select
+   end subroutine fill_thermal_driving
+
+   pure subroutine thermal_driving_impl(t_far, s_far, p_top, active, eos, buf)
+      !! `T_far − eos_freezing_point(eos, S_far, p_top)`.  The liquidus
+      !! comes off the SAME `eos_t` handle the solve used
+      !! (`&ocean_eos_nml tfreeze_set`), never a local copy of the
+      !! coefficients — the two sets differ by ~0.03 degC, which is
+      !! enough to flip the sign of this field.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      use rdb_eos, only: eos_t, eos_freezing_point
+      real(wp), intent(in)    :: t_far(:, :), s_far(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: p_top(:, :), active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(t_far, 1), size(p_top, 1), size(active, 1))
+      ny = min(size(buf, 2), size(t_far, 2), size(p_top, 2), size(active, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = t_far(i, j) - eos_freezing_point(eos, s_far(i, j), p_top(i, j))
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine thermal_driving_impl
+
+   subroutine fill_tfreeze_ib(state_handle, buf)
+      !! `T_f(S_far, p_top)` (degC) — the in-situ freezing point of the
+      !! FAR FIELD at the ice base.  Distinct from `tbdry`, which is the
+      !! freezing point of the INTERFACE salinity `S_b`; their
+      !! difference is the whole three-equation correction, so shipping
+      !! both makes it visible.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call tfreeze_ib_impl(state%cavity_flux%s_far, state%multilayer%p_top, &
+                              state%cavity_flux%active, state%eos, buf)
+      end select
+   end subroutine fill_tfreeze_ib
+
+   pure subroutine tfreeze_ib_impl(s_far, p_top, active, eos, buf)
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      use rdb_eos, only: eos_t, eos_freezing_point
+      real(wp), intent(in)    :: s_far(:, :), p_top(:, :), active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(s_far, 1), size(p_top, 1), size(active, 1))
+      ny = min(size(buf, 2), size(s_far, 2), size(p_top, 2), size(active, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = eos_freezing_point(eos, s_far(i, j), p_top(i, j))
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine tfreeze_ib_impl
+
+   subroutine fill_haline_driving(state_handle, buf)
+      !! `S* = S_far − S_b` (g/kg) — the salinity contrast the haline
+      !! exchange acts on.  Positive under melting (meltwater freshens
+      !! the interface).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_diff_impl(state%cavity_flux%s_far, state%cavity_flux%s_b, &
+                               state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_haline_driving
+
+   pure subroutine cavity_diff_impl(a, b, active, buf)
+      !! `a - b` with the cavity missing-value convention.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: a(:, :), b(:, :), active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(a, 1), size(b, 1), size(active, 1))
+      ny = min(size(buf, 2), size(a, 2), size(b, 2), size(active, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = a(i, j) - b(i, j)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine cavity_diff_impl
+
+   subroutine fill_tbdry(state_handle, buf)
+      !! Interface temperature `T_b` (degC) — on the liquidus at `S_b`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%t_b, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_tbdry
+
+   subroutine fill_sbdry(state_handle, buf)
+      !! Interface salinity `S_b` (g/kg).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%s_b, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_sbdry
+
+   subroutine fill_exch_vel_t(state_handle, buf)
+      !! Thermal exchange velocity `gamma_T` (m/s) the solve CONVERGED
+      !! on — not `Gamma_T·u*` re-derived here.  Under `hj99`/`yung25`
+      !! the two differ by the stratification suppression.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%gamma_t, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_exch_vel_t
+
+   subroutine fill_exch_vel_s(state_handle, buf)
+      !! Haline exchange velocity `gamma_S` (m/s) — see `fill_exch_vel_t`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%gamma_s, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_exch_vel_s
+
+   subroutine fill_ustar_shelf(state_handle, buf)
+      !! Melt friction velocity `u*` (m/s), `max(sqrt(C_d(u²+v²+u_tide²)),
+      !! u*_min)`.  This is the MELT law's `u*` and nothing else: it
+      !! drives no momentum drag, and KPP/EPBL do not read it.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%cavity_flux%ustar, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_ustar_shelf
+
+   subroutine fill_cavity_melt_status(state_handle, buf)
+      !! Per-column `CAVITY_MELT_*` status code, as a real.  `0` is OK;
+      !! anything else is a column that took the kernel's documented
+      !! zero-melt safe state, and the console's warning line says how
+      !! many there were.  Masked like the rest, so the plane cannot be
+      !! read as "everything is fine" over open ocean.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_status_impl(state%cavity_flux%status, state%cavity_flux%active, buf)
+      end select
+   end subroutine fill_cavity_melt_status
+
+   pure subroutine cavity_status_impl(status, active, buf)
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      integer, intent(in)     :: status(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: active(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(status, 1), size(active, 1))
+      ny = min(size(buf, 2), size(status, 2), size(active, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (active(i, j) > 0.5_wp) then
+            buf(i, j, 1) = real(status(i, j), wp)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine cavity_status_impl
+
+   subroutine fill_z_draft(state_handle, buf)
+      !! Ice-shelf draft (m, POSITIVE DOWN from the geoid) — geometry,
+      !! so it needs only `&ocean_cavity_dyn_nml` and is masked by
+      !! `cover_frac` rather than by the melt slot's `active`.  Beyond
+      !! the calving front there is no draft, which is missing data, not
+      !! a draft of zero.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cavity_mask_impl(state%metrics%z_draft, state%metrics%cover_frac, buf)
+      end select
+   end subroutine fill_z_draft
+
+   subroutine fill_water_column(state_handle, buf)
+      !! Water-column thickness under the shelf, `D = bt_H_ref + bt_eta`
+      !! (m) — the ONE expression every consumer of the column depth
+      !! uses, which is exactly what the cavity datum
+      !! (`bt_H_ref = b − z_draft`) buys.  Masked by `cover_frac`: the
+      !! quantity is perfectly well defined in open water, but as a
+      !! CAVITY diagnostic a domain mean should be the mean cavity
+      !! thickness, not that diluted by the open basin.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call water_column_impl(state%dyn%bt_work%bt_H_ref, state%dyn%bt_work%bt_eta, &
+                                state%metrics%cover_frac, buf)
+      end select
+   end subroutine fill_water_column
+
+   pure subroutine water_column_impl(bt_H_ref, bt_eta, cover, buf)
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: bt_H_ref(:, :), bt_eta(:, :), cover(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(bt_H_ref, 1), size(bt_eta, 1), size(cover, 1))
+      ny = min(size(buf, 2), size(bt_H_ref, 2), size(bt_eta, 2), size(cover, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:ny, i=1:nx)
+         if (cover(i, j) > 0.5_wp) then
+            buf(i, j, 1) = bt_H_ref(i, j) + bt_eta(i, j)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine water_column_impl
 
    pure subroutine fill_ice_v_impl(v_ice, buf)
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);

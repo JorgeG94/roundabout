@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.0% of total for procedures.">15 statements</a>
+                 title=" 0.0% of total for procedures.">16 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,9 +134,9 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-cell~2">cell</a>
-            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-i~421">i</a>
-            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-j~351">j</a>
+            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-cell">cell</a>
+            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-i~86">i</a>
+            <a class="list-group-item" href="../proc/apply_surface_src_2d_impl.html#variable-j~85">j</a>
         </div>
       </div>
     </div>
@@ -172,14 +172,26 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>private pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, inv_scale, nz, nx, ny)  
+    <h2>private pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, inv_scale, k_top, nz, nx, ny)  
 </h2>
     
 
-    <p>Stamp <code>inv_scale · Q_field(i,j) · wet_mask(i,j)</code> onto the top
-layer (k = nz) of a tracer&rsquo;s hTr array, mirror into the matching
-budget contributor.  Explicit-shape dummies so NVHPC stdpar can
-compile device kernels against static bounds.</p>
+    <p>Stamp <code>inv_scale · Q_field(i,j) · wet_mask(i,j)</code> onto the first
+LIVE layer (<code>k_top(i,j)</code>) of a tracer&rsquo;s hTr array, mirror into
+the matching budget contributor.  Explicit-shape dummies so
+NVHPC stdpar can compile device kernels against static bounds.</p>
+<p><strong>Why <code>k_top</code> and not <code>nz</code>.</strong> Under a quasi-geopotential
+coordinate beneath an ice shelf the layers inside the draft are
+inert fillers, so on a covered column <code>k = nz</code> carries
+<code>zstar_h_min</code> of water.  A flux stamped there is neither
+diffused down (the vdiff tracer matrix decouples a vanished row
+to the identity) nor kept (the next ALE remap drains it on
+<code>h_old &lt;= H_FLOOR</code>) — but the budget mirror on the line below
+still counts it, so the column leaks exactly the deposit, every
+thermo step.  The atmospheric part of <code>Q_field</code> is zero under
+cover, but the cavity&rsquo;s own <code>heat_cavity</code>/<code>salt_cavity</code> pass
+through <code>ocean_surface_flux_assemble</code> UNMASKED, which is why
+this is the load-bearing site of the whole <code>k_top</code> slice.</p>
 <p><code>inv_scale</code> = dt/(rho0·cp) for heat, dt/rho0 for salt — a
 column-invariant multiplier that the caller derives from <code>sf</code>.
 <code>Q_field</code> carries any (i,j) spatial variation; for the default
@@ -200,7 +212,7 @@ the old scalar-broadcast path.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr~35"></span>
+              <span class="anchor" id="variable-htr~10"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -215,7 +227,7 @@ the old scalar-broadcast path.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-budget~6"></span>
+              <span class="anchor" id="variable-budget~4"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -230,7 +242,7 @@ the old scalar-broadcast path.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-wet_mask~21"></span>
+              <span class="anchor" id="variable-wet_mask~10"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -275,7 +287,26 @@ the old scalar-broadcast path.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~283"></span>
+              <span class="anchor" id="variable-k_top"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+                <p><code>ms%k_top</code> — the first LIVE layer counting down from the top.
+<code>nz</code> on every column that has no top-side filler (which is
+every column on every coordinate but <code>z_fixed</code> under a rigid
+top), so this reads the same memory as the literal <code>nz</code> it
+replaced and the arithmetic is bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~61"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -290,7 +321,7 @@ the old scalar-broadcast path.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~350"></span>
+              <span class="anchor" id="variable-nx~90"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -305,7 +336,7 @@ the old scalar-broadcast path.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~350"></span>
+              <span class="anchor" id="variable-ny~90"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -691,7 +722,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-cell~2"></span>
+              <span class="anchor" id="variable-cell"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -708,7 +739,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~421"></span>
+              <span class="anchor" id="variable-i~86"></span>
               integer,
             </td>
               <td>private</td>
@@ -725,7 +756,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~351"></span>
+              <span class="anchor" id="variable-j~85"></span>
               integer,
             </td>
               <td>private</td>
@@ -757,11 +788,24 @@ large graphs.</div>
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
     <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">apply_surface_src_2d_impl</span><span class="p">(</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">Q_field</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                             </span><span class="n">inv_scale</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
-<span class="w">      </span><span class="c">!! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the top</span>
-<span class="w">      </span><span class="c">!! layer (k = nz) of a tracer's hTr array, mirror into the matching</span>
-<span class="w">      </span><span class="c">!! budget contributor.  Explicit-shape dummies so NVHPC stdpar can</span>
-<span class="w">      </span><span class="c">!! compile device kernels against static bounds.</span>
+<span class="w">                                             </span><span class="n">inv_scale</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the first</span>
+<span class="w">      </span><span class="c">!! LIVE layer (`k_top(i,j)`) of a tracer's hTr array, mirror into</span>
+<span class="w">      </span><span class="c">!! the matching budget contributor.  Explicit-shape dummies so</span>
+<span class="w">      </span><span class="c">!! NVHPC stdpar can compile device kernels against static bounds.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Why `k_top` and not `nz`.** Under a quasi-geopotential</span>
+<span class="w">      </span><span class="c">!! coordinate beneath an ice shelf the layers inside the draft are</span>
+<span class="w">      </span><span class="c">!! inert fillers, so on a covered column `k = nz` carries</span>
+<span class="w">      </span><span class="c">!! `zstar_h_min` of water.  A flux stamped there is neither</span>
+<span class="w">      </span><span class="c">!! diffused down (the vdiff tracer matrix decouples a vanished row</span>
+<span class="w">      </span><span class="c">!! to the identity) nor kept (the next ALE remap drains it on</span>
+<span class="w">      </span><span class="c">!! `h_old &lt;= H_FLOOR`) — but the budget mirror on the line below</span>
+<span class="w">      </span><span class="c">!! still counts it, so the column leaks exactly the deposit, every</span>
+<span class="w">      </span><span class="c">!! thermo step.  The atmospheric part of `Q_field` is zero under</span>
+<span class="w">      </span><span class="c">!! cover, but the cavity's own `heat_cavity`/`salt_cavity` pass</span>
+<span class="w">      </span><span class="c">!! through `ocean_surface_flux_assemble` UNMASKED, which is why</span>
+<span class="w">      </span><span class="c">!! this is the load-bearing site of the whole `k_top` slice.</span>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! `inv_scale` = dt/(rho0·cp) for heat, dt/rho0 for salt — a</span>
 <span class="w">      </span><span class="c">!! column-invariant multiplier that the caller derives from `sf`.</span>
@@ -775,12 +819,18 @@ large graphs.</div>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">Q_field</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_scale</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%k_top` — the first LIVE layer counting down from the top.</span>
+<span class="w">         </span><span class="c">!! `nz` on every column that has no top-side filler (which is</span>
+<span class="w">         </span><span class="c">!! every column on every coordinate but `z_fixed` under a rigid</span>
+<span class="w">         </span><span class="c">!! top), so this reads the same memory as the literal `nz` it</span>
+<span class="w">         </span><span class="c">!! replaced and the arithmetic is bit-identical.</span>
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cell</span>
 <span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">cell</span><span class="p">)</span>
 <span class="w">         </span><span class="n">cell</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inv_scale</span><span class="o">*</span><span class="n">Q_field</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
-<span class="w">         </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell</span>
-<span class="w">         </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell</span>
+<span class="w">         </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell</span>
+<span class="w">         </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell</span>
 <span class="w">      </span><span class="k">end do</span>
 <span class="k">   end subroutine </span><span class="n">apply_surface_src_2d_impl</span>
 </pre></div>
@@ -806,7 +856,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

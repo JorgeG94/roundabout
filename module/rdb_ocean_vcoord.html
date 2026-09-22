@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 1.2% of total for modules and submodules.">630 statements</a>
+                 title=" 1.3% of total for modules and submodules.">776 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -136,6 +136,7 @@
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#variable-nr_iters">NR_ITERS</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#variable-nr_offset">NR_OFFSET</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#variable-nr_tol">NR_TOL</a>
+            <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#variable-z_fixed_top_partial_frac">Z_FIXED_TOP_PARTIAL_FRAC</a>
         </div>
       </div>
     </div>
@@ -167,6 +168,7 @@
       </a>
       <div id="funcs-0" class="collapse">
         <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_count_ledges">ocean_vcoord_count_ledges</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-parse_ocean_vcoord_type">parse_ocean_vcoord_type</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_bytes">ocean_vcoord_bytes</a>
         </div>
@@ -181,6 +183,9 @@
       <div id="subs-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-invert_density_targets">invert_density_targets</a>
+            <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_closed_face_masks">ocean_vcoord_closed_face_masks</a>
+            <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_k_top_from_target">ocean_vcoord_k_top_from_target</a>
+            <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_z_fixed_target">ocean_vcoord_z_fixed_target</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_build_zref_full">ocean_vcoord_build_zref_full</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_compute_target_h">ocean_vcoord_compute_target_h</a>
             <a class="list-group-item" href="../module/rdb_ocean_vcoord.html#proc-ocean_vcoord_compute_target_h_impl">ocean_vcoord_compute_target_h_impl</a>
@@ -257,12 +262,12 @@ C-grid counterpart for the ocean dynamical core.</p>
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
-                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
-                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
-                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
                   <li class="list-inline-item"><a href='rdb_eos.html'>rdb_eos</a></li>
                   <li class="list-inline-item"><a href='rdb_vcoord.html'>rdb_vcoord</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -966,6 +971,43 @@ parameter
                 <p>Newton convergence tolerance — tested on |delta| AFTER xi += delta.</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_fixed_top_partial_frac"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>Z_FIXED_TOP_PARTIAL_FRAC</strong></td>
+<td> =</td>
+                <td>0.1_wp</td>
+            <td>
+                <p>Minimum PARTIAL TOP CELL thickness, as a fraction of the nominal
+layer spacing <code>h_nominal</code>, for <code>VCOORD_Z_FIXED</code> under a rigid top
+(<code>z_top &gt; 0</code>, i.e. an ice-shelf cavity).  The ice base cuts the
+first live layer wherever the draft crosses a nominal level; left
+unguarded that cut can leave a sliver of arbitrarily small
+thickness (<code>0 &lt; h &lt;&lt; h_nominal</code>) sitting against the ice.  A layer
+that thin is live (it clears <code>H_VANISHED</code>) but violates every
+thin-layer CFL the column has, so when the cut would leave less
+than <code>Z_FIXED_TOP_PARTIAL_FRAC*h_nominal</code> the sliver is merged
+into the layer BELOW and the vacated index becomes an inert
+filler — exactly mirroring how the BED side treats its own
+slivers today (a would-be sub-<code>h_min</code> bed cell collapses to
+<code>h_min</code> and hands its water to the layer above).</p>
+<p>The two thresholds differ on purpose and the asymmetry is the
+honest one: the bed&rsquo;s threshold is <code>zstar_h_min</code> (today&rsquo;s
+behaviour, kept bit-for-bit), the top&rsquo;s is a fraction of the
+spacing.  <code>0.1</code> is MITgcm&rsquo;s <code>hFacMin</code> default, which is the
+minimum partial-cell fraction Losch (2008, JGR 113 C08043, §2.1)
+used for exactly this ice-shelf partial-top-cell problem.  Not a
+namelist knob: it is inert unless <code>z_top &gt; 0</code>, and a cavity on a
+z-like coordinate is itself a new, fenced configuration.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -1002,7 +1044,7 @@ parameter
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-coord_type~2"></span>
+              <span class="anchor" id="variable-coord_type~7"></span>
               integer,
             </td>
               <td>public</td>
@@ -1019,7 +1061,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dsig"></span>
+              <span class="anchor" id="variable-dsig~2"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1036,7 +1078,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-is_init~25"></span>
+              <span class="anchor" id="variable-is_init~26"></span>
               logical,
             </td>
               <td>public</td>
@@ -1054,7 +1096,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx_total~56"></span>
+              <span class="anchor" id="variable-nx_total~59"></span>
               integer,
             </td>
               <td>public</td>
@@ -1071,7 +1113,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_total~56"></span>
+              <span class="anchor" id="variable-ny_total~59"></span>
               integer,
             </td>
               <td>public</td>
@@ -1088,7 +1130,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~26"></span>
+              <span class="anchor" id="variable-nz_ml~37"></span>
               integer,
             </td>
               <td>public</td>
@@ -1105,7 +1147,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-regrid_time_scale~2"></span>
+              <span class="anchor" id="variable-regrid_time_scale"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1130,7 +1172,7 @@ target ⇒ bit-identical to the no-filter remap.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_boundary_extrap~2"></span>
+              <span class="anchor" id="variable-remap_boundary_extrap"></span>
               logical,
             </td>
               <td>public</td>
@@ -1144,12 +1186,12 @@ target ⇒ bit-identical to the no-filter remap.</p>
             <td>
 <p>Close the ALE remap&rsquo;s reconstruction at the two boundary cells
 (<code>k=1</code>, <code>k=nz</code>) with the linear-exact one-sided edge pair
-instead of the PCM flatten (MOM6 <code>BOUNDARY_EXTRAPOLATION</code>).</p><a href="../type/ocean_vcoord_t.html#variable-remap_boundary_extrap~2" class="pull-right"><emph>Read more&hellip;</emph></a>
+instead of the PCM flatten (MOM6 <code>BOUNDARY_EXTRAPOLATION</code>).</p><a href="../type/ocean_vcoord_t.html#variable-remap_boundary_extrap" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_check_preconditions~2"></span>
+              <span class="anchor" id="variable-remap_check_preconditions"></span>
               logical,
             </td>
               <td>public</td>
@@ -1162,7 +1204,7 @@ instead of the PCM flatten (MOM6 <code>BOUNDARY_EXTRAPOLATION</code>).</p><a hre
                 <td>.false.</td>
             <td>
 <p>Assert the ALE remap&rsquo;s column preconditions once per remap and
-fail loud on a violation (audit findings V5, V6).</p><a href="../type/ocean_vcoord_t.html#variable-remap_check_preconditions~2" class="pull-right"><emph>Read more&hellip;</emph></a>
+fail loud on a violation (audit findings V5, V6).</p><a href="../type/ocean_vcoord_t.html#variable-remap_check_preconditions" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
@@ -1238,7 +1280,7 @@ density inversion, shape <code>(nx, ny, nz)</code>.  Built from
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_method~2"></span>
+              <span class="anchor" id="variable-remap_method~3"></span>
               integer,
             </td>
               <td>public</td>
@@ -1256,7 +1298,7 @@ PQM falls back to PPM for nz &lt; 5 (see <code>remap_column_pqm</code>).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_nonuniform_weights~2"></span>
+              <span class="anchor" id="variable-remap_nonuniform_weights"></span>
               logical,
             </td>
               <td>public</td>
@@ -1271,7 +1313,7 @@ PQM falls back to PPM for nz &lt; 5 (see <code>remap_column_pqm</code>).</p>
 <p>Use the non-uniform-grid reconstruction weights in the ALE
 remap&rsquo;s PLM slope and PPM edge estimate — Colella &amp; Woodward
 (1984) eqs (1.6)-(1.8) — instead of their equal-thickness
-specialisations (<code>0.5·minmod</code> and <code>(7/12, -1/12)</code>).</p><a href="../type/ocean_vcoord_t.html#variable-remap_nonuniform_weights~2" class="pull-right"><emph>Read more&hellip;</emph></a>
+specialisations (<code>0.5·minmod</code> and <code>(7/12, -1/12)</code>).</p><a href="../type/ocean_vcoord_t.html#variable-remap_nonuniform_weights" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
@@ -1293,7 +1335,7 @@ specialisations (<code>0.5·minmod</code> and <code>(7/12, -1/12)</code>).</p><a
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-remap_vel_conserve_ke~2"></span>
+              <span class="anchor" id="variable-remap_vel_conserve_ke"></span>
               logical,
             </td>
               <td>public</td>
@@ -1317,7 +1359,7 @@ component is never touched (mode-split consistency).  Default
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_ref_pressure~2"></span>
+              <span class="anchor" id="variable-rho_ref_pressure"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -1393,7 +1435,7 @@ sane in tests that don&rsquo;t explicitly set this knob.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-z_ref"></span>
+              <span class="anchor" id="variable-z_ref~3"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -1424,6 +1466,46 @@ sane in tests that don&rsquo;t explicitly set this knob.</p>
             <td>
 <p>Global reference z-interfaces (m, positive-down), shape
 <code>0:nz_ml</code>.  Used by ZSIGMA / ZSTAR_SIGMA / ZSTAR.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_top~5"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>z_top</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Geopotential depth of the column top (m, positive down),
+shape <code>(nx, ny)</code>.  <code>0</code> = the free surface at <code>z = 0</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_closed_faces"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zfixed_closed_faces</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>&amp;vcoord_nml zfixed_closed_faces</code> — partial-step z-level face
+closure.  Only meaningful on <code>VCOORD_Z_FIXED</code>, where a layer
+whose nominal geopotential range lies inside the bed or the
+ice draft is an inert FILLER; a velocity face at which that
+layer is a filler on EITHER side is a z-level WALL, not a
+thin passage (Adcroft, Hill &amp; Marshall 1997; Losch 2008).</p><a href="../type/ocean_vcoord_t.html#variable-zfixed_closed_faces" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
@@ -1547,7 +1629,7 @@ or <code>STRETCH_LOG</code> for a geometric near-surface fine zone.</p>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-bytes~34'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_bytes.html'>ocean_vcoord_bytes</a></td>
+  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-bytes~32'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_bytes.html'>ocean_vcoord_bytes</a></td>
                   <td></td>
               </tr>
               <tr>
@@ -1562,17 +1644,17 @@ or <code>STRETCH_LOG</code> for a geometric near-surface fine zone.</p>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-destroy~28'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_destroy.html'>ocean_vcoord_destroy</a></td>
+  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-destroy~25'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_destroy.html'>ocean_vcoord_destroy</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-enter_data~21'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_enter_data.html'>ocean_vcoord_enter_data</a></td>
+  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-enter_data~23'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_enter_data.html'>ocean_vcoord_enter_data</a></td>
                   <td></td>
               </tr>
               <tr>
                 <td>  procedure, public, non_overridable ::
-  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-exit_data~21'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_exit_data.html'>ocean_vcoord_exit_data</a></td>
+  <strong><a href='../type/ocean_vcoord_t.html#boundprocedure-exit_data~23'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_vcoord_exit_data.html'>ocean_vcoord_exit_data</a></td>
                   <td></td>
               </tr>
               <tr>
@@ -1590,6 +1672,147 @@ or <code>STRETCH_LOG</code> for a geometric near-surface fine zone.</p>
 
         <section>
           <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_vcoord_count_ledges"></span> <h3>public pure function <a href='../proc/ocean_vcoord_count_ledges.html'>ocean_vcoord_count_ledges</a>(open_u, open_v, target_h, nx, ny, nz, h_vanished) result(n_ledge)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Count LEDGE cells: a cell that is LIVE at layer <code>k</code> but all four
+of whose own-layer faces are closed, i.e. water the mask has
+isolated.  A ledge needs a one-cell-wide spike in the bed or the
+draft; it is inert by construction (no flux in or out, and its
+velocity is zeroed every stage), but a non-zero count is worth
+saying out loud once at configure, because it means the mask is
+walling off real water.</p><a href="../proc/ocean_vcoord_count_ledges.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_u~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_u</strong>(nx+1,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_v~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_v</strong>(nx,ny+1,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-target_h~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>target_h</strong>(nx,ny,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~347"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~347"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~299"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_vanished~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_vanished</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
               <div class="card">
     <div class="card-header codesum"><span class="anchor" id="proc-parse_ocean_vcoord_type"></span> <h3>public pure function <a href='../proc/parse_ocean_vcoord_type.html'>parse_ocean_vcoord_type</a>(name) result(code)  
 </h3></div>
@@ -1615,7 +1838,7 @@ semantic (fallback choice) is visible at the call site.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-name~79"></span>
+              <span class="anchor" id="variable-name~51"></span>
               character(len=*),
             </td>
 <td>intent(in)</td>
@@ -1662,7 +1885,7 @@ term here when a new allocatable joins the type.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~327"></span>
+              <span class="anchor" id="variable-this~311"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1714,7 +1937,7 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nk~20"></span>
+              <span class="anchor" id="variable-nk~26"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1729,7 +1952,7 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-hc~3"></span>
+              <span class="anchor" id="variable-hc~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1744,7 +1967,7 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rhoc~3"></span>
+              <span class="anchor" id="variable-rhoc~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1774,7 +1997,7 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_tgt~2"></span>
+              <span class="anchor" id="variable-rho_tgt"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1789,7 +2012,7 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-z_new~7"></span>
+              <span class="anchor" id="variable-z_new~2"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1800,6 +2023,454 @@ AND the DENSITY diagnostic remap (<code>rdb_ocean_diag_fills</code>).</p><a href
             <td><strong>z_new</strong>(n_int+2)</td>
             <td>
 
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_vcoord_closed_face_masks"></span> <h3>public pure subroutine <a href='../proc/ocean_vcoord_closed_face_masks.html'>ocean_vcoord_closed_face_masks</a>(open_u, open_v, target_h, nx, ny, nz, h_vanished)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Partial-step z-level FACE CLOSURE mask for <code>VCOORD_Z_FIXED</code>
+(<code>&amp;vcoord_nml zfixed_closed_faces</code>; Adcroft, Hill &amp; Marshall
+1997; Losch 2008 §2.1 for the ice-shelf cavity).</p><a href="../proc/ocean_vcoord_closed_face_masks.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_u~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_u</strong>(nx+1,ny,nz)</td>
+            <td>
+<p>u-face 0/1 open mask.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_v~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_v</strong>(nx,ny+1,nz)</td>
+            <td>
+<p>v-face 0/1 open mask.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-target_h~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>target_h</strong>(nx,ny,nz)</td>
+            <td>
+<p>The <code>z_fixed</code> target thickness at <code>η = 0</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~345"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p>i-extent of the CENTRE arrays (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~345"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p>j-extent of the CENTRE arrays (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~297"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Number of layers; <code>k = 1</code> is the bed, <code>k = nz</code> the top.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_vanished"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_vanished</strong></td>
+            <td>
+<p>Inert-filler marker (<code>H_VANISHED</code>).  A layer is LIVE iff its
+target thickness is strictly greater than this.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_vcoord_k_top_from_target"></span> <h3>public pure subroutine <a href='../proc/ocean_vcoord_k_top_from_target.html'>ocean_vcoord_k_top_from_target</a>(k_top, k_top_u, k_top_v, target_h, nx, ny, nz, h_vanished)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>The shared FIRST-LIVE-LAYER index, counting down from the top —
+<code>multilayer_state_t%k_top</code> and its two face twins — built from
+a layer-thickness field.</p><a href="../proc/ocean_vcoord_k_top_from_target.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top~5"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+<p>Cell-centred first live layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top_u"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top_u</strong>(nx+1,ny)</td>
+            <td>
+<p>u-face twin.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top_v"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top_v</strong>(nx,ny+1)</td>
+            <td>
+<p>v-face twin.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-target_h~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>target_h</strong>(nx,ny,nz)</td>
+            <td>
+<p>Layer thickness (m) the live/filler pattern is read from —
+the <code>z_fixed</code> target at <code>eta = 0</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~346"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p>i-extent of the CENTRE arrays (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~346"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p>j-extent of the CENTRE arrays (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~298"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Number of layers; <code>k = 1</code> is the bed, <code>k = nz</code> the top.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_vanished~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_vanished</strong></td>
+            <td>
+<p>Inert-filler marker (<code>H_VANISHED</code>).  A layer is LIVE iff its
+thickness is strictly greater than this.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_vcoord_z_fixed_target"></span> <h3>public pure subroutine <a href='../proc/ocean_vcoord_z_fixed_target.html'>ocean_vcoord_z_fixed_target</a>(target_h, total_h, eta, z_top, nx, ny, nz, h_nominal, h_min)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>VCOORD_Z_FIXED</code> target grid — quasi-geopotential interfaces
+under a rigid top, with inert fillers and a partial cell at BOTH
+ends (Yung, Hallberg, Adcroft &amp; Morrison 2026, JAMES, Fig. 1b:
+quasi-z layers are geopotential and VANISH where they outcrop
+into the ice base; Asay-Davis et al. 2016 §3.1.5: z-level models
+use both partial top and bottom cells).</p><a href="../proc/ocean_vcoord_z_fixed_target.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-target_h~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>target_h</strong>(nx,ny,nz)</td>
+            <td>
+<p>Target layer thickness (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-total_h~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>total_h</strong>(nx,ny)</td>
+            <td>
+<p>Column reference thickness <code>H</code> (m) — <code>Σ h_layer − η</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta</strong>(nx,ny)</td>
+            <td>
+<p>Free-surface anomaly <code>η</code> (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_top~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_top</strong>(nx,ny)</td>
+            <td>
+<p>Geopotential depth of the column top (m, positive down,
+<code>&gt;= 0</code>).  <code>0</code> ⇒ the pre-cavity arithmetic, bit-for-bit.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~344"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p>i-extent of every array (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~344"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p>j-extent of every array (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~296"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Number of layers; <code>k = 1</code> is the bed, <code>k = nz</code> the top.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_nominal~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_nominal</strong></td>
+            <td>
+<p>Nominal layer spacing <code>z_fixed_h_ref/nz</code> (m), <code>&gt; 0</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~24"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+<p>Inert-filler thickness (<code>zstar_h_min</code>, <code>&lt;= H_VANISHED</code>).</p>
             </td>
         </tr>
     </tbody>
@@ -1833,7 +2504,7 @@ ocean path own its z_ref lifecycle.</p><a href="../proc/ocean_vcoord_build_zref_
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~322"></span>
+              <span class="anchor" id="variable-this~306"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1848,7 +2519,7 @@ ocean path own its z_ref lifecycle.</p><a href="../proc/ocean_vcoord_build_zref_
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_bed"></span>
+              <span class="anchor" id="variable-h_bed~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1895,7 +2566,7 @@ enter_data/exit_data split.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~323"></span>
+              <span class="anchor" id="variable-this~307"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1925,7 +2596,7 @@ enter_data/exit_data split.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eta~8"></span>
+              <span class="anchor" id="variable-eta~11"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1967,7 +2638,7 @@ the bathymetry) and the free-surface anomaly <code>η</code>.</p><a href="../pro
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~324"></span>
+              <span class="anchor" id="variable-this~308"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1997,7 +2668,7 @@ the bathymetry) and the free-surface anomaly <code>η</code>.</p><a href="../pro
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eta~9"></span>
+              <span class="anchor" id="variable-eta~12"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2044,7 +2715,7 @@ the shared <code>pure (total_h, eta)</code> TBP cannot carry.</p><a href="../pro
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~325"></span>
+              <span class="anchor" id="variable-this~309"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2059,7 +2730,7 @@ the shared <code>pure (total_h, eta)</code> TBP cannot carry.</p><a href="../pro
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-total_h~4"></span>
+              <span class="anchor" id="variable-total_h~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2074,7 +2745,7 @@ the shared <code>pure (total_h, eta)</code> TBP cannot carry.</p><a href="../pro
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eta~10"></span>
+              <span class="anchor" id="variable-eta~14"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2119,7 +2790,7 @@ the shared <code>pure (total_h, eta)</code> TBP cannot carry.</p><a href="../pro
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~21"></span>
+              <span class="anchor" id="variable-eos~27"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2178,7 +2849,7 @@ no host loop, no per-call allocate.</p><a href="../proc/ocean_vcoord_compute_tar
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~326"></span>
+              <span class="anchor" id="variable-this~310"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2193,7 +2864,7 @@ no host loop, no per-call allocate.</p><a href="../proc/ocean_vcoord_compute_tar
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-total_h~5"></span>
+              <span class="anchor" id="variable-total_h~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2209,7 +2880,7 @@ column total (sum of h_layer) so the new grid spans it exactly.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eta~11"></span>
+              <span class="anchor" id="variable-eta~15"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2255,7 +2926,7 @@ the column extent the new interfaces span.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~22"></span>
+              <span class="anchor" id="variable-eos~28"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2311,7 +2982,7 @@ the column extent the new interfaces span.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~317"></span>
+              <span class="anchor" id="variable-this~301"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2352,7 +3023,7 @@ via <code>is_init</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~318"></span>
+              <span class="anchor" id="variable-this~302"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2392,7 +3063,7 @@ via <code>is_init</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~319"></span>
+              <span class="anchor" id="variable-this~303"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2432,7 +3103,7 @@ via <code>is_init</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~320"></span>
+              <span class="anchor" id="variable-this~304"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2472,7 +3143,7 @@ via <code>is_init</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~321"></span>
+              <span class="anchor" id="variable-this~305"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2515,7 +3186,7 @@ them to the device.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~316"></span>
+              <span class="anchor" id="variable-this~300"></span>
               class(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -2530,7 +3201,7 @@ them to the device.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~171"></span>
+              <span class="anchor" id="variable-grid~189"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2545,7 +3216,7 @@ them to the device.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~27"></span>
+              <span class="anchor" id="variable-nz_ml~38"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -2588,7 +3259,7 @@ them to the device.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

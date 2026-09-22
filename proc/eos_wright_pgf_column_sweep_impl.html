@@ -139,12 +139,12 @@
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-t_k~4">T_k</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-t_sq~2">T_sq</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-alpha_0~2">alpha_0</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-denom~22">denom</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-i~405">i</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-denom~32">denom</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-i~390">i</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-inv_h~5">inv_h</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-j~338">j</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-k~238">k</a>
-            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-lambda~3">lambda</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-j~346">j</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-k~255">k</a>
+            <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-lambda~4">lambda</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_0~2">p_0</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_above">p_above</a>
             <a class="list-group-item" href="../proc/eos_wright_pgf_column_sweep_impl.html#variable-p_centre_seed">p_centre_seed</a>
@@ -221,13 +221,27 @@ and the density really IS higher under a thicker draft, so the
 <code>rho_face</code> coefficient becomes MORE correct, not less.</p>
 <p><strong><code>p_top</code> reaches the EOS ARGUMENT only.</strong>  <code>p_edge_out</code> stays an
 anomaly stack seeded at <code>p_edge_out(nz+1) = 0</code> exactly as before,
-so the PGF top boundary condition is untouched.  Consequence,
-stated plainly: under a SLOPING load the along-layer difference
+so the PGF top boundary condition THIS kernel feeds (FV_WRIGHT&rsquo;s
+<code>p_edge</code>) is untouched.  Consequence, stated plainly: under a
+SLOPING load the along-layer difference
 <code>p_centre(i) − p_centre(i−1)</code> omits <code>Δp_top</code>.  That term is
 depth-uniform and is already carried by the barotropic
 <code>eta_forcing</code> seam as <code>−(1/ρ₀)∇p_surf</code>, so the momentum is not
-missing it — adding it here as well would DOUBLE-COUNT.  What
-moves in this kernel is the COMPRESSIBILITY: <code>rho_insitu</code> is
+missing it.</p>
+<p><strong>Amended (P5.0).</strong>  The original wording here said adding the
+load to a PGF top BC &ldquo;would DOUBLE-COUNT&rdquo;.  That is the
+conservative statement, and it is stronger than the truth.  A
+depth-uniform <code>p_top</code> in the top BC perturbs EVERY layer&rsquo;s <code>PFu</code>
+by the SAME <code>−(1/ρ₀)∇p_top</code>, and the split solver replaces the
+depth mean of the layer PGF with the barotropic solution
+(<code>F_bt_u_fast = F_bt_u − ⟨PFu⟩_h</code>), so the uniform piece cancels
+identically and the seam keeps sole ownership of the barotropic
+response — the two are ORTHOGONAL, not additive.  That is what
+<code>&amp;ocean_pgf_nml p_top_in_bc</code> does for FV_MOM6 (theorem in
+<code>compute_fv_mom6_impl</code>&rsquo;s docstring).  It is NOT done here:
+FV_WRIGHT&rsquo;s <code>p_edge</code> seed is a separate follow-up, and this
+kernel&rsquo;s contract remains &ldquo;EOS argument only&rdquo;.  What moves in
+this kernel is the COMPRESSIBILITY: <code>rho_insitu</code> is
 evaluated at the pressure the water actually sits at, which is
 the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.
 Bit-identical when <code>p_top</code> is the zero array it ships as
@@ -265,7 +279,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~68"></span>
+              <span class="anchor" id="variable-h_layer~80"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -325,7 +339,7 @@ the existing PGF Pass 1 + vdiff column kernels).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-p_top"></span>
+              <span class="anchor" id="variable-p_top~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -386,7 +400,7 @@ measured down from.  Does NOT enter <code>p_edge_out</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_0~6"></span>
+              <span class="anchor" id="variable-rho_0~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -401,7 +415,7 @@ measured down from.  Does NOT enter <code>p_edge_out</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~336"></span>
+              <span class="anchor" id="variable-nx~352"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -416,7 +430,7 @@ measured down from.  Does NOT enter <code>p_edge_out</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~336"></span>
+              <span class="anchor" id="variable-ny~352"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -431,7 +445,7 @@ measured down from.  Does NOT enter <code>p_edge_out</code>.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~268"></span>
+              <span class="anchor" id="variable-nz~305"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -902,7 +916,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-denom~22"></span>
+              <span class="anchor" id="variable-denom~32"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -919,7 +933,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~405"></span>
+              <span class="anchor" id="variable-i~390"></span>
               integer,
             </td>
               <td>private</td>
@@ -953,7 +967,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~338"></span>
+              <span class="anchor" id="variable-j~346"></span>
               integer,
             </td>
               <td>private</td>
@@ -970,7 +984,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~238"></span>
+              <span class="anchor" id="variable-k~255"></span>
               integer,
             </td>
               <td>private</td>
@@ -987,7 +1001,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-lambda~3"></span>
+              <span class="anchor" id="variable-lambda~4"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1157,13 +1171,28 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! **`p_top` reaches the EOS ARGUMENT only.**  `p_edge_out` stays an</span>
 <span class="w">      </span><span class="c">!! anomaly stack seeded at `p_edge_out(nz+1) = 0` exactly as before,</span>
-<span class="w">      </span><span class="c">!! so the PGF top boundary condition is untouched.  Consequence,</span>
-<span class="w">      </span><span class="c">!! stated plainly: under a SLOPING load the along-layer difference</span>
+<span class="w">      </span><span class="c">!! so the PGF top boundary condition THIS kernel feeds (FV_WRIGHT's</span>
+<span class="w">      </span><span class="c">!! `p_edge`) is untouched.  Consequence, stated plainly: under a</span>
+<span class="w">      </span><span class="c">!! SLOPING load the along-layer difference</span>
 <span class="w">      </span><span class="c">!! `p_centre(i) − p_centre(i−1)` omits `Δp_top`.  That term is</span>
 <span class="w">      </span><span class="c">!! depth-uniform and is already carried by the barotropic</span>
 <span class="w">      </span><span class="c">!! `eta_forcing` seam as `−(1/ρ₀)∇p_surf`, so the momentum is not</span>
-<span class="w">      </span><span class="c">!! missing it — adding it here as well would DOUBLE-COUNT.  What</span>
-<span class="w">      </span><span class="c">!! moves in this kernel is the COMPRESSIBILITY: `rho_insitu` is</span>
+<span class="w">      </span><span class="c">!! missing it.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Amended (P5.0).**  The original wording here said adding the</span>
+<span class="w">      </span><span class="c">!! load to a PGF top BC "would DOUBLE-COUNT".  That is the</span>
+<span class="w">      </span><span class="c">!! conservative statement, and it is stronger than the truth.  A</span>
+<span class="w">      </span><span class="c">!! depth-uniform `p_top` in the top BC perturbs EVERY layer's `PFu`</span>
+<span class="w">      </span><span class="c">!! by the SAME `−(1/ρ₀)∇p_top`, and the split solver replaces the</span>
+<span class="w">      </span><span class="c">!! depth mean of the layer PGF with the barotropic solution</span>
+<span class="w">      </span><span class="c">!! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`), so the uniform piece cancels</span>
+<span class="w">      </span><span class="c">!! identically and the seam keeps sole ownership of the barotropic</span>
+<span class="w">      </span><span class="c">!! response — the two are ORTHOGONAL, not additive.  That is what</span>
+<span class="w">      </span><span class="c">!! `&amp;ocean_pgf_nml p_top_in_bc` does for FV_MOM6 (theorem in</span>
+<span class="w">      </span><span class="c">!! `compute_fv_mom6_impl`'s docstring).  It is NOT done here:</span>
+<span class="w">      </span><span class="c">!! FV_WRIGHT's `p_edge` seed is a separate follow-up, and this</span>
+<span class="w">      </span><span class="c">!! kernel's contract remains "EOS argument only".  What moves in</span>
+<span class="w">      </span><span class="c">!! this kernel is the COMPRESSIBILITY: `rho_insitu` is</span>
 <span class="w">      </span><span class="c">!! evaluated at the pressure the water actually sits at, which is</span>
 <span class="w">      </span><span class="c">!! the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.</span>
 <span class="w">      </span><span class="c">!! Bit-identical when `p_top` is the zero array it ships as</span>
@@ -1264,7 +1293,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

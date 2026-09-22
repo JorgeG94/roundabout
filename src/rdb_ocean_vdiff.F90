@@ -86,6 +86,22 @@ module rdb_ocean_vdiff
          !! directly.  Mutually exclusive with `&ocean_bdrag_nml implicit`
          !! (configure fails loud); the explicit drag apply is gated off
          !! when on.  Default `.false.` ⇒ bit-identical.
+      logical :: implicit_top_drag = .false.
+         !! Fold the ICE-SHELF TOP drag into the `k = nz` DIAGONAL
+         !! (`&ocean_vdiff_nml implicit_top_drag`) instead of the explicit
+         !! pre-solve add, and MASK the wind-stress RHS off on the faces
+         !! the ice covers.  The mirror of `implicit_drag` at the other
+         !! end of the column: a drag is a diagonal term and the wind is
+         !! an RHS term, so the two share the surface row without either
+         !! being approximated, and the cover mask is what makes the
+         !! sharing physical (there is no atmosphere under a shelf).
+         !! `λ_top` is the SAME Rayleigh rate (`C_d·|U|/h_nz` quadratic,
+         !! `r` linear, `|U|` frozen at uⁿ) the top-drag slot forms, and
+         !! it arrives already cover- and wet-masked.  Requires
+         !! `&ocean_tdrag_nml enable`; mutually exclusive with
+         !! `&ocean_tdrag_nml implicit` and with `htbl > 0`; all fail loud
+         !! at configure.  The explicit top-drag apply is gated off when
+         !! on.  Default `.false.` ⇒ bit-identical.
       logical :: hvel_mom6 = .false.
          !! MOM6 `HARMONIC_VISC = True` parity for the MOMENTUM face thickness
          !! (`hvel`).  Roundabout's `h_u` is the
@@ -155,6 +171,15 @@ module rdb_ocean_vdiff
          !! flip-flops on roundoff velocities at (near-)rest and
          !! collapses the BBL glue at flipped faces (PGF_BUG.md §9.8) —
          !! the rest-state envelope runs with it off.
+      logical :: zlevel_faces = .false.
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !! Latched by `configure_ocean_closed_faces`, forwarded as a
+         !! plain scalar to `diffuse_velocity_columns_impl`, where it
+         !! switches the face column to `min(h_L, h_R)` and CUTS the
+         !! tridiagonal coupling across any interface touching a closed
+         !! (inert-filler-on-one-side) layer.  See that routine's
+         !! `zlevel_faces` docstring for the full argument.  Default
+         !! `.false.` ⇒ bit-identical.
 
       ! ---- Tridiagonal scratch (cell-centred for tracers) ----
       ! Reused across all column solves in one tracer call.  The
@@ -305,7 +330,8 @@ contains
    subroutine vdiff_apply_momentum(grid, this, ms, dt, kv_source, &
                                    tau_u, tau_v, lambda_bot_u, lambda_bot_v, rho0, &
                                    visc_rem_u, visc_rem_v, remnant_only, &
-                                   kv_corner_source, kv_corner_prandtl)
+                                   kv_corner_source, kv_corner_prandtl, &
+                                   lambda_top_u, lambda_top_v, cover_u, cover_v)
       !! Backward-Euler vertical viscosity applied to
       !! `ms%u_face_x_layer` and `ms%v_face_y_layer`.  Per-face
       !! `h_face` averaged from the two abutting cell columns.
@@ -340,6 +366,13 @@ contains
       !!   * `lambda_bot_u` / `lambda_bot_v` — bottom-drag Rayleigh rate
       !!     `λ` (1/s) on the respective faces, added to the bed (`k = 1`)
       !!     diagonal as `dt·λ`.  Only read when `implicit_drag`.
+      !!   * `lambda_top_u` / `lambda_top_v` + `cover_u` / `cover_v` —
+      !!     the ICE-SHELF TOP-drag twin (`implicit_top_drag`): the rate
+      !!     is added to the SURFACE (`k = nz`) diagonal as `dt·λ`, and
+      !!     the wind-stress RHS on that same row is scaled by
+      !!     `(1 − cover)` so an ice-covered face takes the drag and NOT
+      !!     the wind.  All four are read only when `implicit_top_drag`
+      !!     AND all four are supplied.
       !! All optional + device-resident; absent ⇒ the matrix is built
       !! exactly as before (bit-identical).
       !!
@@ -355,9 +388,55 @@ contains
       type(ocean_vdiff_t), intent(inout) :: this
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
-      real(wp), intent(in), optional :: kv_source(:, :, :)
-      real(wp), intent(in), optional :: tau_u(:, :), tau_v(:, :)
-      real(wp), intent(in), optional :: lambda_bot_u(:, :), lambda_bot_v(:, :)
+      ! EXPLICIT SHAPE — not `(:, :)` — on every optional array below, and
+      ! the same on the two `rdb_ocean_dyn` frames that FORWARD them
+      ! (`vmix_apply_in_stage`, `visc_rem_precompute`).  Load-bearing, not
+      ! decoration.  Each of these is handed straight on to the
+      ! EXPLICIT-SHAPE `(nu, nv)` / `(nx, ny, nz)` dummies of
+      ! `diffuse_velocity_columns_impl`, i.e. sequence-associated.  An
+      ! ASSUMED-SHAPE actual in that position forces the compiler to decide,
+      ! at the call, whether the descriptor is contiguous or has to be
+      ! packed into a temporary — and gfortran 15 computes that decision
+      ! UNCONDITIONALLY, from descriptor extents/strides it only loaded
+      ! under the `present()` guard.  An ABSENT optional therefore leaves
+      ! the packing flag uninitialised, and the post-call cleanup
+      ! (`if (.not. packed .and. ptr /= NULL) free(ptr)`) branches on it:
+      ! 160 valgrind "conditional jump depends on uninitialised value(s)"
+      ! from 10 contexts on `test_driver_ocean`, all rooted in this
+      ! routine's stack frame.  Benign (the null check still gates the free)
+      ! but real, and it is the compiler reading OUR uninitialised stack.
+      !
+      ! Declaring the shape removes the decision at its source: an
+      ! explicit-shape dummy is contiguous by definition, so there is no
+      ! flag, no temporary, no free, nothing to read — and, unlike the
+      ! CONTIGUOUS attribute (reverted in 852802b7f), it keeps working on
+      ! nvfortran.  CONTIGUOUS on an assumed-shape OPTIONAL makes nvfortran
+      ! 26.5 hand the callee an offset-adjusted, NON-NULL address for an
+      ! ABSENT actual; the implicit present-or-copyin the compiler emits for
+      ! the impl's explicit-shape dummy then loses its null short-circuit
+      ! and issues a real `cuMemcpyHtoD` off that garbage pointer
+      ! (`__pgi_uacc_dataonb ... 'tau_face(:,:)'` -> SIGSEGV, 44/220 tests
+      ! on `-stdpar=gpu -gpu=cc70,mem:separate`).  An explicit-shape dummy
+      ! carries no descriptor at all, so an absent actual stays a clean
+      ! null and the runtime skips it, exactly as it does today.
+      !
+      ! The bounds are the ones the body already derives and the impl
+      ! already assumes: `multilayer_state_t%init` allocates the u-face
+      ! arrays `(nx_total + 1, ny_total, nz_ml)` and the v-face arrays
+      ! `(nx_total, ny_total + 1, nz_ml)` off this same `grid`.  Every
+      ! actual is a whole allocatable slot component or a whole local array,
+      ! never a strided section (the GPU path already requires that: these
+      ! arrays are device-mapped whole).  Bit-identical: the packing path
+      ! was never taken, only speculated about.
+      real(wp), intent(in), optional :: kv_source(grid%nx_total, grid%ny_total, ms%nz_ml + 1)
+      real(wp), intent(in), optional :: tau_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: tau_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: lambda_bot_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_bot_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
       real(wp), intent(in), optional :: rho0
          !! Boussinesq reference density for the implicit surface-stress
          !! fold, `dt*(tau/rho0)/h_nz`.  READ ONLY when that fold is active
@@ -370,23 +449,28 @@ contains
          !! back to a silent literal 1035, which is how a run configured at
          !! a different rho_0 could fold its wind stress in on the wrong
          !! one.
-      real(wp), intent(inout), optional :: visc_rem_u(:, :, :), visc_rem_v(:, :, :)
+      real(wp), intent(inout), optional :: visc_rem_u(grid%nx_total + 1, grid%ny_total, ms%nz_ml)
+      real(wp), intent(inout), optional :: visc_rem_v(grid%nx_total, grid%ny_total + 1, ms%nz_ml)
+         !! Explicit-shape for the reason spelled out on the argument list
+         !! above.
       logical, intent(in), optional :: remnant_only
          !! `.true.` = build the matrices and (re)fill `visc_rem_u/v`
          !! WITHOUT solving for / modifying the velocities — the
          !! pre-substep visc_rem refresh (PGF_BUG.md §9; MOM6 computes
          !! `vertvisc_coef` before `btstep`, so its BT weights never lag).
          !! Requires both `visc_rem_u/v` present.  Default `.false.`.
-      real(wp), intent(in), optional :: kv_corner_source(:, :, :)
+      real(wp), intent(in), optional :: kv_corner_source(grid%nx_total + 1, grid%ny_total + 1, ms%nz_ml + 1)
          !! Corner-staggered interface viscosity source, `(nx+1, ny+1,
          !! nz+1)` — see the corner add-on note above.  Typically the
          !! vertex kappa-shear `kd_corner` carrier (device-resident).
+         !! Explicit-shape for the reason spelled out on the argument list
+         !! above.
       real(wp), intent(in), optional :: kv_corner_prandtl
          !! Scale applied to `kv_corner_source` (Kv = Pr·Kd; the vertex
          !! kappa-shear `prandtl_turb`).  Default 1.
 
       integer :: nx, ny, nx_face, ny_uface, nx_vface, ny_face, nz
-      logical :: do_stress, do_drag, do_remnant, solve_mom, do_corner
+      logical :: do_stress, do_drag, do_remnant, solve_mom, do_corner, do_top
       real(wp) :: rho0_l, corner_prandtl_l
 
       nx = grid%nx_total
@@ -401,6 +485,8 @@ contains
       ! supplied the corresponding face field (driver wires both together).
       do_stress = this%implicit_stress .and. present(tau_u) .and. present(tau_v)
       do_drag = this%implicit_drag .and. present(lambda_bot_u) .and. present(lambda_bot_v)
+      do_top = this%implicit_top_drag .and. present(lambda_top_u) .and. &
+               present(lambda_top_v) .and. present(cover_u) .and. present(cover_v)
       do_remnant = present(visc_rem_u) .and. present(visc_rem_v)
       solve_mom = .true.
       if (present(remnant_only)) solve_mom = .not. remnant_only
@@ -429,10 +515,12 @@ contains
             this%a_diag_u%data, this%b_diag_u%data, &
             this%c_diag_u%data, this%rhs_u%data, &
             do_stress, do_drag, rho0_l, tau_u, lambda_bot_u, &
+            do_top, lambda_top_u, cover_u, &
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces, ms%k_top_u)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, kv_source, ms%wet_mask, &
@@ -440,10 +528,12 @@ contains
             this%a_diag_v%data, this%b_diag_v%data, &
             this%c_diag_v%data, this%rhs_v%data, &
             do_stress, do_drag, rho0_l, tau_v, lambda_bot_v, &
+            do_top, lambda_top_v, cover_v, &
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces, ms%k_top_v)
       else
          ! Pure-vdiff no-op short-circuit ONLY when there is also no
          ! boundary forcing to fold; stress/drag/remnant must still be
@@ -452,7 +542,7 @@ contains
          ! K_v=0 config would otherwise silently leave visc_rem stale).
          ! A corner viscosity source likewise keeps the solve alive.
          if (this%K_v_momentum <= 0.0_wp .and. .not. do_stress .and. .not. do_drag &
-             .and. .not. do_remnant .and. .not. do_corner) return
+             .and. .not. do_top .and. .not. do_remnant .and. .not. do_corner) return
          call fill_kv_scalar_buf(this%kv_scalar_buf%data, &
                                  this%K_v_momentum, nx, ny, nz)
          call diffuse_velocity_columns_impl( &
@@ -462,10 +552,12 @@ contains
             this%a_diag_u%data, this%b_diag_u%data, &
             this%c_diag_u%data, this%rhs_u%data, &
             do_stress, do_drag, rho0_l, tau_u, lambda_bot_u, &
+            do_top, lambda_top_u, cover_u, &
             solve_mom, do_remnant, visc_rem_u, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces, ms%k_top_u)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, this%kv_scalar_buf%data, ms%wet_mask, &
@@ -473,10 +565,12 @@ contains
             this%a_diag_v%data, this%b_diag_v%data, &
             this%c_diag_v%data, this%rhs_v%data, &
             do_stress, do_drag, rho0_l, tau_v, lambda_bot_v, &
+            do_top, lambda_top_v, cover_v, &
             solve_mom, do_remnant, visc_rem_v, &
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
-            do_corner, corner_prandtl_l, kv_corner_source)
+            do_corner, corner_prandtl_l, kv_corner_source, &
+            this%zlevel_faces, ms%k_top_v)
       end if
    end subroutine vdiff_apply_momentum
 
@@ -799,11 +893,13 @@ contains
                                                  a_diag, b_diag, c_diag, rhs, &
                                                  do_stress, do_drag, rho0, &
                                                  tau_face, lambda_bot, &
+                                                 do_top, lambda_top, cover_face, &
                                                  solve_momentum, &
                                                  do_remnant, visc_rem_out, &
                                                  hvel_mom6, hbbl_visc, &
                                                  bbl_glue, bbl_piston, hvel_upwind, &
-                                                 do_corner, kv_prandtl, kv_corner)
+                                                 do_corner, kv_prandtl, kv_corner, &
+                                                 zlevel_faces, k_top_face)
       !! Build + solve the tridiagonal system per face column.
       !! `u_face` is either `u_face_x_layer` (`x_face = .true.`,
       !! shape (nx+1, ny)) or `v_face_y_layer` (`x_face = .false.`,
@@ -849,6 +945,15 @@ contains
       real(wp), intent(in), optional :: lambda_bot(nu, nv)
          !! Bottom-drag Rayleigh rate λ (1/s) on this face.  Present iff
          !! `do_drag`.
+      logical, intent(in) :: do_top
+         !! Fold the ice-shelf top drag into the `k = nz` diagonal AND
+         !! mask the wind-stress RHS by `(1 − cover_face)`.
+      real(wp), intent(in), optional :: lambda_top(nu, nv)
+         !! Top-drag Rayleigh rate λ (1/s) on this face.  Present iff
+         !! `do_top`.
+      real(wp), intent(in), optional :: cover_face(nu, nv)
+         !! Face ice-cover mask (0 open, 1 under ice), the OR of the two
+         !! abutting cells (`rdb_ocean_top_drag`).  Present iff `do_top`.
       logical, intent(in) :: hvel_mom6
          !! MOM6 HARMONIC_VISC parity for `h_u` + `h_shear` (see the slot-type
          !! docstring).  `.false.` => the historical arithmetic-`h_u` /
@@ -888,6 +993,54 @@ contains
          !! surface → γ → 1).  Clamped to `min(γ, 1.0)` at production
          !! (cheap FP insurance on a quantity the maximum principle
          !! already bounds to (0, 1]).  Present iff `do_remnant`.
+      integer, intent(in) :: k_top_face(nu, nv)
+         !! `ms%k_top_u` / `k_top_v` — the index of the first layer that
+         !! is LIVE on BOTH sides of this face, `nz` wherever nothing
+         !! vanishes against the top.  The surface row of the column
+         !! solve, the ice-shelf top-drag diagonal fold and the
+         !! wind-stress RHS fold all sit on THIS row instead of on `nz`:
+         !! under a quasi-geopotential coordinate beneath a shelf the
+         !! rows above it are inert fillers, decoupled to the identity by
+         !! the `zlevel_faces` gates, so a `dt*lambda_top` added at `nz`
+         !! would damp a row that is not coupled to the ocean at all —
+         !! and the drag rate `lambda_top` is itself captured at
+         !! `k_top_face` by `rdb_ocean_top_drag`, so the two MUST agree.
+         !! With `k_top_face ≡ nz` every expression below is the one it
+         !! replaced, bit for bit.
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
+         !!
+         !! Changes TWO things about the face column, and only when on
+         !! (`.false.` ⇒ every expression below is textually and
+         !! bit-identically what it has always been):
+         !!
+         !! 1. the face thickness becomes `min(h_L, h_R)` instead of the
+         !!    arithmetic (or MOM6-harmonic) mean — the standard
+         !!    partial-cell choice, and the one that makes "this layer is
+         !!    an inert FILLER on at least one side" visible locally as
+         !!    `hvel(k) <= H_VANISHED`;
+         !! 2. the tridiagonal coupling across an interface touching such
+         !!    a layer is CUT (`alpha = beta = 0`), and the layer's own
+         !!    row is forced to the identity.
+         !!
+         !! Without (2) an OPEN layer is frictionally coupled, every
+         !! single step, to the CLOSED layer above or below it — whose
+         !! velocity `mask_layer_velocities` has just zeroed — so the
+         !! wall acts as a spurious side drag instead of as free-slip.
+         !! The floor `max(hvel, H_VANISHED)` does not save it: it makes
+         !! the coupling huge-but-finite (`dt·nu/1.5e-4`), i.e. a rigid
+         !! glue to zero, which is the worst of the three options.
+         !!
+         !! This is the DYNAMIC twin of `metrics%open_u/open_v`: "filler
+         !! on either side" is `min(h_L,h_R) <= H_VANISHED` here and
+         !! `target_h <= H_VANISHED` on either side there, and under
+         !! `z_fixed` the two agree (η is absorbed by the first LIVE
+         !! layer).  It is derived locally rather than threaded as a 3-D
+         !! mask because this kernel is reached through four flat-impl
+         !! call sites and five dispatcher call sites, none of which sees
+         !! `ocean_metrics_t`, and a scalar costs nothing.
+         !! The equivalent tracer decoupling already exists, unconditionally,
+         !! in `build_factorize_tracer_matrix`.
       logical, intent(in) :: do_corner
          !! Add the corner-staggered viscosity to every face interface.
          !! Gated INSIDE the single DC (no split loop — NVHPC penalty);
@@ -903,7 +1056,7 @@ contains
          !! — the direct corner→face route, never via a tracer point.
          !! Present iff `do_corner`.
 
-      integer :: i, j, k, i_left, i_right, j_below, j_above, i_c2, j_c2
+      integer :: i, j, k, ktop, i_left, i_right, j_below, j_above, i_c2, j_c2
       real(wp) :: hf_km1, hf_k, hf_kp1, dz_bot, dz_top
       real(wp) :: hvel(NZ_STACK_MAX)
       real(wp) :: zint(NZ_STACK_MAX)
@@ -916,7 +1069,7 @@ contains
       real(wp) :: zacc, z2, botfn, h_harm, h_arith, h_delta, hl_c, hr_c, i_hbbl
       real(wp) :: nu_face_k, nu_face_kp1, alpha, beta, denom
       real(wp) :: botfn_int, kv_bbl, bbl_thick
-      real(wp) :: inv_rho0
+      real(wp) :: inv_rho0, wind_open
       real(wp), parameter :: EPS_HVEL = 1.0e-30_wp
          !! MOM6 `h_neglect` analogue in the harmonic mean / HBBL inverse.
       real(wp), parameter :: STRESS_H_MIN = 1.0e-3_wp
@@ -937,9 +1090,9 @@ contains
       do concurrent(j=1:nv, i=1:nu) &
          local(i_left, i_right, j_below, j_above, i_c2, j_c2, &
                hf_km1, hf_k, hf_kp1, dz_bot, dz_top, &
-               nu_face_k, nu_face_kp1, alpha, beta, denom, k, &
+               nu_face_k, nu_face_kp1, alpha, beta, denom, k, ktop, &
                hvel, zint, zacc, z2, botfn, botfn_int, &
-               h_harm, h_arith, h_delta, hl_c, hr_c)
+               h_harm, h_arith, h_delta, hl_c, hr_c, wind_open)
          ! Neighbour cell indices for averaging h.  (i_c2, j_c2) is the
          ! SECOND end corner of this face for the corner-viscosity
          ! add-on (the first is (i, j) on both staggerings): a u-face
@@ -1004,6 +1157,11 @@ contains
             else
                hvel(k) = 0.5_wp*(hl_c + hr_c)
             end if
+            ! z-level partial steps: the face column is the OVERLAP of the
+            ! two cell columns, so its thickness is the min.  A filler on
+            ! either side then reads at or below H_VANISHED and the
+            ! coupling gates below cut it out of the solve.
+            if (zlevel_faces) hvel(k) = min(hl_c, hr_c)
          end do
 
          ! ---- k = 1: bed BC, no flux below ----
@@ -1065,6 +1223,12 @@ contains
                end if
             end if
             alpha = dt*nu_face_kp1/(hf_k*dz_top)
+            ! z-level partial steps: no shear across an interface that
+            ! touches a CLOSED face layer.  The tracer twin does exactly
+            ! this, unconditionally, in `build_factorize_tracer_matrix`.
+            if (zlevel_faces) then
+               if (hvel(1) <= H_VANISHED .or. hvel(2) <= H_VANISHED) alpha = 0.0_wp
+            end if
          end if
          a_diag(i, j, 1) = 0.0_wp
          c_diag(i, j, 1) = -alpha
@@ -1140,17 +1304,25 @@ contains
             end if
             beta = dt*nu_face_k/(hf_k*dz_bot)
             alpha = dt*nu_face_kp1/(hf_k*dz_top)
+            ! z-level partial steps — see the bed row.
+            if (zlevel_faces) then
+               if (hvel(k) <= H_VANISHED .or. hvel(k - 1) <= H_VANISHED) beta = 0.0_wp
+               if (hvel(k) <= H_VANISHED .or. hvel(k + 1) <= H_VANISHED) alpha = 0.0_wp
+            end if
             a_diag(i, j, k) = -beta
             c_diag(i, j, k) = -alpha
             b_diag(i, j, k) = 1.0_wp + alpha + beta
          end do
 
-         ! ---- k = nz: surface BC, no flux above ----
+         ! ---- k = k_top: surface BC, no flux above ----
+         ! `k_top` is `nz` on every column with no top-side filler, so
+         ! this block is the historical `k = nz` block verbatim there.
          ! Floor the face thicknesses (see the k=1 block) — keeps the β
          ! denominator non-zero for a collapsed surface layer; no-op for
          ! hvel ≫ H_VANISHED ⇒ bit-identical.  (The stress-BC conversion
          ! below keeps its own STRESS_H_MIN floor on hf_k.)
-         hf_k = max(hvel(nz), H_VANISHED)
+         ktop = k_top_face(i, j)
+         hf_k = max(hvel(ktop), H_VANISHED)
          ! SINGLE-LAYER COLUMN (nz = 1): this row has already been built as
          ! the bed row above (a = c = 0, b = 1 + bottom drag).  Skip the
          ! interface-below build entirely — at nz = 1 it would read
@@ -1158,33 +1330,69 @@ contains
          ! row's drag.  Only the stress RHS below still applies, which is
          ! exactly right: one layer carries BOTH the wind stress and the
          ! bottom drag.  Loop-invariant gate ⇒ nz >= 2 bit-identical.
-         if (nz > 1) then
-            hf_km1 = max(hvel(nz - 1), H_VANISHED)
+         if (ktop > 1) then
+            hf_km1 = max(hvel(ktop - 1), H_VANISHED)
             if (hvel_mom6) then
                dz_bot = 0.5_wp*(hf_km1 + hf_k)
             else
                dz_bot = face_thick(hf_km1, hf_k, use_harmonic)
             end if
-            nu_face_k = 0.5_wp*(kv_centre(i_left, j_below, nz) + kv_centre(i_right, j_above, nz))
+            nu_face_k = 0.5_wp*(kv_centre(i_left, j_below, ktop) &
+                                + kv_centre(i_right, j_above, ktop))
             ! Corner-viscosity add-on (see the k=1 block).
             if (do_corner) then
                nu_face_k = nu_face_k + &
-                           kv_prandtl*(0.5_wp*(kv_corner(i, j, nz) + kv_corner(i_c2, j_c2, nz)))
+                           kv_prandtl*(0.5_wp*(kv_corner(i, j, ktop) + kv_corner(i_c2, j_c2, ktop)))
             end if
             ! BBL glue (see the k=1 block) — this row's beta is the twin of
-            ! row nz-1's alpha and must see the same transform.
+            ! row ktop-1's alpha and must see the same transform.
             if (bbl_glue) then
-               botfn_int = 1.0_wp/(1.0_wp + 0.09_wp*zint(nz - 1)*zint(nz - 1)*zint(nz - 1)* &
-                                   zint(nz - 1)*zint(nz - 1)*zint(nz - 1))
+               botfn_int = 1.0_wp/(1.0_wp + 0.09_wp*zint(ktop - 1)*zint(ktop - 1)*zint(ktop - 1)* &
+                                   zint(ktop - 1)*zint(ktop - 1)*zint(ktop - 1))
                nu_face_k = nu_face_k + (kv_bbl - nu_face_k)*botfn_int
                if (dz_bot > bbl_thick) then
                   dz_bot = (1.0_wp - botfn_int)*dz_bot + botfn_int*bbl_thick
                end if
             end if
             beta = dt*nu_face_k/(hf_k*dz_bot)
-            a_diag(i, j, nz) = -beta
-            c_diag(i, j, nz) = 0.0_wp
-            b_diag(i, j, nz) = 1.0_wp + beta
+            ! z-level partial steps — see the bed row.
+            if (zlevel_faces) then
+               if (hvel(ktop) <= H_VANISHED .or. hvel(ktop - 1) <= H_VANISHED) beta = 0.0_wp
+            end if
+            a_diag(i, j, ktop) = -beta
+            c_diag(i, j, ktop) = 0.0_wp
+            b_diag(i, j, ktop) = 1.0_wp + beta
+         end if
+         ! ---- Rows ABOVE the first live layer: the identity ----
+         ! Empty whenever `k_top = nz`, so bit-identical everywhere a
+         ! column has no top-side filler.  Where it is not empty those
+         ! rows are inert fillers inside the ice draft: they carry no
+         ! mass, they are not coupled to anything (the interior loop's
+         ! `zlevel_faces` gates already zero their alpha/beta when the
+         ! partial-step knob is on, and this makes the statement hold
+         ! with the knob OFF too), and `rhs` still holds `u^n`, so the
+         ! Thomas sweep returns them unchanged.  Written explicitly
+         ! rather than left to the gates because the surface-BC block
+         ! above no longer writes row `nz` when `k_top < nz`.
+         do k = ktop + 1, nz
+            a_diag(i, j, k) = 0.0_wp
+            b_diag(i, j, k) = 1.0_wp
+            c_diag(i, j, k) = 0.0_wp
+         end do
+         ! Ice-shelf top-drag stress BC (Roundabout surface = k=nz; the
+         ! MIRROR of the bed row's `dt·λ_bot` fold above).  λ_top is the
+         ! Rayleigh RATE the top-drag slot already formed and already
+         ! cover- and wet-masked, so an OPEN face contributes an exact
+         ! zero here.  A drag is a SINK ⇒ POSITIVE diagonal add ⇒
+         ! |amplification| ≤ 1 for ANY h/dt, which is the whole point on
+         ! the thin top layers a sigma coordinate leaves near a grounding
+         ! line.  At nz = 1 the `if (nz > 1)` block above is skipped and
+         ! this row IS the bed row: one layer then carries the bottom
+         ! drag, the top drag and the wind, which is exactly right.
+         ! Gated INSIDE the single DC (no split loop — NVHPC penalty);
+         ! `lambda_top` is guaranteed present when `do_top`.
+         if (do_top) then
+            b_diag(i, j, ktop) = b_diag(i, j, ktop) + dt*lambda_top(i, j)
          end if
          ! Surface wind-stress Neumann BC (Roundabout surface = k=nz; MIRROR of
          ! MOM6 k=1).  The free-surface flux is the prescribed kinematic
@@ -1198,11 +1406,31 @@ contains
          ! `min` of the two bounding cells' wet/dry mask (as the explicit
          ! kernel does) so a land face receives no stress.  Gated INSIDE
          ! the single DC.
+         ! ICE COVER: under a shelf there is no atmosphere, so the wind
+         ! RHS is scaled by `(1 − cover_face)` — a covered face takes the
+         ! top DRAG (the diagonal add above) and not the wind.
+         !
+         ! This is now BELT AND BRACES, and deliberately kept.  P2c masks
+         ! the wind at its SOURCE: `ocean_surface_stress_apply_cover`
+         ! zeroes the `tau` pair on every face touching a covered cell
+         ! (the same OR rule `top_drag_fill_face_cover_impl` uses — one
+         ! rule, enforced face-for-face by
+         ! `cavity_cover_face_rule_matches_top_drag`), so `tau_face` is
+         ! already exactly zero here and this factor multiplies zero by
+         ! zero.  It stays because it costs one multiply on a row that is
+         ! already being assembled and it keeps the fold correct
+         ! STANDALONE — a future forcing path that writes `tau` after the
+         ! configure-time mask (a file reader, say) would be caught here
+         ! rather than blowing an atmosphere through the ice.  The
+         ! asymmetry with the explicit path is GONE: the explicit surface
+         ! stress reads the same masked `tau`.
          if (do_stress) then
-            rhs(i, j, nz) = rhs(i, j, nz) + &
-                            dt*tau_face(i, j) &
-                            *min(wet_cell(i_left, j_below), wet_cell(i_right, j_above)) &
-                            *inv_rho0/max(hf_k, STRESS_H_MIN)
+            wind_open = 1.0_wp
+            if (do_top) wind_open = 1.0_wp - cover_face(i, j)
+            rhs(i, j, ktop) = rhs(i, j, ktop) + &
+                              dt*tau_face(i, j)*wind_open &
+                              *min(wet_cell(i_left, j_below), wet_cell(i_right, j_above)) &
+                              *inv_rho0/max(hf_k, STRESS_H_MIN)
          end if
 
          ! ---- Thomas forward sweep ----

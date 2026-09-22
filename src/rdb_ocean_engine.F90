@@ -105,6 +105,8 @@ module rdb_ocean_engine
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, &
@@ -116,10 +118,15 @@ module rdb_ocean_engine
                               configure_ocean_bt_split, configure_ocean_bc, &
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
+                              configure_ocean_closed_faces, &
+                              configure_ocean_k_top, &
+                              configure_ocean_cavity, &
+                              configure_ocean_cavity_melt, &
+                              configure_ocean_top_drag, &
                               configure_ocean_wetdry, &
                               configure_ocean_sponge
    use rdb_ocean_stability_audit, only: ocean_stability_audit
-   use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference
+   use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference, ocean_sponge_refresh_target
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_diag_fills, only: set_diag_remap_method, parse_diag_remap_scheme, &
                                    set_diag_mask_vanished
@@ -456,7 +463,14 @@ contains
       ! `p_surf` dynamic.  Gated: with `in_eos = .false.` `p_top` stays the
       ! zero array it was allocated as and every EOS evaluation is
       ! bit-identical.
-      if (cfg%ocean%psurf%in_eos .and. allocated(engine%state%surface_flux%p_surf)) then
+      !
+      ! P5.0 joins `&ocean_pgf_nml p_top_in_bc` — the load in the FV_MOM6
+      ! pressure-stack surface BC — to the SAME seed, so the unsplit
+      ! driver (which has no per-step refresh) still gets the configure
+      ! value rather than a zero array, and the split driver's step-1 PGF
+      ! is already loaded.
+      if ((cfg%ocean%psurf%in_eos .or. cfg%ocean%pgf%p_top_in_bc) .and. &
+          allocated(engine%state%surface_flux%p_surf)) then
          engine%state%multilayer%p_top = engine%state%surface_flux%p_surf
       end if
       call engine%state%surface_flux%set_sw_penetration( &
@@ -654,6 +668,30 @@ contains
          call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
          call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b)
          call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         ! The ice draft is bathymetry-class static geometry, so it takes
+         ! the bathymetry's ghost treatment VERBATIM: the analytic setter
+         ! already filled the ghosts, and the wrap/fold then overwrites
+         ! them with the seam-correct values on a periodic or folded edge.
+         ! `bt_H_ref = b - z_draft` was latched from the UNWRAPPED pair,
+         ! which is exactly why all three are re-wrapped here (and why
+         ! they must be re-wrapped TOGETHER — a draft whose seam disagreed
+         ! with the datum's would count the ice load twice at that face).
+         if (engine%state%metrics%use_cavity) then
+            call ocean_periodic_wrap_centre_2d( &
+               engine%state%metrics%z_draft, &
+               engine%grid%nx_total, engine%grid%ny_total, &
+               engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
+               engine%state%bc%periodic_x, engine%state%bc%periodic_y)
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%z_draft)
+            call ocean_periodic_wrap_centre_2d( &
+               engine%state%metrics%cover_frac, &
+               engine%grid%nx_total, engine%grid%ny_total, &
+               engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
+               engine%state%bc%periodic_x, engine%state%bc%periodic_y)
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%cover_frac)
+         end if
          ! bt_H_ref was snapshotted from the UNWRAPPED b inside
          ! configure_ocean_bt_split (above) — re-wrap it too.
          if (cfg%ocean%bt%n_inner >= 1) then
@@ -680,6 +718,10 @@ contains
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank
       ! non-periodic ⇒ no-op, periodic ⇒ local wrap.
       call ocean_halo_centre(engine%state%barotropic%b, device_resident=.false.)
+      if (engine%state%metrics%use_cavity) then
+         call ocean_halo_centre(engine%state%metrics%z_draft, device_resident=.false.)
+         call ocean_halo_centre(engine%state%metrics%cover_frac, device_resident=.false.)
+      end if
       call ocean_halo_exchange_ml_state(engine%state%multilayer, device_resident=.false.)
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
@@ -696,7 +738,17 @@ contains
       ! before enter_data. See rdb_ocean_stability_audit.F90 for the
       ! motivating failure (a global tripolar aquaplanet NaN, diagnosed
       ! only after the fact — this audit is the fix).
-      call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, ierr=ierr)
+      ! `bt_H_ref` (b - z_draft afloat, 0 where grounded) is the COLUMN the
+      ! vertical coordinate divides, so it — not the bathymetry — is what
+      ! the terrain-following stiffness check must see under an ice shelf.
+      ! It exists only once the barotropic datum has been built.
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, &
+                                    ierr=ierr, &
+                                    column=engine%state%dyn%bt_work%bt_H_ref)
+      else
+         call ocean_stability_audit(cfg, engine%state%metrics, engine%grid, rank, ierr=ierr)
+      end if
       if (setup_failed(ierr)) return
 
       ! Barotropic linear wave drag: host-side r_H map + h->face average.
@@ -708,6 +760,52 @@ contains
       ! statistics. Same ordering constraints as wave drag.
       call configure_ocean_porous(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! Ice-shelf cavity: build the static isostatic load from the draft
+      ! the IC seed already laid down, and assert the counted-once datum
+      ! invariant. AFTER configure_ocean_pgf (it needs the PGF reference
+      ! density) and configure_ocean_bt_split (it checks that latch),
+      ! BEFORE enter_data.
+      call configure_ocean_cavity(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
+
+      ! Ice-shelf basal melt (P2b): copy the thermodynamic knobs onto the
+      ! melt slot, resolve the gamma_s sentinel, build the per-column
+      ! Coriolis array the hj99 law needs, and SEED ms%p_top from the
+      ! isostatic load configure_ocean_cavity just built.  Immediately
+      ! after it (that is where p_ice_ref comes from), BEFORE enter_data.
+      call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
+
+      ! Ice-shelf TOP drag (Phase 4a): coefficients + the static FACE
+      ! cover masks projected from `metrics%cover_frac`.  AFTER the
+      ! cover_frac halo exchange and after configure_ocean_cavity_melt
+      ! (it owns the one-C_d rule against the melt slot's cdrag_top),
+      ! BEFORE enter_data (the face masks are host-filled and reach the
+      ! device on the slot's `copyin` map).
+      call configure_ocean_top_drag(cfg, engine%state, engine%grid, rank)
+
+      ! Partial-step z-level face closure (&vcoord_nml
+      ! zfixed_closed_faces).  LAST of the static-geometry builders and
+      ! still BEFORE enter_data: it needs `vcoord%z_top` (configure_ocean
+      ! _cavity), `bt_work%bt_H_ref` (configure_ocean_bt_split), the
+      ! land-masked `dy_cu`/`dx_cv` (configure_ocean_land_mask) and the
+      ! periodic-wrap + halo pass above — the mask is built from the
+      ! z_fixed target at eta = 0, and its ghost-band correctness IS the
+      ! seam correctness of those two inputs.  Knob off => literal no-op.
+      call configure_ocean_closed_faces(cfg, engine%state, engine%grid, rank, ierr=ierr)
+      if (setup_failed(ierr)) return
+
+      ! The shared FIRST-LIVE-LAYER index `ms%k_top` (+ its two face
+      ! twins) — what every top-side consumer reads instead of spelling
+      ! `nz`, so that a `z_fixed` column whose top layers are inert
+      ! fillers inside the ice draft is forced on the ice-adjacent LIVE
+      ! layer and not on the filler.  Same inputs and same ordering
+      ! constraints as the closed-face mask above (it is built from the
+      ! same `z_fixed` target at eta = 0), still before enter_data.
+      ! Literal no-op on every coordinate but `z_fixed` under a cavity:
+      ! the arrays already hold the `nz` fallback.
+      call configure_ocean_k_top(cfg, engine%state, engine%grid, rank)
 
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
@@ -996,6 +1094,16 @@ contains
 
       call ocean_porous_refresh(engine%grid, engine%state%metrics, engine%state%multilayer)
 
+      ! PR-23b: rebuild the ANALYTIC sponge target on the live layer
+      ! geometry, once per outer step, beside the porous refresh and
+      ! before the dyn step -- so the whole step relaxes toward the
+      ! geopotential profile that was asked for rather than toward the
+      ! t = 0 layer positions.  No-op unless `&ocean_sponge_nml
+      ! target_source = "linear_z"`, so every other configuration is
+      ! bit-identical.
+      call ocean_sponge_refresh_target(engine%grid, engine%state%sponge, &
+                                       engine%state%multilayer)
+
       if (engine%n_inner >= 1) then
          call ocean_dyn_step_split(engine%grid, engine%state%metrics, engine%state%dyn, &
                                    engine%state%eos, &
@@ -1017,7 +1125,9 @@ contains
                                    redi=engine%state%redi, meke=engine%state%meke, &
                                    vmix_tidal=engine%state%vmix_tidal, &
                                    tides=engine%state%tides, &
-                                   psurf=engine%state%p_surf)
+                                   psurf=engine%state%p_surf, &
+                                   td=engine%state%tdrag, &
+                                   cav=engine%state%cavity_flux)
       else
          call profiler_start("ocean_dyn_step")
          call ocean_dyn_step(engine%grid, engine%state%metrics, engine%state%dyn, engine%state%eos, &
@@ -1032,7 +1142,8 @@ contains
                              epbl=engine%state%epbl, kshear=engine%state%kshear, &
                              slopes=engine%state%slopes, &
                              vmix_tidal=engine%state%vmix_tidal, &
-                             bc=engine%state%bc, t=t)
+                             bc=engine%state%bc, t=t, td=engine%state%tdrag, &
+                             cav=engine%state%cavity_flux)
          call profiler_stop("ocean_dyn_step")
       end if
    end subroutine engine_step
@@ -1239,10 +1350,88 @@ contains
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
-      call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
-                                       engine%state%multilayer, &
-                                       active=engine%state%dyn%enable_thermodynamics &
-                                       .and. engine%state%dyn%is_thermo_step())
+      ! Ice-shelf basal melt (P2b): solve the three-equation interface on
+      ! every covered column and fill the OWNED heat_cavity/salt_cavity
+      ! components.  MUST precede the assembler, which folds them into
+      ! Q_heat/Q_salt.  Same thermo cadence, and a no-op (immediate
+      ! return) when &ocean_cavity_melt_nml enable=.false.  Cavity x sea
+      ! ice is refused at configure, so the ordering against
+      ! engine_step_ice's fillers is not a live question.
+      call ocean_cavity_flux_step(engine%grid, engine%state%cavity_flux, &
+                                  engine%state%metrics, engine%state%multilayer, &
+                                  engine%state%eos, engine%state%surface_flux, &
+                                  active=engine%state%dyn%enable_thermodynamics &
+                                  .and. engine%state%dyn%is_thermo_step())
+
+      ! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.
+      !
+      ! When `&ocean_tdrag_nml` is on, the RK2 stage drivers publish
+      ! `ss%stress_shelf` from the top drag's own `stress_top`, in-stage
+      ! and unlagged, and this branch stays out of the way.  When it is
+      ! OFF but basal melt is on, nothing else would give KPP/EPBL an
+      ! under-ice `u_*` at all — they would mix a covered column on the
+      ! masked (exactly zero) wind stress.  The melt slot already solved
+      ! for a friction velocity with the SAME `C_d` (the one-drag-
+      ! coefficient rule: `&ocean_cavity_melt_nml cdrag_top` must equal
+      ! `&ocean_tdrag_nml cd`), so re-deriving `|tau_top| = rho_0*u_*^2`
+      ! from it is the consistent answer, not a second drag law.
+      !
+      ! HONEST LIMIT: `cav%ustar` is refreshed at the THERMO cadence, at
+      ! the END of the outer step, so this path reaches the boundary-layer
+      ! schemes ONE OUTER STEP LATE.  The top-drag path has no such lag.
+      ! `cav%ustar` is exactly 0 on every uncovered column, so the
+      ! published field keeps `stress_shelf`'s "zero off the cover"
+      ! invariant.
+      !
+      ! A CALL, not an inline `do concurrent`, and the reason is a GPU
+      ! rule rather than a style preference.  A `do concurrent` written
+      ! here would reference `engine%state%surface_stress%stress_shelf`,
+      ! i.e. it would walk the ENGINE, and `ocean_engine_t` is not a
+      ! mapped object -- only `engine%state` is.  nvfortran then emits a
+      ! data clause for the whole `engine` and aborts at run time with
+      ! "variable in data clause is partially present on the device:
+      ! name=engine".  Measured, cc70, 2026-09-20: it did exactly that.
+      ! Host-dereferencing the two component arrays AT the call site and
+      ! handing them to a flat explicit-shape kernel is the fix -- the
+      ! outer-shim + flat-impl pattern.
+      !
+      ! CLAUDE.md's "write a host-gated pass INLINE" rule does not apply:
+      ! that rule exists because an escaping state array pessimises the
+      ! OTHER `do concurrent` loops in the calling routine, and
+      ! `engine_step_finalize` has none -- it is a four-call orchestrator.
+      !
+      ! Placeholder safety is STRUCTURAL, not a runtime branch: the gate
+      ! is `cavity_flux%enable`, and the melt slot allocates `ustar` at
+      ! `(nx, ny)` exactly when that is set (`(1,1)` otherwise), while
+      ! `stress_shelf` is always full size.  So the explicit-shape dummies
+      ! below can only ever be reached with matching, full-size actuals.
+      if (engine%state%cavity_flux%enable .and. .not. engine%state%tdrag%enable) then
+         call ocean_surface_stress_set_shelf_from_ustar( &
+            engine%state%surface_stress%stress_shelf, &
+            engine%state%cavity_flux%ustar, &
+            engine%state%surface_stress%rho0, &
+            size(engine%state%surface_stress%stress_shelf, 1), &
+            size(engine%state%surface_stress%stress_shelf, 2))
+      end if
+
+      ! Ice-shelf cover: the assembler is where the atmospheric bands and
+      ! the cavity's own heat_cavity/salt_cavity are still separable, so
+      ! it is where `1 - cover_frac` is applied — and applying it there
+      ! (rather than at apply time) is also what makes the `Q_heat` /
+      ! `Q_salt` that KPP and EPBL read for `B_0` the MASKED values.
+      ! Cavity off ⇒ the original call, byte-identical.
+      if (engine%state%metrics%use_cavity) then
+         call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
+                                          engine%state%multilayer, &
+                                          active=engine%state%dyn%enable_thermodynamics &
+                                          .and. engine%state%dyn%is_thermo_step(), &
+                                          cover_frac=engine%state%metrics%cover_frac)
+      else
+         call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
+                                          engine%state%multilayer, &
+                                          active=engine%state%dyn%enable_thermodynamics &
+                                          .and. engine%state%dyn%is_thermo_step())
+      end if
 
       if (engine%diag_enabled) then
          call engine%state%diag%step(engine%state, dt, t + dt)

@@ -33,6 +33,7 @@ module rdb_ocean_dyn
    use rdb_barotropic_coupling, only: derive_bt_from_layers, &
                                       compute_h_face_upstream, &
                                       sum_slow_tendencies_into_F_slow, &
+                                      add_top_drag_into_F_slow, &
                                       subtract_fast_cor_ref, &
                                       set_cor_ref_velocity, &
                                       face_depth_mean_u, face_depth_mean_v, &
@@ -47,7 +48,8 @@ module rdb_ocean_dyn
    use rdb_ocean_ke_probe, only: ke_probe_t, ke_probe_sample, ke_probe_coradv_split
    use rdb_ocean_chksum, only: chksum_probe_t, chksum_state, chksum_bt, chksum_hotface
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_ocean_porous, only: porous_update_face_areas
+   use rdb_ocean_porous, only: porous_update_face_areas, &
+                               closed_faces_update_bt_widths
    use rdb_ocean_metrics, only: ocean_metrics_t, &
                                 metrics_fill_cartesian, metrics_fill_spherical, &
                                 metrics_finalize, metrics_fill_coriolis, &
@@ -82,6 +84,9 @@ module rdb_ocean_dyn
    use rdb_ocean_varmix, only: ocean_varmix_t, varmix_compute
    use rdb_ocean_meke, only: ocean_meke_t, meke_step, meke_backscatter_apply
    use rdb_ocean_wave_speed, only: ocean_wave_speed_t, wavespeed_compute
+   use rdb_ocean_top_drag, only: ocean_top_drag_t, &
+                                 ocean_top_drag_compute_tendencies, &
+                                 ocean_top_drag_apply_tendencies
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t, &
                                     ocean_bottom_drag_compute_tendencies, &
                                     ocean_bottom_drag_apply_tendencies, &
@@ -96,6 +101,7 @@ module rdb_ocean_dyn
                                      ocean_surface_restore_apply_tracers
    use rdb_ocean_geothermal, only: ocean_geothermal_t, &
                                    ocean_geothermal_apply_tracers
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t, ocean_cavity_mass_step
    use rdb_ocean_ideal_age, only: ocean_ideal_age_apply, ocean_ideal_age_reset_surface, &
                                   ocean_ideal_age_young_val
    use rdb_ocean_vertical_advection, only: ocean_vertical_advection_t, &
@@ -450,20 +456,52 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(multilayer_state_t), intent(in) :: ms
 
-      if (.not. metrics%use_porous) return
+      if (metrics%use_porous) then
+         call porous_update_face_areas(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                       metrics%porous_eta_interp, &
+                                       metrics%porous_mask_depth, &
+                                       metrics%por_bed, ms%h_layer, &
+                                       metrics%por_dmin_u, metrics%por_dmax_u, &
+                                       metrics%por_davg_u, &
+                                       metrics%por_dmin_v, metrics%por_dmax_v, &
+                                       metrics%por_davg_v, &
+                                       metrics%dy_cu, metrics%dx_cv, &
+                                       metrics%por_face_area_u, &
+                                       metrics%por_face_area_v, &
+                                       metrics%dy_cu_bt, metrics%dx_cv_bt)
+      end if
 
-      call porous_update_face_areas(grid%nx_total, grid%ny_total, ms%nz_ml, &
-                                    metrics%porous_eta_interp, &
-                                    metrics%porous_mask_depth, &
-                                    metrics%por_bed, ms%h_layer, &
-                                    metrics%por_dmin_u, metrics%por_dmax_u, &
-                                    metrics%por_davg_u, &
-                                    metrics%por_dmin_v, metrics%por_dmax_v, &
-                                    metrics%por_davg_v, &
-                                    metrics%dy_cu, metrics%dx_cv, &
-                                    metrics%por_face_area_u, &
-                                    metrics%por_face_area_v, &
-                                    metrics%dy_cu_bt, metrics%dx_cv_bt)
+      ! z-level closed faces: refresh the BAROTROPIC widths from the LIVE
+      ! `h` at the same (per-outer-step) cadence.  AFTER the porous write,
+      ! which it SUPERSEDES rather than multiplies — the combined
+      ! thickness-weighted fraction it computes already contains the
+      ! porous one.  See `closed_faces_update_bt_widths`.
+      if (metrics%use_closed_faces) then
+         ! Two branches, one per porous state: with porous OFF the
+         ! `por_face_area_*` arrays are the `(1,1,1)` placeholder and must
+         ! NOT reach the callee's explicit-shape dummy (see its `use_por`
+         ! docstring -- the GPU build aborts, the CPU builds do not).  The
+         ! mask itself is the inert stand-in: right shape, already mapped,
+         ! `intent(in)` at both dummies so the double association is legal.
+         if (metrics%use_porous) then
+            call closed_faces_update_bt_widths(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                               .true., &
+                                               metrics%dy_cu, metrics%dx_cv, &
+                                               ms%h_layer, &
+                                               metrics%por_face_area_u, &
+                                               metrics%por_face_area_v, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%dy_cu_bt, metrics%dx_cv_bt)
+         else
+            call closed_faces_update_bt_widths(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                               .false., &
+                                               metrics%dy_cu, metrics%dx_cv, &
+                                               ms%h_layer, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%open_u, metrics%open_v, &
+                                               metrics%dy_cu_bt, metrics%dx_cv_bt)
+         end if
+      end if
    end subroutine ocean_porous_refresh
 
    subroutine ocean_dyn_init(this, grid, nz_ml)
@@ -824,7 +862,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_barotropic
 
-   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t)
+   subroutine ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, bc, t, td, cav)
       !! Multilayer extension of `ocean_dyn_step_barotropic`.  One
       !! SSP-RK2 outer step that orchestrates the full per-layer
       !! dynamical core:
@@ -862,6 +900,24 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -915,12 +971,14 @@ contains
       ! ---- Stage 1: tendencies at u^n, FE step -> u^(1) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 1, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td, &
+                     cav=cav)
 
       ! ---- Stage 2: tendencies at u^(1), FE step -> u^(1) + dt*L(u^(1)) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 2, sf=sf, geo=geo, lateral_mix=lateral_mix, &
-                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal)
+                     epbl=epbl, kshear=kshear, slopes=slopes, vmix_tidal=vmix_tidal, td=td, &
+                     cav=cav)
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
       call rk2_average(ms)
@@ -976,7 +1034,7 @@ contains
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step
 
-   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal)
+   subroutine run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, dt, stage, sf, geo, lateral_mix, epbl, kshear, slopes, vmix_tidal, td, cav)
       !! One FE stage of the multilayer step.  Order of operations:
       !!
       !!   1. EOS: rho_layer <- linear(T, S)
@@ -1008,6 +1066,24 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -1027,6 +1103,15 @@ contains
       type(ocean_tidal_mixing_t), intent(inout), optional :: vmix_tidal
 
       logical :: therm_active
+      logical :: fold_top
+         !! `.true.` when the ice-shelf top drag is folded into the vdiff
+         !! `k = nz` diagonal — see the gate note at the `vmix_apply_in_stage`
+         !! call below for why the test is `implicit_fold`, not `present(td)`.
+      logical :: publish_shelf
+         !! `.true.` when the ice-shelf top-drag slot is live and its
+         !! `stress_top` is therefore full-sized and freshly written.
+      integer :: i_ss, j_ss, nx_ss, ny_ss
+         !! Loop/extent locals for the inline `stress_shelf` publish.
       real(wp) :: therm_dt
 
       therm_active = dyn%enable_thermodynamics .and. dyn%is_thermo_step()
@@ -1060,6 +1145,37 @@ contains
       call ocean_horizontal_viscosity_compute_ke_diss(hv, ms)
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
+      ! Ice-shelf top drag (`&ocean_tdrag_nml`).  Sits with the other slow
+      ! velocity-tendency computes; the kernel returns immediately when the
+      ! slot is disabled, so an ordinary run pays one host branch.
+      if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
+      ! Phase 4b: publish the ice-shelf base stress that BOTH boundary-
+      ! layer schemes take `u_*` from.  Under a shelf the wind has been
+      ! masked out of `tau` (so `stress_mag` is exactly 0 there) and the
+      ! turbulent boundary layer is driven by the ice-ocean stress
+      ! instead — `u_*^2 = |tau_top|/rho_0`.
+      !
+      ! Written INLINE as a `do concurrent`, not as a call handing
+      ! `ss%stress_shelf` to an external subroutine: a host-gated call
+      ! with a state array as an actual makes nvfortran treat the array
+      ! as escaping and pessimises every `do concurrent` in this routine
+      ! (CLAUDE.md, measured at +4.8%% on an inert porous pass).
+      !
+      ! Gated on `td%enable`, not `present(td)`: a DISABLED slot carries
+      ! a `(1,1)` placeholder `stress_top`.
+      !
+      ! Placed here — after the top-drag compute, before
+      ! `vmix_apply_in_stage` below — so KPP/EPBL read THIS stage's
+      ! stress.  No lag.
+      publish_shelf = .false.
+      if (present(td)) publish_shelf = td%enable
+      if (publish_shelf) then
+         nx_ss = size(ss%stress_shelf, 1)
+         ny_ss = size(ss%stress_shelf, 2)
+         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
+            ss%stress_shelf(i_ss, j_ss) = td%stress_top(i_ss, j_ss)
+         end do
+      end if
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)
 
       ! Horizontal step + tracer chain.  Continuity-tracer is
@@ -1111,14 +1227,33 @@ contains
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
+      ! Top drag: same double-count guard as the bed.  `implicit_fold`
+      ! (`&ocean_vdiff_nml implicit_top_drag`) folds the rate into the
+      ! vdiff `k = nz` diagonal instead, so the explicit apply is skipped
+      ! there.
+      if (present(td)) then
+         if (.not. td%implicit_fold) then
+            call ocean_top_drag_apply_tendencies(td, ms, dt, no_wait=.true.)
+         end if
+      end if
       if (.not. vd%implicit_stress) then
          call ocean_surface_stress_apply_tendencies(ss, ms, dt, no_wait=.true.)
       end if
 
       ! Surface tracer fluxes, geothermal bottom flux, ideal-age, vmix.
       call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      ! Ice-shelf real freshwater MASS (&ocean_cavity_melt_nml
+      ! freshwater='mass').  Immediately after the surface-flux apply,
+      ! because it REPLACES that apply's virtual cavity salt increment
+      ! with the real advective one and adds the meltwater volume + its
+      ! enthalpy in the same stage, at the same weight, from the same
+      ! `melt`.  Absent / disabled / 'virtual' => immediate return.
+      ! Weight 0.5 per SSP-RK2 stage, matching ocean_accumulate_mass_out.
+      if (present(cav)) then
+         call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, 0.5_wp, &
+                                     active=therm_active)
+      end if
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       ! Ideal-age interior aging only (PR-7): thermo-cadence gated, mirrors
       ! its tracer-kernel neighbours above.  The surface Dirichlet reset is
@@ -1138,11 +1273,79 @@ contains
       !$acc wait(1)
       ! No `bt_work` here: the unsplit path has no BT correction at all,
       ! so there is no consumer for visc_rem — do_remnant stays .false.
-      call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
-                               vmix_tidal=vmix_tidal, metrics=metrics)
+      ! The top-drag fold arrays are handed over as ARRAYS, not as the
+      ! slot: `td` is optional here, and dereferencing an absent
+      ! derived-type dummy is not allowed, whereas forwarding an absent
+      ! optional ARRAY dummy on to another optional dummy is.
+      !
+      ! GATED ON `implicit_fold`, NOT on `present(td)`.  A DISABLED
+      ! top-drag slot carries PLACEHOLDER-sized arrays, and the
+      ! explicit-shape `(nu, nv)` dummy down in
+      ! `diffuse_velocity_columns_impl` is mapped by nvfortran
+      ! UNCONDITIONALLY — the `if (do_top)` guard inside the kernel is a
+      ! runtime branch the compiler cannot see.  Handing over a `(2,1)`
+      ! placeholder therefore aborts the GPU build with "variable in data
+      ! clause is partially present", which is exactly what it did before
+      ! this gate.  The fold requires `&ocean_tdrag_nml enable`
+      ! (validate_config), so when it is on the arrays are full size.
+      fold_top = .false.
+      if (present(td)) fold_top = td%implicit_fold
+      if (fold_top) then
+         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
+                                  vmix_tidal=vmix_tidal, metrics=metrics, &
+                                  lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                  cover_u=td%cover_u, cover_v=td%cover_v)
+      else
+         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, kshear=kshear, &
+                                  vmix_tidal=vmix_tidal, metrics=metrics)
+      end if
    end subroutine run_stage
 
+   subroutine apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
+      !! The two cell-centred surface kernels that do NOT route through
+      !! the assembler's `Q_heat` / `Q_salt`, with their ice-shelf-cover
+      !! dispatch.  Shortwave penetration reads a pristine `q_sw`
+      !! component (or moves a lump the masked deposit never added) and
+      !! restoring forms its flux in-kernel from the live SST/SSS, so
+      !! each needs the cover factor of its own; everything else the
+      !! atmosphere contributes is already masked inside
+      !! `ocean_surface_flux_assemble`.
+      !!
+      !! Hoisted into its own routine rather than written inline in
+      !! `run_stage_split`: that routine hosts eight `do concurrent`
+      !! kernels, and handing a state array (`metrics%cover_frac`) to an
+      !! external subroutine from a `do concurrent` host is the
+      !! documented nvfortran escape-analysis pessimisation (CLAUDE.md,
+      !! measured at +4.8 % on `ocean_continuity`).  This wrapper has no
+      !! `do concurrent` of its own, so there is nothing to pessimise.
+      !!
+      !! Cavity off (`metrics%use_cavity = .false.`) ⇒ the original two
+      !! calls, byte-identical.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_surface_flux_t), intent(in), optional :: sf
+         !! Forwarded; absent ⇒ both kernels no-op (their own contract).
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: therm_dt
+      logical, intent(in) :: therm_active
+
+      if (metrics%use_cavity) then
+         call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, &
+                                                      active=therm_active, &
+                                                      cover_frac=metrics%cover_frac)
+         call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, &
+                                                  active=therm_active, &
+                                                  cover_frac=metrics%cover_frac)
+      else
+         call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, &
+                                                      active=therm_active)
+         call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, &
+                                                  active=therm_active)
+      end if
+   end subroutine apply_sw_and_restore
+
    subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, &
+                                  lambda_top_u, lambda_top_v, cover_u, cover_v, &
                                   apply_tracers, metrics)
       !! Bundle the per-stage vmix closure / KPP overlay / KV_ML_INVZ2 /
       !! assembly gate / vdiff dispatch into one routine so the run_stage
@@ -1218,6 +1421,27 @@ contains
          !! it, a one-stage (Δt/2) lag (see the step-9 call site below).
          !! Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.
 
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
+         !! Ice-shelf top-drag Rayleigh rate (1/s) at u / v faces — the
+         !! `ocean_top_drag_t` slot's `lambda_top_u/v`, forwarded
+         !! verbatim to `vdiff_apply_momentum`'s `k = nz` diagonal fold.
+         !! Passed as ARRAYS rather than the slot itself because the slot
+         !! is optional one level up: forwarding an absent optional
+         !! ARRAY dummy on to another optional dummy is legal Fortran,
+         !! whereas dereferencing an absent derived-type dummy is not.
+         !! Absent, or `vd%implicit_top_drag` off ⇒ bit-identical.
+         !!
+         !! EXPLICIT SHAPE, not `(:, :)`: the attribute has to hold on
+         !! EVERY frame that forwards the optional, or gfortran reinstates
+         !! the speculative pack (and its uninitialised packing flag) in
+         !! whichever frame still hands an assumed-shape actual down.  The
+         !! whole argument is written out on `vdiff_apply_momentum`.
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
+         !! Face ice-cover masks (the OR of the two abutting cells).
+         !! Present together with `lambda_top_*`; used to mask the wind
+         !! RHS off on covered faces.  Explicit-shape for the same reason.
       logical, intent(in), optional :: apply_tracers
          !! `.false.` = momentum-only: skip the tracer vdiff + KPP
          !! non-local applies regardless of the thermo gate.  The pred_corr
@@ -1362,6 +1586,8 @@ contains
                                          tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                          lambda_bot_u=bd%lambda_bot_u, &
                                          lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                         lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                         cover_u=cover_u, cover_v=cover_v, &
                                          visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v, &
                                          kv_corner_source=kshear%kd_corner, &
                                          kv_corner_prandtl=kshear%prandtl_turb)
@@ -1370,6 +1596,8 @@ contains
                                          tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                          lambda_bot_u=bd%lambda_bot_u, &
                                          lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                         lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                         cover_u=cover_u, cover_v=cover_v, &
                                          kv_corner_source=kshear%kd_corner, &
                                          kv_corner_prandtl=kshear%prandtl_turb)
             end if
@@ -1378,12 +1606,16 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v)
          else
             call vdiff_apply_momentum(grid, vd, ms, dt, kv_source=vmix%kv, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
-                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0)
+                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v)
          end if
          if (do_tracers .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
             call vdiff_apply_tracers(grid, vd, ms, dyn%therm_dt(dt), &
@@ -1400,12 +1632,16 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=bt_work%visc_rem_u, visc_rem_v=bt_work%visc_rem_v)
          else
             call vdiff_apply_momentum(grid, vd, ms, dt, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
-                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0)
+                                      lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v)
          end if
          if (do_tracers .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
             call vdiff_apply_tracers(grid, vd, ms, dyn%therm_dt(dt))
@@ -1414,7 +1650,8 @@ contains
       end if
    end subroutine vmix_apply_in_stage
 
-   subroutine visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear)
+   subroutine visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear, &
+                                  lambda_top_u, lambda_top_v, cover_u, cover_v)
       !! Refresh `bt_work%visc_rem_u/v` from the CURRENT stage state
       !! BEFORE the barotropic forcing assembly (PGF_BUG.md §9) — the
       !! MOM6-order parity (`vertvisc_coef` runs before `btstep` every
@@ -1442,6 +1679,17 @@ contains
       type(ocean_kappa_shear_t), intent(in), optional :: kshear
          !! Kappa-shear slot; only read when enabled + vertex mode
          !! (supplies the corner Kv source).
+      real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
+         !! Ice-shelf top-drag Rayleigh rate — forwarded so the REMNANT
+         !! is built from the same operator the stage-end momentum solve
+         !! will build.  A remnant built without a sink the solve has
+         !! would weight the barotropic corrector with a friction
+         !! operator that is not the one applied.  EXPLICIT SHAPE for the
+         !! reason spelled out on `vmix_apply_in_stage`'s twin dummies.
+      real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
+      real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
+         !! Face ice-cover masks, same reason.
 
       logical :: vertex_kv
 
@@ -1454,6 +1702,8 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=dyn%bt_work%visc_rem_u, &
                                       visc_rem_v=dyn%bt_work%visc_rem_v, &
                                       remnant_only=.true., &
@@ -1464,6 +1714,8 @@ contains
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                      lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                      cover_u=cover_u, cover_v=cover_v, &
                                       visc_rem_u=dyn%bt_work%visc_rem_u, &
                                       visc_rem_v=dyn%bt_work%visc_rem_v, &
                                       remnant_only=.true.)
@@ -1473,6 +1725,8 @@ contains
                                    tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                    lambda_bot_u=bd%lambda_bot_u, &
                                    lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
+                                   lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                   cover_u=cover_u, cover_v=cover_v, &
                                    visc_rem_u=dyn%bt_work%visc_rem_u, &
                                    visc_rem_v=dyn%bt_work%visc_rem_v, &
                                    remnant_only=.true.)
@@ -2116,6 +2370,15 @@ contains
       !! at a dynamically blocked (drying-front) face resets to zero, so
       !! rewetting starts from rest.  Knob off / absent ⇒ the ORIGINAL
       !! loops run untouched (byte-identical).
+      !!
+      !! When `&vcoord_nml zfixed_closed_faces` is on, the PER-LAYER
+      !! z-level mask `metrics%open_u/open_v` composes multiplicatively
+      !! too — this is the "no normal velocity" half of the z-level wall
+      !! (the "no mass or tracer flux" half is continuity's, and
+      !! "free-slip" is the horizontal-viscosity kernels').  It runs
+      !! AFTER `apply_bt_correction` at every call site, so a barotropic
+      !! increment can never be left behind at a closed face.  Knob off
+      !! ⇒ the ORIGINAL loops, byte-identical.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(multilayer_state_t), intent(inout) :: ms
@@ -2148,6 +2411,20 @@ contains
          end do
          do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
             ms%v_face_y_layer(i, j, k) = metrics%wet_v(i, j)*ms%v_face_y_layer(i, j, k)
+         end do
+      end if
+
+      ! z-level closed faces: a SEPARATE host-gated pass, not folded into
+      ! the branches above, so neither the all-wet nor the wet/dry loop
+      ! changes textually when the knob is off.
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
+            ms%u_face_x_layer(i, j, k) = metrics%open_u(i, j, k)* &
+                                         ms%u_face_x_layer(i, j, k)
+         end do
+         do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
+            ms%v_face_y_layer(i, j, k) = metrics%open_v(i, j, k)* &
+                                         ms%v_face_y_layer(i, j, k)
          end do
       end if
    end subroutine mask_layer_velocities
@@ -2231,7 +2508,7 @@ contains
    subroutine ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, dt, n_inner, sf, geo, vcoord, bc, sp, t, &
                                    lateral_mix, epbl, kshear, mle, slopes, gm, varmix, wavespeed, &
-                                   redi, meke, vmix_tidal, tides, psurf)
+                                   redi, meke, vmix_tidal, tides, psurf, td, cav)
       !! Split-explicit SSP-RK2 outer step on the multilayer state.
       !! Parallel to `ocean_dyn_step` (the unsplit driver
       !! still ships for tests + reference).  Phase 4b-MVP scope:
@@ -2279,6 +2556,24 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -2386,7 +2681,7 @@ contains
       integer :: it, stage
       integer :: i, j, nx_ptop, ny_ptop
          !! Loop indices + extents for the E3 `ms%p_top` refresh below.
-      logical :: tide_on, psurf_on, psurf_eos_on
+      logical :: tide_on, psurf_on, p_top_live
       real(wp) :: t_now
          !! Model time (s) for `ocean_ideal_age_young_val`; `t` fallback (PR-7).
       integer :: nan_i, nan_j, nan_k
@@ -2473,6 +2768,31 @@ contains
       ! per outer step, before the PGF of the step and held static across
       ! the stages.
       !
+      ! P5.0: the SAME refresh also covers `&ocean_pgf_nml p_top_in_bc`,
+      ! the second consumer of `ms%p_top` — it puts the load in the
+      ! FV_MOM6 pressure-stack surface BC (`pa(nz+1)`), independently of
+      ! whether it also reaches the EOS arguments.  The gate is the
+      ! DISJUNCTION so neither consumer can ever read a p_top that the
+      ! configure-time seed left behind while `sf%p_surf` moved on.
+      !
+      ! P5.2 completes the PARTITION: the assembled top-of-column load is
+      !
+      !     ms%p_top = metrics%p_ice_ref + sf%p_surf
+      !
+      ! — the STATIC isostatic ice load (absorbed into the barotropic
+      ! datum `bt_H_ref = b - z_draft`, and therefore deliberately NOT a
+      ! component of `sf%p_surf`, which the `eta_ib` seam is built from)
+      ! plus whatever atmospheric / anomaly load the psurf seam carries.
+      ! Without the cavity term this refresh would OVERWRITE the
+      ! configure-time ice load with `p_surf` alone on step 1, silently
+      ! unloading the column for every consumer of `p_top`.
+      !
+      ! A cavity WITHOUT the psurf seam needs no refresh at all: the
+      ! draft is static, so the configure-time seed in
+      ! `configure_ocean_cavity` is already the final value and this
+      ! whole block stays switched off (`psurf_on = .false.`).  That is
+      ! why the gate below is still the psurf gate.
+      !
       ! Written INLINE as a `do concurrent` rather than as a call: a
       ! host-gated call handing a state array to an EXTERNAL subroutine
       ! makes nvfortran treat that array as escaping and pessimises EVERY
@@ -2480,17 +2800,29 @@ contains
       ! taken (CLAUDE.md, measured at +4.8 % on `ocean_continuity`).
       ! The copy spans the WHOLE array, ghosts included, so `p_top`
       ! inherits exactly the halo validity `p_surf` has and needs no
-      ! exchange of its own.
-      psurf_eos_on = .false.
+      ! exchange of its own (`p_ice_ref` is ghost-filled at configure,
+      ! from a `z_draft` that went through the bathymetry's own re-wrap
+      ! and halo exchange).
+      p_top_live = .false.
       if (psurf_on) then
-         if (psurf%in_eos) psurf_eos_on = .true.
+         if (psurf%in_eos .or. pgf%p_top_in_bc) p_top_live = .true.
       end if
-      if (psurf_eos_on) then
+      if (p_top_live) then
          nx_ptop = size(ms%p_top, 1)
          ny_ptop = size(ms%p_top, 2)
-         do concurrent(j=1:ny_ptop, i=1:nx_ptop)
-            ms%p_top(i, j) = sf%p_surf(i, j)
-         end do
+         ! Two inline loops rather than one with a branch on `use_cavity`:
+         ! without a cavity `p_ice_ref` is a `(1,1)` PLACEHOLDER, so the
+         ! cavity spelling may not even be written in a form the compiler
+         ! could speculate an index out of.
+         if (metrics%use_cavity) then
+            do concurrent(j=1:ny_ptop, i=1:nx_ptop)
+               ms%p_top(i, j) = metrics%p_ice_ref(i, j) + sf%p_surf(i, j)
+            end do
+         else
+            do concurrent(j=1:ny_ptop, i=1:nx_ptop)
+               ms%p_top(i, j) = sf%p_surf(i, j)
+            end do
+         end if
       end if
 
       call probe_dS(grid, ms, "outer step entry", 0, dyn%outer_step_count + 1)
@@ -2682,20 +3014,21 @@ contains
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=psurf%eta_seam)
+                                 eta_forcing=psurf%eta_seam, td=td, cav=cav)
          else if (tide_on) then
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
-                                 eta_forcing=tides%eta_forcing)
+                                 eta_forcing=tides%eta_forcing, td=td, cav=cav)
          else
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
                                  lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
-                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke)
+                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, td=td, &
+                                 cav=cav)
          end if
          ! pred_corr between-stage reset (SPEC §2): the predictor's
          ! provisional up/vp/hp are discarded — only u_av/v_av/h_av carry
@@ -2850,6 +3183,21 @@ contains
                                                dyn%outer_step_count + 1)
          call profiler_stop("ocean_ale_remap")
          call probe_dS(grid, ms, "after ALE remap", 3, dyn%outer_step_count + 1)
+         ! z-level closed faces: the ALE remap is the LAST velocity writer
+         ! of the outer step, and it is a COLUMN operator -- it redistributes
+         ! momentum along a face column without consulting any horizontal
+         ! mask.  Its own `min(h_L,h_R)` face column (see
+         ! `remap_x_face_velocity`) already gives a closed layer an
+         ! exactly-zero target so nothing is poured IN, but the layers
+         ! ABOVE and BELOW it still shift, and a PPM reconstruction whose
+         ! stencil straddles the gap can leave a non-zero value in the
+         ! zero-thickness cell.  Re-assert the wall here: a closed face
+         ! carries exactly zero normal velocity at the END of the step, not
+         ! merely at the end of the last stage.  Gated inside
+         ! `mask_layer_velocities`, so this is a no-op with the knob off.
+         if (metrics%use_closed_faces) then
+            call mask_layer_velocities(grid, metrics, ms, bt_work=dyn%bt_work)
+         end if
       end if
 
       ! Ideal-age surface reset (PR-7): the Dirichlet BC `age = young_val`
@@ -3482,7 +3830,7 @@ contains
    subroutine run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                               va, hd, vd, vmix, ms, dt, n_inner, sf, geo, stage, vcoord, bc, sp, t, &
                               lateral_mix, epbl, kshear, mle, gm, redi, varmix, vmix_tidal, meke, &
-                              eta_forcing)
+                              eta_forcing, td, cav)
       !! One FE stage of the split-explicit step.  See the
       !! `ocean_dyn_step_split` header for the design.
       type(hgrid_t), intent(in) :: grid
@@ -3496,6 +3844,24 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_bottom_drag_t), intent(inout) :: bd
+      type(ocean_top_drag_t), intent(inout), optional :: td
+         !! Ice-shelf TOP-drag slot (`&ocean_tdrag_nml`).  OPTIONAL so the
+         !! many direct `ocean_dyn_step*` / `run_stage*` call sites in the
+         !! test suite need no churn; the production driver always passes
+         !! it.  Absent, or present and disabled, => no kernel launch and
+         !! a bit-identical step.
+      type(ocean_cavity_flux_t), intent(inout), optional :: cav
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`).
+         !! OPTIONAL for the same reason `td` is: the direct
+         !! `ocean_dyn_step*` / `run_stage*` call sites in the test suite
+         !! need no churn, and the production driver always passes it.
+         !! Absent, disabled, or `freshwater="virtual"` => no kernel
+         !! launch and a bit-identical step.  It is threaded down here
+         !! rather than acted on in `engine_step_finalize` because the
+         !! real-freshwater volume must be spent in the SAME stage, at
+         !! the SAME stage weight and from the SAME `melt` value as the
+         !! salt and heat halves the surface-flux apply spends -- see
+         !! `ocean_cavity_mass_step`'s docstring.
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
@@ -3586,10 +3952,24 @@ contains
          !! .true. when the map-driven sponge (PR-23) supersedes the legacy
          !! band path. A local logical because Fortran does not guarantee
          !! `.and.` short-circuits past `present()`.
+      logical :: fold_top
+         !! `.true.` when the ice-shelf top drag is folded into the vdiff
+         !! `k = nz` diagonal.  Tested instead of `present(td)` because a
+         !! DISABLED top-drag slot carries placeholder-sized arrays, and
+         !! the explicit-shape dummy they would reach in
+         !! `diffuse_velocity_columns_impl` is device-mapped
+         !! unconditionally — see the note in `run_stage`.
+      logical :: publish_shelf
+         !! `.true.` when the ice-shelf top-drag slot is live and its
+         !! `stress_top` is therefore full-sized and freshly written.
+      integer :: i_ss, j_ss, nx_ss, ny_ss
+         !! Loop/extent locals for the inline `stress_shelf` publish.
       real(wp) :: dt_inner, therm_dt
       real(wp) :: h_min_floor
       real(wp) :: chain_weight, dt_vel
 
+      fold_top = .false.
+      if (present(td)) fold_top = td%implicit_fold
       stage_id = 0
       if (present(stage)) stage_id = stage
       ! Probes label the OUTER step we're INSIDE — i.e. the one
@@ -3695,7 +4075,7 @@ contains
       call chksum_state(grid, ms, dyn%chksum_probe, "entry", stage_id, step_id)
 
       ! ---- 1. Snapshot u_bt^n, v_bt^n at start of stage ----
-      call derive_bt_from_layers(grid, dyn%bt_work, ms)
+      call derive_bt_from_layers(grid, dyn%bt_work, ms, metrics)
       ! Build the per-face upstream-PPM column-sum thickness on the
       ! same snapshot.  No-op when `use_upstream_h_face = .false.`;
       ! otherwise feeds the BT substep + corrector with the same
@@ -3825,6 +4205,35 @@ contains
       call profiler_start("ocean_bdrag")
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, dt)
       call ocean_channel_drag_compute_tendencies(grid, metrics, bd, ms)
+      ! Ice-shelf top drag (`&ocean_tdrag_nml`) — see `run_stage`.
+      if (present(td)) call ocean_top_drag_compute_tendencies(td, ms, dt)
+      ! Phase 4b: publish the ice-shelf base stress that BOTH boundary-
+      ! layer schemes take `u_*` from.  Under a shelf the wind has been
+      ! masked out of `tau` (so `stress_mag` is exactly 0 there) and the
+      ! turbulent boundary layer is driven by the ice-ocean stress
+      ! instead — `u_*^2 = |tau_top|/rho_0`.
+      !
+      ! Written INLINE as a `do concurrent`, not as a call handing
+      ! `ss%stress_shelf` to an external subroutine: a host-gated call
+      ! with a state array as an actual makes nvfortran treat the array
+      ! as escaping and pessimises every `do concurrent` in this routine
+      ! (CLAUDE.md, measured at +4.8%% on an inert porous pass).
+      !
+      ! Gated on `td%enable`, not `present(td)`: a DISABLED slot carries
+      ! a `(1,1)` placeholder `stress_top`.
+      !
+      ! Placed here — after the top-drag compute, before
+      ! `vmix_apply_in_stage` below — so KPP/EPBL read THIS stage's
+      ! stress.  No lag.
+      publish_shelf = .false.
+      if (present(td)) publish_shelf = td%enable
+      if (publish_shelf) then
+         nx_ss = size(ss%stress_shelf, 1)
+         ny_ss = size(ss%stress_shelf, 2)
+         do concurrent(j_ss=1:ny_ss, i_ss=1:nx_ss)
+            ss%stress_shelf(i_ss, j_ss) = td%stress_top(i_ss, j_ss)
+         end do
+      end if
       call profiler_stop("ocean_bdrag")
       call profiler_start("ocean_surfstress")
       call ocean_surface_stress_compute_tendencies(grid, ss, ms)
@@ -3884,9 +4293,22 @@ contains
       ! predictor BEFORE btstep/continuity (SPEC §2 P5).
       if (dyn%bt_work%bt_forcing_visc_rem .or. dyn%bt_work%bt_renorm_visc_rem &
           .or. is_pc) then
-         call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
+         if (fold_top) then
+            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
+         end if
       end if
       call sum_slow_tendencies_into_F_slow(dyn%bt_work, pgf, cor, hv, bd, ss, ms)
+      ! The top drag MUST reach the barotropic mode the same way the
+      ! bottom drag does — through the depth mean of `F_slow`, which the
+      ! substep integrates and `apply_bt_correction` then subtracts back
+      ! out.  See `add_top_drag_into_F_slow`'s docstring for why a
+      ! tendency left out of this sum is both invisible to the fast loop
+      ! and mis-corrected on the layers.
+      if (present(td)) call add_top_drag_into_F_slow(dyn%bt_work, td, ms)
       ! MOM6 wt_u parity (`&ocean_bt_nml forcing_visc_rem`): weight the
       ! forcing depth-mean by h·visc_rem so layers the implicit friction
       ! will immediately damp (grounded stacks under the vdiff BBL glue)
@@ -3899,12 +4321,12 @@ contains
       ! first stage degenerates to the plain h-mean.
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
          call face_depth_mean_rem_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
       else
-         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml)
-         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml)
+         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
+         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
       end if
       ! Subtract the bt projection of the PGF: the barotropic substep has
       ! its own `-G·∂η/∂x` term, so without this subtraction the
@@ -3912,12 +4334,12 @@ contains
       ! √(2gH).
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, pgf%dpdx_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
          call face_depth_mean_rem_v(grid, pgf%dpdy_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
       else
-         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml)
-         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml)
+         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
+         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
       end if
       do concurrent(j=1:ny_uface, i=1:nx_face)
          dyn%bt_work%F_bt_u_fast(i, j) = dyn%bt_work%F_bt_u(i, j) - dyn%bt_work%F_bt_u_fast(i, j)
@@ -3953,7 +4375,7 @@ contains
          ! depth-mean above used.  Without this the uncancelled
          ! `f × (v̄_av − v̄^n)` forces every substep and pumps the basin's
          ! gravest Poincaré seiche (see `set_cor_ref_velocity`).
-         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc)
+         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc, metrics)
          call subtract_fast_cor_ref(grid, metrics, dyn%bt_work, cor%f_corner, &
                                     bc_w_drv, bc_e_drv, bc_s_drv, bc_n_drv, &
                                     has_w_drv, has_e_drv, has_s_drv, has_n_drv)
@@ -4145,6 +4567,12 @@ contains
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)
+      ! Top drag: same double-count guard as the bed (see `run_stage`).
+      if (present(td)) then
+         if (.not. td%implicit_fold) then
+            call ocean_top_drag_apply_tendencies(td, ms, dt_vel, no_wait=.true.)
+         end if
+      end if
       if (.not. vd%implicit_stress) then
          call ocean_surface_stress_apply_tendencies(ss, ms, dt_vel, no_wait=.true.)
       end if
@@ -4256,8 +4684,17 @@ contains
       else
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
       end if
-      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, therm_dt, active=therm_active)
-      call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+      ! Ice-shelf real freshwater MASS -- see the identical block in
+      ! `run_stage`.  `chain_weight` is the SAME per-stage weight the
+      ! continuity chain's `ocean_accumulate_mass_out` uses (0.5 per
+      ! SSP-RK2 stage; 0 / 1 for the pred_corr predictor / corrector), so
+      ! the tracked mass source and the tracked boundary outflux are
+      ! weighted alike and the console residual closes.
+      if (present(cav)) then
+         call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, chain_weight, &
+                                     active=therm_active)
+      end if
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       call probe_dS(grid, ms, "after surface flux", stage_id, step_id)
       ! Ideal-age tracer: interior aging only (1 s/s), thermo-cadence
@@ -4294,13 +4731,29 @@ contains
       ! predictor continuity forms u_av.  Momentum-only there (tracers
       ! untouched); dt_vel = BE·dt matches MOM6's dt_pred.
       if (is_pred) then
-         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
-                                  kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                  apply_tracers=.false., metrics=metrics)
+         if (fold_top) then
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     apply_tracers=.false., metrics=metrics, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     apply_tracers=.false., metrics=metrics)
+         end if
       else
-         call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
-                                  kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                  metrics=metrics)
+         if (fold_top) then
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     metrics=metrics, &
+                                     lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
+                                     cover_u=td%cover_u, cover_v=td%cover_v)
+         else
+            call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
+                                     kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
+                                     metrics=metrics)
+         end if
       end if
       ! KE attribution: implicit vertical friction (+ folded drag/stress
       ! when implicit_*) — the stage-close segment (debug_ke_attr).

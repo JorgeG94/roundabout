@@ -8,7 +8,7 @@ module rdb_ocean_state
    !! requires wiring it into both.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, LAND_DEPTH_THRESHOLD, GRAVITY, H_VANISHED, H_DIV_EPS, &
-                            DEG2RAD, TWO_PI
+                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED
    use rdb_grid, only: hgrid_t
    use pic_logger, only: logger => global_logger
    use rdb_error_ring, only: fail
@@ -37,8 +37,10 @@ module rdb_ocean_state
    use rdb_ocean_meke, only: ocean_meke_t
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
+   use rdb_ocean_top_drag, only: ocean_top_drag_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
+   use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t
    use rdb_ocean_vertical_advection, only: ocean_vertical_advection_t
    use rdb_ocean_hdiff_tracer, only: ocean_hdiff_tracer_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t
@@ -57,12 +59,23 @@ module rdb_ocean_state
 #ifndef RDB_NO_NETCDF
    use rdb_ocean_restart_io, only: ocean_restart_write_local, ocean_restart_read_local, &
                                    ocean_restart_metadata_t
-   use rdb_ocean_data_input, only: ocean_data_input_t
+   use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_load_static_2d
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
 #endif
    use rdb_decomp, only: decomp_t
-   use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type
+   use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
+                               ocean_vcoord_z_fixed_target
    use rdb_ocean_metrics, only: ocean_metrics_t
+   use rdb_ocean_cavity, only: parse_cavity_draft_config, parse_cavity_draft_source, &
+                               CAVITY_DRAFT_NONE, CAVITY_DRAFT_FLAT, CAVITY_DRAFT_LINEAR, &
+                               CAVITY_DRAFT_FILE, &
+                               CAVITY_SOURCE_DRAFT, CAVITY_SOURCE_THICKNESS, &
+                               set_draft_flat, set_draft_linear, &
+                               parse_cavity_draft_sign, cavity_draft_apply_sign, &
+                               CAVITY_SIGN_INVALID, &
+                               cavity_water_column_impl, cavity_apply_land_exclusion, &
+                               cavity_count_grounded, cavity_fill_cover_frac, &
+                               cavity_draft_is_finite_nonneg, CAVITY_BOUND_INF
    use rdb_config, only: config_t, ice_hlim_count
    use rdb_profiler, only: profiler_start, profiler_stop
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IC_SEED, &
@@ -72,7 +85,7 @@ module rdb_ocean_state
    use rdb_ocean_bathymetry_inject, only: bathymetry_normalise_sign, bathymetry_fill_ghosts_array
 #ifndef RDB_NO_NETCDF
    use rdb_bathymetry, only: load_bathymetry_into_array
-   use rdb_ocean_z_init, only: seed_ts_from_zfile
+   use rdb_ocean_z_init, only: seed_ts_from_zfile, seed_ts_linear_z
 #endif
    implicit none
    private
@@ -95,9 +108,53 @@ module rdb_ocean_state
    public :: topo_length_to_grid_units
    public :: set_bathymetry_neverworld2
    public :: set_bathymetry_island
+   public :: set_bathymetry_isomip_plus
+   public :: isomip_plus_bx, isomip_plus_by
+   public :: ISOMIP_B0, ISOMIP_B2, ISOMIP_B4, ISOMIP_B6
+   public :: ISOMIP_XBAR, ISOMIP_DC, ISOMIP_FC, ISOMIP_WC, ISOMIP_ZB_DEEP
    public :: apply_layer_rho_init
    public :: ocean_linear_layer_density
    public :: pgf_nonoverlap_gate_on
+
+   ! ==================================================================
+   ! MISMIP+ / ISOMIP+ bedrock coefficients
+   !
+   ! Asay-Davis, Cornford, Durand, Galton-Fenzi, Gladstone, Gudmundsson,
+   ! Hattermann, Holland, Holland, Holland, Martin, Mathiot, Pattyn and
+   ! Seroussi (2016), "Experimental design for three interrelated marine
+   ! ice sheet and ocean model intercomparison projects: MISMIP v. 3
+   ! (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1)",
+   ! Geosci. Model Dev. 9, 2471-2497, doi:10.5194/gmd-9-2471-2016.
+   !
+   ! Table 1 (MISMIP+ parameters); the bed itself is their Eqs. (1)-(4).
+   ! ISOMIP+ reuses it verbatim ("The bathymetry is the same as in
+   ! Eq. (1)", their Sect. 3.1.1).  Every value below is METRES and is
+   ! an ELEVATION coefficient (z positive UP, sea level at z = 0) —
+   ! Roundabout's `b` is the opposite sign convention, which is why the
+   ! setter negates at the very end and nowhere else.
+   ! ==================================================================
+   real(wp), parameter :: ISOMIP_B0 = -150.0_wp
+      !! `B0`, bedrock elevation at x = 0 (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B2 = -728.8_wp
+      !! `B2`, second bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B4 = 343.91_wp
+      !! `B4`, third bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_B6 = -50.57_wp
+      !! `B6`, fourth bedrock coefficient (m).  Table 1.
+   real(wp), parameter :: ISOMIP_XBAR = 300.0e3_wp
+      !! `x_bar`, along-flow length scale of the bedrock (m).  Table 1.
+   real(wp), parameter :: ISOMIP_DC = 500.0_wp
+      !! `d_c`, depth of the trough relative to the side walls (m).  Table 1.
+   real(wp), parameter :: ISOMIP_FC = 4.0e3_wp
+      !! `f_c`, characteristic width of the channel side walls (m).  Table 1.
+   real(wp), parameter :: ISOMIP_WC = 24.0e3_wp
+      !! `w_c`, half-width of the trough (m).  Table 1.
+   real(wp), parameter :: ISOMIP_ZB_DEEP = -720.0_wp
+      !! `z_b,deep`, maximum depth of the bedrock (m, ELEVATION so
+      !! negative).  Table 1.  The dispatch does NOT hard-code this: the
+      !! clip comes from `&ocean_topo_nml max_depth`, so the protocol
+      !! value is `max_depth = 720.0`.  Exported for the unit test and
+      !! for anyone writing an ISOMIP+ namelist.
 
    type :: ocean_state_t
       logical :: is_init = .false.
@@ -179,8 +236,18 @@ module rdb_ocean_state
       type(ocean_bottom_drag_t) :: bdrag
          !! Bottom-drag kernel (linear Rayleigh or quadratic log-layer).
          !! Acts on the k=1 layer only.
+      type(ocean_top_drag_t) :: tdrag
+         !! Ice-shelf TOP-drag kernel (`&ocean_tdrag_nml`, default off).
+         !! The mirror of `bdrag` at `k = nz`, masked by ice cover on
+         !! faces.  Off ⇒ placeholder arrays, no kernel.
       type(ocean_surface_stress_t) :: surface_stress
          !! Surface wind-stress kernel.  Acts on the k=nz layer only.
+      type(ocean_cavity_flux_t) :: cavity_flux
+         !! Ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`, default
+         !! off).  Holds the sampled far field, `u*`, the interface
+         !! state, the melt mass flux and the per-column solver status;
+         !! its driver fills `surface_flux%heat_cavity`/`salt_cavity`.
+         !! Gated: off ⇒ `(1,1)` placeholders, no kernel, bit-identical.
       type(ocean_surface_flux_t) :: surface_flux
          !! Surface heat + salt flux slot.  2D `Q_heat(:,:)` / `Q_salt(:,:)`
          !! (W/m^2 and kg/m^2/s, positive downward / salinifying).  Seeded
@@ -353,8 +420,10 @@ contains
          call this%pressure_force%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%hvisc%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%bdrag%init(grid, nz_ml=this%multilayer%nz_ml)
+         call this%tdrag%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_stress%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%surface_flux%init(grid)
+         call this%cavity_flux%init(grid)
          call this%vert_advect%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%hdiff_tracer%init(grid, nz_ml=this%multilayer%nz_ml)
          call this%vdiff%init(grid, nz_ml=this%multilayer%nz_ml)
@@ -364,8 +433,10 @@ contains
          call this%pressure_force%init(grid)
          call this%hvisc%init(grid)
          call this%bdrag%init(grid)
+         call this%tdrag%init(grid)
          call this%surface_stress%init(grid)
          call this%surface_flux%init(grid)
+         call this%cavity_flux%init(grid)
          call this%vert_advect%init(grid)
          call this%hdiff_tracer%init(grid)
          call this%vdiff%init(grid)
@@ -473,6 +544,19 @@ contains
       this%pressure_force%skip_nonoverlap = &
          pgf_nonoverlap_gate_on(cfg, this%pressure_force%variant)
       this%pressure_force%scratch_gated = .true.
+      ! Ice-shelf cavity geometry: `use_cavity` gates the allocation of
+      ! the three static metrics fields (`z_draft`, `cover_frac`,
+      ! `p_ice_ref`), so it latches HERE — and it has to be earlier than
+      ! most: the draft is filled inside `ocean_state_seed_from_cfg`,
+      ! which is the first thing the engine does after this, long before
+      ! any `configure_ocean_*` pass.  Off ⇒ three `(1,1)` placeholders.
+      this%metrics%use_cavity = cfg%ocean%cavity_dyn%enable
+      ! Ice-shelf basal melt: the melt slot's own gate, latched here for
+      ! the same reason (its `init` sizes eleven 2-D arrays off it).
+      this%cavity_flux%enable = cfg%ocean%cavity_melt%enable
+      ! Ice-shelf top drag: same gate discipline — its `init` sizes the
+      ! two face scratch buffers and five 2-D fields off `enable`.
+      this%tdrag%enable = cfg%ocean%tdrag%enable
       this%epbl%enable = cfg%ocean%epbl%enable
       this%kshear%enable = cfg%ocean%kshear%enable
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
@@ -532,7 +616,18 @@ contains
       ! in rdb_ocean_data_input's module docstring).
       call this%data_input%init(cfg%ocean%data)
 #endif
+      ! Linear-EOS reference state, all five members off `&ocean_ic_nml`.
+      ! This runs before `ocean_state_enter_data` AND before the
+      ! `configure_ocean_*` pass that copies the whole flat-POD handle
+      ! onto the closure slots that carry their own copy
+      ! (`vmix%eos`, `epbl%eos`, `kshear%eos`, `tidal_mixing%eos` —
+      ! `rdb_ocean_setup.F90`), so every rider and every device kernel
+      ! that takes `eos_t` by value sees the configured values.  Defaults
+      ! equal the `eos_t` component defaults ⇒ bit-identical.
       this%eos%alpha_T = cfg%ocean%ic%alpha_T
+      this%eos%beta_S = cfg%ocean%ic%beta_S
+      this%eos%T_ref = cfg%ocean%ic%T_ref
+      this%eos%S_ref = cfg%ocean%ic%S_ref
       this%eos%rho0 = cfg%ocean%ic%rho_0
       ! EPBL master switch is read here (before the configure_ocean_*
       ! pass) because diag registration — which gates the MLD_EPBL /
@@ -647,8 +742,10 @@ contains
                + this%lateral_mix%bytes() &
                + this%hvisc%bytes() &
                + this%bdrag%bytes() &
+               + this%tdrag%bytes() &
                + this%surface_stress%bytes() &
                + this%surface_flux%bytes() &
+               + this%cavity_flux%bytes() &
                + this%vert_advect%bytes() &
                + this%hdiff_tracer%bytes() &
                + this%vdiff%bytes() &
@@ -714,12 +811,14 @@ contains
       call profiler_stop("ed_hvisc")
       call profiler_start("ed_bdrag", nvtx_only=.true.)
       call state%bdrag%enter_data()
+      call state%tdrag%enter_data()
       call profiler_stop("ed_bdrag")
       call profiler_start("ed_surface_stress", nvtx_only=.true.)
       call state%surface_stress%enter_data()
       call profiler_stop("ed_surface_stress")
       call profiler_start("ed_surface_flux", nvtx_only=.true.)
       call state%surface_flux%enter_data()
+      call state%cavity_flux%enter_data()
       call profiler_stop("ed_surface_flux")
       call profiler_start("ed_vert_advect", nvtx_only=.true.)
       call state%vert_advect%enter_data()
@@ -878,12 +977,14 @@ contains
       call state%vert_advect%exit_data()
       call profiler_stop("xd_vert_advect")
       call profiler_start("xd_surface_flux", nvtx_only=.true.)
+      call state%cavity_flux%exit_data()
       call state%surface_flux%exit_data()
       call profiler_stop("xd_surface_flux")
       call profiler_start("xd_surface_stress", nvtx_only=.true.)
       call state%surface_stress%exit_data()
       call profiler_stop("xd_surface_stress")
       call profiler_start("xd_bdrag", nvtx_only=.true.)
+      call state%tdrag%exit_data()
       call state%bdrag%exit_data()
       call profiler_stop("xd_bdrag")
       call profiler_start("xd_hvisc", nvtx_only=.true.)
@@ -944,6 +1045,8 @@ contains
       call this%vmix_tidal%destroy()
       call this%hvisc%destroy()
       call this%bdrag%destroy()
+      call this%tdrag%destroy()
+      call this%cavity_flux%destroy()
       call this%surface_flux%destroy()
       call this%surface_stress%destroy()
       call this%vert_advect%destroy()
@@ -1010,6 +1113,10 @@ contains
          !! `_HEIGHT_POSITIVE_UP` (`rdb_ocean_bathymetry_inject`).
 
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
+      real(wp), allocatable :: water(:, :)
+         !! Reference water-column thickness the IC seeds work on:
+         !! `b − z_draft` under an ice shelf, a byte copy of `b`
+         !! otherwise.  Host-only setup scratch, released on return.
 
       nz_ml = state%multilayer%nz_ml
       idx_S = state%multilayer%idx_salinity
@@ -1092,6 +1199,22 @@ contains
             call set_bathymetry_double_drake(state%barotropic%b, grid, &
                                              cfg%ocean%topo%max_depth, &
                                              cfg%ocean%topo%slope_scale)
+         case ("isomip_plus")
+            ! MISMIP+/ISOMIP+ analytic bedrock (Asay-Davis et al. 2016,
+            ! Eqs. 1-4 + Table 1).  `max_depth` IS the deep clip
+            ! (`-z_b,deep`, protocol 720 m) and `x_origin` places the
+            ! model's west edge on the paper's absolute x axis (protocol
+            ! 320 km).  The formula is written in METRES, so the setter
+            ! is handed metres-per-grid-unit rather than a converted
+            ! length: `topo_length_to_grid_units(1, ...)` is grid units
+            ! per metre, and this is its reciprocal (exactly 1 on a
+            ! Cartesian grid).
+            call set_bathymetry_isomip_plus(state%barotropic%b, grid, &
+                                            cfg%ocean%topo%max_depth, &
+                                            cfg%ocean%topo%x_origin, &
+                                            1.0_wp/topo_length_to_grid_units(1.0_wp, &
+                                                                             cfg%ocean%grid%grid_config, &
+                                                                             cfg%ocean%grid%rad_earth))
          case ("file")
             ! Real bathymetry from NetCDF.  File must be pre-projected onto
             ! the model's Cartesian grid (matching nx_phys × ny_phys); the
@@ -1132,8 +1255,38 @@ contains
          end select
       end if
 
-      ! Water column thickness h = b → SSH (h − b) starts at zero.
-      state%barotropic%h = state%barotropic%b
+      ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
+      ! ORDERING IS LOAD-BEARING and this is the only place it can go: the
+      ! draft must exist before the water column `b − z_draft` seeds the
+      ! layer split and the wet mask (grounding), both of which happen a
+      ! few lines below, and long before any `configure_ocean_*` pass.
+      ! The formula setters fill the FULL array including ghosts; the
+      ! periodic/fold re-wrap + halo exchange that `barotropic%b` gets are
+      ! applied to `z_draft` alongside it in `rdb_ocean_engine`.
+      !
+      ! `water` is the reference water-column thickness every seed below
+      ! works on.  With the knob off it is a byte copy of `b`, so there is
+      ! ONE code path and the default run is bit-identical.
+      allocate (water(nx, ny))
+      if (state%metrics%use_cavity) then
+         call seed_cavity_draft(state, grid, cfg, ierr=local_ierr)
+         if (local_ierr /= OCEAN_STATUS_OK) then
+            if (present(ierr)) then
+               ierr = local_ierr
+               return
+            end if
+            error stop "ocean_state_seed_from_cfg: ice-shelf cavity geometry failed"
+         end if
+         call cavity_water_column_impl(water, state%barotropic%b, &
+                                       state%metrics%z_draft, nx, ny)
+      else
+         water = state%barotropic%b
+      end if
+
+      ! Water column thickness h = b − z_draft → the free-surface anomaly
+      ! `bt_eta = Σ h_layer − bt_H_ref` starts at zero (SSH = 0 without a
+      ! cavity; the loaded equilibrium under one).
+      state%barotropic%h = water
       state%barotropic%u_face_x = 0.0_wp
       state%barotropic%v_face_y = 0.0_wp
       state%barotropic%hu_face_x = 0.0_wp
@@ -1155,14 +1308,57 @@ contains
       ! horizontally-uniform density stack).  Validated as mutually exclusive
       ! with wet/dry, so the two branches never both need the emerged-column
       ! floor.  Default "sigma" ⇒ byte-identical to the pre-knob path.
+      !
+      ! THIRD BRANCH — `VCOORD_Z_FIXED` under a cavity.  The running
+      ! coordinate there is quasi-geopotential with inert fillers inside
+      ! the ice, so a sigma-style seed is NOT on the coordinate: the very
+      ! first ALE remap would relamp the whole column in one step, and a
+      ! T/S profile that `&ocean_zinit_nml source="linear"` made exactly
+      ! linear in geopotential z would come back through the PPM boundary
+      ! closure NOT exactly linear — column by column, because the draft
+      ! (and so the cut) differs column to column.  That difference IS a
+      ! horizontal density gradient, i.e. exactly the spurious rest
+      ! current this coordinate exists to remove.  So seed `h_layer`
+      ! directly FROM the target (`η = 0`, which is the cavity datum's
+      ! own resting state) and let the zinit overlay evaluate T/S at
+      ! those layer centres: exact by construction, first remap an
+      ! identity, no step-1 regrid shock.
+      !
+      ! Fenced to the cavity so every existing `z_fixed` namelist keeps
+      ! its sigma-style seed bit-for-bit; `z_fixed` × cavity is a
+      ! configuration `validate_config` refused outright until now.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
-                                          state%barotropic%b, nz_ml, &
+                                          water, nz_ml, &
                                           cfg%ocean%topo%max_depth, &
                                           cfg%ocean%isopycnal%angstrom_h)
+      else if (state%metrics%use_cavity .and. &
+               parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .and. &
+               cfg%ocean%topo%max_depth > 0.0_wp) then
+         block
+            real(wp) :: h_min_seed
+            real(wp), allocatable :: eta_rest(:, :)
+            allocate (eta_rest(nx, ny), source=0.0_wp)
+            ! `zstar_h_min` comes off the SLOT, not off `cfg`: there is
+            ! one source of truth for the filler thickness and it is the
+            ! one the running target builder will use.  `engine_setup`
+            ! copies both `zstar_*` knobs onto the slot immediately BEFORE
+            ! this seed (it has to — the seed's own tail calls
+            ! `vcoord%build_zref_full`, which reads them), so the value is
+            ! already the namelist's.  Fall back to `cfg` only for a
+            ! caller that seeds a state whose vcoord slot was never
+            ! initialised.
+            h_min_seed = cfg%zstar_h_min
+            if (state%vcoord%is_init) h_min_seed = state%vcoord%zstar_h_min
+            call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_rest, &
+                                             state%metrics%z_draft, nx, ny, nz_ml, &
+                                             cfg%ocean%topo%max_depth/real(nz_ml, wp), &
+                                             h_min_seed)
+            deallocate (eta_rest)
+         end block
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
-                                        state%barotropic%b, nz_ml, &
+                                        water, nz_ml, &
                                         apply_wetdry_floor=cfg%ocean%wetdry%enable)
       end if
       ! Keep the barotropic water-column prognostic non-negative on the
@@ -1174,7 +1370,7 @@ contains
       ! re-derives D from bt_h would disagree with Σ h_layer by nz·2·H_VANISHED
       ! on every emerged column.  Knob-off ⇒ h = b (byte-identical).
       if (cfg%ocean%wetdry%enable) then
-         state%barotropic%h = max(state%barotropic%b, &
+         state%barotropic%h = max(water, &
                                   real(nz_ml, wp)*2.0_wp*H_VANISHED)
       end if
       state%multilayer%u_face_x_layer = 0.0_wp
@@ -1189,19 +1385,67 @@ contains
       ! flood headroom) stay wet_mask=1 and the dynamic wd_wet_dyn gate
       ! handles their wetting/drying instead of the static land mask.
       if (cfg%ocean%wetdry%enable) then
-         call seed_wet_mask_impl(state%multilayer%wet_mask, state%barotropic%b, &
+         call seed_wet_mask_impl(state%multilayer%wet_mask, water, &
                                  land_cutoff=-cfg%ocean%wetdry%land_margin)
+      else if (state%metrics%use_cavity) then
+         ! GROUNDING.  A column with less than `h_min_cavity` of water
+         ! under the ice is LAND — routed through the SAME wet-mask seed
+         ! the bathymetry uses, so the static metric-zeroing land mask
+         ! (`configure_ocean_land_mask`) and the finite land-state hold
+         ! (`ocean_state_seed_land_cells`) follow for free.  Never a thin
+         ! film of water under grounded ice.  Note the cutoff is applied
+         ! to `b − z_draft`, so an ordinary land column (`b` below
+         ! LAND_DEPTH_THRESHOLD, draft already zeroed there) is land for
+         ! the same reason it always was.
+         call seed_wet_mask_impl(state%multilayer%wet_mask, water, &
+                                 land_cutoff=cfg%ocean%cavity_dyn%h_min_cavity)
       else
-         call seed_wet_mask_impl(state%multilayer%wet_mask, state%barotropic%b)
+         call seed_wet_mask_impl(state%multilayer%wet_mask, water)
       end if
 
       ! Tracers carry per-layer h*Tr.  Multiply the (now spatially-
       ! varying) h_layer by the configured uniform scalar.
       if (idx_S > 0) then
-         call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(idx_S)%hTr, &
-            state%multilayer%h_layer, &
-            cfg%initial_salinity, nz_ml)
+         block
+            real(wp) :: s_layer(nz_ml)
+            real(wp) :: dS_dlayer
+            logical :: stratify_s
+            ! Linear S(z) when both surface + bottom are specified —
+            ! EXACT mirror of the temperature branch below, including
+            ! the gate (`both /= 0`), the vertical convention (k=1 is
+            ! the bed = S_init_bottom, k=nz_ml the surface =
+            ! S_init_surface), the single-layer fall-through, and the
+            ! seed helper (so ghosts and land columns are filled the
+            ! same way: hTr = S(k)·h_layer everywhere, land included,
+            ! since h_layer is already 0/floored there).  The profile is
+            ! linear in LAYER INDEX, which under the sigma-style
+            ! `h_layer = b/nz_ml` seed is linear in layer-centre depth
+            ! on every column — so a sloping bed gets the same endpoint
+            ! values with a depth-proportional gradient.
+            ! Note the stable polarity is the INVERSE of temperature:
+            ! dense/salty water belongs at the bed, so a stable haline
+            ! column has `S_init_bottom > S_init_surface`.
+            ! Both-zero (the default) ⇒ uniform `initial_salinity`,
+            ! byte-identical to the pre-knob path.
+            stratify_s = (cfg%S_init_surface /= 0.0_wp) .and. &
+                         (cfg%S_init_bottom /= 0.0_wp) .and. &
+                         (nz_ml > 1)
+            if (stratify_s) then
+               dS_dlayer = (cfg%S_init_surface - cfg%S_init_bottom)/ &
+                           real(nz_ml - 1, wp)
+               do k = 1, nz_ml
+                  s_layer(k) = cfg%S_init_bottom + dS_dlayer*real(k - 1, wp)
+               end do
+               call seed_tracer_stratified_impl( &
+                  state%multilayer%tracers(idx_S)%hTr, &
+                  state%multilayer%h_layer, s_layer, nz_ml)
+            else
+               call seed_tracer_uniform_impl( &
+                  state%multilayer%tracers(idx_S)%hTr, &
+                  state%multilayer%h_layer, &
+                  cfg%initial_salinity, nz_ml)
+            end if
+         end block
       end if
       if (idx_T > 0) then
          block
@@ -1271,16 +1515,20 @@ contains
       ! any analytical T/S.  Default off (`enable = .false.`) preserves
       ! bit-identity.  NetCDF-only: the reader lives in rdb_ocean_z_init,
       ! which only compiles with RDB_ENABLE_NETCDF=ON.
+      !
+      ! Under a cavity the overlay is handed `metrics%z_draft` so every
+      ! layer centre's depth is measured from `z = 0` rather than from the
+      ! ice base; see `seed_zinit_overlay`.
       if (cfg%ocean%zinit%enable) then
 #ifndef RDB_NO_NETCDF
          if (present(ierr)) then
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr=local_ierr)
+            call seed_zinit_overlay(state, grid, cfg, ierr=local_ierr)
             if (local_ierr /= 0) then
                ierr = local_ierr
                return
             end if
          else
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit)
+            call seed_zinit_overlay(state, grid, cfg)
          end if
 #else
          call fail("ocean_state_seed_from_cfg: ocean_zinit requires "// &
@@ -1365,6 +1613,52 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine ocean_state_seed_from_cfg
 
+#ifndef RDB_NO_NETCDF
+   subroutine seed_zinit_overlay(state, grid, cfg, ierr)
+      !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
+      !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
+      !! `"linear"` — the analytic affine `lin_*` profile) and whether a
+      !! cavity draft is present.
+      !!
+      !! The draft is the whole reason this is a separate routine.  Both
+      !! seeders measure each layer centre's GEOPOTENTIAL depth from
+      !! `z = 0`; under an ice shelf the column top is `z_draft` metres
+      !! down, so `metrics%z_draft` has to reach them or a `T(z)` profile
+      !! lands systematically too shallow (and, under a SLOPING lid,
+      !! tilts the isopycnals with the ice base — not a state of rest).
+      !! With the cavity off `metrics%z_draft` is the `(1, 1)`
+      !! placeholder, so the argument is simply not passed and the
+      !! arithmetic is bit-identical to the pre-cavity path.
+      !!
+      !! NOT `pure`: the seeders it dispatches to read files and log.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      type(config_t), intent(in) :: cfg
+      integer, intent(out), optional :: ierr
+         !! Threaded straight through to the seeder; an ABSENT `ierr`
+         !! stays absent there, so each keeps its own `error stop` text.
+
+      logical :: cav
+
+      cav = state%metrics%use_cavity
+      if (trim(adjustl(cfg%ocean%zinit%source)) == "linear") then
+         if (cav) then
+            call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr, &
+                                  state%metrics%z_draft)
+         else
+            call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr)
+         end if
+      else
+         if (cav) then
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, &
+                                    state%metrics%z_draft)
+         else
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr)
+         end if
+      end if
+   end subroutine seed_zinit_overlay
+#endif
+
    subroutine ocean_state_build_restart_registry(state, grid, reg)
       !! Walk the ocean god state and register every field that must
       !! checkpoint for a bit-exact step-(N+1) resume (ROADMAP A1).
@@ -1428,6 +1722,20 @@ contains
       !!     top of every outer step (restart is step-aligned).
       !!   bt_H_ref — recomputed from `b` by configure_ocean_bt_split;
       !!     `b` is bathymetry (static), reconstructed at config time.
+      !!   metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity
+      !!     statics (`&ocean_cavity_dyn_nml`) fall under the SAME rule,
+      !!     and for the same reason: the draft is a PRESCRIBED, static
+      !!     geometry, rebuilt at configure by `seed_cavity_draft` from
+      !!     the namelist before the restart read runs, exactly as `b` and
+      !!     `bt_H_ref` are.  Checkpointing it would create the
+      !!     file-vs-namelist ambiguity the derived-field exclusion exists
+      !!     to avoid (does a saved draft beat an edited namelist?), and a
+      !!     resume whose draft disagreed with its datum would be
+      !!     silently wrong — `bt_H_ref = b − z_draft` ties the two
+      !!     together, so they must be rebuilt together or not at all.
+      !!     A TIME-VARYING draft (a coupled ice sheet) is a different
+      !!     field with a different owner and would register itself, the
+      !!     same way a time-varying surface-flux component must.
       !!   vcoord target_h / z_ref — recomputed per step (z_ref rebuilt
       !!     from `b` in the seed); never prognostic.
       !!   w_interface, mass_flux_* — diagnosed each stage from the
@@ -1625,6 +1933,31 @@ contains
          call reg%register_2d("ice_sw_thru_diag", state%ice%sw_thru_diag, 0, &
                               size(state%ice%sw_thru_diag, 1), &
                               size(state%ice%sw_thru_diag, 2), optional=.true.)
+      end if
+
+      ! --- Ice-shelf cavity basal melt (P2b): the TWO OWNED surface-flux
+      !     components.  These ARE registered, and the exclusion rule
+      !     above says exactly why: `Q_heat`/`Q_salt` are derived views
+      !     and stay out, but "any filler that makes a COMPONENT
+      !     time-varying MUST register it".  The melt rate is a function
+      !     of the live state, so `heat_cavity`/`salt_cavity` are
+      !     time-varying — and they are written at the END of outer step
+      !     N and integrated on step N+1 (the ice coupler's documented
+      !     one-step lag), so without them a warm restart would apply
+      !     zero melt for its first step.  `optional=.true.`: an older
+      !     checkpoint resumes with the zero seed rather than failing.
+      !     The slot's own arrays (`cavity_flux%melt`, `t_b`, ...) are
+      !     NOT registered — they are recomputed from state before first
+      !     use, the same derived-field rule as `mass_flux_*`.
+      if (allocated(state%surface_flux%heat_cavity)) then
+         call reg%register_2d("sf_heat_cavity", state%surface_flux%heat_cavity, 0, &
+                              size(state%surface_flux%heat_cavity, 1), &
+                              size(state%surface_flux%heat_cavity, 2), optional=.true.)
+      end if
+      if (allocated(state%surface_flux%salt_cavity)) then
+         call reg%register_2d("sf_salt_cavity", state%surface_flux%salt_cavity, 0, &
+                              size(state%surface_flux%salt_cavity, 1), &
+                              size(state%surface_flux%salt_cavity, 2), optional=.true.)
       end if
 
       ! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice
@@ -2844,10 +3177,14 @@ contains
       !! times a NaN land contribution is still NaN).  Spec §13.3 /
       !! `land_mask_final_resolution.md` R-land-state:
       !!   * `h_layer` floored to `H_VANISHED` (never 0 — avoids 1/0);
-      !!   * tracers held at their seeded per-layer value (`hTr/h_old`),
-      !!     re-scaled onto the floored thickness so `T/S = hTr/h` is
-      !!     preserved and finite;
+      !!   * tracer content zeroed (`hTr = 0`, so `T = S = 0` — finite);
       !!   * layer + barotropic face velocities zeroed at land faces.
+      !!
+      !! The `(h, hTr) = (H_VANISHED, 0)` pair is the LAND-STATE CONTRACT:
+      !! it is what every vanished-gated operator already holds a land
+      !! column at, so a land column looks the same to the budget at the
+      !! latch and at every later step.  `seed_land_tracer_hold_impl`
+      !! carries the full statement and the history.
       !!
       !! Runs at SETUP, after `metrics_apply_land_mask` has derived
       !! `wet_u/wet_v`, BEFORE `ocean_state_enter_data`.  Plain host loops
@@ -2860,19 +3197,42 @@ contains
       associate (ms => state%multilayer)
          nz_ml = size(ms%h_layer, 3)
 
-         ! Tracers FIRST: read the old (pre-floor) h to recover T/S, then
-         ! re-scale hTr onto the floored thickness.  Must precede the
-         ! h_layer floor so the per-layer value is recovered from the
-         ! thickness it was seeded against.
+         ! Tracer content on land is ZERO — the state every vanished-gated
+         ! operator (ALE remap first) holds a land column at, and therefore
+         ! the state the budget latch must see.  Order-independent of the
+         ! thickness floor below: neither reads the other.  See
+         ! `seed_land_tracer_hold_impl`'s land-state contract.
          if (allocated(ms%tracers)) then
             do t = 1, size(ms%tracers)
-               call seed_land_tracer_hold_impl(ms%tracers(t)%hTr, ms%h_layer, &
+               call seed_land_tracer_hold_impl(ms%tracers(t)%hTr, &
                                                ms%wet_mask, nz_ml)
             end do
          end if
 
          ! h_layer floor on land.
          call seed_land_h_floor_impl(ms%h_layer, ms%wet_mask, nz_ml)
+
+         ! The SAME contract, on a WET column, for the inert fillers a
+         ! rigid-top coordinate leaves inside the ice (and below the
+         ! bed).  `h = zstar_h_min <= H_VANISHED` puts them on the
+         ! vanished side of every gate, so the first ALE regrid writes
+         ! their `hTr` to zero — un-budgeted, because the latch was taken
+         ! with the seed's `c*h_min` still in them.  Measured on
+         ! `cavity_sloping_lid_rest_zfixed.nml` before this hold: a
+         ! step-1 salt residual of `-1.604E-06` relative (3.5e10 kg of
+         ! salt, all of it filler content), flat thereafter — the exact
+         ! shape commit `4d8ac2e0` recorded for the grounded columns.
+         ! Fenced to `z_fixed` x cavity, the only configuration that
+         ! vanishes a layer on a wet column today, so every existing
+         ! namelist is bit-identical.
+         if (state%metrics%use_cavity .and. state%vcoord%coord_type == VCOORD_Z_FIXED) then
+            if (allocated(ms%tracers)) then
+               do t = 1, size(ms%tracers)
+                  call seed_vanished_tracer_hold_impl(ms%tracers(t)%hTr, &
+                                                      ms%h_layer, nz_ml)
+               end do
+            end if
+         end if
 
          ! Zero layer face velocities at land faces.
          call seed_land_face_vel_impl(ms%u_face_x_layer, state%metrics%wet_u, nz_ml)
@@ -2897,30 +3257,97 @@ contains
       end associate
    end subroutine ocean_state_seed_land_cells
 
-   pure subroutine seed_land_tracer_hold_impl(hTr, h_layer, wet_mask, nz)
-      !! On land T-cells, recover the seeded per-layer tracer value
-      !! `val = hTr/h_old` and re-scale onto the `H_VANISHED` floor so
-      !! `hTr = val*H_VANISHED` stays finite and `T/S` is held.  Wet cells
-      !! untouched (bit-identical when `wet_mask≡1`).
+   pure subroutine seed_land_tracer_hold_impl(hTr, wet_mask, nz)
+      !! Zero the extensive tracer content `hTr` on land T-cells
+      !! (`wet_mask == 0`).  Wet cells untouched (bit-identical when
+      !! `wet_mask ≡ 1`).
+      !!
+      !! ### The land-state contract: `h = H_VANISHED`, `hTr = 0`
+      !!
+      !! `seed_land_h_floor_impl` pins a land layer's thickness EXACTLY at
+      !! `H_VANISHED`, which is the D4 *vanished* marker.  Every
+      !! vanished-gated operator in the tree tests `h > H_VANISHED`
+      !! (strictly), so a land layer is on the VANISHED side of every one
+      !! of those gates — in particular the ALE remap's concentration
+      !! step (`rdb_ocean_remap::ocean_remap_tracer_field`, `c = hTr/h` if
+      !! `h > H_FLOOR` else `c = 0`), which therefore writes `hTr = 0` on
+      !! every land column at the first regrid.
+      !!
+      !! So `hTr = 0` is not a choice made here — it is the land content
+      !! the running solver holds.  The seed's job is to hand the budget
+      !! latch the SAME land state that every later step will have, and
+      !! any other seeded value is content the first regrid discards
+      !! silently and un-budgeted, which shows up as a step change in the
+      !! console `Error` residual between step 0 and step 1.
+      !!
+      !! This replaced a "recover `val = hTr/max(h_old, H_VANISHED)` and
+      !! re-scale onto the floor" hold, which was wrong twice:
+      !!
+      !!   * the `max(...)` divisor makes the re-scale an exact IDENTITY
+      !!     whenever `h_old <= H_VANISHED` — including `h_old < 0`, which
+      !!     is what an ice-shelf column GROUNDED by `&ocean_cavity_dyn_nml
+      !!     h_min_cavity` has (its water column `b - z_draft` is negative
+      !!     by hundreds of metres).  Those columns kept a FULL-COLUMN,
+      !!     negative `hTr` next to a floored `h`, i.e. an implied
+      !!     concentration of order `-1e7` PSU, and contributed it to the
+      !!     budget latch: 61 % of the initial salt content on
+      !!     `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`;
+      !!   * even where the re-scale DID work (ordinary land, `0 < h_old`),
+      !!     the `val*H_VANISHED` it left is discarded by the first regrid,
+      !!     a ~1e-8 relative step change in every land-bearing case.
+      !!
+      !! The `0*NaN` hazard the old hold existed to avoid is avoided the
+      !! same way: `T = S = hTr/h = 0` is finite.
       integer, intent(in) :: nz
       real(wp), intent(inout) :: hTr(:, :, :)
-      real(wp), intent(in) :: h_layer(:, :, :)
       real(wp), intent(in) :: wet_mask(:, :)
       integer :: i, j, k, nx, ny
-      real(wp) :: val
       nx = size(hTr, 1)
       ny = size(hTr, 2)
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
-               if (wet_mask(i, j) == 0.0_wp) then
-                  val = hTr(i, j, k)/max(h_layer(i, j, k), H_VANISHED)
-                  hTr(i, j, k) = val*H_VANISHED
-               end if
+               if (wet_mask(i, j) == 0.0_wp) hTr(i, j, k) = 0.0_wp
             end do
          end do
       end do
    end subroutine seed_land_tracer_hold_impl
+
+   pure subroutine seed_vanished_tracer_hold_impl(hTr, h_layer, nz)
+      !! Zero the extensive tracer content `hTr` on any layer the target
+      !! grid seeded as an INERT FILLER (`h_layer <= H_VANISHED`),
+      !! whether or not the column is wet.
+      !!
+      !! The vanished-layer twin of `seed_land_tracer_hold_impl`, and it
+      !! rests on the same argument: a filler is on the vanished side of
+      !! every `h > H_VANISHED` gate, so the ALE remap's concentration
+      !! step writes `c = 0` and therefore `hTr = 0` at the FIRST regrid.
+      !! Whatever the seed put there is content the regrid discards
+      !! silently and un-budgeted — a step change in the console `Error`
+      !! residual between step 0 and step 1.  The seed's job is to hand
+      !! the budget latch the state the running solver holds.
+      !!
+      !! This is the state, not a choice: the physically-valued filler
+      !! (option (i) — carry `c_live*h_min` in the prognostic state and
+      !! debit the donor) would need a wet-column analogue of the
+      !! land-state contract and would change the remap's conservation
+      !! bookkeeping.  The vanished-layer T/S that the PGF and the EOS
+      !! need is substituted at CONSUMPTION instead, which is a separate
+      !! slice.
+      integer, intent(in) :: nz
+      real(wp), intent(inout) :: hTr(:, :, :)
+      real(wp), intent(in) :: h_layer(:, :, :)
+      integer :: i, j, k, nx, ny
+      nx = size(hTr, 1)
+      ny = size(hTr, 2)
+      do k = 1, nz
+         do j = 1, ny
+            do i = 1, nx
+               if (h_layer(i, j, k) <= H_VANISHED) hTr(i, j, k) = 0.0_wp
+            end do
+         end do
+      end do
+   end subroutine seed_vanished_tracer_hold_impl
 
    pure subroutine seed_land_h_floor_impl(h_layer, wet_mask, nz)
       !! Floor land-cell layer thickness to `H_VANISHED` (never 0 ⇒ no
@@ -3173,6 +3600,227 @@ contains
       end do
    end subroutine set_bathymetry_spoon
 
+   subroutine seed_cavity_draft(state, grid, cfg, ierr)
+      !! Fill `metrics%z_draft` (and its `cover_frac` companion) from
+      !! `&ocean_cavity_dyn_nml`, then cross-validate the geometry against
+      !! the seeded bathymetry.  Runs from `ocean_state_seed_from_cfg`
+      !! IMMEDIATELY after the bathymetry and BEFORE the layer split and
+      !! the wet-mask seed, which both read `b − z_draft`.
+      !!
+      !! Non-`pure` on purpose (the only cavity routine that is): it
+      !! reports the grounded / over-land column counts through the
+      !! logger and fails loud through the error ring.  The arithmetic it
+      !! drives is in `rdb_ocean_cavity`, where every routine IS `pure`.
+      !!
+      !! UNITS.  The namelist carries metres; the setters work in GRID
+      !! coordinate units (metres on Cartesian, DEGREES on
+      !! spherical/curvilinear), so the box corners are converted with
+      !! `topo_length_to_grid_units` and the dimensionless slope is
+      !! converted the inverse way — the same trap `&ocean_topo_nml
+      !! slope_scale` documents, where a metres length against a degrees
+      !! position collapsed a seamount to a flat basin.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      type(config_t), intent(in) :: cfg
+      integer, intent(out) :: ierr
+
+      integer :: draft_code, source_code, nx, ny, ng
+      integer :: n_over_land, n_grounded, n_interior
+      integer :: sign_code, local_ierr
+      real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
+      real(wp) :: grounded_frac
+
+      ierr = OCEAN_STATUS_OK
+      nx = size(state%metrics%z_draft, 1)
+      ny = size(state%metrics%z_draft, 2)
+      ng = grid%nghost
+      if (nx /= size(state%barotropic%b, 1) .or. ny /= size(state%barotropic%b, 2)) then
+         call fail("&ocean_cavity_dyn_nml: z_draft is at its placeholder size — "// &
+                   "metrics%use_cavity must be latched BEFORE metrics%init (it is "// &
+                   "latched in ocean_state_init_from_config)", &
+                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      draft_code = parse_cavity_draft_config(cfg%ocean%cavity_dyn%draft_config)
+      source_code = parse_cavity_draft_source(cfg%ocean%cavity_dyn%draft_source)
+      ! `validate_config` already refuses every spelling outside the v1
+      ! envelope with a full explanation; this is the same gate one level
+      ! down, for direct (test / API) callers that bypass it.
+      if (draft_code /= CAVITY_DRAFT_NONE .and. draft_code /= CAVITY_DRAFT_FLAT &
+          .and. draft_code /= CAVITY_DRAFT_LINEAR .and. draft_code /= CAVITY_DRAFT_FILE) then
+         call fail("&ocean_cavity_dyn_nml draft_config='"// &
+                   trim(cfg%ocean%cavity_dyn%draft_config)//"' is not available "// &
+                   "(none|flat|linear|file)", ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+      if (source_code /= CAVITY_SOURCE_DRAFT .and. source_code /= CAVITY_SOURCE_THICKNESS) then
+         call fail("&ocean_cavity_dyn_nml draft_source='"// &
+                   trim(cfg%ocean%cavity_dyn%draft_source)//"' is not available "// &
+                   "(draft|thickness; 'in_situ' isostasy is deferred)", &
+                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      ! GRID units per metre (1 on Cartesian; degrees-per-metre otherwise).
+      ! The "no limit" sentinels pass through UNCONVERTED so they stay
+      ! sentinels on every grid.
+      per_metre = topo_length_to_grid_units(1.0_wp, cfg%ocean%grid%grid_config, &
+                                            cfg%ocean%grid%rad_earth)
+      x0_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_x0, per_metre)
+      x1_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_x1, per_metre)
+      y0_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_y0, per_metre)
+      y1_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_y1, per_metre)
+      ! `draft_slope` is d(draft [m]) / d(x [m]); the setter wants
+      ! d(draft [m]) / d(x [grid units]) = slope / (grid units per metre).
+      slope_g = cfg%ocean%cavity_dyn%draft_slope/per_metre
+
+      ! `draft_source = "thickness"`: the formula amplitude is an ice
+      ! THICKNESS, converted by the Boussinesq-isostatic (flotation)
+      ! relation `z_draft = rho_ice*h_ice/rho_0`.  Scaling the amplitude
+      ! (and the slope with it) is exact because both setters are LINEAR
+      ! in the amplitude — and it keeps one draft field, so everything
+      ! downstream stays source-agnostic.
+      amp = cfg%ocean%cavity_dyn%draft_depth
+      if (source_code == CAVITY_SOURCE_THICKNESS) then
+         amp = amp*cfg%ocean%cavity_dyn%rho_ice/state%eos%rho0
+         slope_g = slope_g*cfg%ocean%cavity_dyn%rho_ice/state%eos%rho0
+      end if
+
+      select case (draft_code)
+      case (CAVITY_DRAFT_FLAT)
+         call set_draft_flat(state%metrics%z_draft, grid, amp, x0_g, x1_g, y0_g, y1_g)
+      case (CAVITY_DRAFT_LINEAR)
+         call set_draft_linear(state%metrics%z_draft, grid, amp, slope_g, &
+                               x0_g, x1_g, y0_g, y1_g)
+      case (CAVITY_DRAFT_FILE)
+#ifndef RDB_NO_NETCDF
+         ! Static 2-D NetCDF draft, through the PR-14 reader.  SINGLE
+         ! RANK: the loader itself applies the global offset correctly,
+         ! but the grounding statistics a few lines below are single-rank
+         ! reductions and the whole cavity is fenced that way, so the
+         ! restriction is asserted here rather than left implicit.
+         if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
+            call fail("&ocean_cavity_dyn_nml draft_config='file' is single-rank "// &
+                      "only (the cavity's grounding statistics are single-rank "// &
+                      "reductions).  Run on one rank or use an analytic draft.", &
+                      ierr, OCEAN_STATUS_ERR_IC_SEED)
+            return
+         end if
+         sign_code = parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign)
+         if (sign_code == CAVITY_SIGN_INVALID) then
+            call fail("&ocean_cavity_dyn_nml draft_sign='"// &
+                      trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
+                      "' is not recognised (depth|positive_down|elevation|"// &
+                      "positive_up)", ierr, OCEAN_STATUS_ERR_IC_SEED)
+            return
+         end if
+         ! Interior first (the reader writes the physical window only)...
+         state%metrics%z_draft = 0.0_wp
+         call ocean_data_input_load_static_2d( &
+            trim(cfg%ocean%cavity_dyn%draft_file), &
+            trim(cfg%ocean%cavity_dyn%draft_var), grid, nx, ny, &
+            ng + 1, ng + 1, state%metrics%z_draft, ierr=local_ierr)
+         if (local_ierr /= OCEAN_STATUS_OK) then
+            ierr = local_ierr
+            return
+         end if
+         ! ...sign-normalise onto DEPTH positive down...
+         call cavity_draft_apply_sign(state%metrics%z_draft, nx, ny, sign_code)
+         ! ...then fill the ghost band by constant extrapolation, the
+         ! SAME routine and the same order the file bathymetry uses
+         ! (`load_bathymetry_into_array` -> `fill_bathymetry_ghosts_array`).
+         ! The periodic/fold re-wrap and the halo exchange that
+         ! `metrics%z_draft` gets in `rdb_ocean_engine` run later and are
+         ! shared with the formula path, so a file draft and a formula
+         ! draft see an identical boundary treatment.
+         call bathymetry_fill_ghosts_array(state%metrics%z_draft, grid)
+#else
+         call fail("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                   "RDB_ENABLE_NETCDF=ON at build time (the static-2-D reader "// &
+                   "lives in the NetCDF-gated rdb_ocean_data_input).", &
+                   ierr, OCEAN_STATUS_ERR_IO)
+         return
+#endif
+      case default  ! CAVITY_DRAFT_NONE
+         state%metrics%z_draft = 0.0_wp
+      end select
+
+      ! Guard the field itself before anything derives geometry from it.
+      ! Written as `.not. (z >= 0)` inside the helper so a NaN FAILS
+      ! rather than sliding through a `z < 0` test that is false for NaN.
+      if (.not. cavity_draft_is_finite_nonneg(state%metrics%z_draft, nx, ny)) then
+         call fail("&ocean_cavity_dyn_nml: z_draft must be finite and >= 0 "// &
+                   "everywhere (it is a DEPTH below z = 0, positive down)", &
+                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      ! NO ICE OVER LAND: zero the draft wherever the bathymetry already
+      ! says land, so land columns keep the datum they always had
+      ! (`bt_H_ref = b`) and the counted-once invariant stays exact on
+      ! every column.
+      call cavity_apply_land_exclusion(state%metrics%z_draft, state%barotropic%b, &
+                                       nx, ny, n_over_land)
+
+      call cavity_count_grounded(state%barotropic%b, state%metrics%z_draft, &
+                                 cfg%ocean%cavity_dyn%h_min_cavity, ng, &
+                                 grid%nx_phys, grid%ny_phys, nx, ny, &
+                                 n_grounded, n_interior)
+      grounded_frac = real(n_grounded, wp)/real(max(n_interior, 1), wp)
+      if (grounded_frac > cfg%ocean%cavity_dyn%grounded_max_frac) then
+         call fail("&ocean_cavity_dyn_nml: the prescribed draft grounds "// &
+                   to_string(n_grounded)//" of "//to_string(n_interior)// &
+                   " interior columns ("//to_string(grounded_frac)//"), above "// &
+                   "grounded_max_frac = "// &
+                   to_string(cfg%ocean%cavity_dyn%grounded_max_frac)// &
+                   ".  Either the draft is too deep for this bathymetry or the "// &
+                   "shelf box is in the wrong place (check the UNITS of "// &
+                   "draft_x0/x1 — they are metres, converted to grid units).", &
+                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      call cavity_fill_cover_frac(state%metrics%cover_frac, state%metrics%z_draft, nx, ny)
+
+      if (comm_env_rank() == 0) then
+         call logger%info("Ice-shelf cavity: ON  draft_config='"// &
+                          trim(cfg%ocean%cavity_dyn%draft_config)//"' source='"// &
+                          trim(cfg%ocean%cavity_dyn%draft_source)//"' max draft = "// &
+                          to_string(maxval(state%metrics%z_draft))//" m, "// &
+                          "h_min_cavity = "// &
+                          to_string(cfg%ocean%cavity_dyn%h_min_cavity)//" m")
+         call logger%info("                  datum bt_H_ref = b - z_draft afloat, "// &
+                          "0 where grounded; "// &
+                          to_string(n_grounded)//" of "//to_string(n_interior)// &
+                          " interior columns grounded (-> LAND via the wet mask)")
+         if (n_over_land > 0) then
+            call logger%warning("&ocean_cavity_dyn_nml: draft zeroed on "// &
+                                to_string(n_over_land)//" column(s) whose bed is "// &
+                                "already land (b < LAND_DEPTH_THRESHOLD) — no ice "// &
+                                "over land.  Check the shelf box if that is a surprise.")
+         end if
+      end if
+   end subroutine seed_cavity_draft
+
+   pure function cavity_bound_to_grid(bound_m, per_metre) result(bound_grid)
+      !! Convert ONE shelf-box bound from metres to grid coordinate units,
+      !! leaving the `CAVITY_BOUND_INF` "no limit" sentinel alone.  Without
+      !! the guard the sentinel would be scaled by the degrees-per-metre
+      !! factor on a spherical grid and come out as a finite (if absurd)
+      !! bound — harmless numerically, but it would stop meaning what it
+      !! says, and the next reader would have to re-derive that.
+      real(wp), intent(in) :: bound_m
+      real(wp), intent(in) :: per_metre
+         !! Grid units per metre (1 on Cartesian).
+      real(wp) :: bound_grid
+      if (abs(bound_m) >= CAVITY_BOUND_INF) then
+         bound_grid = bound_m
+      else
+         bound_grid = bound_m*per_metre
+      end if
+   end function cavity_bound_to_grid
+
    pure function topo_length_to_grid_units(length_m, grid_config, rad_earth) result(len_grid)
       !! Convert a metres length scale (`slope_scale` / `half_width`) into the
       !! GRID coordinate units the formula bathymetry setters operate in.
@@ -3270,6 +3918,161 @@ contains
          end do
       end do
    end subroutine set_bathymetry_seamount
+
+   pure function isomip_logistic(t) result(r)
+      !! `1/(1 + exp(t))`, saturated instead of overflowing.
+      !!
+      !! The two logistic terms of Eq. (4) reach `|t| ~ 34` over the
+      !! ISOMIP+ box including ghost rows, but a caller with a much wider
+      !! `y_len` (or a tiny `f_c`) would drive `exp(t)` past the `real64`
+      !! overflow at `t ~ 709`.  Saturating at +/-`T_SAT` is exact to the
+      !! last bit of `r` on both sides (`1/(1+exp(500))` underflows to 0
+      !! and `1/(1+exp(-500))` rounds to 1 anyway), so this costs nothing
+      !! and removes an Inf that would propagate as a NaN.
+      !!
+      !! `t` is built from grid positions and the Table-1 constants, all
+      !! finite by construction, so the CLAUDE.md "if/else clamps launder
+      !! NaN" trap does not apply: there is no path that feeds this a NaN.
+      real(wp), intent(in) :: t
+      real(wp) :: r
+      real(wp), parameter :: T_SAT = 500.0_wp
+      if (t > T_SAT) then
+         r = 0.0_wp
+      else if (t < -T_SAT) then
+         r = 1.0_wp
+      else
+         r = 1.0_wp/(1.0_wp + exp(t))
+      end if
+   end function isomip_logistic
+
+   pure function isomip_plus_bx(x) result(bx)
+      !! Along-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (2):
+      !!
+      !!     Bx(x) = B0 + B2*xt**2 + B4*xt**4 + B6*xt**6,   xt = x/x_bar
+      !!
+      !! `x` is the ABSOLUTE MISMIP+ along-flow coordinate in METRES
+      !! (0 at the ice divide), NOT the model's domain-relative x — the
+      !! ISOMIP+ ocean box starts at `x = 320 km` (their Table 3 `x0`),
+      !! which is what `&ocean_topo_nml x_origin` supplies.  Result is an
+      !! ELEVATION (m, positive up), so it is negative everywhere in the
+      !! ISOMIP+ box.
+      real(wp), intent(in) :: x
+      real(wp) :: bx
+      real(wp) :: xt, xt2
+      xt = x/ISOMIP_XBAR
+      xt2 = xt*xt
+      bx = ISOMIP_B0 + xt2*(ISOMIP_B2 + xt2*(ISOMIP_B4 + xt2*ISOMIP_B6))
+   end function isomip_plus_bx
+
+   pure function isomip_plus_by(y, y_len) result(by)
+      !! Across-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (4):
+      !!
+      !!     By(y) = d_c/(1 + exp(-2*(y - Ly/2 - w_c)/f_c))
+      !!           + d_c/(1 + exp( 2*(y - Ly/2 + w_c)/f_c))
+      !!
+      !! A two-sided logistic trough: ~0 within `|y - Ly/2| < w_c` (the
+      !! trough floor) rising to `d_c` on both side walls over the
+      !! `f_c` transition.  Note the paper's own caveat (their Fig. 1b):
+      !! `By` is an OFFSET relative to the trough, not a transect — the
+      !! bed is `Bx + By`, and `Bx` is never zero.
+      !!
+      !! `y` and `y_len` are METRES.  `y_len` is the model's own domain
+      !! width, which for the prescribed ISOMIP+ box (`0 <= y <= 80 km`)
+      !! is the paper's `Ly` — taking it from the grid rather than
+      !! hard-coding 80 km keeps the trough centred in whatever box the
+      !! caller actually built.
+      real(wp), intent(in) :: y, y_len
+      real(wp) :: by
+      real(wp) :: yc
+      yc = y - 0.5_wp*y_len
+      by = ISOMIP_DC*isomip_logistic(-2.0_wp*(yc - ISOMIP_WC)/ISOMIP_FC) &
+           + ISOMIP_DC*isomip_logistic(2.0_wp*(yc + ISOMIP_WC)/ISOMIP_FC)
+   end function isomip_plus_by
+
+   subroutine set_bathymetry_isomip_plus(b, grid, max_depth, x_origin, m_per_grid)
+      !! Public only for the unit-test suite (no production module imports it);
+      !! ignore when developing production code in other modules.
+      !!
+      !! Fill `b(:,:)` with the MISMIP+ / ISOMIP+ analytic bedrock,
+      !! Asay-Davis et al. (2016) Eqs. (1)-(4) + Table 1:
+      !!
+      !!     z_b(x,y) = max( Bx(x) + By(y), z_b,deep )      [Eq. (1)]
+      !!
+      !! `z_b` is an ELEVATION (positive up, sea level at 0) and is
+      !! negative throughout the ISOMIP+ box; Roundabout's `b` is a
+      !! DEPTH (positive down), so the last line is `b = -z_b`, floored
+      !! at 0 so that a bed which the formula puts ABOVE sea level (it
+      !! does for `x < ~140 km`, outside the ISOMIP+ box but reachable if
+      !! a caller sets a smaller `x_origin`) is reported as dry land
+      !! rather than as a negative depth.  `b = 0` is below
+      !! `LAND_DEPTH_THRESHOLD`, so `seed_wet_mask_impl` masks the column
+      !! out through the ordinary land path — there is no ISOMIP+ branch
+      !! anywhere downstream.
+      !!
+      !! `max_depth` is the deep clip, i.e. `-z_b,deep`; the protocol
+      !! value is `ISOMIP_ZB_DEEP` ⇒ `&ocean_topo_nml max_depth = 720.0`.
+      !!
+      !! MINIMUM WATER COLUMN.  The protocol (their Sect. 3.1.5) asks for
+      !! "the minimum ocean column as thin as can reasonably be achieved"
+      !! and leaves the value to the modeller, with the choice being
+      !! either to modify the topography or to mark the column land.
+      !! Roundabout takes the second option and it is NOT this routine's
+      !! job: `&ocean_cavity_dyn_nml h_min_cavity` is the threshold and
+      !! `seed_wet_mask_impl(water, land_cutoff=h_min_cavity)` is where it
+      !! bites, on `water = b - z_draft`.
+      !!
+      !! UNITS.  Every Table-1 constant is METRES, as printed.  Grid
+      !! positions are in GRID coordinate units (metres on Cartesian,
+      !! DEGREES on spherical/curvilinear), so `m_per_grid` converts them
+      !! to metres before the formula sees them — the inverse of the
+      !! `topo_length_to_grid_units` conversion the spoon/seamount
+      !! dispatch applies to `slope_scale`, and the same trap.  On a
+      !! Cartesian grid `m_per_grid = 1` exactly and this is the identity.
+      !! (The protocol prescribes a Cartesian box; the conversion exists
+      !! so a curvilinear caller degrades predictably rather than
+      !! silently collapsing the basin flat.)
+      !!
+      !! Fills the FULL array INCLUDING ghost rows by evaluating the
+      !! formula at the ghost index — the CLAUDE.md rule every formula
+      !! bathymetry setter follows; a ghost row left at the alloc-time
+      !! zero sends the EOS into its `rho_0` vanishing-layer fallback and
+      !! puts a spurious density jump at every wall-adjacent face.
+      !!
+      !! MPI: positions come off the GLOBAL index offsets + extents, so
+      !! each rank fills its window of ONE global bed.  Single rank ⇒
+      !! offsets 0 ⇒ byte-identical to the undecomposed formula.
+      real(wp), intent(inout) :: b(:, :)
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: max_depth
+         !! Deep clip (m, positive down) = `-z_b,deep`.  Protocol: 720.
+      real(wp), intent(in) :: x_origin
+         !! Absolute MISMIP+ x (m) of the domain's west edge.  Protocol
+         !! (ISOMIP+): 320e3.
+      real(wp), intent(in) :: m_per_grid
+         !! Metres per grid coordinate unit (1 on Cartesian).
+
+      real(wp) :: y_len, x_m, y_m, by, zb
+      integer :: i, j, ng, nxt, nyt, ioff, joff
+
+      ng = grid%nghost
+      ioff = grid%i_offset_global
+      joff = grid%j_offset_global
+      nxt = size(b, 1)
+      nyt = size(b, 2)
+      y_len = real(grid%ny_global, wp)*grid%dy*m_per_grid
+
+      do j = 1, nyt
+         y_m = (real(j - ng + joff, wp) - 0.5_wp)*grid%dy*m_per_grid
+         ! `By` depends on y alone — hoisted out of the i loop.
+         by = isomip_plus_by(y_m, y_len)
+         do i = 1, nxt
+            x_m = x_origin + (real(i - ng + ioff, wp) - 0.5_wp)*grid%dx*m_per_grid
+            zb = isomip_plus_bx(x_m) + by
+            if (zb < -max_depth) zb = -max_depth     ! Eq. (1) deep clip
+            b(i, j) = max(-zb, 0.0_wp)               ! elevation -> depth
+         end do
+      end do
+   end subroutine set_bathymetry_isomip_plus
 
    pure function nw2_cosbell(x, L) result(c)
       !! Cosine-bell kernel for the Neverworld2 basin: `0.5·(1 + cos(π·min(|x/L|,1)))`.

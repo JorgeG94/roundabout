@@ -1000,6 +1000,19 @@ contains
                                this%mass_flux_v%data)
       end if
 
+      ! ---- z-level closed faces (&vcoord_nml zfixed_closed_faces) ----
+      ! The SAME argument as the porous pass above, and a SEPARATE factor:
+      ! the transport-Coriolis PV flux must see the same per-layer walls
+      ! continuity does, or a closed layer contributes transport the mass
+      ! budget never moved.  See the composition rule on
+      ! `ocean_metrics_t%open_v`.
+      if (metrics%use_closed_faces) then
+         call porous_narrow_3d(nu, ny, nz, metrics%open_u, &
+                               this%mass_flux_u%data)
+         call porous_narrow_3d(nx, nv, nz, metrics%open_v, &
+                               this%mass_flux_v%data)
+      end if
+
       ! ---- Pass 4: KE at cell centres (area-weighted) ----
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          this%ke_centre%data(i, j, k) = 0.25_wp*metrics%iareaT(i, j)*( &
@@ -1250,6 +1263,17 @@ contains
             call porous_narrow_3d(nu, ny, nz, metrics%por_face_area_u, &
                                   this%mass_flux_u%data)
             call porous_narrow_3d(nx, nv, nz, metrics%por_face_area_v, &
+                                  this%mass_flux_v%data)
+         end if
+
+         ! ---- z-level closed faces ----
+         ! INSIDE the same `else` and for the same reason: the `usf`
+         ! branch copies continuity's fluxes, which the mask already
+         ! closed.
+         if (metrics%use_closed_faces) then
+            call porous_narrow_3d(nu, ny, nz, metrics%open_u, &
+                                  this%mass_flux_u%data)
+            call porous_narrow_3d(nx, nv, nz, metrics%open_v, &
                                   this%mass_flux_v%data)
          end if
       end if

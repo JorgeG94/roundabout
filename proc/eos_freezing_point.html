@@ -169,15 +169,75 @@
 <code>eos_density_point</code> (flat-POD <code>eos_t</code> by value, device-
 callable), plus <code>elemental</code> so callers can evaluate whole
 salinity arrays in one reference.</p>
-<p>v1 is the SIS2/MOM6 LINEAR liquidus for EVERY <code>eos%variant</code>:</p>
-<p>T_f = TFR_S_COEFF·S + TFR_P_COEFF·p</p>
-<p>(μ = −0.054 °C per g/kg, MOM6 <code>TFREEZE_FORM = "LINEAR"</code> — MOM6
-keeps the linear form as its default even under the Wright /
-TEOS-10 density branches, so applying it across variants is
-parity, not a shortcut.)  A TEOS-10 <code>t_freezing(SA, p)</code>
-polynomial slots in later as an <code>eos%variant ==
-EOS_VARIANT_ROQUET_SPV / EOS_VARIANT_TEOS10</code> branch, mirroring
-the dispatch in <code>eos_density_point</code>.</p>
+<p>The form is LINEAR for every <code>eos%variant</code>:</p>
+<p>T_f = λ1·S + λ2 + λ3·p</p>
+<p>with the three coefficients carried ON THE HANDLE
+(<code>eos%tfr_s</code> / <code>eos%tfr_0</code> / <code>eos%tfr_p</code>) and selected as a
+named set by <code>&amp;ocean_eos_nml tfreeze_set</code>:</p>
+<ul>
+<li><code>"seaice"</code> (DEFAULT) — SIS2/MOM6, λ = (−0.054, 0, −7.53e-8);
+    T_f(35 PSU, 0 Pa) = −1.89 °C.</li>
+<li><code>"isomip"</code> — ISOMIP+ / Asay-Davis et al. (2016) Table 4,
+    λ = (−0.0573, 0.0832, −7.53e-8); T_f(34.5, 0) = −1.89365 °C.</li>
+</ul>
+<p>Keeping the linear form under the Wright / Roquet density
+branches is MOM6 parity, not a shortcut: MOM6&rsquo;s
+<code>TFREEZE_FORM = "LINEAR"</code> is its default under any density
+branch.</p>
+<p>VARIANT / FORM DISPATCH SEAM.  A NONLINEAR liquidus — MOM6&rsquo;s
+<code>TFREEZE_FORM = "MILLERO_78"</code> (Millero 1978, UNESCO TP28) or a
+TEOS-10 <code>t_freezing(SA, p)</code> polynomial — is a different
+FUNCTIONAL FORM, not another coefficient triple, so it does NOT
+belong in <code>tfreeze_set</code>.  It slots in HERE, as a leading branch</p>
+<p>if (eos%tfreeze_form == TFREEZE_FORM_MILLERO78) then &hellip; else</p>
+<p>mirroring the <code>eos%variant</code> dispatch in <code>eos_density_point</code> and
+leaving the linear expression below untouched.  Not implemented:
+the Millero (1978) coefficients are UNVERIFIED here (the primary
+document could not be obtained — see the prototype&rsquo;s
+<code>ice_shelf_melt/CITATIONS.md</code> §1 &ldquo;Millero (1978)&rdquo;), and this
+repository does not ship unverified constants.</p>
+<p>BIT-IDENTITY, and why the parentheses are load-bearing.  The
+pre-knob expression was <code>TFR_S_COEFF*S + TFR_P_COEFF*p</code>, i.e.
+<code>(λ1·S) + (λ3·p)</code> by Fortran&rsquo;s left-to-right evaluation.  The
+expression below keeps EXACTLY that pair together in its own
+parenthesised subexpression and adds the intercept LAST, which is
+the order that makes the default set a no-op: parentheses are
+binding in Fortran, so a reassociating compiler (<code>-fast</code> /
+<code>-ffast-math</code> without <code>-Kieee</code>) may not fold λ2 into a different
+sum.  Writing it as <code>λ2 + λ1·S + λ3·p</code> would have put the
+intercept INSIDE the pair and changed the legacy grouping.</p>
+<p><strong>At every production call site the result is bitwise unchanged.</strong>
+All four callers — <code>ice_frazil_accumulate</code>,
+<code>ice_frazil_uptake{,_multicat}_impl</code>, <code>ice_compute_basal_flux_impl</code>
+— pass <code>p = 0.0_wp</code>, and there <code>λ3·p</code> is a signed zero, so the
+sum is <code>λ1·S</code> regardless of whether the toolchain contracts the
+two products into an FMA: <code>fma(λ1, S, ±0) = round(λ1·S)</code> is the
+same value as <code>round(λ1·S) + (±0)</code> for every nonzero product.
+Adding <code>λ2 ≡ TFR_0_COEFF ≡ +0.0</code> is then the IEEE-754 <code>x + 0.0</code>
+identity — exact for every finite <code>x</code> EXCEPT <code>x = −0.0</code>.
+MEASURED (gfortran 15.1, <code>-O3 -march=native</code>): bitwise identical
+at <code>p = 0</code> over 400 001 salinities spanning [0, 40], with the
+single exception below.</p>
+<p>SIGNED ZERO, decided and documented: <code>T_f</code> is a zero at all only
+when <code>λ1·S</code> and <code>λ3·p</code> are both zero, i.e. only at <code>S = 0</code> AND
+<code>p = 0</code>, and there the legacy expression returned <code>−0.0</code> while
+this one returns <code>+0.0</code>.  That difference is ACCEPTED, because
+<code>−0.0 == +0.0</code> is <code>.true.</code>, no consumer divides by <code>T_f</code> or
+forms <code>1/T_f</code>, no consumer branches on <code>sign(T_f)</code>, and every
+call site uses <code>T_f</code> only inside the difference <code>T − T_f</code>, where
+the sign of a zero cannot survive.</p>
+<p>OFF the production envelope (<code>p /= 0</code>, which nothing passes yet —
+wiring the cavity pressure in is a later PR) the answer may move
+by <strong>at most 1 ulp</strong> from the pre-knob expression, and only on a
+toolchain whose FMA contraction is sensitive to whether the
+coefficients are compile-time <code>parameter</code>s or runtime handle
+members.  gfortran 15.1 at <code>-O3 -march=native</code> is such a
+toolchain: it contracts <code>eos%tfr_s*S + eos%tfr_p*p</code> into a
+<code>vfmadd</code> but did NOT contract the old all-constant form (measured:
+33 825 of 160 040 <code>(S, p /= 0)</code> samples differ, max gap exactly
+1 ulp).  That is a rounding-mode difference in a more accurate
+direction, not a change of formula.
+<code>test_default_set_bit_identical</code> pins both arms.</p>
 
 
     <h3>Arguments</h3>
@@ -193,7 +253,7 @@ the dispatch in <code>eos_density_point</code>.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~27"></span>
+              <span class="anchor" id="variable-eos~36"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in)</td>
@@ -203,14 +263,15 @@ the dispatch in <code>eos_density_point</code>.</p>
             <td>::</td>
             <td><strong>eos</strong></td>
             <td>
-                <p>Shared EOS handle (variant tag), by value.  Read for the
-future per-variant dispatch; every variant takes the linear
-branch in v1.</p>
+                <p>Shared EOS handle, by value — carries the liquidus
+coefficient set (<code>tfr_s</code>/<code>tfr_0</code>/<code>tfr_p</code>) written at configure
+by <code>eos_apply_tfreeze_set</code>, plus the variant tag the future
+nonlinear-form branch will read.</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-s~5"></span>
+              <span class="anchor" id="variable-s~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -225,7 +286,7 @@ branch in v1.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-p~14"></span>
+              <span class="anchor" id="variable-p~13"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -261,199 +322,448 @@ surface — the frazil kernel&rsquo;s use case).</p>
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: proc~~eos_freezing_point~~CalledByGraph Pages: 1 -->
-<svg id="proceos_freezing_pointCalledByGraph" width="641pt" height="114pt"
- viewBox="0.00 0.00 641.00 113.92" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="proc~~eos_freezing_point~~CalledByGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 154)">
+<svg id="proceos_freezing_pointCalledByGraph" width="641pt" height="183pt"
+ viewBox="0.00 0.00 641.00 182.59" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~eos_freezing_point~~CalledByGraph" class="graph" transform="scale(0.43 0.43) rotate(0) translate(4 419)">
 <title>proc~~eos_freezing_point~~CalledByGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 885,-154 885,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-419 1481,-419 1481,4 -4,4"/>
 <!-- proc~eos_freezing_point -->
 <g id="proc~~eos_freezing_point~~CalledByGraph_node1" class="node">
 <title>proc~eos_freezing_point</title>
-<polygon fill="none" stroke="black" points="881,-87 769,-87 769,-63 881,-63 881,-87"/>
-<text text-anchor="middle" x="825" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">eos_freezing_point</text>
+<polygon fill="none" stroke="black" points="1477,-192 1365,-192 1365,-168 1477,-168 1477,-192"/>
+<text text-anchor="middle" x="1421" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50">eos_freezing_point</text>
+</g>
+<!-- proc~cavity_safe_state -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node2" class="node">
+<title>proc~cavity_safe_state</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node2"><a xlink:href="../proc/cavity_safe_state.html" xlink:title="cavity_safe_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="1291,-316 1188,-316 1188,-292 1291,-292 1291,-316"/>
+<text text-anchor="middle" x="1239.5" y="-301.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_safe_state</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge1" class="edge">
+<title>proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M1291.13,-292.79C1304.05,-288.67 1317.53,-283.18 1329,-276 1360.99,-255.97 1389.41,-222.09 1405.66,-200.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1408.59,-202.33 1411.66,-192.2 1402.94,-198.2 1408.59,-202.33"/>
+</g>
+<!-- proc~cavity_solve_melt -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node3" class="node">
+<title>proc~cavity_solve_melt</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node3"><a xlink:href="../proc/cavity_solve_melt.html" xlink:title="cavity_solve_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="800,-394 694,-394 694,-370 800,-370 800,-394"/>
+<text text-anchor="middle" x="747" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solve_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge2" class="edge">
+<title>proc~cavity_solve_melt&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M800.21,-392.44C909.31,-411.18 1164.9,-438.74 1329,-325 1373.33,-294.27 1400.54,-234.24 1412.63,-201.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1416.07,-202.66 1416.15,-192.07 1409.48,-200.3 1416.07,-202.66"/>
+</g>
+<!-- proc~cavity_solve_melt&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge10" class="edge">
+<title>proc~cavity_solve_melt&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M800.07,-380.32C871.55,-377.2 1003.76,-368.53 1114,-345 1142.85,-338.84 1174.41,-328.41 1198.53,-319.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1199.89,-322.83 1208.05,-316.08 1197.46,-316.27 1199.89,-322.83"/>
+</g>
+<!-- proc~cavity_state_at_x -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node13" class="node">
+<title>proc~cavity_state_at_x</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node13"><a xlink:href="../proc/cavity_state_at_x.html" xlink:title="cavity_state_at_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="939,-354 836,-354 836,-330 939,-330 939,-354"/>
+<text text-anchor="middle" x="887.5" y="-339.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_state_at_x</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt&#45;&gt;proc~cavity_state_at_x -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge25" class="edge">
+<title>proc~cavity_solve_melt&#45;&gt;proc~cavity_state_at_x</title>
+<path fill="none" stroke="#aaff00" d="M789.55,-370C803.8,-365.88 819.93,-361.23 834.87,-356.91"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="835.86,-360.27 844.5,-354.13 833.92,-353.54 835.86,-360.27"/>
+</g>
+<!-- proc~cavity_three_equation -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node4" class="node">
+<title>proc~cavity_three_equation</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node4"><a xlink:href="../proc/cavity_three_equation.html" xlink:title="cavity_three_equation">
+<polygon fill="#d9534f" stroke="#d9534f" points="1109.5,-274 979.5,-274 979.5,-250 1109.5,-250 1109.5,-274"/>
+<text text-anchor="middle" x="1044.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_three_equation</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge3" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M1109.64,-267.25C1168.4,-269.87 1256.94,-268.19 1329,-243 1355.97,-233.57 1382.3,-213.85 1399.65,-198.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1402.22,-201.36 1407.4,-192.11 1397.59,-196.11 1402.22,-201.36"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge12" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M1100.81,-274.04C1124.89,-279.28 1153.19,-285.43 1177.85,-290.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1177.29,-294.26 1187.81,-292.97 1178.78,-287.42 1177.29,-294.26"/>
 </g>
 <!-- proc~ice_compute_basal_flux_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node2" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node5" class="node">
 <title>proc~ice_compute_basal_flux_impl</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node2"><a xlink:href="../proc/ice_compute_basal_flux_impl.html" xlink:title="ice_compute_basal_flux_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="727.5,-150 559.5,-150 559.5,-126 727.5,-126 727.5,-150"/>
-<text text-anchor="middle" x="643.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux_impl</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node5"><a xlink:href="../proc/ice_compute_basal_flux_impl.html" xlink:title="ice_compute_basal_flux_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1323.5,-234 1155.5,-234 1155.5,-210 1323.5,-210 1323.5,-234"/>
+<text text-anchor="middle" x="1239.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_compute_basal_flux_impl&#45;&gt;proc~eos_freezing_point -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge1" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge4" class="edge">
 <title>proc~ice_compute_basal_flux_impl&#45;&gt;proc~eos_freezing_point</title>
-<path fill="none" stroke="#ff0000" d="M702.58,-125.97C712.82,-123.36 723.3,-120.35 733,-117 753.26,-110 775.09,-100.01 792.29,-91.53"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="793.96,-94.61 801.33,-87 790.83,-88.35 793.96,-94.61"/>
+<path fill="none" stroke="#ff0000" d="M1291.94,-209.96C1312.78,-205.09 1337.02,-199.42 1358.76,-194.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1359.62,-197.72 1368.55,-192.04 1358.02,-190.91 1359.62,-197.72"/>
 </g>
 <!-- proc~ice_frazil_accumulate_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node3" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node6" class="node">
 <title>proc~ice_frazil_accumulate_impl</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node3"><a xlink:href="../proc/ice_frazil_accumulate_impl.html" xlink:title="ice_frazil_accumulate_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="722,-108 565,-108 565,-84 722,-84 722,-108"/>
-<text text-anchor="middle" x="643.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_accumulate_impl</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node6"><a xlink:href="../proc/ice_frazil_accumulate_impl.html" xlink:title="ice_frazil_accumulate_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1318,-192 1161,-192 1161,-168 1318,-168 1318,-192"/>
+<text text-anchor="middle" x="1239.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_accumulate_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_frazil_accumulate_impl&#45;&gt;proc~eos_freezing_point -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge2" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge5" class="edge">
 <title>proc~ice_frazil_accumulate_impl&#45;&gt;proc~eos_freezing_point</title>
-<path fill="none" stroke="#ff0000" d="M722.19,-86.91C734.35,-85.49 746.82,-84.03 758.67,-82.64"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="759.38,-86.08 768.9,-81.45 758.56,-79.13 759.38,-86.08"/>
+<path fill="none" stroke="#ff0000" d="M1318.19,-180C1330.35,-180 1342.82,-180 1354.67,-180"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1354.9,-183.5 1364.9,-180 1354.9,-176.5 1354.9,-183.5"/>
 </g>
 <!-- proc~ice_frazil_uptake_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node4" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node7" class="node">
 <title>proc~ice_frazil_uptake_impl</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node4"><a xlink:href="../proc/ice_frazil_uptake_impl.html" xlink:title="ice_frazil_uptake_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="708.5,-66 578.5,-66 578.5,-42 708.5,-42 708.5,-66"/>
-<text text-anchor="middle" x="643.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_impl</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node7"><a xlink:href="../proc/ice_frazil_uptake_impl.html" xlink:title="ice_frazil_uptake_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1304.5,-150 1174.5,-150 1174.5,-126 1304.5,-126 1304.5,-150"/>
+<text text-anchor="middle" x="1239.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_frazil_uptake_impl&#45;&gt;proc~eos_freezing_point -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge3" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge6" class="edge">
 <title>proc~ice_frazil_uptake_impl&#45;&gt;proc~eos_freezing_point</title>
-<path fill="none" stroke="#ff0000" d="M708.54,-61.49C724.89,-63.4 742.47,-65.46 758.87,-67.38"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="758.56,-70.87 768.9,-68.55 759.37,-63.92 758.56,-70.87"/>
+<path fill="none" stroke="#ff0000" d="M1291.94,-150.04C1312.78,-154.91 1337.02,-160.58 1358.76,-165.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1358.02,-169.09 1368.55,-167.96 1359.62,-162.28 1358.02,-169.09"/>
 </g>
 <!-- proc~ice_frazil_uptake_multicat_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node5" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node8" class="node">
 <title>proc~ice_frazil_uptake_multicat_impl</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node5"><a xlink:href="../proc/ice_frazil_uptake_multicat_impl.html" xlink:title="ice_frazil_uptake_multicat_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="733,-24 554,-24 554,0 733,0 733,-24"/>
-<text text-anchor="middle" x="643.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_multicat_impl</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node8"><a xlink:href="../proc/ice_frazil_uptake_multicat_impl.html" xlink:title="ice_frazil_uptake_multicat_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1329,-108 1150,-108 1150,-84 1329,-84 1329,-108"/>
+<text text-anchor="middle" x="1239.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_multicat_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~eos_freezing_point -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge4" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge7" class="edge">
 <title>proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~eos_freezing_point</title>
-<path fill="none" stroke="#ff0000" d="M702.58,-24.03C712.82,-26.64 723.3,-29.65 733,-33 753.26,-40 775.09,-49.99 792.29,-58.47"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="790.83,-61.65 801.33,-63 793.96,-55.39 790.83,-61.65"/>
+<path fill="none" stroke="#ff0000" d="M1304.3,-108.11C1312.77,-110.59 1321.21,-113.53 1329,-117 1354.64,-128.43 1380.65,-147.33 1398.26,-161.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1396.24,-164.32 1406.19,-167.95 1400.67,-158.91 1396.24,-164.32"/>
+</g>
+<!-- proc~tfreeze_ib_impl -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node9" class="node">
+<title>proc~tfreeze_ib_impl</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node9"><a xlink:href="../proc/tfreeze_ib_impl.html" xlink:title="tfreeze_ib_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1286,-66 1193,-66 1193,-42 1286,-42 1286,-66"/>
+<text text-anchor="middle" x="1239.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tfreeze_ib_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~tfreeze_ib_impl&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge8" class="edge">
+<title>proc~tfreeze_ib_impl&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M1286.26,-59.24C1300.68,-62.33 1316.17,-67.22 1329,-75 1363.79,-96.08 1392.23,-134.94 1407.59,-159.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1404.76,-161.09 1413,-167.75 1410.71,-157.4 1404.76,-161.09"/>
+</g>
+<!-- proc~thermal_driving_impl -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node10" class="node">
+<title>proc~thermal_driving_impl</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node10"><a xlink:href="../proc/thermal_driving_impl.html" xlink:title="thermal_driving_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1302,-24 1177,-24 1177,0 1302,0 1302,-24"/>
+<text text-anchor="middle" x="1239.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">thermal_driving_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~thermal_driving_impl&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge9" class="edge">
+<title>proc~thermal_driving_impl&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M1302.26,-20.04C1311.77,-23.09 1321.06,-27.27 1329,-33 1373.38,-65 1400.69,-125.95 1412.75,-158.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1409.47,-159.63 1416.13,-167.87 1416.06,-157.28 1409.47,-159.63"/>
+</g>
+<!-- proc~cavity_melt_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node11" class="node">
+<title>proc~cavity_melt_point</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node11"><a xlink:href="../proc/cavity_melt_point.html" xlink:title="cavity_melt_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="635,-415 529,-415 529,-391 635,-391 635,-415"/>
+<text text-anchor="middle" x="582" y="-400.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge14" class="edge">
+<title>proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt</title>
+<path fill="none" stroke="#ffaa00" d="M635.02,-396.3C650.46,-394.31 667.53,-392.11 683.56,-390.04"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="684.44,-393.46 693.91,-388.71 683.55,-386.52 684.44,-393.46"/>
+</g>
+<!-- proc~cavity_melt_point_gamma -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node12" class="node">
+<title>proc~cavity_melt_point_gamma</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node12"><a xlink:href="../proc/cavity_melt_point_gamma.html" xlink:title="cavity_melt_point_gamma">
+<polygon fill="#d9534f" stroke="#d9534f" points="658,-373 506,-373 506,-349 658,-349 658,-373"/>
+<text text-anchor="middle" x="582" y="-358.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_solve_melt -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge15" class="edge">
+<title>proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_solve_melt</title>
+<path fill="none" stroke="#ffaa00" d="M658.3,-370.7C666.84,-371.8 675.47,-372.91 683.81,-373.99"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="683.46,-377.47 693.82,-375.28 684.35,-370.53 683.46,-377.47"/>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge11" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M939.23,-339.51C985.02,-336.95 1054.18,-332.28 1114,-325 1134.85,-322.46 1157.53,-318.88 1177.75,-315.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1178.52,-318.81 1187.77,-313.64 1177.32,-311.92 1178.52,-318.81"/>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge16" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation</title>
+<path fill="none" stroke="#aaff00" d="M903.27,-329.86C919.85,-316.75 947.97,-295.99 975,-283 979.08,-281.04 983.39,-279.21 987.78,-277.51"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="989.23,-280.71 997.45,-274.02 986.85,-274.13 989.23,-280.71"/>
+</g>
+<!-- proc~cavity_two_equation -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node14" class="node">
+<title>proc~cavity_two_equation</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node14"><a xlink:href="../proc/cavity_two_equation.html" xlink:title="cavity_two_equation">
+<polygon fill="#d9534f" stroke="#d9534f" points="1105,-316 984,-316 984,-292 1105,-292 1105,-316"/>
+<text text-anchor="middle" x="1044.5" y="-301.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_two_equation</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_two_equation&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge13" class="edge">
+<title>proc~cavity_two_equation&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M1105.24,-304C1128.29,-304 1154.63,-304 1177.77,-304"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1177.81,-307.5 1187.81,-304 1177.81,-300.5 1177.81,-307.5"/>
+</g>
+<!-- proc~fill_tfreeze_ib -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node15" class="node">
+<title>proc~fill_tfreeze_ib</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node15"><a xlink:href="../proc/fill_tfreeze_ib.html" xlink:title="fill_tfreeze_ib">
+<polygon fill="#d9534f" stroke="#d9534f" points="1085.5,-66 1003.5,-66 1003.5,-42 1085.5,-42 1085.5,-66"/>
+<text text-anchor="middle" x="1044.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_tfreeze_ib</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_tfreeze_ib&#45;&gt;proc~tfreeze_ib_impl -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge21" class="edge">
+<title>proc~fill_tfreeze_ib&#45;&gt;proc~tfreeze_ib_impl</title>
+<path fill="none" stroke="#aa00ff" d="M1085.96,-54C1113.96,-54 1151.61,-54 1182.49,-54"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1182.68,-57.5 1192.68,-54 1182.68,-50.5 1182.68,-57.5"/>
+</g>
+<!-- proc~fill_thermal_driving -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node16" class="node">
+<title>proc~fill_thermal_driving</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node16"><a xlink:href="../proc/fill_thermal_driving.html" xlink:title="fill_thermal_driving">
+<polygon fill="#d9534f" stroke="#d9534f" points="1102,-24 987,-24 987,0 1102,0 1102,-24"/>
+<text text-anchor="middle" x="1044.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_thermal_driving</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_thermal_driving&#45;&gt;proc~thermal_driving_impl -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge22" class="edge">
+<title>proc~fill_thermal_driving&#45;&gt;proc~thermal_driving_impl</title>
+<path fill="none" stroke="#ff00aa" d="M1102.1,-12C1122.36,-12 1145.47,-12 1166.84,-12"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1166.84,-15.5 1176.84,-12 1166.84,-8.5 1166.84,-15.5"/>
 </g>
 <!-- proc~ice_compute_basal_flux -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node6" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node17" class="node">
 <title>proc~ice_compute_basal_flux</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node6"><a xlink:href="../proc/ice_compute_basal_flux.html" xlink:title="ice_compute_basal_flux">
-<polygon fill="#d9534f" stroke="#d9534f" points="518,-150 379,-150 379,-126 518,-126 518,-150"/>
-<text text-anchor="middle" x="448.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node17"><a xlink:href="../proc/ice_compute_basal_flux.html" xlink:title="ice_compute_basal_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="1114,-232 975,-232 975,-208 1114,-208 1114,-232"/>
+<text text-anchor="middle" x="1044.5" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_compute_basal_flux&#45;&gt;proc~ice_compute_basal_flux_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge5" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge17" class="edge">
 <title>proc~ice_compute_basal_flux&#45;&gt;proc~ice_compute_basal_flux_impl</title>
-<path fill="none" stroke="#ff0000" d="M518.09,-138C528.19,-138 538.73,-138 549.23,-138"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="549.26,-141.5 559.26,-138 549.26,-134.5 549.26,-141.5"/>
+<path fill="none" stroke="#00ff00" d="M1114.09,-220.71C1124.19,-220.82 1134.73,-220.92 1145.23,-221.03"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1145.22,-224.53 1155.26,-221.14 1145.29,-217.53 1145.22,-224.53"/>
 </g>
 <!-- proc~ice_frazil_accumulate -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node7" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node18" class="node">
 <title>proc~ice_frazil_accumulate</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node7"><a xlink:href="../proc/ice_frazil_accumulate.html" xlink:title="ice_frazil_accumulate">
-<polygon fill="#d9534f" stroke="#d9534f" points="512.5,-108 384.5,-108 384.5,-84 512.5,-84 512.5,-108"/>
-<text text-anchor="middle" x="448.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_accumulate</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node18"><a xlink:href="../proc/ice_frazil_accumulate.html" xlink:title="ice_frazil_accumulate">
+<polygon fill="#d9534f" stroke="#d9534f" points="1108.5,-190 980.5,-190 980.5,-166 1108.5,-166 1108.5,-190"/>
+<text text-anchor="middle" x="1044.5" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_accumulate</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_frazil_accumulate&#45;&gt;proc~ice_frazil_accumulate_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge6" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge18" class="edge">
 <title>proc~ice_frazil_accumulate&#45;&gt;proc~ice_frazil_accumulate_impl</title>
-<path fill="none" stroke="#7fff00" d="M512.7,-96C526.05,-96 540.38,-96 554.47,-96"/>
-<polygon fill="#7fff00" stroke="#7fff00" points="554.66,-99.5 564.66,-96 554.66,-92.5 554.66,-99.5"/>
+<path fill="none" stroke="#00ffa9" d="M1108.7,-178.65C1122.05,-178.79 1136.38,-178.94 1150.47,-179.09"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="1150.63,-182.59 1160.66,-179.19 1150.7,-175.59 1150.63,-182.59"/>
 </g>
 <!-- proc~ice_frazil_uptake -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node8" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node19" class="node">
 <title>proc~ice_frazil_uptake</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node8"><a xlink:href="../proc/ice_frazil_uptake.html" xlink:title="ice_frazil_uptake">
-<polygon fill="#d9534f" stroke="#d9534f" points="499.5,-66 397.5,-66 397.5,-42 499.5,-42 499.5,-66"/>
-<text text-anchor="middle" x="448.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node19"><a xlink:href="../proc/ice_frazil_uptake.html" xlink:title="ice_frazil_uptake">
+<polygon fill="#d9534f" stroke="#d9534f" points="1095.5,-148 993.5,-148 993.5,-124 1095.5,-124 1095.5,-148"/>
+<text text-anchor="middle" x="1044.5" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake</text>
 </a>
 </g>
 </g>
 <!-- proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge7" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge19" class="edge">
 <title>proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_impl</title>
-<path fill="none" stroke="#00ffff" d="M499.7,-54C520.62,-54 545.34,-54 568.29,-54"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="568.34,-57.5 578.34,-54 568.34,-50.5 568.34,-57.5"/>
+<path fill="none" stroke="#00a9ff" d="M1095.7,-136.52C1116.62,-136.74 1141.34,-136.99 1164.29,-137.23"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1164.3,-140.73 1174.34,-137.34 1164.37,-133.73 1164.3,-140.73"/>
 </g>
 <!-- proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge8" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge20" class="edge">
 <title>proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl</title>
-<path fill="none" stroke="#7f00ff" d="M499.7,-43.07C523.37,-37.92 551.9,-31.72 577.22,-26.21"/>
-<polygon fill="#7f00ff" stroke="#7f00ff" points="578.09,-29.6 587.11,-24.05 576.6,-22.76 578.09,-29.6"/>
+<path fill="none" stroke="#0000ff" d="M1095.7,-125.59C1118.48,-120.87 1145.76,-115.22 1170.35,-110.12"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1171.26,-113.51 1180.34,-108.05 1169.84,-106.66 1171.26,-113.51"/>
+</g>
+<!-- proc~cavity_melt_columns -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node20" class="node">
+<title>proc~cavity_melt_columns</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node20"><a xlink:href="../proc/cavity_melt_columns.html" xlink:title="cavity_melt_columns">
+<polygon fill="#d9534f" stroke="#d9534f" points="461,-415 337,-415 337,-391 461,-391 461,-415"/>
+<text text-anchor="middle" x="399" y="-400.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge23" class="edge">
+<title>proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point</title>
+<path fill="none" stroke="#ff0000" d="M461.03,-403C479.64,-403 500.13,-403 518.82,-403"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="519,-406.5 529,-403 519,-399.5 519,-406.5"/>
+</g>
+<!-- proc~cavity_melt_columns_2d -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node21" class="node">
+<title>proc~cavity_melt_columns_2d</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node21"><a xlink:href="../proc/cavity_melt_columns_2d.html" xlink:title="cavity_melt_columns_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="470,-373 328,-373 328,-349 470,-349 470,-373"/>
+<text text-anchor="middle" x="399" y="-358.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge24" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma</title>
+<path fill="none" stroke="#ffaa00" d="M470.24,-361C478.5,-361 487.01,-361 495.45,-361"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="495.71,-364.5 505.71,-361 495.71,-357.5 495.71,-364.5"/>
 </g>
 <!-- proc~engine_step_ice -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node9" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node22" class="node">
 <title>proc~engine_step_ice</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node9"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
-<polygon fill="#d9534f" stroke="#d9534f" points="343,-108 245,-108 245,-84 343,-84 343,-108"/>
-<text text-anchor="middle" x="294" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node22"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="936.5,-190 838.5,-190 838.5,-166 936.5,-166 936.5,-190"/>
+<text text-anchor="middle" x="887.5" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
 </a>
 </g>
 </g>
 <!-- proc~engine_step_ice&#45;&gt;proc~ice_compute_basal_flux -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge9" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge26" class="edge">
 <title>proc~engine_step_ice&#45;&gt;proc~ice_compute_basal_flux</title>
-<path fill="none" stroke="#ff0000" d="M338.7,-108.04C355.93,-112.78 375.89,-118.28 393.97,-123.26"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="393.22,-126.68 403.79,-125.96 395.08,-119.93 393.22,-126.68"/>
+<path fill="none" stroke="#0000ff" d="M932.92,-190.04C950.51,-194.8 970.9,-200.33 989.35,-205.33"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="988.51,-208.73 999.08,-207.96 990.34,-201.97 988.51,-208.73"/>
 </g>
 <!-- proc~engine_step_ice&#45;&gt;proc~ice_frazil_accumulate -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge10" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge27" class="edge">
 <title>proc~engine_step_ice&#45;&gt;proc~ice_frazil_accumulate</title>
-<path fill="none" stroke="#00ff00" d="M343.25,-96C353.17,-96 363.82,-96 374.4,-96"/>
-<polygon fill="#00ff00" stroke="#00ff00" points="374.48,-99.5 384.48,-96 374.48,-92.5 374.48,-99.5"/>
+<path fill="none" stroke="#aa00ff" d="M936.69,-178C947.24,-178 958.63,-178 969.92,-178"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="970.22,-181.5 980.22,-178 970.22,-174.5 970.22,-181.5"/>
 </g>
 <!-- proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge11" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge28" class="edge">
 <title>proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake</title>
-<path fill="none" stroke="#0000ff" d="M338.7,-83.96C355.93,-79.22 375.89,-73.72 393.97,-68.74"/>
-<polygon fill="#0000ff" stroke="#0000ff" points="395.08,-72.07 403.79,-66.04 393.22,-65.32 395.08,-72.07"/>
+<path fill="none" stroke="#ff00aa" d="M932.92,-165.96C950.51,-161.2 970.9,-155.67 989.35,-150.67"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="990.34,-154.03 999.08,-148.04 988.51,-147.27 990.34,-154.03"/>
 </g>
 <!-- proc~driver_run_ocean -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node10" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node23" class="node">
 <title>proc~driver_run_ocean</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
-<polygon fill="#d9534f" stroke="#d9534f" points="209,-129 103,-129 103,-105 209,-105 209,-129"/>
-<text text-anchor="middle" x="156" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node23"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="800,-211 694,-211 694,-187 800,-187 800,-211"/>
+<text text-anchor="middle" x="747" y="-196.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge12" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge30" class="edge">
 <title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
-<path fill="none" stroke="#ff0000" d="M209.19,-108.94C217.5,-107.66 226.14,-106.32 234.58,-105.02"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="235.39,-108.44 244.74,-103.45 234.32,-101.52 235.39,-108.44"/>
+<path fill="none" stroke="#0000ff" d="M800.36,-191.06C809.47,-189.68 819,-188.23 828.26,-186.83"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="828.81,-190.29 838.17,-185.33 827.76,-183.37 828.81,-190.29"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node24" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node24"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="292,-373 157,-373 157,-349 292,-349 292,-373"/>
+<text text-anchor="middle" x="224.5" y="-358.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge29" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d</title>
+<path fill="none" stroke="#00ff00" d="M292.19,-361C300.48,-361 309.03,-361 317.5,-361"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="317.77,-364.5 327.77,-361 317.77,-357.5 317.77,-364.5"/>
 </g>
 <!-- proc~rdb_ocean_step -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node11" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node25" class="node">
 <title>proc~rdb_ocean_step</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node11"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
-<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-87 107.5,-87 107.5,-63 204.5,-63 204.5,-87"/>
-<text text-anchor="middle" x="156" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node25"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="795.5,-169 698.5,-169 698.5,-145 795.5,-145 795.5,-169"/>
+<text text-anchor="middle" x="747" y="-154.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
 </a>
 </g>
 </g>
 <!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge13" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge31" class="edge">
 <title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
-<path fill="none" stroke="#ff0000" d="M204.57,-82.34C214.33,-83.85 224.72,-85.46 234.81,-87.01"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="234.35,-90.49 244.77,-88.55 235.42,-83.57 234.35,-90.49"/>
+<path fill="none" stroke="#0000ff" d="M795.66,-164.23C806.1,-165.81 817.26,-167.5 828.07,-169.14"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="827.87,-172.65 838.28,-170.69 828.92,-165.73 827.87,-172.65"/>
 </g>
 <!-- proc~driver_run -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_node12" class="node">
+<g id="proc~~eos_freezing_point~~CalledByGraph_node26" class="node">
 <title>proc~driver_run</title>
-<g id="a_proc~~eos_freezing_point~~CalledByGraph_node12"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
-<polygon fill="#d9534f" stroke="#d9534f" points="67,-129 0,-129 0,-105 67,-105 67,-129"/>
-<text text-anchor="middle" x="33.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node26"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="615.5,-211 548.5,-211 548.5,-187 615.5,-187 615.5,-211"/>
+<text text-anchor="middle" x="582" y="-196.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
-<g id="proc~~eos_freezing_point~~CalledByGraph_edge14" class="edge">
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge32" class="edge">
 <title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
-<path fill="none" stroke="#ff0000" d="M67.11,-117C75.11,-117 83.94,-117 92.83,-117"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-120.5 102.85,-117 92.85,-113.5 92.85,-120.5"/>
+<path fill="none" stroke="#ff0000" d="M615.59,-199C635.1,-199 660.53,-199 683.75,-199"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="683.89,-202.5 693.89,-199 683.89,-195.5 683.89,-202.5"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_node27" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~eos_freezing_point~~CalledByGraph_node27"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="121,-373 0,-373 0,-349 121,-349 121,-373"/>
+<text text-anchor="middle" x="60.5" y="-358.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~eos_freezing_point~~CalledByGraph_edge33" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ff00" d="M121.36,-361C129.56,-361 138.08,-361 146.53,-361"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="146.79,-364.5 156.79,-361 146.79,-357.5 146.79,-364.5"/>
 </g>
 </g>
 </svg>
@@ -564,22 +874,90 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! callable), plus `elemental` so callers can evaluate whole</span>
 <span class="w">      </span><span class="c">!! salinity arrays in one reference.</span>
 <span class="w">      </span><span class="c">!!</span>
-<span class="w">      </span><span class="c">!! v1 is the SIS2/MOM6 LINEAR liquidus for EVERY `eos%variant`:</span>
+<span class="w">      </span><span class="c">!! The form is LINEAR for every `eos%variant`:</span>
 <span class="w">      </span><span class="c">!!</span>
-<span class="w">      </span><span class="c">!!   T_f = TFR_S_COEFF·S + TFR_P_COEFF·p</span>
+<span class="w">      </span><span class="c">!!   T_f = λ1·S + λ2 + λ3·p</span>
 <span class="w">      </span><span class="c">!!</span>
-<span class="w">      </span><span class="c">!! (μ = −0.054 °C per g/kg, MOM6 `TFREEZE_FORM = "LINEAR"` — MOM6</span>
-<span class="w">      </span><span class="c">!! keeps the linear form as its default even under the Wright /</span>
-<span class="w">      </span><span class="c">!! TEOS-10 density branches, so applying it across variants is</span>
-<span class="w">      </span><span class="c">!! parity, not a shortcut.)  A TEOS-10 `t_freezing(SA, p)`</span>
-<span class="w">      </span><span class="c">!! polynomial slots in later as an `eos%variant ==</span>
-<span class="w">      </span><span class="c">!! EOS_VARIANT_ROQUET_SPV / EOS_VARIANT_TEOS10` branch, mirroring</span>
-<span class="w">      </span><span class="c">!! the dispatch in `eos_density_point`.</span>
+<span class="w">      </span><span class="c">!! with the three coefficients carried ON THE HANDLE</span>
+<span class="w">      </span><span class="c">!! (`eos%tfr_s` / `eos%tfr_0` / `eos%tfr_p`) and selected as a</span>
+<span class="w">      </span><span class="c">!! named set by `&amp;ocean_eos_nml tfreeze_set`:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   * `"seaice"` (DEFAULT) — SIS2/MOM6, λ = (−0.054, 0, −7.53e-8);</span>
+<span class="w">      </span><span class="c">!!     T_f(35 PSU, 0 Pa) = −1.89 °C.</span>
+<span class="w">      </span><span class="c">!!   * `"isomip"` — ISOMIP+ / Asay-Davis et al. (2016) Table 4,</span>
+<span class="w">      </span><span class="c">!!     λ = (−0.0573, 0.0832, −7.53e-8); T_f(34.5, 0) = −1.89365 °C.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Keeping the linear form under the Wright / Roquet density</span>
+<span class="w">      </span><span class="c">!! branches is MOM6 parity, not a shortcut: MOM6's</span>
+<span class="w">      </span><span class="c">!! `TFREEZE_FORM = "LINEAR"` is its default under any density</span>
+<span class="w">      </span><span class="c">!! branch.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! VARIANT / FORM DISPATCH SEAM.  A NONLINEAR liquidus — MOM6's</span>
+<span class="w">      </span><span class="c">!! `TFREEZE_FORM = "MILLERO_78"` (Millero 1978, UNESCO TP28) or a</span>
+<span class="w">      </span><span class="c">!! TEOS-10 `t_freezing(SA, p)` polynomial — is a different</span>
+<span class="w">      </span><span class="c">!! FUNCTIONAL FORM, not another coefficient triple, so it does NOT</span>
+<span class="w">      </span><span class="c">!! belong in `tfreeze_set`.  It slots in HERE, as a leading branch</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   if (eos%tfreeze_form == TFREEZE_FORM_MILLERO78) then ... else</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! mirroring the `eos%variant` dispatch in `eos_density_point` and</span>
+<span class="w">      </span><span class="c">!! leaving the linear expression below untouched.  Not implemented:</span>
+<span class="w">      </span><span class="c">!! the Millero (1978) coefficients are UNVERIFIED here (the primary</span>
+<span class="w">      </span><span class="c">!! document could not be obtained — see the prototype's</span>
+<span class="w">      </span><span class="c">!! `ice_shelf_melt/CITATIONS.md` §1 "Millero (1978)"), and this</span>
+<span class="w">      </span><span class="c">!! repository does not ship unverified constants.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! BIT-IDENTITY, and why the parentheses are load-bearing.  The</span>
+<span class="w">      </span><span class="c">!! pre-knob expression was `TFR_S_COEFF*S + TFR_P_COEFF*p`, i.e.</span>
+<span class="w">      </span><span class="c">!! `(λ1·S) + (λ3·p)` by Fortran's left-to-right evaluation.  The</span>
+<span class="w">      </span><span class="c">!! expression below keeps EXACTLY that pair together in its own</span>
+<span class="w">      </span><span class="c">!! parenthesised subexpression and adds the intercept LAST, which is</span>
+<span class="w">      </span><span class="c">!! the order that makes the default set a no-op: parentheses are</span>
+<span class="w">      </span><span class="c">!! binding in Fortran, so a reassociating compiler (`-fast` /</span>
+<span class="w">      </span><span class="c">!! `-ffast-math` without `-Kieee`) may not fold λ2 into a different</span>
+<span class="w">      </span><span class="c">!! sum.  Writing it as `λ2 + λ1·S + λ3·p` would have put the</span>
+<span class="w">      </span><span class="c">!! intercept INSIDE the pair and changed the legacy grouping.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **At every production call site the result is bitwise unchanged.**</span>
+<span class="w">      </span><span class="c">!! All four callers — `ice_frazil_accumulate`,</span>
+<span class="w">      </span><span class="c">!! `ice_frazil_uptake{,_multicat}_impl`, `ice_compute_basal_flux_impl`</span>
+<span class="w">      </span><span class="c">!! — pass `p = 0.0_wp`, and there `λ3·p` is a signed zero, so the</span>
+<span class="w">      </span><span class="c">!! sum is `λ1·S` regardless of whether the toolchain contracts the</span>
+<span class="w">      </span><span class="c">!! two products into an FMA: `fma(λ1, S, ±0) = round(λ1·S)` is the</span>
+<span class="w">      </span><span class="c">!! same value as `round(λ1·S) + (±0)` for every nonzero product.</span>
+<span class="w">      </span><span class="c">!! Adding `λ2 ≡ TFR_0_COEFF ≡ +0.0` is then the IEEE-754 `x + 0.0`</span>
+<span class="w">      </span><span class="c">!! identity — exact for every finite `x` EXCEPT `x = −0.0`.</span>
+<span class="w">      </span><span class="c">!! MEASURED (gfortran 15.1, `-O3 -march=native`): bitwise identical</span>
+<span class="w">      </span><span class="c">!! at `p = 0` over 400 001 salinities spanning [0, 40], with the</span>
+<span class="w">      </span><span class="c">!! single exception below.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! SIGNED ZERO, decided and documented: `T_f` is a zero at all only</span>
+<span class="w">      </span><span class="c">!! when `λ1·S` and `λ3·p` are both zero, i.e. only at `S = 0` AND</span>
+<span class="w">      </span><span class="c">!! `p = 0`, and there the legacy expression returned `−0.0` while</span>
+<span class="w">      </span><span class="c">!! this one returns `+0.0`.  That difference is ACCEPTED, because</span>
+<span class="w">      </span><span class="c">!! `−0.0 == +0.0` is `.true.`, no consumer divides by `T_f` or</span>
+<span class="w">      </span><span class="c">!! forms `1/T_f`, no consumer branches on `sign(T_f)`, and every</span>
+<span class="w">      </span><span class="c">!! call site uses `T_f` only inside the difference `T − T_f`, where</span>
+<span class="w">      </span><span class="c">!! the sign of a zero cannot survive.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! OFF the production envelope (`p /= 0`, which nothing passes yet —</span>
+<span class="w">      </span><span class="c">!! wiring the cavity pressure in is a later PR) the answer may move</span>
+<span class="w">      </span><span class="c">!! by **at most 1 ulp** from the pre-knob expression, and only on a</span>
+<span class="w">      </span><span class="c">!! toolchain whose FMA contraction is sensitive to whether the</span>
+<span class="w">      </span><span class="c">!! coefficients are compile-time `parameter`s or runtime handle</span>
+<span class="w">      </span><span class="c">!! members.  gfortran 15.1 at `-O3 -march=native` is such a</span>
+<span class="w">      </span><span class="c">!! toolchain: it contracts `eos%tfr_s*S + eos%tfr_p*p` into a</span>
+<span class="w">      </span><span class="c">!! `vfmadd` but did NOT contract the old all-constant form (measured:</span>
+<span class="w">      </span><span class="c">!! 33 825 of 160 040 `(S, p /= 0)` samples differ, max gap exactly</span>
+<span class="w">      </span><span class="c">!! 1 ulp).  That is a rounding-mode difference in a more accurate</span>
+<span class="w">      </span><span class="c">!! direction, not a change of formula.</span>
+<span class="w">      </span><span class="c">!! `test_default_set_bit_identical` pins both arms.</span>
 <span class="w">      </span><span class="c">!$acc routine seq</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
-<span class="w">         </span><span class="c">!! Shared EOS handle (variant tag), by value.  Read for the</span>
-<span class="w">         </span><span class="c">!! future per-variant dispatch; every variant takes the linear</span>
-<span class="w">         </span><span class="c">!! branch in v1.</span>
+<span class="w">         </span><span class="c">!! Shared EOS handle, by value — carries the liquidus</span>
+<span class="w">         </span><span class="c">!! coefficient set (`tfr_s`/`tfr_0`/`tfr_p`) written at configure</span>
+<span class="w">         </span><span class="c">!! by `eos_apply_tfreeze_set`, plus the variant tag the future</span>
+<span class="w">         </span><span class="c">!! nonlinear-form branch will read.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">S</span>
 <span class="w">         </span><span class="c">!! Salinity (PSU / g/kg).</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p</span>
@@ -587,12 +965,7 @@ large graphs.</div>
 <span class="w">         </span><span class="c">!! surface — the frazil kernel's use case).</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_f</span>
 
-<span class="w">      </span><span class="c">! Variant dispatch seam: v1 = the same linear liquidus for all</span>
-<span class="w">      </span><span class="c">! variants (see docstring), so `eos%variant` is read only by the</span>
-<span class="w">      </span><span class="c">! future TEOS-10 branch — which slots in as</span>
-<span class="w">      </span><span class="c">!   if (eos%variant == EOS_VARIANT_ROQUET_SPV) then ... else</span>
-<span class="w">      </span><span class="c">! without touching this default expression.</span>
-<span class="w">      </span><span class="n">T_f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TFR_S_COEFF</span><span class="o">*</span><span class="n">S</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">TFR_P_COEFF</span><span class="o">*</span><span class="n">p</span>
+<span class="w">      </span><span class="n">T_f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">eos</span><span class="p">%</span><span class="n">tfr_s</span><span class="o">*</span><span class="n">S</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">eos</span><span class="p">%</span><span class="n">tfr_p</span><span class="o">*</span><span class="n">p</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">eos</span><span class="p">%</span><span class="n">tfr_0</span>
 <span class="w">   </span><span class="k">end function </span><span class="n">eos_freezing_point</span>
 </pre></div>
 
@@ -617,7 +990,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

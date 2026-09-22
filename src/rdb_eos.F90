@@ -30,9 +30,13 @@ module rdb_eos
    public :: eos_validate
    public :: eos_wright_pgf_column_sweep_impl
    public :: eos_specvol_derivs
+   public :: eos_density_derivs
+   public :: eos_buoyancy_coeffs
    public :: eos_density_point
    public :: eos_freezing_point
    public :: parse_eos_variant
+   public :: parse_tfreeze_set
+   public :: eos_apply_tfreeze_set
 
    integer, parameter, public :: EOS_VARIANT_LINEAR = 1
       !! Linear T/S (debug / lock-exchange / Eady).
@@ -76,14 +80,75 @@ module rdb_eos
       !! seq` body.  Not yet device-callable; consumers always pass
       !! the model-prognostic (T, S) regardless of convention.
 
-   ! Seawater freezing-point (liquidus) coefficients — SIS2/MOM6 linear
-   ! form `T_Freeze` (sea-ice PR 1, PLAN_SEA_ICE.md "Prerequisites").
+   ! ======================================================================
+   ! Seawater freezing-point (liquidus) coefficient SETS.
+   ! ----------------------------------------------------------------------
+   ! Both shipped sets evaluate the SAME linear form
+   !
+   !     T_f = lambda_1*S + lambda_2 + lambda_3*p
+   !
+   ! and differ only in their three numbers.  The set is selected by
+   ! `&ocean_eos_nml tfreeze_set` and lives on the EOS handle as
+   ! `eos%tfr_s` / `eos%tfr_0` / `eos%tfr_p`, so `eos_freezing_point`
+   ! carries NO hard-coded liquidus and every holder of an `eos_t` copy
+   ! (the ice slot's `engine%state%eos`, the vmix / EPBL / kappa-shear /
+   ! tidal-mixing slot copies) inherits the configured set.
+   !
+   ! WHY IT IS SELECTABLE.  The two sets are 0.03 °C apart at S = 34.5 —
+   ! a few percent of a typical Antarctic thermal driving, and enough to
+   ! flip the SIGN of an ice-shelf basal melt rate over a 0.03 °C band of
+   ! ocean temperature.  Sea-ice runs want the SIS2 number they were
+   ! tuned with; an ISOMIP+ cavity run is required by its protocol to use
+   ! the other.  Picking one silently is the bug.
+   ! ======================================================================
+
+   integer, parameter, public :: TFREEZE_SET_INVALID = 0
+      !! Unrecognised `tfreeze_set` string — `validate_config` fails loud
+      !! on this rather than falling back to a default (a mistyped
+      !! liquidus is a 0.03 °C physics change with no symptom).
+   integer, parameter, public :: TFREEZE_SET_SEAICE = 1
+      !! SIS2/MOM6 sea-ice linear liquidus (`TFR_*_COEFF` below).  The
+      !! DEFAULT — every run that predates this knob is bit-identical.
+   integer, parameter, public :: TFREEZE_SET_ISOMIP = 2
+      !! ISOMIP+ ice-shelf-cavity liquidus (`TFR_ISOMIP_*` below).
+
+   ! ---- `tfreeze_set = "seaice"` (default) ----
+   ! SIS2/MOM6 linear form `T_Freeze` (sea-ice PR 1, PLAN_SEA_ICE.md
+   ! "Prerequisites").  Zero intercept by construction.
    real(wp), parameter, public :: TFR_S_COEFF = -0.054_wp
       !! Liquidus slope dT_f/dS (degC per g/kg) — SIS2's `T_Freeze`
       !! μ = −0.054 °C/(g/kg); T_f(S=35) = −1.89 °C.
+   real(wp), parameter, public :: TFR_0_COEFF = 0.0_wp
+      !! Liquidus intercept (degC).  EXACTLY zero for this set — the
+      !! SIS2 form has no constant term.  Named (rather than left
+      !! implicit) so the handle's default and `eos_freezing_point`'s
+      !! bit-identity contract cannot drift apart.
    real(wp), parameter, public :: TFR_P_COEFF = -7.53e-8_wp
       !! Pressure depression dT_f/dp (degC/Pa) — MOM6 `DTFREEZE_DP`
       !! reference value (−7.53e-8 °C/Pa ≈ −0.75 °C per 1000 dbar).
+
+   ! ---- `tfreeze_set = "isomip"` ----
+   ! Asay-Davis, X. S., et al. (2016): "Experimental design for three
+   ! interrelated marine ice sheet and ocean model intercomparison
+   ! projects: MISMIP v. 3 (MISMIP +), ISOMIP v. 2 (ISOMIP +) and
+   ! MISOMIP v. 1 (MISOMIP1)."  Geosci. Model Dev. 9, 2471-2497.
+   ! Coefficients verified against **Table 4, p. 2483** ("Parameters
+   ! recommended for the common (COM) experiments": λ1 = −0.0573
+   ! °C PSU⁻¹ "Liquidus slope", λ2 = 0.0832 °C "Liquidus intercept",
+   ! λ3 = −7.53e-8 °C Pa⁻¹ "Liquidus pressure coefficient"), consumed in
+   ! **eq. (25), p. 2485**: `T_zd = λ1·S_zd + λ2 + λ3·p_zd` — the same
+   ! ordering and sign convention this module evaluates, with `p` a
+   ! POSITIVE pressure in Pa.  Paper p. 2485 notes the set is "based on
+   ! values from Jenkins et al. (2010) but have been modified to compute
+   ! the potential freezing point".
+   real(wp), parameter, public :: TFR_ISOMIP_S_COEFF = -0.0573_wp
+      !! ISOMIP+ λ1, liquidus slope (degC per PSU).
+   real(wp), parameter, public :: TFR_ISOMIP_0_COEFF = 0.0832_wp
+      !! ISOMIP+ λ2, liquidus intercept (degC).
+   real(wp), parameter, public :: TFR_ISOMIP_P_COEFF = -7.53e-8_wp
+      !! ISOMIP+ λ3, liquidus pressure coefficient (degC/Pa).  Numerically
+      !! equal to `TFR_P_COEFF`; kept as its own named constant so the two
+      !! sets stay independently editable.
 
    ! Wright (1997) coefficients from Table A1 of the paper.  Units: SI
    ! throughout (T in degC, S in PSU, P in Pa, ρ in kg/m^3).
@@ -311,6 +376,20 @@ module rdb_eos
          !! calls, so a host assignment at configure needs no
          !! `!$acc update device` under `mem:separate` (same contract as
          !! `rho0`).
+      real(wp) :: tfr_s = TFR_S_COEFF
+         !! Liquidus slope λ1 (degC per PSU) — the `S` coefficient of
+         !! `eos_freezing_point`.  Selected as a NAMED SET by
+         !! `&ocean_eos_nml tfreeze_set` (`eos_apply_tfreeze_set`), never
+         !! knob-by-knob: the three numbers are a fitted triple and
+         !! mixing λ1 from one source with λ2 from another is a silent
+         !! physics error.  Default = the SIS2 sea-ice set ⇒ bit-identical
+         !! to every run before the knob existed.
+      real(wp) :: tfr_0 = TFR_0_COEFF
+         !! Liquidus intercept λ2 (degC).  Exactly `0.0` for the default
+         !! sea-ice set — see `eos_freezing_point` for the (signed-zero
+         !! only) bit-identity argument this exactness underwrites.
+      real(wp) :: tfr_p = TFR_P_COEFF
+         !! Liquidus pressure coefficient λ3 (degC/Pa).
       integer :: ts_convention = TS_POT_PRAC
          !! Tracer T/S convention this EOS expects (TS_POT_PRAC /
          !! TS_CONS_ABS).  Identity for linear + Wright.  This type is
@@ -388,6 +467,58 @@ contains
          code = EOS_VARIANT_LINEAR
       end select
    end function parse_eos_variant
+
+   pure function parse_tfreeze_set(name) result(code)
+      !! Translate a `&ocean_eos_nml tfreeze_set=...` string into a
+      !! `TFREEZE_SET_*` code.  Unlike `parse_eos_variant` this one does
+      !! NOT fall back to a default on a typo: it returns
+      !! `TFREEZE_SET_INVALID` and `validate_config` aborts.  Silently
+      !! defaulting would turn a mistyped liquidus into a 0.03 °C shift
+      !! in the freezing point — a melt-rate sign change at the margin,
+      !! with no run-time symptom at all.
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(adjustl(name)))
+      case ("seaice", "SEAICE", "sea_ice", "sis2")
+         code = TFREEZE_SET_SEAICE
+      case ("isomip", "ISOMIP", "isomip+", "isomip_plus")
+         code = TFREEZE_SET_ISOMIP
+      case default
+         code = TFREEZE_SET_INVALID
+      end select
+   end function parse_tfreeze_set
+
+   pure subroutine eos_apply_tfreeze_set(eos, code)
+      !! Write the named liquidus coefficient SET onto the EOS handle.
+      !! Called once, at configure time, from the earliest
+      !! `configure_ocean_*` stage — before the flat-POD handle is copied
+      !! onto the vmix / EPBL / kappa-shear / tidal-mixing slots and
+      !! before `ocean_state_enter_data`, so every copy and every device
+      !! kernel taking `eos_t` by value sees the configured set (same
+      !! contract as `rho0` / `p_ref`; no `!$acc update device` is owed).
+      !!
+      !! `TFREEZE_SET_INVALID` leaves the handle UNTOUCHED — the abort
+      !! belongs to `validate_config`, which owns the fail-loud message;
+      !! this routine is `pure` and cannot speak.
+      type(eos_t), intent(inout) :: eos
+      integer, intent(in) :: code
+
+      select case (code)
+      case (TFREEZE_SET_ISOMIP)
+         eos%tfr_s = TFR_ISOMIP_S_COEFF
+         eos%tfr_0 = TFR_ISOMIP_0_COEFF
+         eos%tfr_p = TFR_ISOMIP_P_COEFF
+      case (TFREEZE_SET_SEAICE)
+         eos%tfr_s = TFR_S_COEFF
+         eos%tfr_0 = TFR_0_COEFF
+         eos%tfr_p = TFR_P_COEFF
+      case default
+         ! TFREEZE_SET_INVALID (and anything else): leave the handle at
+         ! whatever it already carries — the default sea-ice set unless a
+         ! caller has already applied one.  `validate_config` owns the
+         ! fail-loud; this routine is `pure` and cannot report.
+      end select
+   end subroutine eos_apply_tfreeze_set
 
    subroutine eos_compute_arrays(eos, h_layer, hS_layer, hT_layer, &
                                  rho_layer, nx, ny, nz)
@@ -626,13 +757,28 @@ contains
       !!
       !! **`p_top` reaches the EOS ARGUMENT only.**  `p_edge_out` stays an
       !! anomaly stack seeded at `p_edge_out(nz+1) = 0` exactly as before,
-      !! so the PGF top boundary condition is untouched.  Consequence,
-      !! stated plainly: under a SLOPING load the along-layer difference
+      !! so the PGF top boundary condition THIS kernel feeds (FV_WRIGHT's
+      !! `p_edge`) is untouched.  Consequence, stated plainly: under a
+      !! SLOPING load the along-layer difference
       !! `p_centre(i) − p_centre(i−1)` omits `Δp_top`.  That term is
       !! depth-uniform and is already carried by the barotropic
       !! `eta_forcing` seam as `−(1/ρ₀)∇p_surf`, so the momentum is not
-      !! missing it — adding it here as well would DOUBLE-COUNT.  What
-      !! moves in this kernel is the COMPRESSIBILITY: `rho_insitu` is
+      !! missing it.
+      !!
+      !! **Amended (P5.0).**  The original wording here said adding the
+      !! load to a PGF top BC "would DOUBLE-COUNT".  That is the
+      !! conservative statement, and it is stronger than the truth.  A
+      !! depth-uniform `p_top` in the top BC perturbs EVERY layer's `PFu`
+      !! by the SAME `−(1/ρ₀)∇p_top`, and the split solver replaces the
+      !! depth mean of the layer PGF with the barotropic solution
+      !! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`), so the uniform piece cancels
+      !! identically and the seam keeps sole ownership of the barotropic
+      !! response — the two are ORTHOGONAL, not additive.  That is what
+      !! `&ocean_pgf_nml p_top_in_bc` does for FV_MOM6 (theorem in
+      !! `compute_fv_mom6_impl`'s docstring).  It is NOT done here:
+      !! FV_WRIGHT's `p_edge` seed is a separate follow-up, and this
+      !! kernel's contract remains "EOS argument only".  What moves in
+      !! this kernel is the COMPRESSIBILITY: `rho_insitu` is
       !! evaluated at the pressure the water actually sits at, which is
       !! the ~4-5 kg/m^3 systematic error an ice-shelf load introduces.
       !! Bit-identical when `p_top` is the zero array it ships as
@@ -945,6 +1091,151 @@ contains
       end if
    end subroutine eos_specvol_derivs
 
+   pure elemental subroutine eos_buoyancy_coeffs(eos, T, S, p, alpha_T, beta_S)
+      !! Thermal-expansion and haline-contraction coefficients of the
+      !! **ACTIVE** equation of state at a point, in the SAME DIMENSIONAL
+      !! convention the `eos_t` members `alpha_T` / `beta_S` carry:
+      !!
+      !!   alpha_T = −∂ρ/∂T   (kg/m³ per degC; > 0 — warm water expands)
+      !!   beta_S  = +∂ρ/∂S   (kg/m³ per PSU;  > 0 — salt contracts)
+      !!
+      !! so that `ρ ≈ ρ_ref − alpha_T·ΔT + beta_S·ΔS` to first order,
+      !! matching the linear branch of `eos_density_point` term for term.
+      !! They are NOT the fractional α = −(1/ρ)∂ρ/∂T; divide by ρ (or by
+      !! ρ₀ in a Boussinesq consumer) for that.  `ocean_cavity_const_t`
+      !! deliberately carries its own FRACTIONAL ISOMIP+ pair — see its
+      !! docstring.
+      !!
+      !! **Why this exists.** Seawater's thermal expansion is strongly
+      !! state-dependent: it collapses toward zero near the freezing point
+      !! and grows with pressure (thermobaricity).  At (−1.9 degC, 34.5
+      !! PSU) Wright (1997) gives roughly a quarter of the 10 degC surface
+      !! value, and about twice that again by 1000 dbar.  Any consumer
+      !! that sizes a buoyancy flux with a CONSTANT α while the dyn-core
+      !! integrates a NONLINEAR ρ is inconsistent with its own density
+      !! field — worst under an ice shelf, where the constant can
+      !! mis-magnitude (and in the cold-fresh corner mis-sign) the
+      !! melt-driven surface buoyancy flux that sets the boundary layer.
+      !!
+      !! **Exactness, per branch — this is load-bearing for bit-identity.**
+      !! Each branch is differentiated in CLOSED FORM from that variant's
+      !! own density expression; no branch round-trips through
+      !! `−ρ²·dSV/dX`, because for the LINEAR branch that would return
+      !! `ρ(T,S)²·alpha_T/ρ₀²` — equal to `eos%alpha_T` only to round-off.
+      !! As written the linear branch returns the handle members
+      !! BIT-FOR-BIT, which is what lets a consumer routed through here
+      !! stay byte-identical to the constant path under `eos = "linear"`.
+      !!
+      !!   * linear — `ρ = ρ₀ + β(S−S_ref) − α(T−T_ref)` ⇒ the members
+      !!     themselves, exactly; `p` is ignored (no pressure dependence).
+      !!   * Wright (1997) — `ρ = P/D` with `P = p + p₀(T,S)` and
+      !!     `D = λ(T,S) + α₀(T,S)·P`, so by the quotient rule
+      !!     `∂ρ/∂X = (P_X·D − P·D_X)/D²`, `D_X = λ_X + α₀_X·P + α₀·P_X`,
+      !!     all three polynomials from Table A1.  Algebraically identical
+      !!     to `−ρ²·dSV/dX` from `eos_specvol_derivs`, evaluated once.
+      !!   * Roquet et al. (2015) SpV — `ρ = 1/SV` ⇒ `∂ρ/∂X = −SV_X/SV²`,
+      !!     reusing the SINGLE fused `roquet_spv_point` evaluation that
+      !!     already returns `SV` and both model-variable sensitivities
+      !!     (no duplicated polynomial — see `eos_specvol_derivs`).
+      !!
+      !! The `else` is unreachable-by-contract: `eos_validate` guarantees
+      !! `eos%variant` is in the device-callable set at configure time
+      !! (device code cannot `error stop`), exactly as for
+      !! `eos_density_point` / `eos_specvol_derivs`.
+      !!
+      !! `elemental` (all dummies scalar, `eos_t` a flat POD by value) so a
+      !! host-side sweep can evaluate whole arrays in one reference, and
+      !! `!$acc routine seq` so a `do concurrent` kernel can call it —
+      !! the same shape `eos_freezing_point` already ships.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle (variant + scalar coeffs), by value.
+      real(wp), intent(in) :: T, S
+         !! Potential temperature (degC) and practical salinity (PSU) —
+         !! the model-prognostic pair, per the `TS_POT_PRAC` convention.
+      real(wp), intent(in) :: p
+         !! Pressure (Pa) at which to evaluate.  Which pressure is the
+         !! CONSUMER's choice and is documented at each call site: a
+         !! surface buoyancy flux wants the top of the column
+         !! (`multilayer_state_t%p_top` under `&ocean_psurf_nml in_eos`,
+         !! else `eos%p_ref`); an interior-interface closure wants the
+         !! true in-situ hydrostatic pressure there.  Never a
+         !! horizontally-varying value fed back into `ms%rho_layer` —
+         !! see the `p_top` seam contract in `src/core/ocean/README.md`.
+      real(wp), intent(out) :: alpha_T
+         !! −∂ρ/∂T (kg/m³ per degC).
+      real(wp), intent(out) :: beta_S
+         !! +∂ρ/∂S (kg/m³ per PSU).
+
+      real(wp) :: T_sq, alpha_0, p_0, lambda, big_p, denom, inv_d2
+      real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
+      real(wp) :: sv_roq, dsv_dt_roq, dsv_ds_roq, inv_sv2
+
+      if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt_roq, dsv_ds_roq)
+         inv_sv2 = 1.0_wp/(sv_roq*sv_roq)
+         alpha_T = dsv_dt_roq*inv_sv2
+         beta_S = -dsv_ds_roq*inv_sv2
+      else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
+         T_sq = T*T
+         alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
+         p_0 = WRIGHT_B0 + WRIGHT_B1*T + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*T + &
+               WRIGHT_B4*S + WRIGHT_B5*S*T
+         lambda = WRIGHT_C0 + WRIGHT_C1*T + WRIGHT_C2*T_sq + WRIGHT_C3*T_sq*T + &
+                  WRIGHT_C4*S + WRIGHT_C5*S*T
+         dp0_dt = WRIGHT_B1 + 2.0_wp*WRIGHT_B2*T + 3.0_wp*WRIGHT_B3*T_sq + &
+                  WRIGHT_B5*S
+         dlam_dt = WRIGHT_C1 + 2.0_wp*WRIGHT_C2*T + 3.0_wp*WRIGHT_C3*T_sq + &
+                   WRIGHT_C5*S
+         dp0_ds = WRIGHT_B4 + WRIGHT_B5*T
+         dlam_ds = WRIGHT_C4 + WRIGHT_C5*T
+         big_p = p + p_0
+         denom = lambda + alpha_0*big_p
+         inv_d2 = 1.0_wp/(denom*denom)
+         alpha_T = -(dp0_dt*denom &
+                     - big_p*(dlam_dt + WRIGHT_A1*big_p + alpha_0*dp0_dt))*inv_d2
+         beta_S = (dp0_ds*denom &
+                   - big_p*(dlam_ds + WRIGHT_A2*big_p + alpha_0*dp0_ds))*inv_d2
+      else
+         alpha_T = eos%alpha_T
+         beta_S = eos%beta_S
+      end if
+   end subroutine eos_buoyancy_coeffs
+
+   pure elemental subroutine eos_density_derivs(eos, T, S, p, drho_dt, drho_ds)
+      !! Density sensitivities `∂ρ/∂T` and `∂ρ/∂S` of the ACTIVE equation
+      !! of state at a point — the signed twin of `eos_buoyancy_coeffs`,
+      !! which is where the per-variant closed forms live:
+      !!
+      !!   ∂ρ/∂T = −alpha_T   (kg/m³ per degC; < 0 in the usual regime)
+      !!   ∂ρ/∂S = +beta_S    (kg/m³ per PSU;  > 0)
+      !!
+      !! Negation is exact in IEEE-754, so this is the same number with
+      !! the opposite sign bit — never a second evaluation of the EOS.
+      !! Prefer this spelling where the consumer wants a density GRADIENT
+      !! (`∇ρ = ∂ρ/∂T·∇T + ∂ρ/∂S·∇S`) and `eos_buoyancy_coeffs` where it
+      !! wants the (α, β) pair in the `eos_t` member convention.
+      !!
+      !! `eos_specvol_derivs` remains the right entry point for a consumer
+      !! that genuinely works in SPECIFIC VOLUME (EPBL's PE weights,
+      !! kappa-shear's `dbuoy = g·ρ₀·dSV/dX`); this routine is the density
+      !! form, not a duplicate of it.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: T, S
+      real(wp), intent(in) :: p
+      real(wp), intent(out) :: drho_dt
+         !! ∂ρ/∂T (kg/m³ per degC).
+      real(wp), intent(out) :: drho_ds
+         !! ∂ρ/∂S (kg/m³ per PSU).
+
+      real(wp) :: alpha_T, beta_S
+
+      call eos_buoyancy_coeffs(eos, T, S, p, alpha_T, beta_S)
+      drho_dt = -alpha_T
+      drho_ds = beta_S
+   end subroutine eos_density_derivs
+
    pure function eos_density_point(eos, T, S, p) result(rho)
       !! Scalar density evaluation at a point — the same formulas the
       !! 3D `eos_*_impl` kernels apply, exposed for finite-difference
@@ -985,22 +1276,90 @@ contains
       !! callable), plus `elemental` so callers can evaluate whole
       !! salinity arrays in one reference.
       !!
-      !! v1 is the SIS2/MOM6 LINEAR liquidus for EVERY `eos%variant`:
+      !! The form is LINEAR for every `eos%variant`:
       !!
-      !!   T_f = TFR_S_COEFF·S + TFR_P_COEFF·p
+      !!   T_f = λ1·S + λ2 + λ3·p
       !!
-      !! (μ = −0.054 °C per g/kg, MOM6 `TFREEZE_FORM = "LINEAR"` — MOM6
-      !! keeps the linear form as its default even under the Wright /
-      !! TEOS-10 density branches, so applying it across variants is
-      !! parity, not a shortcut.)  A TEOS-10 `t_freezing(SA, p)`
-      !! polynomial slots in later as an `eos%variant ==
-      !! EOS_VARIANT_ROQUET_SPV / EOS_VARIANT_TEOS10` branch, mirroring
-      !! the dispatch in `eos_density_point`.
+      !! with the three coefficients carried ON THE HANDLE
+      !! (`eos%tfr_s` / `eos%tfr_0` / `eos%tfr_p`) and selected as a
+      !! named set by `&ocean_eos_nml tfreeze_set`:
+      !!
+      !!   * `"seaice"` (DEFAULT) — SIS2/MOM6, λ = (−0.054, 0, −7.53e-8);
+      !!     T_f(35 PSU, 0 Pa) = −1.89 °C.
+      !!   * `"isomip"` — ISOMIP+ / Asay-Davis et al. (2016) Table 4,
+      !!     λ = (−0.0573, 0.0832, −7.53e-8); T_f(34.5, 0) = −1.89365 °C.
+      !!
+      !! Keeping the linear form under the Wright / Roquet density
+      !! branches is MOM6 parity, not a shortcut: MOM6's
+      !! `TFREEZE_FORM = "LINEAR"` is its default under any density
+      !! branch.
+      !!
+      !! VARIANT / FORM DISPATCH SEAM.  A NONLINEAR liquidus — MOM6's
+      !! `TFREEZE_FORM = "MILLERO_78"` (Millero 1978, UNESCO TP28) or a
+      !! TEOS-10 `t_freezing(SA, p)` polynomial — is a different
+      !! FUNCTIONAL FORM, not another coefficient triple, so it does NOT
+      !! belong in `tfreeze_set`.  It slots in HERE, as a leading branch
+      !!
+      !!   if (eos%tfreeze_form == TFREEZE_FORM_MILLERO78) then ... else
+      !!
+      !! mirroring the `eos%variant` dispatch in `eos_density_point` and
+      !! leaving the linear expression below untouched.  Not implemented:
+      !! the Millero (1978) coefficients are UNVERIFIED here (the primary
+      !! document could not be obtained — see the prototype's
+      !! `ice_shelf_melt/CITATIONS.md` §1 "Millero (1978)"), and this
+      !! repository does not ship unverified constants.
+      !!
+      !! BIT-IDENTITY, and why the parentheses are load-bearing.  The
+      !! pre-knob expression was `TFR_S_COEFF*S + TFR_P_COEFF*p`, i.e.
+      !! `(λ1·S) + (λ3·p)` by Fortran's left-to-right evaluation.  The
+      !! expression below keeps EXACTLY that pair together in its own
+      !! parenthesised subexpression and adds the intercept LAST, which is
+      !! the order that makes the default set a no-op: parentheses are
+      !! binding in Fortran, so a reassociating compiler (`-fast` /
+      !! `-ffast-math` without `-Kieee`) may not fold λ2 into a different
+      !! sum.  Writing it as `λ2 + λ1·S + λ3·p` would have put the
+      !! intercept INSIDE the pair and changed the legacy grouping.
+      !!
+      !! **At every production call site the result is bitwise unchanged.**
+      !! All four callers — `ice_frazil_accumulate`,
+      !! `ice_frazil_uptake{,_multicat}_impl`, `ice_compute_basal_flux_impl`
+      !! — pass `p = 0.0_wp`, and there `λ3·p` is a signed zero, so the
+      !! sum is `λ1·S` regardless of whether the toolchain contracts the
+      !! two products into an FMA: `fma(λ1, S, ±0) = round(λ1·S)` is the
+      !! same value as `round(λ1·S) + (±0)` for every nonzero product.
+      !! Adding `λ2 ≡ TFR_0_COEFF ≡ +0.0` is then the IEEE-754 `x + 0.0`
+      !! identity — exact for every finite `x` EXCEPT `x = −0.0`.
+      !! MEASURED (gfortran 15.1, `-O3 -march=native`): bitwise identical
+      !! at `p = 0` over 400 001 salinities spanning [0, 40], with the
+      !! single exception below.
+      !!
+      !! SIGNED ZERO, decided and documented: `T_f` is a zero at all only
+      !! when `λ1·S` and `λ3·p` are both zero, i.e. only at `S = 0` AND
+      !! `p = 0`, and there the legacy expression returned `−0.0` while
+      !! this one returns `+0.0`.  That difference is ACCEPTED, because
+      !! `−0.0 == +0.0` is `.true.`, no consumer divides by `T_f` or
+      !! forms `1/T_f`, no consumer branches on `sign(T_f)`, and every
+      !! call site uses `T_f` only inside the difference `T − T_f`, where
+      !! the sign of a zero cannot survive.
+      !!
+      !! OFF the production envelope (`p /= 0`, which nothing passes yet —
+      !! wiring the cavity pressure in is a later PR) the answer may move
+      !! by **at most 1 ulp** from the pre-knob expression, and only on a
+      !! toolchain whose FMA contraction is sensitive to whether the
+      !! coefficients are compile-time `parameter`s or runtime handle
+      !! members.  gfortran 15.1 at `-O3 -march=native` is such a
+      !! toolchain: it contracts `eos%tfr_s*S + eos%tfr_p*p` into a
+      !! `vfmadd` but did NOT contract the old all-constant form (measured:
+      !! 33 825 of 160 040 `(S, p /= 0)` samples differ, max gap exactly
+      !! 1 ulp).  That is a rounding-mode difference in a more accurate
+      !! direction, not a change of formula.
+      !! `test_default_set_bit_identical` pins both arms.
       !$acc routine seq
       type(eos_t), intent(in) :: eos
-         !! Shared EOS handle (variant tag), by value.  Read for the
-         !! future per-variant dispatch; every variant takes the linear
-         !! branch in v1.
+         !! Shared EOS handle, by value — carries the liquidus
+         !! coefficient set (`tfr_s`/`tfr_0`/`tfr_p`) written at configure
+         !! by `eos_apply_tfreeze_set`, plus the variant tag the future
+         !! nonlinear-form branch will read.
       real(wp), intent(in) :: S
          !! Salinity (PSU / g/kg).
       real(wp), intent(in) :: p
@@ -1008,12 +1367,7 @@ contains
          !! surface — the frazil kernel's use case).
       real(wp) :: T_f
 
-      ! Variant dispatch seam: v1 = the same linear liquidus for all
-      ! variants (see docstring), so `eos%variant` is read only by the
-      ! future TEOS-10 branch — which slots in as
-      !   if (eos%variant == EOS_VARIANT_ROQUET_SPV) then ... else
-      ! without touching this default expression.
-      T_f = TFR_S_COEFF*S + TFR_P_COEFF*p
+      T_f = (eos%tfr_s*S + eos%tfr_p*p) + eos%tfr_0
    end function eos_freezing_point
 
 end module rdb_eos

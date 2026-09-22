@@ -73,6 +73,10 @@ module rdb_ocean_vcoord
    public :: ocean_vcoord_t
    public :: parse_ocean_vcoord_type
    public :: invert_density_targets
+   public :: ocean_vcoord_z_fixed_target
+   public :: ocean_vcoord_closed_face_masks
+   public :: ocean_vcoord_k_top_from_target
+   public :: ocean_vcoord_count_ledges
    public :: VCOORD_EULERIAN_Z
    public :: VCOORD_LAGRANGIAN
    public :: VCOORD_Z_FIXED
@@ -88,6 +92,31 @@ module rdb_ocean_vcoord
       !! Newton convergence tolerance — tested on |delta| AFTER xi += delta.
    real(wp), parameter :: NR_OFFSET = 1.0e-6_wp
       !! Out-of-range nudge applied only when the boundary gradient ≈ 0.
+
+   ! ---- VCOORD_Z_FIXED rigid-top partial cell ----
+   real(wp), parameter :: Z_FIXED_TOP_PARTIAL_FRAC = 0.1_wp
+      !! Minimum PARTIAL TOP CELL thickness, as a fraction of the nominal
+      !! layer spacing `h_nominal`, for `VCOORD_Z_FIXED` under a rigid top
+      !! (`z_top > 0`, i.e. an ice-shelf cavity).  The ice base cuts the
+      !! first live layer wherever the draft crosses a nominal level; left
+      !! unguarded that cut can leave a sliver of arbitrarily small
+      !! thickness (`0 < h << h_nominal`) sitting against the ice.  A layer
+      !! that thin is live (it clears `H_VANISHED`) but violates every
+      !! thin-layer CFL the column has, so when the cut would leave less
+      !! than `Z_FIXED_TOP_PARTIAL_FRAC*h_nominal` the sliver is merged
+      !! into the layer BELOW and the vacated index becomes an inert
+      !! filler — exactly mirroring how the BED side treats its own
+      !! slivers today (a would-be sub-`h_min` bed cell collapses to
+      !! `h_min` and hands its water to the layer above).
+      !!
+      !! The two thresholds differ on purpose and the asymmetry is the
+      !! honest one: the bed's threshold is `zstar_h_min` (today's
+      !! behaviour, kept bit-for-bit), the top's is a fraction of the
+      !! spacing.  `0.1` is MITgcm's `hFacMin` default, which is the
+      !! minimum partial-cell fraction Losch (2008, JGR 113 C08043, §2.1)
+      !! used for exactly this ice-shelf partial-top-cell problem.  Not a
+      !! namelist knob: it is inert unless `z_top > 0`, and a cavity on a
+      !! z-like coordinate is itself a new, fenced configuration.
 
    type :: ocean_vcoord_t
       logical :: is_init = .false.
@@ -134,6 +163,30 @@ module rdb_ocean_vcoord
       ! ZSTAR_FULL branch of `compute_target_h`.
       real(wp), allocatable :: z_ref(:, :, :)
          !! Per-column z* reference (m), shape `(nx, ny, 0:nz_ml)`.
+
+      ! ---- Geopotential depth of the column TOP ----
+      ! The rigid-lid seam of the z-like families.  `z_top(i,j)` is the
+      ! depth (m, positive down, `>= 0`) of the top of the WATER column
+      ! below the `z = 0` datum, i.e. `metrics%z_draft` under an
+      ! ice-shelf cavity and identically `0` everywhere else (open
+      ! ocean, and every non-cavity run).  Filled once at configure
+      ! (`configure_ocean_cavity`) — the draft is static — and never
+      ! touched again, so the remap driver's signature is unchanged and
+      ! no second static 2-D array is threaded through the `pure` call
+      ! chain.
+      !
+      ! Allocated UNCONDITIONALLY with `source = 0.0_wp`, so it is always
+      ! safe to hand to an explicit-shape device dummy: unlike
+      ! `metrics%z_draft` (a `(1,1)` placeholder when no cavity is
+      ! configured) this is always `(nx_total, ny_total)`.
+      !
+      ! Consumed by the `VCOORD_Z_FIXED` branch of `compute_target_h`,
+      ! which measures its nominal interface depths from `z = 0` and
+      ! clips the stack against `z_top`.  `z_top ≡ 0` ⇒ every geometric
+      ! branch reproduces its pre-cavity arithmetic bit-for-bit.
+      real(wp), allocatable :: z_top(:, :)
+         !! Geopotential depth of the column top (m, positive down),
+         !! shape `(nx, ny)`.  `0` = the free surface at `z = 0`.
 
       ! ---- Isopycnal (VCOORD_RHO) target densities ----
       ! Monotone-increasing nominal interface potential densities
@@ -289,6 +342,23 @@ module rdb_ocean_vcoord
          !! capped at a 1.25× rescale factor.  The barotropic/depth-mean
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
+      logical :: zfixed_closed_faces = .false.
+         !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
+         !! closure.  Only meaningful on `VCOORD_Z_FIXED`, where a layer
+         !! whose nominal geopotential range lies inside the bed or the
+         !! ice draft is an inert FILLER; a velocity face at which that
+         !! layer is a filler on EITHER side is a z-level WALL, not a
+         !! thin passage (Adcroft, Hill & Marshall 1997; Losch 2008).
+         !!
+         !! The per-layer 0/1 face mask itself lives on `ocean_metrics_t`
+         !! (`open_u`/`open_v`, built once at configure by
+         !! `ocean_vcoord_closed_face_masks` from THIS module's `z_fixed`
+         !! target at `eta = 0`).  The flag is carried here so the ALE
+         !! remap driver — which never sees `ocean_metrics_t` — can build
+         !! its FACE columns as `min(h_L, h_R)` and drop the closed
+         !! layers, instead of pouring momentum into water that is not
+         !! there.  Scalar on the type, reaches the device through the
+         !! existing `copyin(this)`.  Default `.false.` => bit-identical.
 
       ! ---- Cached extents (for kernel loops + sanity checks) ----
       integer :: nx_total = 0
@@ -346,6 +416,12 @@ contains
       ! layer column (the dry / shallow degenerate case).
       allocate (this%z_ref(grid%nx_total, grid%ny_total, 0:nz_local), source=0.0_wp)
 
+      ! Geopotential depth of the column top.  Zero = the `z = 0` datum;
+      ! `configure_ocean_cavity` overwrites it with the static ice draft
+      ! when a cavity is configured.  Allocated unconditionally so the
+      ! Z_FIXED kernel never sees a placeholder-sized array.
+      allocate (this%z_top(grid%nx_total, grid%ny_total), source=0.0_wp)
+
       ! Isopycnal target densities — sized `0:nz_ml`, populated by the
       ! setup wiring only when `coord_type == VCOORD_RHO`.  Default is a
       ! benign monotone ramp (1020..1030 kg/m³) so the slot is always
@@ -375,6 +451,7 @@ contains
       if (allocated(this%z_ref_global)) deallocate (this%z_ref_global)
       if (allocated(this%target_h)) deallocate (this%target_h)
       if (allocated(this%z_ref)) deallocate (this%z_ref)
+      if (allocated(this%z_top)) deallocate (this%z_top)
       if (allocated(this%rho_target)) deallocate (this%rho_target)
       if (allocated(this%remap_total_h)) deallocate (this%remap_total_h)
       if (allocated(this%remap_h_ref)) deallocate (this%remap_h_ref)
@@ -400,6 +477,7 @@ contains
       type(ocean_vcoord_t), intent(inout) :: this
       if (.not. this%is_init) return
       !$acc enter data copyin(this%dsig, this%z_ref_global, this%target_h, this%z_ref)
+      !$acc enter data copyin(this%z_top)
       !$acc enter data copyin(this%rho_target)
       !$acc enter data copyin(this%remap_total_h, this%remap_h_ref, this%remap_h_old)
       !$acc enter data copyin(this%remap_conc_t, this%remap_conc_s)
@@ -419,6 +497,7 @@ contains
       !$acc exit data delete(this%remap_conc_t, this%remap_conc_s)
       !$acc exit data delete(this%remap_h_old, this%remap_h_ref, this%remap_total_h)
       !$acc exit data delete(this%rho_target)
+      !$acc exit data delete(this%z_top)
       !$acc exit data delete(this%z_ref, this%target_h, this%z_ref_global, this%dsig)
    end subroutine ocean_vcoord_exit_data_impl
 
@@ -621,7 +700,7 @@ contains
       real(wp) :: column_total, alpha, x, z_top_k, z_bot_k, dz_z, dz_sum, deficit
       real(wp) :: z_ref_nz_inv
       real(wp) :: h_bed_ref, eta_loc, H_eff, z_upper, z_lower, sum_dz
-      real(wp) :: h_nominal, h_min, z_below_loc, z_above_nominal_loc
+      real(wp) :: h_nominal, h_min
 
       if (.not. this%is_init) return
       ! Lagrangian / isopycnal: the target IS the current h_layer —
@@ -791,19 +870,16 @@ contains
             end do
 
          case (VCOORD_Z_FIXED)
-            ! Fixed-z interfaces with vanishing layers in shallow water.
-            ! Per-column algorithm mirrors `seed_h_layer_z_fixed_impl`:
-            ! walk surface-down, each layer takes its nominal thickness
-            ! `h_nominal = h_ref / nz_ml` if the interface below it sits
-            ! inside the remaining water column; else collapses to
-            ! `h_min` while the surface absorbs the residual.  When
-            ! `z_fixed_h_ref = 0` (knob unset) fall back to uniform
-            ! `H · dsig(k)` so tests that omit the knob still get
-            ! something sensible.
+            ! Fixed-z (quasi-geopotential) interfaces with vanishing
+            ! layers at BOTH ends: `h_min` fillers below the bed and —
+            ! under a rigid top (`z_top > 0`, an ice-shelf cavity) —
+            ! `h_min` fillers inside the ice, with a partial cell at each
+            ! live end.  See `ocean_vcoord_z_fixed_target`, which owns the
+            ! algorithm and is shared with the initial-thickness seed.
             !
-            ! `total_h(i,j) + eta(i,j)` is the live column total; ALE
-            ! remaps toward these per-step targets every outer step,
-            ! keeping the interface anchored at `z_target(k) = k · h_nominal`.
+            ! When `z_fixed_h_ref = 0` (knob unset) fall back to uniform
+            ! `(H + η) · dsig(k)` so tests that omit the knob still get
+            ! something sensible.
             h_nominal = 0.0_wp
             if (z_fixed_h_ref > 0.0_wp) then
                h_nominal = z_fixed_h_ref/real(nz, wp)
@@ -816,23 +892,8 @@ contains
                   target_h(i, j, k) = (total_h(i, j) + eta(i, j))*dsig(k)
                end do
             else
-               do concurrent(j=1:ny_total, i=1:nx_total) &
-                  local(k, z_below_loc, z_above_nominal_loc)
-                  z_below_loc = total_h(i, j) + eta(i, j)
-                  do k = 1, nz
-                     z_above_nominal_loc = real(nz - k, wp)*h_nominal
-                     if (z_above_nominal_loc > z_below_loc - h_min) then
-                        ! Above the column / would be sub-h_min — vanish.
-                        target_h(i, j, k) = h_min
-                        z_below_loc = z_below_loc - h_min
-                     else
-                        ! Layer fits — take nominal thickness (or surface
-                        ! residual for k=nz where z_above_nominal=0).
-                        target_h(i, j, k) = z_below_loc - z_above_nominal_loc
-                        z_below_loc = z_above_nominal_loc
-                     end if
-                  end do
-               end do
+               call ocean_vcoord_z_fixed_target(target_h, total_h, eta, this%z_top, &
+                                                nx_total, ny_total, nz, h_nominal, h_min)
             end if
 
          case default
@@ -840,6 +901,383 @@ contains
          end select
       end associate
    end subroutine ocean_vcoord_compute_target_h_impl
+
+   pure subroutine ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, &
+                                               nx, ny, nz, h_nominal, h_min)
+      !! `VCOORD_Z_FIXED` target grid — quasi-geopotential interfaces
+      !! under a rigid top, with inert fillers and a partial cell at BOTH
+      !! ends (Yung, Hallberg, Adcroft & Morrison 2026, JAMES, Fig. 1b:
+      !! quasi-z layers are geopotential and VANISH where they outcrop
+      !! into the ice base; Asay-Davis et al. 2016 §3.1.5: z-level models
+      !! use both partial top and bottom cells).
+      !!
+      !! ### The rule
+      !!
+      !! Nominal interface depths are GEOPOTENTIAL and unchanged by the
+      !! rigid top: the interface above layer `k` sits at depth
+      !! `(nz − k)·h_nominal − η` below `z = 0`, i.e. at
+      !! `(nz − k)·h_nominal − z_top` below the column TOP, which is
+      !! itself at depth `z_top − η`.  The walk is bed-up (`k = 1` is the
+      !! bed) in "depth below the column top", `z_below_loc` tracking the
+      !! bottom interface of the layer being laid:
+      !!
+      !!   * **bed side, unchanged.** A layer whose nominal top interface
+      !!     is deeper than the remaining column (by more than `h_min`)
+      !!     collapses to the inert filler `h_min` and hands its water
+      !!     UP; the lowest live layer is the partial BOTTOM cell and
+      !!     absorbs `η` plus the bed fillers' `h_min` debt.
+      !!   * **top side, new.** A layer whose nominal range lies entirely
+      !!     above the column top — i.e. inside the ice — collapses to
+      !!     `h_min` and stacks immediately under the ice base.  The
+      !!     layer whose nominal range STRADDLES the column top is the
+      !!     partial TOP cell: its thickness is the part of its nominal
+      !!     range below the top, less the top fillers' `h_min` debt.
+      !!     If that cut would leave less than
+      !!     `max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*h_nominal)`, the sliver
+      !!     is merged into the layer BELOW and the index becomes another
+      !!     filler (`k_live_top` moves down one) — the mirror of the
+      !!     bed's own sliver rule.
+      !!
+      !! `Σ_k target_h = total_h + eta` is closed by construction: every
+      !! branch assigns exactly what it subtracts from `z_below_loc`, so
+      !! each END pays for its own fillers and there is ONE closing rule
+      !! that works when both ends vanish.  (A degenerate column thinner
+      !! than `nz·h_min` overshoots to `nz·h_min`, exactly as the
+      !! pre-cavity code did.)
+      !!
+      !! ### Bit-identity
+      !!
+      !! `z_top ≡ 0` ⇒ `k_live_top = nz`, so the top branch is taken ONLY
+      !! at `k = nz`, where it evaluates `real(0, wp)*h_min = +0.0` — the
+      !! same value as the pre-cavity `real(nz − nz, wp)*h_nominal`.  Every
+      !! other layer evaluates `real(nz − k, wp)*h_nominal − 0.0_wp`, which
+      !! is bit-for-bit `real(nz − k, wp)*h_nominal` in IEEE round-to-
+      !! nearest (and under FMA contraction, since `fma(a, b, −0.0)`
+      !! rounds `a·b` once).  Pinned by
+      !! `tests/test_ocean_vcoord_zfixed_cavity.F90`.
+      integer, intent(in) :: nx
+         !! i-extent of every array (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of every array (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      real(wp), intent(out) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m).
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference thickness `H` (m) — `Σ h_layer − η`.
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly `η` (m).
+      real(wp), intent(in) :: z_top(nx, ny)
+         !! Geopotential depth of the column top (m, positive down,
+         !! `>= 0`).  `0` ⇒ the pre-cavity arithmetic, bit-for-bit.
+      real(wp), intent(in) :: h_nominal
+         !! Nominal layer spacing `z_fixed_h_ref/nz` (m), `> 0`.
+      real(wp), intent(in) :: h_min
+         !! Inert-filler thickness (`zstar_h_min`, `<= H_VANISHED`).
+      integer :: i, j, k, k_live_top
+      real(wp) :: z_below_loc, z_above_nominal_loc, z_top_loc, partial_min
+
+      partial_min = max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*h_nominal)
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, k_live_top, z_below_loc, z_above_nominal_loc, z_top_loc)
+         z_top_loc = z_top(i, j)
+         ! Index of the shallowest layer the rigid top leaves live: the
+         ! largest k whose nominal BOTTOM interface, at depth
+         ! `(nz − k + 1)*h_nominal` below z = 0, clears the top by more
+         ! than the minimum partial-cell thickness.  Monotone in k, so
+         ! the last k that passes is the largest.  Skipped entirely when
+         ! there is no rigid top (the bit-identity gate).
+         k_live_top = nz
+         if (z_top_loc > 0.0_wp) then
+            k_live_top = 1
+            do k = 1, nz
+               if (real(nz - k + 1, wp)*h_nominal - z_top_loc > partial_min) then
+                  k_live_top = k
+               end if
+            end do
+         end if
+         z_below_loc = total_h(i, j) + eta(i, j)
+         do k = 1, nz
+            if (k >= k_live_top) then
+               ! At and above the first live layer the stack is measured
+               ! from the column TOP: `(nz − k)*h_min` is the debt the
+               ! top fillers above this layer still owe, so the partial
+               ! top cell (k = k_live_top) is cut at the ice base and
+               ! pays for them, and every filler above lands on h_min.
+               z_above_nominal_loc = real(nz - k, wp)*h_min
+            else
+               z_above_nominal_loc = real(nz - k, wp)*h_nominal - z_top_loc
+            end if
+            if (z_above_nominal_loc > z_below_loc - h_min) then
+               ! Below the bed / would be sub-h_min — vanish.
+               target_h(i, j, k) = h_min
+               z_below_loc = z_below_loc - h_min
+            else
+               ! Layer fits — nominal thickness, or the end residual.
+               target_h(i, j, k) = z_below_loc - z_above_nominal_loc
+               z_below_loc = z_above_nominal_loc
+            end if
+         end do
+      end do
+   end subroutine ocean_vcoord_z_fixed_target
+
+   pure subroutine ocean_vcoord_closed_face_masks(open_u, open_v, target_h, &
+                                                  nx, ny, nz, h_vanished)
+      !! Partial-step z-level FACE CLOSURE mask for `VCOORD_Z_FIXED`
+      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
+      !!
+      !! Under `z_fixed` a layer whose nominal geopotential range lies
+      !! inside the bed — or inside the ice draft — is an inert FILLER of
+      !! thickness `zstar_h_min` (`<= h_vanished`).  A velocity face at
+      !! which layer `k` is a filler on EITHER side is not a thin
+      !! passage: geometrically there is no water there on one side, so
+      !! it is a **WALL for that layer** — no normal velocity, no mass or
+      !! tracer flux, free-slip on the tangential component.  This marks
+      !! those faces.
+      !!
+      !! ### The rule, in one line
+      !!
+      !! ```
+      !! open_u(I,j,k) = 1  iff  target_h(I-1,j,k) > h_vanished
+      !!                   .and. target_h(I  ,j,k) > h_vanished
+      !! ```
+      !! and the v-face mirror.  The mask is **STATIC**: the bed and the
+      !! draft are static, and under `z_fixed` `η` is absorbed by the
+      !! first LIVE layer (the partial cell) — a filler's target is
+      !! `zstar_h_min` whatever `η` does — so the live/filler pattern
+      !! does not move.  Build it once, from
+      !! `ocean_vcoord_z_fixed_target` at `η = 0`, so there is exactly
+      !! ONE definition of "live" shared with the ALE regrid and the IC
+      !! seed.
+      !!
+      !! ### Composition
+      !!
+      !! The mask is a THIRD, independent factor on the face width, not a
+      !! replacement for either of the other two:
+      !! ```
+      !! dy_eff(I,j,k) = dy_cu(I,j) · por_face_area_u(I,j,k) · open_u(I,j,k)
+      !!                  land (2-D)     porous (subgrid)       z-level (per layer)
+      !! ```
+      !!
+      !! ### Array-edge faces
+      !!
+      !! `I = 1` and `I = nx+1` are left fully OPEN (1), exactly as the
+      !! porous kernel leaves them: their `dy_cu` is already zero and the
+      !! continuity wall zeroing owns them.  The PHYSICAL seam of a
+      !! periodic axis is an interior index (`nghost+1`), so it is
+      !! covered by the `2:nx` sweep — provided the caller built
+      !! `target_h` from GHOST-FILLED inputs (`bt_H_ref` and `z_top` are
+      !! periodic-wrapped + halo-exchanged before this runs).
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      real(wp), intent(out) :: open_u(nx + 1, ny, nz)
+         !! u-face 0/1 open mask.
+      real(wp), intent(out) :: open_v(nx, ny + 1, nz)
+         !! v-face 0/1 open mask.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! The `z_fixed` target thickness at `η = 0`.
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).  A layer is LIVE iff its
+         !! target thickness is strictly greater than this.
+      integer :: i, j, k
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+         open_u(i, j, k) = 1.0_wp
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+         open_v(i, j, k) = 1.0_wp
+      end do
+
+      do concurrent(k=1:nz, j=1:ny, i=2:nx)
+         if (target_h(i - 1, j, k) > h_vanished .and. &
+             target_h(i, j, k) > h_vanished) then
+            open_u(i, j, k) = 1.0_wp
+         else
+            open_u(i, j, k) = 0.0_wp
+         end if
+      end do
+
+      do concurrent(k=1:nz, j=2:ny, i=1:nx)
+         if (target_h(i, j - 1, k) > h_vanished .and. &
+             target_h(i, j, k) > h_vanished) then
+            open_v(i, j, k) = 1.0_wp
+         else
+            open_v(i, j, k) = 0.0_wp
+         end if
+      end do
+   end subroutine ocean_vcoord_closed_face_masks
+
+   pure subroutine ocean_vcoord_k_top_from_target(k_top, k_top_u, k_top_v, &
+                                                  target_h, nx, ny, nz, h_vanished)
+      !! The shared FIRST-LIVE-LAYER index, counting down from the top —
+      !! `multilayer_state_t%k_top` and its two face twins — built from
+      !! a layer-thickness field.
+      !!
+      !! ### The rule
+      !!
+      !! ```
+      !! k_top(i,j) = the largest k with target_h(i,j,k) > h_vanished,
+      !!              or nz when the column has none
+      !! ```
+      !!
+      !! **Strict `>`**, matching the remap drain's `H_FLOOR`
+      !! (`rdb_ocean_remap.F90`), the melt far-field sampler's
+      !! `<= H_VANISHED ⇒ cycle`, and `ocean_vcoord_closed_face_masks`
+      !! above: a layer sitting exactly ON the marker is dead on every
+      !! side of the contract.  `h_vanished` is `H_VANISHED`, never a
+      !! slot-local `h_min = 1.0e-3` anti-zero floor — those are a
+      !! different thing under the D4 taxonomy.
+      !!
+      !! **The `nz` fallback is what makes the whole indirection free.**
+      !! On sigma, z*-lite, and every geometric family that does not
+      !! vanish a layer against the top, no wet column has
+      !! `h(:,:,nz) <= h_vanished`, so `k_top ≡ nz` and every consumer
+      !! that reads `k_top(i,j)` instead of `nz` reads the same memory
+      !! with the same arithmetic.  A land column (every layer at the
+      !! marker under the land-state contract) also lands on `nz`, which
+      !! is what those consumers index today, and is then masked out by
+      !! `wet_mask` exactly as before.
+      !!
+      !! ### The face rule is `min`, not `max`
+      !!
+      !! `k_top_u(I,j) = min(k_top(I-1,j), k_top(I,j))` and the v-face
+      !! mirror.  A velocity face carries water in layer `k` only where
+      !! BOTH abutting columns are live there — which is precisely the
+      !! statement `ocean_vcoord_closed_face_masks` makes with
+      !! `open_u = 1 iff target_h > h_vanished on both sides` — so the
+      !! shallowest layer the FACE has is the DEEPER of the two column
+      !! tops, i.e. the SMALLER index.  `max` would hand the ice-ocean
+      !! top drag and the implicit stress/drag fold a row that is a
+      !! filler on one side, which is the bug this field exists to stop.
+      !! With `k_top ≡ nz` everywhere, `min(nz, nz) = nz` ⇒ the face
+      !! twins are bit-identical too.
+      !!
+      !! Array-edge faces (`I = 1`, `I = nx+1`) take the one column they
+      !! have, mirroring the mask builder leaving them fully open: their
+      !! `dy_cu` is already zero and the wall zeroing owns them.
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      integer, intent(out) :: k_top(nx, ny)
+         !! Cell-centred first live layer.
+      integer, intent(out) :: k_top_u(nx + 1, ny)
+         !! u-face twin.
+      integer, intent(out) :: k_top_v(nx, ny + 1)
+         !! v-face twin.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! Layer thickness (m) the live/filler pattern is read from —
+         !! the `z_fixed` target at `eta = 0` at configure time.
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).  A layer is LIVE iff its
+         !! thickness is strictly greater than this.
+      integer :: i, j, k, ia, ib, ka, kb
+
+      ! Each loop is SELF-CONTAINED — it reads `target_h` and writes ONE
+      ! output array, and no loop reads what another wrote.  That is
+      ! deliberate: under `-stdpar=gpu` with `mem:separate` each
+      ! `do concurrent` gets its OWN implicit data region for the host
+      ! arrays it touches, so a face loop that read the `k_top` a
+      ! previous loop had just written saw the array as write-only and
+      ! came back with the wrong indices on device while being correct on
+      ! the host.  Re-scanning the column costs two extra passes over
+      ! `target_h` ONCE, at configure.
+      do concurrent(j=1:ny, i=1:nx) local(k)
+         k_top(i, j) = nz
+         do k = nz, 1, -1
+            if (target_h(i, j, k) > h_vanished) then
+               k_top(i, j) = k
+               exit
+            end if
+         end do
+      end do
+
+      ! `ia`/`ib` clamp to the one column an ARRAY-EDGE face has, so
+      ! `min(ka, kb)` degenerates to that column's own index there — the
+      ! mask builder leaves those faces fully open for the same reason.
+      do concurrent(j=1:ny, i=1:nx + 1) local(k, ia, ib, ka, kb)
+         ia = max(1, i - 1)
+         ib = min(nx, i)
+         ka = nz
+         do k = nz, 1, -1
+            if (target_h(ia, j, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = nz
+         do k = nz, 1, -1
+            if (target_h(ib, j, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_top_u(i, j) = min(ka, kb)
+      end do
+
+      do concurrent(j=1:ny + 1, i=1:nx) local(k, ia, ib, ka, kb)
+         ia = max(1, j - 1)
+         ib = min(ny, j)
+         ka = nz
+         do k = nz, 1, -1
+            if (target_h(i, ia, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = nz
+         do k = nz, 1, -1
+            if (target_h(i, ib, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_top_v(i, j) = min(ka, kb)
+      end do
+   end subroutine ocean_vcoord_k_top_from_target
+
+   pure function ocean_vcoord_count_ledges(open_u, open_v, target_h, &
+                                           nx, ny, nz, h_vanished) result(n_ledge)
+      !! Count LEDGE cells: a cell that is LIVE at layer `k` but all four
+      !! of whose own-layer faces are closed, i.e. water the mask has
+      !! isolated.  A ledge needs a one-cell-wide spike in the bed or the
+      !! draft; it is inert by construction (no flux in or out, and its
+      !! velocity is zeroed every stage), but a non-zero count is worth
+      !! saying out loud once at configure, because it means the mask is
+      !! walling off real water.
+      !!
+      !! Interior cells only (`2:nx-1`, `2:ny-1`) — the ghost ring has no
+      !! four-face neighbourhood of its own.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+      real(wp), intent(in) :: h_vanished
+      integer :: n_ledge
+      integer :: i, j, k
+
+      n_ledge = 0
+      do k = 1, nz
+         do j = 2, ny - 1
+            do i = 2, nx - 1
+               if (target_h(i, j, k) <= h_vanished) cycle
+               if (open_u(i, j, k) == 0.0_wp .and. &
+                   open_u(i + 1, j, k) == 0.0_wp .and. &
+                   open_v(i, j, k) == 0.0_wp .and. &
+                   open_v(i, j + 1, k) == 0.0_wp) then
+                  n_ledge = n_ledge + 1
+               end if
+            end do
+         end do
+      end do
+   end function ocean_vcoord_count_ledges
 
    pure subroutine ocean_vcoord_compute_target_h_rho(this, total_h, eta, T, S, eos, hybrid)
       !! Thin polymorphic wrapper for the isopycnal (`VCOORD_RHO`) and
@@ -1331,6 +1769,7 @@ contains
                + arr_bytes(this%z_ref_global) &
                + arr_bytes(this%target_h) &
                + arr_bytes(this%z_ref) &
+               + arr_bytes(this%z_top) &
                + arr_bytes(this%rho_target) &
                + arr_bytes(this%remap_total_h) &
                + arr_bytes(this%remap_h_ref) &

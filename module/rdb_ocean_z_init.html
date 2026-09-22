@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.6% of total for modules and submodules.">304 statements</a>
+                 title=" 0.6% of total for modules and submodules.">375 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -144,6 +144,8 @@
       <div id="funcs-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-zinit_dims_ok">zinit_dims_ok</a>
+            <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-draft_shape_ok">draft_shape_ok</a>
+            <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-linear_in_z">linear_in_z</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-zinit_io_ok">zinit_io_ok</a>
         </div>
       </div>
@@ -156,9 +158,10 @@
       </a>
       <div id="subs-0" class="collapse">
         <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-build_z_ctr">build_z_ctr</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-interp_column_linear_z">interp_column_linear_z</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-seed_ts_from_zfile">seed_ts_from_zfile</a>
-            <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-build_z_ctr">build_z_ctr</a>
+            <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-seed_ts_linear_z">seed_ts_linear_z</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-find_var">find_var</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-read_dims">read_dims</a>
             <a class="list-group-item" href="../module/rdb_ocean_z_init.html#proc-read_field_xyz">read_field_xyz</a>
@@ -180,37 +183,65 @@
     </div>
 
     <div class="col-md-9" id='text'>
-      <p>Reads pre-regridded T + S from a model-grid NetCDF file
-(<code>&amp;ocean_zinit_nml</code>), interpolates linearly in depth onto the
-seeded layer-centre depths, and writes the multilayer tracer slots
-as <code>hTr = value * h_layer</code>.</p>
+      <p>Puts a GEOPOTENTIAL T(z)/S(z) profile onto the seeded layer
+centres (<code>&amp;ocean_zinit_nml</code>) and writes the multilayer tracer slots
+as <code>hTr = value * h_layer</code>.  Two sources, <code>&amp;ocean_zinit_nml source</code>:</p>
 <ul>
-<li>File is PRE-REGRIDDED to <code>nx_phys x ny_phys</code> — no in-core
-    horizontal interpolation.</li>
-<li>Vertical interp is point-linear-in-depth, constant
-    extrapolation beyond the source range.</li>
-<li>Dry columns (<code>wet_mask &lt;= 0</code>) get the namelist <code>land_fill_t/_s</code>
-    constants.</li>
+<li><code>"file"</code> (default) — reads pre-regridded T + S from a
+    model-grid NetCDF and interpolates linearly in depth.
+    File is PRE-REGRIDDED to <code>nx_phys x ny_phys</code> — no in-core
+    horizontal interpolation.  Vertical interp is
+    point-linear-in-depth, constant extrapolation beyond the source
+    range.  Dry columns (<code>wet_mask &lt;= 0</code>) get the namelist
+    <code>land_fill_t/_s</code> constants.  Interior cells only — ghosts keep
+    whatever the analytical IC seeded, because the file carries no
+    data for them.</li>
+<li><code>"linear"</code> — an ANALYTIC affine profile,
+    <code>T(z) = lin_t_ref + lin_dt_dz*z</code> (and the salinity twin) with
+    <code>z</code> the GEOPOTENTIAL height, positive UP, zero at the <code>z = 0</code>
+    datum, i.e. <code>z = -z_ctr</code>.  Needs no file, so it fills the FULL
+    array INCLUDING ghosts and land columns (the analytic formula
+    is defined everywhere — same reasoning as the formula
+    bathymetry setters, and it keeps a wall-adjacent EOS
+    evaluation off the <code>rho_0</code> fallback).  This is the profile an
+    idealised ice-shelf cavity needs: <code>&amp;tracer_nml T_init_surface</code>
+    / <code>T_init_bottom</code> are linear in LAYER INDEX, which under a
+    terrain-following coordinate with a SLOPING lid tilts the
+    isopycnals with the coordinate and is therefore NOT a state of
+    rest.</li>
 </ul>
+<h3 id="depth-is-measured-from-z-0-not-from-the-column-top">Depth is measured from <code>z = 0</code>, not from the column top</h3>
+<p><code>build_z_ctr</code> takes the geopotential depth of the column TOP
+(<code>z_top</code>, positive-down) and adds the thickness above each layer
+centre.  In the open ocean <code>z_top = 0</code> and this is the free-surface
+datum.  Under an ice shelf the water column starts <code>z_draft</code> metres
+down, so <code>z_top = metrics%z_draft(i,j)</code>; without it a geopotential
+profile lands <code>z_draft</code> metres too shallow on every shelf column
+and the isopycnals tilt with the ice base.  <code>z_draft</code> reaches here
+as an OPTIONAL ghosted <code>(nx_total, ny_total)</code> argument: absent (the
+no-cavity path) is <code>z_top = 0</code> and bit-identical to the original.</p>
 <p>Runs at seed time, HOST-side, BEFORE <code>ocean_state_enter_data</code>, so
 it uses plain host <code>do</code> loops (NOT <code>do concurrent</code>); the later
-enter_data copies the host-resident arrays up.  NetCDF-only.</p>
+enter_data copies the host-resident arrays up.  The module is only
+compiled with <code>RDB_ENABLE_NETCDF=ON</code> (the file reader needs it), so
+the <code>"linear"</code> source currently inherits that build requirement
+even though it opens nothing.</p>
 <br>          <div class="card mb-4">
       <h3 class="card-header card-title bg-light">Uses</h3>
       <div class="card-body">
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item"><a href='rdb_error_ring.html'>rdb_error_ring</a></li>
-                  <li class="list-inline-item"><a href='rdb_config.html'>rdb_config</a></li>
-                  <li class="list-inline-item">pic_strings</li>
-                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
-                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
-                  <li class="list-inline-item"><a href='rdb_io_netcdf.html'>rdb_io_netcdf</a></li>
-                  <li class="list-inline-item"><a href='rdb_ocean_status.html'>rdb_ocean_status</a></li>
-                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
-                  <li class="list-inline-item">netcdf</li>
                   <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='rdb_io_netcdf.html'>rdb_io_netcdf</a></li>
+                  <li class="list-inline-item"><a href='rdb_config.html'>rdb_config</a></li>
+                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_error_ring.html'>rdb_error_ring</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_status.html'>rdb_ocean_status</a></li>
+                  <li class="list-inline-item">netcdf</li>
+                  <li class="list-inline-item">pic_strings</li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -1376,7 +1407,7 @@ I/O error; does NOT <code>error stop</code> — safe from test code.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx_phys~45"></span>
+              <span class="anchor" id="variable-nx_phys~44"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1391,7 +1422,7 @@ I/O error; does NOT <code>error stop</code> — safe from test code.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny_phys~46"></span>
+              <span class="anchor" id="variable-ny_phys~45"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1410,6 +1441,147 @@ I/O error; does NOT <code>error stop</code> — safe from test code.</p>
     <h4>
     Return Value
     <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-draft_shape_ok"></span> <h3>private pure function <a href='../proc/draft_shape_ok.html'>draft_shape_ok</a>(z_draft, ms) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>True iff <code>z_draft</code> is the FULL ghosted <code>(nx_total, ny_total)</code>
+array the seeders index with <code>(ng+i, ng+j)</code> — i.e. it matches
+<code>h_layer</code>&rsquo;s horizontal extent.  Guards the <code>(1, 1)</code> placeholder
+<code>ocean_metrics_t</code> allocates when the cavity is off from ever
+being read as a field.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_draft~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_draft</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~150"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-linear_in_z"></span> <h3>private pure elemental function <a href='../proc/linear_in_z.html'>linear_in_z</a>(v_ref, dv_dz, z_depth) result(v)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Affine profile <code>v(z) = v_ref + dv_dz*z</code> evaluated at
+geopotential height <code>z = -z_depth</code>, i.e.
+<code>v = v_ref - dv_dz*z_depth</code>.</p><a href="../proc/linear_in_z.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_ref~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_ref</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dv_dz~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dv_dz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_depth~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_depth</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
     </h4>
     
 
@@ -1460,7 +1632,7 @@ byte-identical while unblocking the <code>ierr</code>-present return path
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~112"></span>
+              <span class="anchor" id="variable-ierr~128"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -1475,7 +1647,7 @@ byte-identical while unblocking the <code>ierr</code>-present return path
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ncid~53"></span>
+              <span class="anchor" id="variable-ncid~51"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -1505,6 +1677,94 @@ byte-identical while unblocking the <code>ierr</code>-present return path
 
         <section>
           <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-build_z_ctr"></span> <h3>public pure subroutine <a href='../proc/build_z_ctr.html'>build_z_ctr</a>(h_layer, nz_ml, z_top, z_ctr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Layer-centre GEOPOTENTIAL depths (positive-down from the <code>z = 0</code>
+datum) from a column of layer thicknesses.  Bottom-up: k=1 bed,
+k=nz_ml surface.
+<code>z_ctr(k) = z_top + sum_{k'=k+1..nz_ml} h(k') + 0.5*h(k)</code>.</p><a href="../proc/build_z_ctr.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~112"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nz_ml)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_ml~55"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_ml</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_top~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_top</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ctr~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ctr</strong>(nz_ml)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
               <div class="card">
     <div class="card-header codesum"><span class="anchor" id="proc-interp_column_linear_z"></span> <h3>public pure subroutine <a href='../proc/interp_column_linear_z.html'>interp_column_linear_z</a>(z_src, v_src, nz_src, z_ctr, nz_ml, v_out)  
 </h3></div>
@@ -1573,7 +1833,7 @@ depth space so index orientations never need reconciling.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-z_ctr~3"></span>
+              <span class="anchor" id="variable-z_ctr~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1588,7 +1848,7 @@ depth space so index orientations never need reconciling.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~55"></span>
+              <span class="anchor" id="variable-nz_ml~57"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1624,7 +1884,7 @@ depth space so index orientations never need reconciling.</p>
   </div>
 
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-seed_ts_from_zfile"></span> <h3>public  subroutine <a href='../proc/seed_ts_from_zfile.html'>seed_ts_from_zfile</a>(ms, grid, cfg, ierr)  
+    <div class="card-header codesum"><span class="anchor" id="proc-seed_ts_from_zfile"></span> <h3>public  subroutine <a href='../proc/seed_ts_from_zfile.html'>seed_ts_from_zfile</a>(ms, grid, cfg, ierr, z_draft)  
 </h3></div>
     <div class="card-body">
           
@@ -1648,7 +1908,7 @@ the full ocean state) to avoid a circular dependency.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~134"></span>
+              <span class="anchor" id="variable-ms~149"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1663,7 +1923,7 @@ the full ocean state) to avoid a circular dependency.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~266"></span>
+              <span class="anchor" id="variable-grid~268"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1678,7 +1938,7 @@ the full ocean state) to avoid a circular dependency.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-cfg~122"></span>
+              <span class="anchor" id="variable-cfg~134"></span>
               type(<a href='../type/ocean_zinit_config_t.html'>ocean_zinit_config_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1693,7 +1953,7 @@ the full ocean state) to avoid a circular dependency.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~108"></span>
+              <span class="anchor" id="variable-ierr~123"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -1707,6 +1967,26 @@ the full ocean state) to avoid a circular dependency.</p>
 present; absent behaves as today (<code>error stop</code>).</p>
             </td>
         </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_draft~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_draft</strong>(:,:)</td>
+            <td>
+<p>Ice-base depth (m, positive-down, <code>&gt;= 0</code>), FULL ghosted
+<code>(nx_total, ny_total)</code> shape — <code>metrics%z_draft</code>.  The
+geopotential depth of every layer centre is measured from
+<code>z = 0</code>, so the column top sits at <code>z_draft</code> under a shelf.
+Absent ⇒ <code>z_top = 0</code> (open ocean), bit-identical to the
+pre-cavity behaviour.</p>
+            </td>
+        </tr>
     </tbody>
   </table>
 
@@ -1715,13 +1995,15 @@ present; absent behaves as today (<code>error stop</code>).</p>
   </div>
 
               <div class="card">
-    <div class="card-header codesum"><span class="anchor" id="proc-build_z_ctr"></span> <h3>private pure subroutine <a href='../proc/build_z_ctr.html'>build_z_ctr</a>(h_layer, nz_ml, z_ctr)  
+    <div class="card-header codesum"><span class="anchor" id="proc-seed_ts_linear_z"></span> <h3>public  subroutine <a href='../proc/seed_ts_linear_z.html'>seed_ts_linear_z</a>(ms, cfg, ierr, z_draft)  
 </h3></div>
     <div class="card-body">
           
-  <p>Layer-centre depths (positive-down from SSH) from a column of
-layer thicknesses.  Bottom-up: k=1 bed, k=nz_ml surface.
-<code>z_ctr(k) = sum_{k'=k+1..nz_ml} h(k') + 0.5*h(k)</code>.</p>
+  <p>Seed T and S from the ANALYTIC affine geopotential profiles
+<code>T(z) = lin_t_ref + lin_dt_dz*z</code>, <code>S(z) = lin_s_ref +
+lin_ds_dz*z</code> (<code>z</code> positive UP, zero at the <code>z = 0</code> datum),
+sampled at each layer centre&rsquo;s TRUE geopotential depth and
+written as <code>hTr = value * h_layer</code>.</p><a href="../proc/seed_ts_linear_z.html" class="pull-right"><emph>Read more&hellip;</emph></a>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1736,47 +2018,64 @@ layer thicknesses.  Bottom-up: k=1 bed, k=nz_ml surface.
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~98"></span>
-              real(kind=wp),
+              <span class="anchor" id="variable-ms~151"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
-<td>intent(in)</td>
+<td>intent(inout)</td>
               <td></td>            <td>
               
             </td>
             <td>::</td>
-            <td><strong>h_layer</strong>(nz_ml)</td>
+            <td><strong>ms</strong></td>
             <td>
 
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_ml~54"></span>
+              <span class="anchor" id="variable-cfg~135"></span>
+              type(<a href='../type/ocean_zinit_config_t.html'>ocean_zinit_config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~124"></span>
               integer,
             </td>
-<td>intent(in)</td>
-              <td></td>            <td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
               
             </td>
             <td>::</td>
-            <td><strong>nz_ml</strong></td>
+            <td><strong>ierr</strong></td>
             <td>
-
+<p>Non-zero on a malformed <code>z_draft</code> when present; absent
+behaves like the rest of the seed path (<code>error stop</code>).</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-z_ctr~2"></span>
+              <span class="anchor" id="variable-z_draft~14"></span>
               real(kind=wp),
             </td>
-<td>intent(out)</td>
-              <td></td>            <td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
               
             </td>
             <td>::</td>
-            <td><strong>z_ctr</strong>(nz_ml)</td>
+            <td><strong>z_draft</strong>(:,:)</td>
             <td>
-
+<p>Ice-base depth (m, positive-down), FULL ghosted
+<code>(nx_total, ny_total)</code> shape.  Absent ⇒ open ocean.</p>
             </td>
         </tr>
     </tbody>
@@ -1808,7 +2107,7 @@ Error-stops with a descriptive message when none is found.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-ncid~50"></span>
+              <span class="anchor" id="variable-ncid~48"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1853,7 +2152,7 @@ Error-stops with a descriptive message when none is found.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-label~19"></span>
+              <span class="anchor" id="variable-label~18"></span>
               character(len=*),
             </td>
 <td>intent(in)</td>
@@ -1883,7 +2182,7 @@ Error-stops with a descriptive message when none is found.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~109"></span>
+              <span class="anchor" id="variable-ierr~125"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -1927,7 +2226,7 @@ Returns source z-level count <code>nz_src</code>; error-stops on mismatch.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-ncid~51"></span>
+              <span class="anchor" id="variable-ncid~49"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1957,7 +2256,7 @@ Returns source z-level count <code>nz_src</code>; error-stops on mismatch.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~267"></span>
+              <span class="anchor" id="variable-grid~269"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -2002,7 +2301,7 @@ Returns source z-level count <code>nz_src</code>; error-stops on mismatch.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~110"></span>
+              <span class="anchor" id="variable-ierr~126"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -2044,7 +2343,7 @@ interior array, permuting from the file&rsquo;s Fortran storage order.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-ncid~52"></span>
+              <span class="anchor" id="variable-ncid~50"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2089,7 +2388,7 @@ interior array, permuting from the file&rsquo;s Fortran storage order.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~437"></span>
+              <span class="anchor" id="variable-nx~495"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2104,7 +2403,7 @@ interior array, permuting from the file&rsquo;s Fortran storage order.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~437"></span>
+              <span class="anchor" id="variable-ny~495"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2149,7 +2448,7 @@ interior array, permuting from the file&rsquo;s Fortran storage order.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~111"></span>
+              <span class="anchor" id="variable-ierr~127"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -2193,7 +2492,7 @@ today (<code>error stop</code>).</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.2% of total for procedures.">108 statements</a>
+                 title=" 0.2% of total for procedures.">114 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -186,7 +186,7 @@ after) is load-bearing and matches the pre-split behaviour.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~396"></span>
+              <span class="anchor" id="variable-this~54"></span>
               class(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -201,7 +201,7 @@ after) is load-bearing and matches the pre-split behaviour.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-cfg~116"></span>
+              <span class="anchor" id="variable-cfg~2"></span>
               type(<a href='../type/config_t.html'>config_t</a>),
             </td>
 <td>intent(in)</td>
@@ -216,7 +216,7 @@ after) is load-bearing and matches the pre-split behaviour.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~207"></span>
+              <span class="anchor" id="variable-grid~27"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -802,6 +802,19 @@ large graphs.</div>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">skip_nonoverlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">pgf_nonoverlap_gate_on</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">variant</span><span class="p">)</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">pressure_force</span><span class="p">%</span><span class="n">scratch_gated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="c">! Ice-shelf cavity geometry: `use_cavity` gates the allocation of</span>
+<span class="w">      </span><span class="c">! the three static metrics fields (`z_draft`, `cover_frac`,</span>
+<span class="w">      </span><span class="c">! `p_ice_ref`), so it latches HERE — and it has to be earlier than</span>
+<span class="w">      </span><span class="c">! most: the draft is filled inside `ocean_state_seed_from_cfg`,</span>
+<span class="w">      </span><span class="c">! which is the first thing the engine does after this, long before</span>
+<span class="w">      </span><span class="c">! any `configure_ocean_*` pass.  Off ⇒ three `(1,1)` placeholders.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_cavity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">cavity_dyn</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! Ice-shelf basal melt: the melt slot's own gate, latched here for</span>
+<span class="w">      </span><span class="c">! the same reason (its `init` sizes eleven 2-D arrays off it).</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">cavity_flux</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">cavity_melt</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! Ice-shelf top drag: same gate discipline — its `init` sizes the</span>
+<span class="w">      </span><span class="c">! two face scratch buffers and five 2-D fields off `enable`.</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">tdrag</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tdrag</span><span class="p">%</span><span class="n">enable</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">vmix_tidal</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">tidal_mixing</span><span class="p">%</span><span class="n">enable</span>
@@ -861,7 +874,18 @@ large graphs.</div>
 <span class="w">      </span><span class="c">! in rdb_ocean_data_input's module docstring).</span>
 <span class="w">      </span><span class="k">call </span><span class="n">this</span><span class="p">%</span><span class="n">data_input</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
 <span class="cp">#endif</span>
+<span class="w">      </span><span class="c">! Linear-EOS reference state, all five members off `&amp;ocean_ic_nml`.</span>
+<span class="w">      </span><span class="c">! This runs before `ocean_state_enter_data` AND before the</span>
+<span class="w">      </span><span class="c">! `configure_ocean_*` pass that copies the whole flat-POD handle</span>
+<span class="w">      </span><span class="c">! onto the closure slots that carry their own copy</span>
+<span class="w">      </span><span class="c">! (`vmix%eos`, `epbl%eos`, `kshear%eos`, `tidal_mixing%eos` —</span>
+<span class="w">      </span><span class="c">! `rdb_ocean_setup.F90`), so every rider and every device kernel</span>
+<span class="w">      </span><span class="c">! that takes `eos_t` by value sees the configured values.  Defaults</span>
+<span class="w">      </span><span class="c">! equal the `eos_t` component defaults ⇒ bit-identical.</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">alpha_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">alpha_T</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">beta_S</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">beta_S</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">T_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">T_ref</span>
+<span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">S_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">S_ref</span>
 <span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">%</span><span class="n">rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">ic</span><span class="p">%</span><span class="n">rho_0</span>
 <span class="w">      </span><span class="c">! EPBL master switch is read here (before the configure_ocean_*</span>
 <span class="w">      </span><span class="c">! pass) because diag registration — which gates the MLD_EPBL /</span>
@@ -967,7 +991,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

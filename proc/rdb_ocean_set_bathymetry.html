@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">36 statements</a>
+                 title=" 0.1% of total for procedures.">41 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,9 +134,9 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-h~41">h</a>
+            <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-h~55">h</a>
             <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-ierr_local~5">ierr_local</a>
-            <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-ng~13">ng</a>
+            <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-ng~47">ng</a>
             <a class="list-group-item" href="../proc/rdb_ocean_set_bathymetry.html#variable-wrap_seam">wrap_seam</a>
         </div>
       </div>
@@ -188,6 +188,13 @@ slot is touched.</p>
 <code>z_ref</code> table (ZSTAR_FULL) or the static land mask + C-grid face
 metrics — for those, drive the case from a namelist/restart
 instead (matches the recovered precedent&rsquo;s documented limit).</p>
+<p>REFUSED under an ice-shelf cavity (<code>&amp;ocean_cavity_dyn_nml
+enable</code>). There the mode-split contract is <code>bt_H_ref = b −
+z_draft</code>, so the <code>bt_H_ref = b</code> re-derivation below would silently
+delete the ice load from the datum — and even re-deriving it
+correctly would not be enough: a new bed changes which columns
+GROUND, and this entry point deliberately does not rebuild the wet
+mask or the land-masked metrics. Re-seed from a namelist instead.</p>
 
 
     <h3>Arguments</h3>
@@ -266,7 +273,7 @@ instead (matches the recovered precedent&rsquo;s documented limit).</p>
 
       <h3>Return Value
         <small>
-          <span class="anchor" id="variable-status~38"></span>
+          <span class="anchor" id="variable-status~42"></span>
           integer(kind=c_int)
         </small>
       </h3>
@@ -560,7 +567,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h~41"></span>
+              <span class="anchor" id="variable-h~55"></span>
               type(<a href='../type/ocean_handle_t.html'>ocean_handle_t</a>),
             </td>
               <td>private,</td>
@@ -594,7 +601,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ng~13"></span>
+              <span class="anchor" id="variable-ng~47"></span>
               integer,
             </td>
               <td>private</td>
@@ -656,6 +663,14 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! `z_ref` table (ZSTAR_FULL) or the static land mask + C-grid face</span>
 <span class="w">      </span><span class="c">!! metrics — for those, drive the case from a namelist/restart</span>
 <span class="w">      </span><span class="c">!! instead (matches the recovered precedent's documented limit).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! REFUSED under an ice-shelf cavity (`&amp;ocean_cavity_dyn_nml</span>
+<span class="w">      </span><span class="c">!! enable`). There the mode-split contract is `bt_H_ref = b −</span>
+<span class="w">      </span><span class="c">!! z_draft`, so the `bt_H_ref = b` re-derivation below would silently</span>
+<span class="w">      </span><span class="c">!! delete the ice load from the datum — and even re-deriving it</span>
+<span class="w">      </span><span class="c">!! correctly would not be enough: a new bed changes which columns</span>
+<span class="w">      </span><span class="c">!! GROUND, and this entry point deliberately does not rebuild the wet</span>
+<span class="w">      </span><span class="c">!! mask or the land-masked metrics. Re-seed from a namelist instead.</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="kt">c_ptr</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">value</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_handle</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="kt">c_int</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">value</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_p</span><span class="p">,</span><span class="w"> </span><span class="n">ny_p</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="kt">c_double</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b_data</span><span class="p">(</span><span class="n">nx_p</span><span class="p">,</span><span class="w"> </span><span class="n">ny_p</span><span class="p">)</span>
@@ -670,6 +685,17 @@ large graphs.</div>
 <span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">nx_p</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">h</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ny_p</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">h</span><span class="p">%</span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"rdb_ocean_set_bathymetry: shape mismatch against the physical interior"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">                   </span><span class="n">ierr_local</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_BAD_SHAPE</span><span class="p">)</span>
+<span class="w">         </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">ierr_local</span><span class="p">,</span><span class="w"> </span><span class="kt">c_int</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">h</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_cavity</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"rdb_ocean_set_bathymetry: refused with &amp;ocean_cavity_dyn_nml "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"enable — the datum is bt_H_ref = b - z_draft, and a mid-run bed "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"swap would both drop the ice load from it and change which "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"columns ground (this entry point does not rebuild the wet mask). "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"Re-seed from a namelist instead."</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">ierr_local</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
 <span class="w">         </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">ierr_local</span><span class="p">,</span><span class="w"> </span><span class="kt">c_int</span><span class="p">)</span>
 <span class="w">         </span><span class="k">return</span>
 <span class="k">      end if</span>
@@ -726,7 +752,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

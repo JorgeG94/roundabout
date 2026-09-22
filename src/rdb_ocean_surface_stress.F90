@@ -13,6 +13,93 @@
 !! `set_wind_stress_const(tau_x, tau_y)` to fill them uniformly
 !! (spatially-constant wind — the Tier-1 default).  Spatially-
 !! varying wind sets the arrays directly before `enter_data`.
+!!
+!! ## Ice-shelf cover (`&ocean_cavity_dyn_nml`)
+!!
+!! Under an ice shelf there is no atmosphere, so there is no wind.  The
+!! mask is applied ONCE to the `tau` PAIR
+!! (`ocean_surface_stress_apply_cover`) rather than to each derived
+!! view, because `tau_x`/`tau_y` have THREE independent consumers and
+!! only one of them lives in this module:
+!! `ocean_surface_stress_compute_tendencies` (the explicit momentum
+!! source), the implicit surface-stress fold in `rdb_ocean_vdiff`
+!! (`tau_u=ss%tau_x`, nine call sites into a hot tridiagonal kernel)
+!! and the MLE front-stress sampler in `rdb_ocean_mle`.  Masking the
+!! derived views would leave the other two blowing an atmosphere
+!! through several hundred metres of solid ice; masking the source
+!! makes all three correct by construction and adds no branch to any
+!! hot kernel.
+!!
+!! FACE RULE — it is `&ocean_tdrag_nml`'s, not a second one.  The
+!! projection of the cell-centred `cover_frac` onto faces is stated once,
+!! in `rdb_ocean_top_drag`'s module docstring: a face is under ice if
+!! EITHER abutting cell is (`max(cover_L, cover_R)`), rim faces are left
+!! alone, and the CALVING-FRONT face is therefore closed to the wind
+!! exactly where the top drag closes on it.  The two implementations are
+!! held identical face-for-face by
+!! `cavity_cover_face_rule_matches_top_drag`.  Its cost is one face-wide
+!! transition at the front, where the first open cell receives half the
+!! zonal impulse and therefore a `stress_mag` of `|tau|/2` — the `u*`
+!! consistent with the momentum it actually got.
+!!
+!! CONTRACT: every writer of the `tau` pair must re-apply the cover
+!! before refreshing `stress_mag` — `ocean_surface_stress_apply_cover`
+!! does both, and `ocean_surface_stress_set_derived`'s optional
+!! `cover_frac` routes through it.  Absent ⇒ the original path,
+!! byte-identical.  The mask is idempotent (it multiplies by 0 or 1),
+!! so re-applying it after every bracket read costs nothing.
+!!
+!! ## The two upper-boundary stresses (`stress_mag` + `stress_shelf`)
+!!
+!! Masking the wind is only half the physics: under a shelf the
+!! turbulent boundary layer is not unforced, it is forced by the
+!! ICE-OCEAN stress instead, and that stress is not in `tau` — the
+!! ice-shelf top drag is a separate momentum tendency with its own slot.
+!! So this type carries TWO cell-centred stress magnitudes and they are
+!! different things:
+!!
+!!   * `stress_mag`   — `|tau|`, and ONLY `|tau|`.  Purely DERIVED from
+!!     the `tau` pair, rebuilt from scratch by every writer of it
+!!     (`ocean_surfstress_refresh_stress_mag`).  Carries the wind, the
+!!     sea-ice blend, and the ice-shelf cover mask, because all three
+!!     are written into `tau`.
+!!   * `stress_shelf` — `|tau_top|` at an ICE-SHELF BASE (N/m^2), the
+!!     cell-centred magnitude published by `rdb_ocean_top_drag` as
+!!     `stress_top`, or (top drag off, basal melt on) `rho_0*u_*^2` from
+!!     the melt slot's own `u_*` (via
+!!     `ocean_surface_stress_set_shelf_from_ustar`).  NOT derived from
+!!     `tau`; refreshed by the driver, not by the `tau` refresh; exactly
+!!     zero without a cavity.
+!!
+!! `u_*^2 = (stress_mag + stress_shelf) / rho_0` is the ONE definition
+!! both boundary-layer schemes use (`rdb_ocean_vmix` KPP,
+!! `rdb_ocean_epbl`).  The SUM is the area-weighted total upper-boundary
+!! momentum flux, not a double count: `tau` is zeroed on every face
+!! touching a covered cell, so `stress_mag` is exactly zero wherever
+!! `cover_frac = 1`, and `stress_top` is multiplied by `cover_frac`, so
+!! it is exactly zero wherever `cover_frac = 0`.  The two supports are
+!! disjoint under the binary v1 cover, and each term already carries its
+!! own area weight, so the sum generalises unchanged to a fractional
+!! cover.
+!!
+!! `stress_shelf` is kept SEPARATE from `stress_mag` rather than blended
+!! into it for three reasons, each of which a folded-in design gets
+!! wrong: (1) `stress_mag` is rebuilt from `tau` by every `tau` writer,
+!! which would silently wipe a folded contribution at the next
+!! data-forcing bracket or sea-ice blend; (2) the top-drag stress is
+!! recomputed EVERY RK2 stage while the `tau` refresh is per outer step,
+!! so a fold would either accumulate across stages or go stale; (3)
+!! keeping `stress_mag` a pure function of `tau` is what makes the
+!! existing cover gate (`test_ocean_cavity_flux`'s "exactly zero under
+!! cover") and the sea-ice gates (`test_ocean_ice_stress_mag`) still
+!! mean what they say.
+!!
+!! `stress_shelf` is ALWAYS allocated and zero-filled (`init`), mapped
+!! (`enter_data`), counted (`bytes`) — never conditionally — so both
+!! boundary-layer kernels have ONE code path: no optional dummy, no
+!! placeholder array reaching an explicit-shape device kernel.  With no
+!! cavity it is the zero array and `stress_mag + 0.0` is `stress_mag`
+!! bit-for-bit under IEEE-754 (both are finite and non-negative).
 module rdb_ocean_surface_stress
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
@@ -30,6 +117,8 @@ module rdb_ocean_surface_stress
    public :: ocean_surface_stress_apply_tendencies
    public :: ocean_surface_stress_set_derived
    public :: ocean_surface_stress_refresh_mag
+   public :: ocean_surface_stress_apply_cover
+   public :: ocean_surface_stress_set_shelf_from_ustar
 
    type :: ocean_surface_stress_t
       logical :: is_init = .false.
@@ -92,6 +181,37 @@ module rdb_ocean_surface_stress
          !! three lines, same FP op order, just computed once) — which is
          !! why a `tau` write that skips the refresh silently freezes
          !! BOTH schemes' `u_*` at the last refreshed stress.
+         !!
+         !! Under an ice-shelf cavity the refresh is not enough on its
+         !! own: a `tau` writer must ALSO re-apply the cover mask, which
+         !! is why `ocean_surface_stress_apply_cover` does both in one
+         !! call (see the module docstring's cover contract).  What the
+         !! mask leaves behind under the ice — the ICE-OCEAN stress — is
+         !! `stress_shelf` below, deliberately not folded in here.
+      real(wp), allocatable :: stress_shelf(:, :)
+         !! Cell-centred magnitude of the stress an ICE-SHELF BASE
+         !! exerts on the ocean (N/m^2, `>= 0`), shape `(nx_total,
+         !! ny_total)`, valid including ghosts.  **Always allocated**,
+         !! mapped and counted; exactly zero without a cavity, and
+         !! exactly zero on every cell with `cover_frac = 0`.
+         !!
+         !! NOT derived from `tau` — the ice-ocean stress is a separate
+         !! momentum tendency (`rdb_ocean_top_drag`), so this field is
+         !! NOT touched by `ocean_surfstress_refresh_stress_mag` and NOT
+         !! touched by `ocean_surface_stress_apply_cover`.  It is
+         !! refreshed by the split/unsplit RK2 drivers, inline, in the
+         !! same stage that recomputes the top drag and strictly before
+         !! `vmix_apply_in_stage` reads it (no lag), from
+         !! `ocean_top_drag_t%stress_top`.  When the top drag is OFF but
+         !! `&ocean_cavity_melt_nml enable` is on, `engine_step_finalize`
+         !! fills it instead from `rho_0*u_*^2` with the melt slot's own
+         !! `u_*` — the SAME `C_d` under the one-drag-coefficient rule,
+         !! but at the thermo cadence, so THAT path is lagged one outer
+         !! step.  Both are documented in the module docstring.
+         !!
+         !! Consumers: KPP (`rdb_ocean_vmix`) and EPBL
+         !! (`rdb_ocean_epbl`), both as
+         !! `u_* = sqrt((stress_mag + stress_shelf)/rho_0)`.
 
       type(scratch_3d_buffer_t) :: du_stress
          !! Surface stress tendency at east faces, shape
@@ -127,6 +247,7 @@ contains
       allocate (this%tau_x(nx + 1, ny), source=0.0_wp)
       allocate (this%tau_y(nx, ny + 1), source=0.0_wp)
       allocate (this%stress_mag(nx, ny), source=0.0_wp)
+      allocate (this%stress_shelf(nx, ny), source=0.0_wp)
       call this%du_stress%init(nx + 1, ny, nz, "ocean_surfstress_du_stress")
       call this%dv_stress%init(nx, ny + 1, nz, "ocean_surfstress_dv_stress")
       this%is_init = .true.
@@ -138,6 +259,7 @@ contains
       if (allocated(this%tau_x)) deallocate (this%tau_x)
       if (allocated(this%tau_y)) deallocate (this%tau_y)
       if (allocated(this%stress_mag)) deallocate (this%stress_mag)
+      if (allocated(this%stress_shelf)) deallocate (this%stress_shelf)
       call this%du_stress%destroy()
       call this%dv_stress%destroy()
    end subroutine ocean_surfstress_destroy
@@ -157,7 +279,8 @@ contains
 
    subroutine ocean_surfstress_enter_data_impl(this)
       type(ocean_surface_stress_t), intent(inout) :: this
-      !$acc enter data copyin(this%tau_x, this%tau_y, this%stress_mag)
+      !$acc enter data copyin(this%tau_x, this%tau_y, this%stress_mag, &
+      !$acc                   this%stress_shelf)
       ! Force the host wind values onto the device.  On OpenMP the root
       ! map(to:state) can leave tau_x/tau_y already "present" (descriptors
       ! come over with the parent), making the copyin above a no-op copy —
@@ -167,7 +290,8 @@ contains
       ! BEFORE this call — the `update device` here is what pushes it (the
       ! mem:separate trap: a missed push here gives `stress_mag == 0` on
       ! device, silently killing KPP/EPBL wind mixing, CLAUDE.md:312).
-      !$acc update device(this%tau_x, this%tau_y, this%stress_mag)
+      !$acc update device(this%tau_x, this%tau_y, this%stress_mag, &
+      !$acc                this%stress_shelf)
       call scratch_3d_buffer_enter_data_impl(this%du_stress)
       call scratch_3d_buffer_enter_data_impl(this%dv_stress)
    end subroutine ocean_surfstress_enter_data_impl
@@ -184,7 +308,8 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: this
       call scratch_3d_buffer_exit_data_impl(this%du_stress)
       call scratch_3d_buffer_exit_data_impl(this%dv_stress)
-      !$acc exit data delete(this%tau_x, this%tau_y, this%stress_mag)
+      !$acc exit data delete(this%tau_x, this%tau_y, this%stress_mag, &
+      !$acc                  this%stress_shelf)
    end subroutine ocean_surfstress_exit_data_impl
 
    subroutine ocean_surfstress_set_const(this, tau_x_val, tau_y_val)
@@ -496,6 +621,58 @@ contains
       end if
    end subroutine surfstress_apply_impl
 
+   pure subroutine ocean_surface_stress_set_shelf_from_ustar(stress_shelf, ustar, &
+                                                             rho0, nx, ny)
+      !! Publish the ice-base stress from a FRICTION VELOCITY:
+      !! `stress_shelf = rho_0 * u_*^2`.
+      !!
+      !! The melt-only route into the `stress_shelf` seam.  When
+      !! `&ocean_tdrag_nml` is on, the RK2 stage drivers fill
+      !! `stress_shelf` inline from `ocean_top_drag_t%stress_top` and
+      !! this is never called; when the top drag is OFF but
+      !! `&ocean_cavity_melt_nml` is on, `engine_step_finalize` calls it
+      !! with the melt slot's own `u_*`, which was solved with the SAME
+      !! `C_d` (the one-drag-coefficient rule refuses a disagreeing
+      !! `cdrag_top` at configure).  So this is a change of variable, not
+      !! a second drag law.
+      !!
+      !! **Cadence, stated because it is a real cost:** the melt `u_*` is
+      !! refreshed at the THERMO cadence at the END of an outer step, so
+      !! this path reaches KPP/EPBL ONE OUTER STEP LATE.  The top-drag
+      !! path has no such lag.
+      !!
+      !! A CALL rather than an inline loop at the call site, deliberately:
+      !! `engine_step_finalize` would have to walk `engine%state%...`
+      !! inside a `do concurrent`, and `ocean_engine_t` is not a mapped
+      !! object, so nvfortran emits a data clause for the whole engine and
+      !! aborts with "partially present on the device".  Host-dereference
+      !! at the call site, flat explicit-shape dummies here.  The
+      !! escaping-actual pessimisation CLAUDE.md warns about does not
+      !! apply: `engine_step_finalize` owns no `do concurrent` of its own.
+      !!
+      !! `u_*` is exactly zero on every uncovered column
+      !! (`cavity_melt_columns_2d`), so the published field keeps
+      !! `stress_shelf`'s "exactly zero off the cover" invariant and the
+      !! disjoint-support argument in the module docstring still holds.
+      integer, intent(in) :: nx, ny
+         !! Extents of BOTH arrays.  The caller gates on the melt slot's
+         !! `enable`, which is exactly when `ustar` is full size, so an
+         !! `(1,1)` placeholder can never reach these dummies.
+      real(wp), intent(in) :: rho0
+         !! Reference density (kg/m^3) -- the single rho0 of record, by
+         !! value from `ocean_surface_stress_t%rho0`.
+      real(wp), intent(inout) :: stress_shelf(nx, ny)
+         !! `ocean_surface_stress_t%stress_shelf` (N/m^2), overwritten.
+      real(wp), intent(in) :: ustar(nx, ny)
+         !! `ocean_cavity_flux_t%ustar` (m/s).
+
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         stress_shelf(i, j) = rho0*ustar(i, j)*ustar(i, j)
+      end do
+   end subroutine ocean_surface_stress_set_shelf_from_ustar
+
    pure function ocean_surface_stress_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the surface stress slot
       !! (0 when unallocated). One arr_bytes term per array — add a
@@ -505,11 +682,92 @@ contains
       nbytes = arr_bytes(this%tau_x) &
                + arr_bytes(this%tau_y) &
                + arr_bytes(this%stress_mag) &
+               + arr_bytes(this%stress_shelf) &
                + this%du_stress%bytes() &
                + this%dv_stress%bytes()
    end function ocean_surface_stress_bytes
 
-   subroutine ocean_surface_stress_set_derived(grid, ss)
+   pure subroutine ocean_surface_stress_apply_cover(ss, cover_frac)
+      !! Zero the wind-stress pair on every C-grid face that touches an
+      !! ice-covered cell, then refresh `stress_mag` from the masked
+      !! pair.  The two halves are ONE call on purpose: a masked `tau`
+      !! with a stale `stress_mag` would leave KPP/EPBL mixing on a wind
+      !! that no longer reaches the water.
+      !!
+      !! FACE RULE — see the module docstring.  `open_face =
+      !! min(1 - cover_left, 1 - cover_right)`, i.e. a face is closed if
+      !! EITHER neighbour is covered, so no wind acts on a covered cell.
+      !! A rim face (`i = 1` / `i = nx+1`, `j = 1` / `j = ny+1`) has only
+      !! one neighbour in range and takes that cell's cover.
+      !!
+      !! Idempotent (multiplies by 0 or 1), so the configure-time call
+      !! and the per-bracket data-forcing seam can both run it.
+      !!
+      !! **Runs where the data lives** — a plain `do concurrent`, so it
+      !! is a host loop before `enter_data` and a device kernel after,
+      !! exactly like `ocean_surface_stress_refresh_mag`.
+      type(ocean_surface_stress_t), intent(inout) :: ss
+      real(wp), intent(in) :: cover_frac(:, :)
+         !! Ice-cover fraction at cell centres (`metrics%cover_frac`,
+         !! v1 binary 0/1), shape `(nx_total, ny_total)`.
+      ! assumed-shape-ok: configure-time / per-forcing-bracket cadence,
+      ! forwarded to an explicit-shape `_impl` before any device loop.
+      integer :: nx, ny
+
+      if (.not. allocated(ss%tau_x) .or. .not. allocated(ss%tau_y)) return
+      nx = size(ss%tau_x, 1) - 1
+      ny = size(ss%tau_x, 2)
+      ! A placeholder-sized cover (the `use_cavity = .false.` (1,1)
+      ! allocation) is not a mask — refuse it rather than mask a corner.
+      if (size(cover_frac, 1) /= nx .or. size(cover_frac, 2) /= ny) return
+      call ocean_surfstress_cover_impl(ss%tau_x, ss%tau_y, cover_frac, nx, ny)
+      call ocean_surface_stress_refresh_mag(ss)
+   end subroutine ocean_surface_stress_apply_cover
+
+   pure subroutine ocean_surfstress_cover_impl(tau_x, tau_y, cover_frac, nx, ny)
+      !! Flat `do concurrent` kernel behind `ocean_surface_stress_apply_cover`
+      !! — explicit-shape dummies, integer dims first (decl-order, ifx
+      !! #8586).
+      !!
+      !! THIS IS `top_drag_fill_face_cover_impl`'S RULE, APPLIED IN PLACE.
+      !! The face projection is stated once, in `rdb_ocean_top_drag`'s
+      !! module docstring (§ The FACE cover rule), and there are two
+      !! implementations of it only because one fills face ARRAYS the drag
+      !! kernel reads per step and the other multiplies `tau` in place at
+      !! configure — materialising two more face arrays here, in a slot
+      !! that exists whether or not there is a cavity, to then throw them
+      !! away, is the worse trade.  They are kept identical by a TEST
+      !! (`cavity_cover_face_rule_matches_top_drag`), which is the same
+      !! way `mirror_of_bottom_drag` keeps the top and bottom drag one
+      !! closure rather than two.  Both halves of the rule matter:
+      !!
+      !!   * interior faces take the OR, `max(cover(i-1,j), cover(i,j))`,
+      !!     so the CALVING-FRONT face is closed to the wind exactly where
+      !!     it is opened to the drag;
+      !!   * RIM faces (`i = 1`, `i = nx+1`, `j = 1`, `j = ny+1`) are left
+      !!     UNTOUCHED, because they have only one neighbour in range.
+      !!     Inventing a one-sided cover there would (a) disagree with the
+      !!     drag's `cover_u = 0` and (b) clobber a periodic `tau` ghost
+      !!     that the halo seam had already wrapped — this routine runs
+      !!     AFTER `ocean_seam_refresh_surface_stress`.  Those faces carry
+      !!     no prognostic velocity, so leaving them alone is not an
+      !!     approximation.
+      integer, intent(in)    :: nx, ny
+      real(wp), intent(inout) :: tau_x(nx + 1, ny), tau_y(nx, ny + 1)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      integer :: i, j
+      real(wp) :: cov
+      do concurrent(j=1:ny, i=2:nx) local(cov)
+         cov = max(cover_frac(i - 1, j), cover_frac(i, j))
+         tau_x(i, j) = tau_x(i, j)*(1.0_wp - cov)
+      end do
+      do concurrent(j=2:ny, i=1:nx) local(cov)
+         cov = max(cover_frac(i, j - 1), cover_frac(i, j))
+         tau_y(i, j) = tau_y(i, j)*(1.0_wp - cov)
+      end do
+   end subroutine ocean_surfstress_cover_impl
+
+   subroutine ocean_surface_stress_set_derived(grid, ss, cover_frac)
       !! Fill `stress_mag` from the current `tau_x`/`tau_y` — the MOM6
       !! `set_derived_forcing_fields` analogue (PR-12), and the public
       !! entry point `configure_ocean_forcing` calls after the
@@ -529,7 +787,18 @@ contains
          !! is now taken from `tau_x`/`tau_y` directly — see
          !! `ocean_surfstress_refresh_stress_mag`.
       type(ocean_surface_stress_t), intent(inout) :: ss
-      call ocean_surface_stress_refresh_mag(ss)
+      real(wp), intent(in), optional :: cover_frac(:, :)
+         !! Ice-shelf cover fraction at cell centres
+         !! (`metrics%cover_frac`).  Present ⇒ the `tau` pair is masked
+         !! on every face touching a covered cell BEFORE `stress_mag` is
+         !! rebuilt (`ocean_surface_stress_apply_cover`).  Absent ⇒ the
+         !! original refresh-only path, byte-identical.
+      ! assumed-shape-ok: configure-time / per-forcing-bracket cadence.
+      if (present(cover_frac)) then
+         call ocean_surface_stress_apply_cover(ss, cover_frac)
+      else
+         call ocean_surface_stress_refresh_mag(ss)
+      end if
    end subroutine ocean_surface_stress_set_derived
 
    subroutine ocean_surfstress_refresh_stress_mag(this)

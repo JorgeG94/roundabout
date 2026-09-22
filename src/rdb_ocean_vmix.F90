@@ -87,7 +87,7 @@ module rdb_ocean_vmix
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, SEAWATER_CP, &
                                      sw_transmission
-   use rdb_eos, only: eos_t
+   use rdb_eos, only: eos_t, eos_buoyancy_coeffs
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -110,6 +110,7 @@ module rdb_ocean_vmix
    public :: parse_kpp_sw_method
    public :: kpp_sw_method_is_implemented
    public :: kpp_surface_buoyancy_flux
+   public :: parse_buoyancy_coeffs
 
    ! KPP shortwave-in-boundary-layer methods (MOM6 KPP_SHORTWAVE_METHOD).
    ! The surface buoyancy flux `B_0` is charged only for the SW ABSORBED
@@ -134,6 +135,26 @@ module rdb_ocean_vmix
       !! Large et al. 1994 interior closure (future; not yet wired).
    integer, parameter, public :: VMIX_INTERIOR_CVMIX = 3
       !! CVMix-compatible (future).
+
+   ! Source of the thermal-expansion / haline-contraction pair the KPP
+   ! `B_0` and the double-diffusion density ratio consume
+   ! (`&ocean_vmix_nml buoyancy_coeffs`, E4).  Keep these arms in lockstep
+   ! with `parse_buoyancy_coeffs` AND with the `nml_enum allowed=` list in
+   ! `register_ocean_vmix` (rdb_config.F90) — an allowed string with no
+   ! `case` arm parses to the fallback and silently does the wrong thing.
+   integer, parameter, public :: BUOY_COEFFS_CONSTANT = 1
+      !! `constant` (DEFAULT): the scalar `&ocean_ic_nml alpha_T`/`beta_S`
+      !! off the EOS handle, whatever the active EOS.  Exactly right for
+      !! `eos = "linear"` (they ARE that EOS's coefficients); a constant
+      !! stand-in under `wright`/`roquet`.
+   integer, parameter, public :: BUOY_COEFFS_EOS = 2
+      !! `eos`: `eos_buoyancy_coeffs` evaluated from the ACTIVE equation
+      !! of state at each consumer's own (T, S, p).  Byte-identical to
+      !! `constant` under `eos = "linear"`.
+   integer, parameter, public :: BUOY_COEFFS_INVALID = 0
+      !! Unparsed spelling — `configure_ocean_vmix` fails loud on it
+      !! rather than falling back (a silently-wrong α is a physics change
+      !! with no symptom).
 
    real(wp), parameter, public :: HENYEY_MIN_SINLAT = 1.0e-10_wp
       !! Floor on |sin(latitude)| used ONLY inside the `N0_2Omega /
@@ -217,6 +238,30 @@ module rdb_ocean_vmix
       ! psu) — see `kpp_surface_buoyancy_flux` for the `1/rho_0` that
       ! turns them into a buoyancy flux.
       type(eos_t) :: eos
+
+      ! ---- Source of the α/β pair (E4, `&ocean_vmix_nml buoyancy_coeffs`) ----
+      ! The handle members above are the LINEAR EOS's true coefficients.
+      ! Under a NONLINEAR EOS they are a constant stand-in for a strongly
+      ! state-dependent pair, and `BUOY_COEFFS_EOS` replaces them with
+      ! `eos_buoyancy_coeffs(eos, T, S, p)` evaluated where each consumer
+      ! needs it.  Default `BUOY_COEFFS_CONSTANT` ⇒ bit-identical; under
+      ! `eos = "linear"` the two settings are byte-identical by
+      ! construction (that branch of `eos_buoyancy_coeffs` returns the
+      ! handle members themselves, no round-trip through ρ²·dSV).
+      integer :: buoyancy_coeffs = BUOY_COEFFS_CONSTANT
+         !! `BUOY_COEFFS_CONSTANT` | `BUOY_COEFFS_EOS`.  Read ON-DEVICE
+         !! (inside `vmix_kpp_overlay_impl`'s `do concurrent` bodies), so
+         !! it rides the same configure-precedes-`enter_data` contract as
+         !! `rho0` and the `pp81_*` scalars beside it.
+      logical :: p_top_in_eos = .false.
+         !! Mirror of `&ocean_psurf_nml in_eos` — whether
+         !! `multilayer_state_t%p_top` carries a surface load that the
+         !! in-situ EOS pressure must be measured down from.  Seeded at
+         !! configure from the same knob EPBL's `in_eos` takes, so the two
+         !! boundary-layer schemes build their pressure stacks the same
+         !! way.  Only read when `buoyancy_coeffs == BUOY_COEFFS_EOS`
+         !! (`p_top` is the zero array when the knob is off anyway — this
+         !! is the belt-and-braces gate EPBL already carries).
 
       ! ---- KPP-specific ----
       real(wp) :: ri_crit = 0.3_wp
@@ -785,6 +830,16 @@ contains
       !! `sw_source="q_sw"`, making this total).  `sf%has_sw` is passed as
       !! the `sw_active` gate — false ⇒ the `_impl`'s `B_0` reduces to the
       !! unmodified legacy source line, bit-for-bit.
+      !!
+      !! E4: this shim is also the OUTER SHIM for the surface (T, S) the
+      !! `buoyancy_coeffs = "eos"` path needs — the tracer registry is an
+      !! array of derived types, so `ms%tracers(t)%hTr` is dereferenced
+      !! HERE, on the host, and the flat top-level arrays are handed down
+      !! as explicit-shape dummies (array-of-derived-type device
+      !! indirection rule).  They are passed UNCONDITIONALLY, on both
+      !! branches: the `_impl` reads them only under the knob, and a
+      !! host-gated call handing a state array to an external subroutine
+      !! costs even when never taken.
       type(hgrid_t), intent(in) :: grid
       type(ocean_vmix_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
@@ -792,19 +847,24 @@ contains
       type(ocean_surface_flux_t), intent(in) :: sf
       if (sf%sw_from_qsw) then
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
-                                    grid%nx_total, grid%ny_total, sf%q_sw, &
+                                    grid%nx_total, grid%ny_total, ms%nz_ml, sf%q_sw, &
+                                    ms%tracers(ms%idx_temperature)%hTr, &
+                                    ms%tracers(ms%idx_salinity)%hTr, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method)
       else
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
-                                    grid%nx_total, grid%ny_total, sf%Q_heat, &
+                                    grid%nx_total, grid%ny_total, ms%nz_ml, sf%Q_heat, &
+                                    ms%tracers(ms%idx_temperature)%hTr, &
+                                    ms%tracers(ms%idx_salinity)%hTr, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method)
       end if
    end subroutine vmix_apply_kpp_overlay
 
    pure subroutine vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
-                                         nx_arg, ny_arg, sw_src, sw_active, &
+                                         nx_arg, ny_arg, nz_arg, sw_src, &
+                                         temp_h, salt_h, sw_active, &
                                          sw_pen_frac, sw_R, sw_zeta1, sw_zeta2, &
                                          sw_method)
       !! KPP boundary-layer overlay on top of the interior closure
@@ -889,11 +949,17 @@ contains
       type(multilayer_state_t), intent(in) :: ms
       type(ocean_surface_stress_t), intent(in) :: ss
       type(ocean_surface_flux_t), intent(in) :: sf
-      integer, intent(in) :: nx_arg, ny_arg
+      integer, intent(in) :: nx_arg, ny_arg, nz_arg
          !! Grid extents — declared before `sw_src` (decl-order hook).
       real(wp), intent(in) :: sw_src(nx_arg, ny_arg)
          !! Caller-selected irradiance source (`sf%Q_heat` or `sf%q_sw`),
          !! explicit-shape (per-RK2-stage kernel: no assumed-shape waiver).
+      real(wp), intent(in) :: temp_h(nx_arg, ny_arg, nz_arg)
+         !! `hTr` of the temperature tracer (degC·m), flattened off the
+         !! registry by the shim.  Read ONLY under
+         !! `buoyancy_coeffs == BUOY_COEFFS_EOS`, and only at `k = nz`.
+      real(wp), intent(in) :: salt_h(nx_arg, ny_arg, nz_arg)
+         !! `hTr` of the salinity tracer (PSU·m).  Same contract.
       logical, intent(in) :: sw_active
          !! Host-side `sf%has_sw` gate — false ⇒ `B_0` uses the unmodified
          !! legacy source line (bit-identity).
@@ -914,12 +980,35 @@ contains
       real(wp) :: h_b_lagged, wstar3_lagged, w_s_col
       real(wp) :: delta_b, n_brunt, vt2
       real(wp) :: q_bl
+      real(wp) :: a_buoy, b_buoy, t_sfc, s_sfc, h_sfc, p_buoy, p_buoy_ref
       logical :: crossing_found
       logical :: destabilizing
 
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
+
+      ! E4 — the pressure the `buoyancy_coeffs = "eos"` α/β are evaluated
+      ! at.  `B_0` is a SURFACE buoyancy flux, so the natural pressure is
+      ! the one at the TOP of the column:
+      !
+      !   * `&ocean_psurf_nml in_eos` on  -> `ms%p_top(i,j)`, the ice /
+      !     atmospheric load in Pa (the E3 seam), and nothing else.
+      !   * off                           -> `eos%p_ref`, the pressure the
+      !     model's own `ms%rho_layer` is referenced to, so α stays
+      !     consistent with the density field the rest of the closure
+      !     differences (a σ₂ run gets its α at 2000 dbar, not at 0).
+      !
+      ! The gate is `in_eos`, NOT `p_top /= 0`: a cavity run fills `p_top`
+      ! with the ice load whether or not `in_eos` is set, and `in_eos` is
+      ! the single switch for the whole seam (same note EPBL carries at
+      ! its `epbl%in_eos` assignment).  The select below is on a
+      ! domain-uniform logical, so it is warp-uniform — free.
+      !
+      ! This is an α, never a density: it is not differenced along a layer
+      ! and so does not violate the "nothing horizontally varying may
+      ! enter rho_layer" contract (src/core/ocean/README.md, `p_top` seam).
+      p_buoy_ref = this%eos%p_ref
 
       ! Surface buoyancy flux B_0 is computed PER COLUMN inside the
       ! BL-depth loop from the 2D flux fields (A7): identical arithmetic
@@ -940,7 +1029,8 @@ contains
                delta_d, frac, denom, h_b, crossing_found, &
                tau_mag, u_star, &
                h_b_lagged, wstar3_lagged, w_s_col, &
-               delta_b, n_brunt, vt2, B_0, destabilizing, q_T_kin, q_S_kin, q_bl)
+               delta_b, n_brunt, vt2, B_0, destabilizing, q_T_kin, q_S_kin, q_bl, &
+               a_buoy, b_buoy, t_sfc, s_sfc, h_sfc, p_buoy)
          u_ref = 0.5_wp*(ms%u_face_x_layer(i, j, nz) + ms%u_face_x_layer(i + 1, j, nz))
          v_ref = 0.5_wp*(ms%v_face_y_layer(i, j, nz) + ms%v_face_y_layer(i, j + 1, nz))
          b_ref = -GRAVITY*ms%rho_layer(i, j, nz)/this%rho0
@@ -949,7 +1039,15 @@ contains
          ! PR-12 dedup: |tau| at cell centres is now a shared field
          ! (ocean_surface_stress_set_derived, same 3-line FP op order as
          ! the inline computation this replaces — bit-identical, §7.5).
-         tau_mag = ss%stress_mag(i, j)
+         ! Phase 4b: under an ice shelf the wind is masked out of `tau`
+         ! and the boundary layer is driven by the ICE-OCEAN stress
+         ! instead, which is NOT in `tau` — `stress_shelf` carries it.
+         ! The two supports are disjoint (cover mask vs `cover_frac`
+         ! weight), so the sum is the total upper-boundary momentum flux.
+         ! Always allocated; the zero array without a cavity, and
+         ! `x + 0.0` is `x` bit-for-bit.  See the `stress_mag` /
+         ! `stress_shelf` contract in `rdb_ocean_surface_stress`.
+         tau_mag = ss%stress_mag(i, j) + ss%stress_shelf(i, j)
          u_star = sqrt(tau_mag/this%rho0)
          h_b_lagged = this%bl_depth(i, j)
          ! B_0 charges only the SW absorbed inside the (lagged) BL depth:
@@ -969,8 +1067,29 @@ contains
             q_T_kin = sf%Q_heat(i, j)/(this%rho0*sf%cp)
          end if
          q_S_kin = sf%Q_salt(i, j)/this%rho0
-         B_0 = kpp_surface_buoyancy_flux(this%eos%alpha_T, this%eos%beta_S, &
-                                         this%rho0, q_T_kin, q_S_kin)
+         ! E4 — α/β for B_0.  CONSTANT reproduces the pre-knob line
+         ! byte-for-byte (the multiply is on the same two handle members,
+         ! via a local, which is an FP no-op); EOS evaluates the ACTIVE
+         ! equation of state at this column's surface (T, S) and at the
+         ! top-of-column pressure.  A vanished surface layer has no
+         ! meaningful (T, S), so it keeps the constants rather than
+         ! dividing by ~0 — `H_VANISHED` (dynamic-vanish), not
+         ! `H_DIV_EPS`, because that is a real skip, not 1/0 armour.
+         a_buoy = this%eos%alpha_T
+         b_buoy = this%eos%beta_S
+         if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
+            h_sfc = ms%h_layer(i, j, nz)
+            if (h_sfc > H_VANISHED) then
+               t_sfc = temp_h(i, j, nz)/h_sfc
+               s_sfc = salt_h(i, j, nz)/h_sfc
+               p_buoy = p_buoy_ref
+               if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
+               call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
+                                        a_buoy, b_buoy)
+            end if
+         end if
+         B_0 = kpp_surface_buoyancy_flux(a_buoy, b_buoy, this%rho0, &
+                                         q_T_kin, q_S_kin)
          destabilizing = (B_0 < 0.0_wp)
          wstar3_lagged = max(0.0_wp, -B_0)*h_b_lagged
          w_s_col = sqrt(u_star*u_star + wstar3_lagged**(2.0_wp/3.0_wp))
@@ -1029,9 +1148,10 @@ contains
          local(k, d_running, d_face_k, sigma, g_shape, kv_kpp, h_b, &
                tau_mag, u_star, &
                wstar3, w_star, w_s, gamma_factor, B_0, destabilizing, &
-               q_T_kin, q_S_kin, q_bl)
-         ! PR-12 dedup — see Pass 1's comment above.
-         tau_mag = ss%stress_mag(i, j)
+               q_T_kin, q_S_kin, q_bl, &
+               a_buoy, b_buoy, t_sfc, s_sfc, h_sfc, p_buoy)
+         ! PR-12 dedup + the ice-shelf stress — see Pass 1's comment.
+         tau_mag = ss%stress_mag(i, j) + ss%stress_shelf(i, j)
          u_star = sqrt(tau_mag/this%rho0)
          h_b = this%bl_depth(i, j)
          ! B_0 charges only the SW absorbed inside the (current) BL depth
@@ -1051,8 +1171,22 @@ contains
             q_T_kin = sf%Q_heat(i, j)/(this%rho0*sf%cp)
          end if
          q_S_kin = sf%Q_salt(i, j)/this%rho0
-         B_0 = kpp_surface_buoyancy_flux(this%eos%alpha_T, this%eos%beta_S, &
-                                         this%rho0, q_T_kin, q_S_kin)
+         ! E4 — same α/β selection as pass 1; see its comment block.
+         a_buoy = this%eos%alpha_T
+         b_buoy = this%eos%beta_S
+         if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
+            h_sfc = ms%h_layer(i, j, nz)
+            if (h_sfc > H_VANISHED) then
+               t_sfc = temp_h(i, j, nz)/h_sfc
+               s_sfc = salt_h(i, j, nz)/h_sfc
+               p_buoy = p_buoy_ref
+               if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
+               call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
+                                        a_buoy, b_buoy)
+            end if
+         end if
+         B_0 = kpp_surface_buoyancy_flux(a_buoy, b_buoy, this%rho0, &
+                                         q_T_kin, q_S_kin)
          this%b0(i, j) = B_0
          destabilizing = (B_0 < 0.0_wp)
          wstar3 = max(0.0_wp, -B_0)*h_b
@@ -1140,6 +1274,24 @@ contains
          tag = -1
       end select
    end function parse_kpp_sw_method
+
+   pure function parse_buoyancy_coeffs(name) result(tag)
+      !! Map the `&ocean_vmix_nml buoyancy_coeffs` string to a
+      !! `BUOY_COEFFS_*` tag; `BUOY_COEFFS_INVALID` for an unrecognised
+      !! string, which `configure_ocean_vmix` turns into a fail-loud abort
+      !! (never a silent fallback to the constants).  The accepted set
+      !! must match the `nml_enum allowed=` list in `register_ocean_vmix`.
+      character(len=*), intent(in) :: name
+      integer :: tag
+      select case (trim(name))
+      case ("constant")
+         tag = BUOY_COEFFS_CONSTANT
+      case ("eos")
+         tag = BUOY_COEFFS_EOS
+      case default
+         tag = BUOY_COEFFS_INVALID
+      end select
+   end function parse_buoyancy_coeffs
 
    pure function kpp_sw_method_is_implemented(name) result(ok)
       !! Fail-loud predicate for `kpp_sw_method` — `validate_config`
@@ -1374,7 +1526,26 @@ contains
       ny = grid%ny_total
       nz = ms%nz_ml
 
-      if (this%ddiff_enable) then
+      if (this%ddiff_enable .and. this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
+         ! E4: same closure, but α/β come from the ACTIVE EOS at each
+         ! interface's own (T, S, p) instead of the scalar pair.  A
+         ! SEPARATE impl, deliberately, not a branch inside the collapsed
+         ! one: the in-situ pressure has to be accumulated DOWN a column,
+         ! which forces `do concurrent(j, i)` + a serial k sweep, and the
+         ! default path must keep its fully-collapsed (i, j, k) launch —
+         ! both for its GPU parallelism and so its byte-identity is
+         ! structural rather than argued.
+         call vmix_split_ddiff_eos_impl(nx, ny, nz + 1, this%kt, this%ks, &
+                                        ms%tracers(ms%idx_temperature)%hTr, &
+                                        ms%tracers(ms%idx_salinity)%hTr, ms%h_layer, &
+                                        ms%p_top, this%eos, this%rho0, &
+                                        this%p_top_in_eos, &
+                                        this%ddiff_strat_param_max, this%ddiff_kappa_s, &
+                                        this%ddiff_exp1, this%ddiff_exp2, &
+                                        this%ddiff_param1, this%ddiff_param2, &
+                                        this%ddiff_param3, this%ddiff_mol_diff, &
+                                        this%ddiff_use_k90)
+      else if (this%ddiff_enable) then
          ! Outer shim: dereference the registry tracers (idx 1/2) on the
          ! host and hand the flat top-level arrays to the do-concurrent
          ! impl (array-of-derived-type device indirection rule).
@@ -1494,6 +1665,150 @@ contains
          kt(i, j, k) = kt_pre + kd_t
       end do
    end subroutine vmix_split_ddiff_impl
+
+   pure subroutine vmix_split_ddiff_eos_impl(nx, ny, nzp1, kt, ks, temp_h, salt_h, &
+                                             h_layer, p_top, eos, rho0, p_top_in_eos, &
+                                             strat_param_max, kappa_s, exp1, exp2, &
+                                             param1, param2, param3, mol_diff, use_k90)
+      !! `buoyancy_coeffs = "eos"` twin of `vmix_split_ddiff_impl` — the
+      !! SAME CVMix closed forms, the same branch structure, the same
+      !! outputs; the only change is where `α` and `β` come from.
+      !!
+      !! The constant version forms `adT = α·ΔT` and `bdS = β·ΔS` with one
+      !! scalar pair for the whole domain.  Here both are evaluated at the
+      !! INTERFACE's own state — `eos_buoyancy_coeffs` at the mean of the
+      !! two abutting layer (T, S) and at the in-situ hydrostatic pressure
+      !! there.  The stratification parameter the closure actually
+      !! branches on is the density ratio `R_ρ = α·ΔT / β·ΔS`, and under a
+      !! nonlinear EOS α varies by a factor of several between a 25 degC
+      !! surface and a −1.9 degC cavity, and again with depth, so a single
+      !! α can put an interface in the wrong REGIME (fingering vs
+      !! diffusive convection), not merely off by a coefficient.
+      !!
+      !! **Pressure.** Seeded from `p_top` (the E3 surface-load seam) and
+      !! accumulated DOWNWARD as `g·ρ₀·h`, exactly the way EPBL seeds and
+      !! walks its `p_mid` stack — a true per-interface hydrostatic
+      !! pressure, which is the test the `p_top` seam contract applies to
+      !! any joining builder.  `eos%p_ref` deliberately does NOT enter: an
+      !! interior interface has a real depth of its own, and adding a
+      !! potential-density reference on top of it would double-count.
+      !! (KPP's `B_0` is the other way round — it is a SURFACE flux with
+      !! no depth of its own, so it falls back to `p_ref`.)
+      !!
+      !! **Why the loop nest differs from the constant twin.** The
+      !! pressure is a running sum down the column, so `k` cannot be part
+      !! of the concurrent index set.  The constant path keeps its fully
+      !! collapsed `(i, j, k)` launch untouched; this one is
+      !! `do concurrent(j, i)` with a serial surface→bed `k` sweep, the
+      !! same shape as `epbl_column_kernel` and `ks_solve_column`.
+      !!
+      !! Interface `k` sits at the BOTTOM of layer `k`, between layer `k`
+      !! (upper, surfaceward — `hu`) and layer `k-1` (lower, bedward —
+      !! `hl`); `k = nzp1` is the free surface and `k = 1` the bed, and
+      !! both are left at `kd = 0` exactly as the constant twin leaves
+      !! them, which is what preserves the closed-BC invariant.
+      !!
+      !! Explicit-shape dummies throughout (no assumed-shape in a
+      !! `do concurrent`); `eos` is a flat POD passed by value, so the
+      !! device copy is register-resident and `eos_buoyancy_coeffs` is
+      !! reachable as an `!$acc routine seq` from the same shared library.
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(inout) :: ks(nx, ny, nzp1)
+      real(wp), intent(in) :: temp_h(nx, ny, nzp1 - 1)
+         !! `hTr` of temperature (degC·m).
+      real(wp), intent(in) :: salt_h(nx, ny, nzp1 - 1)
+         !! `hTr` of salinity (PSU·m).
+      real(wp), intent(in) :: h_layer(nx, ny, nzp1 - 1)
+      real(wp), intent(in) :: p_top(nx, ny)
+         !! Surface load (Pa) — `multilayer_state_t%p_top`, the zero array
+         !! unless `&ocean_psurf_nml in_eos`.
+      type(eos_t), intent(in) :: eos
+         !! Active EOS handle, by value.
+      real(wp), intent(in) :: rho0
+         !! Boussinesq reference density for the hydrostatic accumulation
+         !! (the one configured ρ₀ of record, via `vmix%rho0`).
+      logical, intent(in) :: p_top_in_eos
+         !! Whether to seed the stack from `p_top` — mirrors EPBL's gate.
+      real(wp), intent(in) :: strat_param_max, kappa_s, exp1, exp2
+      real(wp), intent(in) :: param1, param2, param3, mol_diff
+      logical, intent(in) :: use_k90
+
+      integer :: i, j, k, nz
+      real(wp) :: kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl
+      real(wp) :: p_int, t_u, t_l, s_u, s_l, alpha_i, beta_i
+
+      nz = nzp1 - 1
+
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, &
+               p_int, t_u, t_l, s_u, s_l, alpha_i, beta_i)
+         p_int = 0.0_wp
+         if (p_top_in_eos) p_int = p_top(i, j)
+
+         do k = nzp1, 1, -1
+            ! Walk down from the free surface: stepping from interface
+            ! k+1 to interface k crosses layer k, so charge its weight
+            ! first.  At k = nzp1 nothing has been crossed yet and p_int
+            ! is still the surface load.
+            if (k <= nz) p_int = p_int + GRAVITY*rho0*h_layer(i, j, k)
+
+            kt_pre = kt(i, j, k)
+            kd_t = 0.0_wp
+            kd_s = 0.0_wp
+
+            if (k >= 2 .and. k <= nz) then
+               hu = h_layer(i, j, k)      ! upper layer (toward surface)
+               hl = h_layer(i, j, k - 1)  ! lower layer
+               if (hu > H_VANISHED .and. hl > H_VANISHED) then
+                  t_u = temp_h(i, j, k)/hu
+                  t_l = temp_h(i, j, k - 1)/hl
+                  s_u = salt_h(i, j, k)/hu
+                  s_l = salt_h(i, j, k - 1)/hl
+                  ! α, β at the interface state: the mean of the two
+                  ! abutting layer centres (the same two-point average
+                  ! the ΔT / ΔS below are differences of), at the in-situ
+                  ! interface pressure.
+                  call eos_buoyancy_coeffs(eos, 0.5_wp*(t_u + t_l), &
+                                           0.5_wp*(s_u + s_l), p_int, &
+                                           alpha_i, beta_i)
+                  ! alpha*dT and beta*dS across interface k (upper - lower)
+                  adT = alpha_i*(t_u - t_l)
+                  bdS = beta_i*(s_u - s_l)
+
+                  if (adT >= bdS .and. bdS > 0.0_wp) then
+                     ! ---- salt fingering (R_rho >= 1) ----
+                     rrho = adT/bdS
+                     if (rrho < strat_param_max) then
+                        ddiff = (1.0_wp - ((rrho - 1.0_wp)/ &
+                                           (strat_param_max - 1.0_wp))**exp1)**exp2
+                        kd_s = kappa_s*ddiff
+                     end if
+                     kd_t = 0.7_wp*kd_s
+                  else if (adT >= bdS .and. adT < 0.0_wp) then
+                     ! ---- diffusive convection (0 < R_rho < 1) ----
+                     rrho = adT/bdS
+                     if (use_k90) then
+                        ddiff = mol_diff*8.7_wp*rrho**1.1_wp
+                     else
+                        ddiff = mol_diff*param1* &
+                                exp(param2*exp(param3*(1.0_wp/rrho - 1.0_wp)))
+                     end if
+                     kd_t = ddiff
+                     if (rrho < 0.5_wp) then
+                        kd_s = 0.15_wp*rrho*ddiff
+                     else
+                        kd_s = (1.85_wp*rrho - 0.85_wp)*ddiff
+                     end if
+                  end if
+               end if
+            end if
+
+            ks(i, j, k) = kt_pre + kd_s
+            kt(i, j, k) = kt_pre + kd_t
+         end do
+      end do
+   end subroutine vmix_split_ddiff_eos_impl
 
    subroutine vmix_assemble(grid, this, ms, geolat, status)
       !! The single downstream gate of the vmix diffusivity assembly —

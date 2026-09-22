@@ -158,6 +158,17 @@ association outlives this call.</p></td>
                  <td><p>Append a message to a growable error list.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/add_top_drag_into_f_slow.html'>add_top_drag_into_F_slow</a></td>
+                 <td><a href='../module/rdb_barotropic_coupling.html'>rdb_barotropic_coupling</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Add the ice-shelf top-drag tendency into the already-summed
+slow forcing.  Separate from <code>sum_slow_tendencies_into_F_slow</code>
+(rather than a sixth term in it) for one reason: the top-drag
+slot is OPTIONAL all the way down the driver chain, and the sum
+above must stay a single unconditional kernel with no <code>present</code>
+branch inside its <code>do concurrent</code>.</p><a href="../proc/add_top_drag_into_f_slow.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/aniso_mode_is_implemented.html'>aniso_mode_is_implemented</a></td>
                  <td><a href='../module/rdb_ocean_horizontal_viscosity.html'>rdb_ocean_horizontal_viscosity</a></td>
                  <td>Function</td>
@@ -367,6 +378,18 @@ rx updated in-place; u_prev NOT updated here (done by the caller
 after all edges are set).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/apply_surface_restore_2d_cover_impl.html'>apply_surface_restore_2d_cover_impl</a></td>
+                 <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Ice-shelf-cover twin of <code>apply_surface_restore_2d_impl</code>: the
+open-water factor <code>1 - cover_frac</code> composes multiplicatively
+with <code>wet_mask</code>, so a covered column receives EXACTLY zero
+restoring — and, because the same factor multiplies the budget
+mirror, exactly zero restoring shows up in the heat/salt
+surface budget there too.  Separate <code>_impl</code>, not an in-loop
+<code>present()</code> test (house idiom).</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/apply_surface_restore_2d_impl.html'>apply_surface_restore_2d_impl</a></td>
                  <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
                  <td>Subroutine</td>
@@ -400,10 +423,10 @@ and <code>apply_surface_src_2d_dyn_impl</code>.</p></td>
                  <td><a href='../proc/apply_surface_src_2d_impl.html'>apply_surface_src_2d_impl</a></td>
                  <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
                  <td>Subroutine</td>
-                 <td><p>Stamp <code>inv_scale · Q_field(i,j) · wet_mask(i,j)</code> onto the top
-layer (k = nz) of a tracer&rsquo;s hTr array, mirror into the matching
-budget contributor.  Explicit-shape dummies so NVHPC stdpar can
-compile device kernels against static bounds.</p><a href="../proc/apply_surface_src_2d_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+                 <td><p>Stamp <code>inv_scale · Q_field(i,j) · wet_mask(i,j)</code> onto the first
+LIVE layer (<code>k_top(i,j)</code>) of a tracer&rsquo;s hTr array, mirror into
+the matching budget contributor.  Explicit-shape dummies so
+NVHPC stdpar can compile device kernels against static bounds.</p><a href="../proc/apply_surface_src_2d_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/apply_surface_src_2d_nobudget_impl.html'>apply_surface_src_2d_nobudget_impl</a></td>
@@ -418,6 +441,32 @@ contract (<code>budget_id = TRACER_BUDGET_NONE</code>) must not touch
 <code>apply_surface_src_2d_dyn_impl</code>&rsquo;s docstring) — this keeps the
 production S/T impl untouched and the increment <code>hTr</code> receives
 bit-identical to salinity&rsquo;s.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/apply_sw_and_restore.html'>apply_sw_and_restore</a></td>
+                 <td><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The two cell-centred surface kernels that do NOT route through
+the assembler&rsquo;s <code>Q_heat</code> / <code>Q_salt</code>, with their ice-shelf-cover
+dispatch.  Shortwave penetration reads a pristine <code>q_sw</code>
+component (or moves a lump the masked deposit never added) and
+restoring forms its flux in-kernel from the live SST/SSS, so
+each needs the cover factor of its own; everything else the
+atmosphere contributes is already masked inside
+<code>ocean_surface_flux_assemble</code>.</p><a href="../proc/apply_sw_and_restore.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/apply_sw_penetration_cover_impl.html'>apply_sw_penetration_cover_impl</a></td>
+                 <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Ice-shelf-cover twin of <code>apply_sw_penetration_impl</code>: the
+open-water factor <code>1 - cover_frac</code> composes multiplicatively
+with <code>wet_mask</code> into the column irradiance <code>I0</code>, so a fully
+covered column neither removes the surface lump nor deposits a
+profile — it is left EXACTLY untouched.  Separate <code>_impl</code>, not
+an in-loop <code>present()</code> test (house idiom, see
+<code>apply_surface_src_2d_dyn_impl</code>) — the cover-off path keeps the
+original kernel byte-identical.</p><a href="../proc/apply_sw_penetration_cover_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/apply_sw_penetration_impl.html'>apply_sw_penetration_impl</a></td>
@@ -1075,9 +1124,10 @@ explicit-shape; one cadence-bounded launch per remap.</p></td>
                  <td><a href='../proc/build_z_ctr.html'>build_z_ctr</a></td>
                  <td><a href='../module/rdb_ocean_z_init.html'>rdb_ocean_z_init</a></td>
                  <td>Subroutine</td>
-                 <td><p>Layer-centre depths (positive-down from SSH) from a column of
-layer thicknesses.  Bottom-up: k=1 bed, k=nz_ml surface.
-<code>z_ctr(k) = sum_{k'=k+1..nz_ml} h(k') + 0.5*h(k)</code>.</p></td>
+                 <td><p>Layer-centre GEOPOTENTIAL depths (positive-down from the <code>z = 0</code>
+datum) from a column of layer thicknesses.  Bottom-up: k=1 bed,
+k=nz_ml surface.
+<code>z_ctr(k) = z_top + sum_{k'=k+1..nz_ml} h(k') + 0.5*h(k)</code>.</p><a href="../proc/build_z_ctr.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/c_to_f_string.html'>c_to_f_string</a></td>
@@ -1129,6 +1179,467 @@ evaluated.</p></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Function</td>
                  <td><p>Comma-separated list of catalog diagnostic names (for error text).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_apply_land_exclusion.html'>cavity_apply_land_exclusion</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>NO ICE OVER LAND (design rule R2): force <code>z_draft = 0</code> on every
+column the bathymetry already calls land (<code>b &lt;
+LAND_DEPTH_THRESHOLD</code>), and report how many were touched so the
+caller can log it.</p><a href="../proc/cavity_apply_land_exclusion.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_bound_to_grid.html'>cavity_bound_to_grid</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Function</td>
+                 <td><p>Convert ONE shelf-box bound from metres to grid coordinate units,
+leaving the <code>CAVITY_BOUND_INF</code> &ldquo;no limit&rdquo; sentinel alone.  Without
+the guard the sentinel would be scaled by the degrees-per-metre
+factor on a spherical grid and come out as a finite (if absurd)
+bound — harmless numerically, but it would stop meaning what it
+says, and the next reader would have to re-derive that.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_buoyancy_flux.html'>cavity_buoyancy_flux</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Interfacial buoyancy flux <code>B_b</code> (m^2/s^3), NEGATIVE = stabilising
+— Yung et al. (2025) eq. (6) p. 5831,</p><a href="../proc/cavity_buoyancy_flux.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_comp_apply_impl.html'>cavity_comp_apply_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The <code>volume_compensation = "uniform_open_ocean"</code> sink: remove
+<code>dw</code> metres of the top layer from every wet cell the ice does
+NOT cover, the removed parcel carrying that cell&rsquo;s own <code>T</code> and
+<code>S</code> so no concentration there changes.</p><a href="../proc/cavity_comp_apply_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_comp_scale_tracer_impl.html'>cavity_comp_scale_tracer_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Apply the compensation sink&rsquo;s top-layer ratio to one PASSIVE
+tracer&rsquo;s load.  Unconditional (<code>scale = 1</code> off the sink), so
+there is no mask branch inside the kernel.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_comp_withdrawal.html'>cavity_comp_withdrawal</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Function</td>
+                 <td><p>The uniform per-unit-area thickness the <code>uniform_open_ocean</code>
+sink removes: <code>vol_melt/area_open</code>, and exactly zero when there
+is no open ocean to remove it from (a fully ice-covered domain —
+the sink then does nothing rather than dividing by zero, and the
+volume stays in, which the mass budget reports honestly as a
+growing total).</p><a href="../proc/cavity_comp_withdrawal.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_count_grounded.html'>cavity_count_grounded</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Count the INTERIOR columns the cavity grounds: wet bed
+(<code>b &gt;= LAND_DEPTH_THRESHOLD</code>) but water thickness
+<code>b - z_draft &lt; h_min</code>.  Interior-only, because the ghost band
+carries extrapolated bathymetry and would bias the fraction the
+<code>grounded_max_frac</code> sanity bound is taken against.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_count_unloaded_p_top.html'>cavity_count_unloaded_p_top</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p>Count cells whose top-of-column pressure does NOT carry the
+isostatic ice load — the melt path&rsquo;s guard that
+<code>configure_ocean_cavity</code> (the sole <code>ms%p_top</code> producer) ran, and
+ran before this check.</p><a href="../proc/cavity_count_unloaded_p_top.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_count_zero_f.html'>cavity_count_zero_f</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p>Count ice-covered WET columns sitting at exactly <code>f = 0</code> — the
+configure-time domain check for <code>exchange_law = "hj99"</code>.</p><a href="../proc/cavity_count_zero_f.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_datum_impl.html'>cavity_datum_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The BAROTROPIC DATUM: <code>bt_H_ref = b - z_draft</code> on a column that
+has water under the ice, and exactly <code>0</code> on one that is
+GROUNDED (<code>b - z_draft &lt; h_min</code>, i.e. land by the very rule
+<code>seed_wet_mask_impl</code> applies).</p><a href="../proc/cavity_datum_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_datum_residual.html'>cavity_datum_residual</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p>Max violation of the counted-once invariant (I) in METRES of
+reference depth, over the WET columns:
+<code>max |bt_H_ref - (b - z_draft)|</code> where <code>b - z_draft &gt;= h_min</code>.</p><a href="../proc/cavity_datum_residual.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_diff_impl.html'>cavity_diff_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>a - b</code> with the cavity missing-value convention.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_draft_apply_sign.html'>cavity_draft_apply_sign</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Normalise a freshly loaded draft field onto Roundabout&rsquo;s
+convention (DEPTH, positive down, <code>&gt;= 0</code>).</p><a href="../proc/cavity_draft_apply_sign.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_draft_is_finite_nonneg.html'>cavity_draft_is_finite_nonneg</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p>Configure-time guard: every draft entry is finite and <code>&gt;= 0</code>.</p><a href="../proc/cavity_draft_is_finite_nonneg.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_draft_is_uniform.html'>cavity_draft_is_uniform</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Function</td>
+                 <td><p>Is the configured ice-shelf draft UNIFORM over the whole array?</p><a href="../proc/cavity_draft_is_uniform.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_exchange_velocities.html'>cavity_exchange_velocities</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Exchange-velocity dispatch — ONE argument list for every law, so
+a later <code>do concurrent</code> kernel dispatches with a single
+<code>select case</code> and no reshaping.  <code>l_plus</code> is the viscous Obukhov
+scale of the CURRENT iterate: the single scalar that carries the
+stratification feedback for every implicit law.  Pass
+<code>CAVITY_L_PLUS_NEUTRAL</code> for the neutral / unsuppressed
+evaluation.</p><a href="../proc/cavity_exchange_velocities.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_exchange_with_f.html'>cavity_exchange_with_f</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Copy of an exchange bundle with <code>f_cor</code> replaced — the seam that
+lets a 2-D kernel give EVERY COLUMN its own Coriolis parameter
+while <code>ocean_cavity_exchange_t</code> keeps its scalar member.</p><a href="../proc/cavity_exchange_with_f.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_far_field_impl.html'>cavity_far_field_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Thickness-weighted mean of <code>(T, S, u, v)</code> over <code>far_depth</code>
+METRES below the ice base, with a PARTIAL last layer.</p><a href="../proc/cavity_far_field_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_fill_cover_frac.html'>cavity_fill_cover_frac</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>v1 ice-cover fraction: BINARY, <code>1</code> wherever there is any draft.
+An area-blended calving front (a partially covered cell) is a
+melt-physics decision, not a geometry one, so it is deliberately
+left for the slice that needs it — the field exists now only so
+that slice does not have to re-open the metrics lifecycle.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_fill_p_ice_ref.html'>cavity_fill_p_ice_ref</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>p_ice_ref = (rho_ref*GRAVITY) * z_draft</code> (Pa).</p><a href="../proc/cavity_fill_p_ice_ref.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_flux_fill_impl.html'>cavity_flux_fill_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fill the two OWNED surface-flux components from the solved
+interface.  FULL OVERWRITE of the whole plane, never <code>+=</code> —
+the same rule the sea-ice coupler&rsquo;s fillers follow, and for the
+same reason (a <code>+=</code> ratchets across outer steps with no bound).</p><a href="../proc/cavity_flux_fill_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_gamma_hj99.html'>cavity_gamma_hj99</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Holland &amp; Jenkins (1999) eqs. (14)-(18) p. 1792:</p><a href="../proc/cavity_gamma_hj99.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_gamma_yung25.html'>cavity_gamma_yung25</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Yung et al. (2025) &ldquo;StratFeedback&rdquo;, eqs. (7)-(8) p. 5832:</p><a href="../proc/cavity_gamma_yung25.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_heat_fluxes.html'>cavity_heat_fluxes</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The three heat fluxes of (E2), W/m^2:</p><a href="../proc/cavity_heat_fluxes.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_ice_terms.html'>cavity_ice_terms</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>(c_i_eff, kh)</code> for the requested ice-conduction mode — the two
+numbers through which every mode enters the quadratic.</p><a href="../proc/cavity_ice_terms.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_l_plus_from_state.html'>cavity_l_plus_from_state</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Viscous Obukhov scale <code>L+ = L/delta_nu</code> with <code>delta_nu = nu/u*</code>,
+i.e. <code>L+ = -u*^4/(nu*kappa*B_b)</code> — Yung et al. (2025) eq. (5)
+p. 5831; the same definition in Vreugdenhil &amp; Taylor (2019)
+eq. (27) and Rosevear et al. (2022) eqs. (6)+(8) p. 2592.
+POSITIVE for melting.  Returns <code>CAVITY_L_PLUS_NEUTRAL</code> for a
+vanishing buoyancy flux.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_l_plus_is_neutral.html'>cavity_l_plus_is_neutral</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Is this trial <code>L+</code> the neutral / unsuppressed limit?</p><a href="../proc/cavity_l_plus_is_neutral.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_law_is_implicit.html'>cavity_law_is_implicit</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Does this law&rsquo;s <code>(gamma_t, gamma_s)</code> depend on the interfacial
+buoyancy flux — and therefore on the melt rate it produces?  Yung
+et al. (2025) p. 5833 states the consequence: &ldquo;Since the transfer
+coefficients depend on L+, which in turn depends on melt rate via
+surface buoyancy forcing, iteration is required for convergence
+of the three-equation parameterisation solution.&rdquo;</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_m_ice_from_mass.html'>cavity_m_ice_from_mass</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Solid-ice thickness rate (m/s) from the canonical mass flux,
+<code>m_ice = m_mass/rho_i</code>.  REPORTING ONLY — this is Jenkins,
+Nicholls &amp; Corr (2010)&rsquo;s <code>a_b</code> convention.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_m_weq_from_mass.html'>cavity_m_weq_from_mass</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Freshwater-equivalent thickness rate (m/s) from the canonical
+mass flux, <code>m_weq = m_mass/rho_fw</code>.  REPORTING ONLY — this is
+ISOMIP+&rsquo;s <code>m_w</code> (Asay-Davis et al. (2016) eq. (24) p. 2485), the
+number their figures are in.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_mask_impl.html'>cavity_mask_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Copy a 2-D cavity field into the diag buffer, writing IEEE NaN
+wherever the column was not solved.  Every cavity fill that is
+a plain read of a slot array routes through here, so the
+missing-value convention cannot drift between them.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_mass_apply_impl.html'>cavity_mass_apply_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The real-mass top-layer source: add the meltwater VOLUME to
+<code>h_layer</code> at the first LIVE layer <code>k_top(i,j)</code>, replace the
+virtual salt flux the assembler
+stamped with the real advective salt <code>w*s_ice</code>, and add the
+enthalpy <code>dh*T_b</code> — mirroring both tracer increments into the
+existing surface budget contributors.</p><a href="../proc/cavity_mass_apply_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_mass_salt_mirror_impl.html'>cavity_mass_salt_mirror_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The pseudo-salt mirror of <code>cavity_mass_apply_impl</code>&rsquo;s SALT
+increment, with no budget accumulation — <code>budget_id = NONE</code>, so
+it must not touch <code>salt_budget_surface</code>.</p><a href="../proc/cavity_mass_salt_mirror_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_mass_thin_is_fatal.html'>cavity_mass_thin_is_fatal</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Function</td>
+                 <td><p>Is this step&rsquo;s clamped-withdrawal tally a FAIL-LOUD condition?</p><a href="../proc/cavity_mass_thin_is_fatal.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_mass_totals_impl.html'>cavity_mass_totals_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The two INTERIOR integrals the mass budget and the compensation
+sink need, reduced on device in one pass:</p><a href="../proc/cavity_mass_totals_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_melt_columns.html'>cavity_melt_columns</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Data-parallel driver: solve <code>n</code> independent columns.</p><a href="../proc/cavity_melt_columns.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_melt_columns_2d.html'>cavity_melt_columns_2d</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Masked 2-D driver: form the friction velocity and solve the
+interface on every ICE-COVERED column of an <code>(nx, ny)</code> plane,
+leaving the rest untouched at exactly zero.</p><a href="../proc/cavity_melt_columns_2d.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_melt_point.html'>cavity_melt_point</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Scalar entry point returning only what a coupling seam consumes:
+the interface state, the canonical melt mass flux and the ocean
+-&gt; interface heat flux.  A thin wrapper over <code>cavity_solve_melt</code>
+that keeps the solution BUNDLE inside the callee, so a
+<code>do concurrent</code> over columns needs no derived-type <code>local(...)</code>
+clause at all — each iteration writes its own array elements.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_melt_point_gamma.html'>cavity_melt_point_gamma</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>cavity_melt_point</code> plus the two EXCHANGE VELOCITIES the solve
+converged on.</p><a href="../proc/cavity_melt_point_gamma.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_melt_status_is_fatal.html'>cavity_melt_status_is_fatal</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Function</td>
+                 <td><p>Is this step&rsquo;s status tally a FAIL-LOUD condition?</p><a href="../proc/cavity_melt_status_is_fatal.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_obukhov_length.html'>cavity_obukhov_length</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Dimensional Obukhov length <code>L = -u*^3/(kappa*B_b)</code> (m), POSITIVE
+for a stabilising (melting) buoyancy flux.  McPhee, Maykut &amp;
+Morison (1987) p. 7029; the same scale appears as Yung et al.
+(2025) eq. (5) p. 5831.  (Holland &amp; Jenkins (1999) uses <code>L_O</code> in
+their eq. (18) but never defines it.)</p><a href="../proc/cavity_obukhov_length.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_outer_residual.html'>cavity_outer_residual</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Outer-iteration residual <code>G(x) = ln(L+_new(x)) - x</code>, with the
+destabilising branch folded in: a non-positive, non-finite or
+sentinel <code>L+_new</code> means the buoyancy flux at this iterate is
+destabilising (or zero), which every law treats as
+<code>L+ = +infinity</code>, so <code>G = +infinity</code>.  Mapping it that way keeps
+the bisection bracket valid instead of taking <code>log()</code> of a
+negative number.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_resolve_gamma_s.html'>cavity_resolve_gamma_s</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p>Resolve the <code>&amp;ocean_cavity_melt_nml gamma_s</code> &ldquo;unset&rdquo; sentinel to
+the ISOMIP+ default <code>gamma_t/CAVITY_GAMMA_RATIO_ISOMIP</code>
+(Asay-Davis et al. (2016) Table 4 p. 2483; the 35 is Jenkins,
+Nicholls &amp; Corr (2010) p. 2309).</p><a href="../proc/cavity_resolve_gamma_s.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_safe_state.html'>cavity_safe_state</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The documented SAFE STATE returned on every non-OK status: zero
+melt, interface salinity equal to the far field, interface
+temperature on the liquidus there.  <code>m_mass</code> is EXACTLY zero, so
+a failed column contributes nothing to a heat/salt budget rather
+than contributing a plausible wrong number.</p><a href="../proc/cavity_safe_state.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_salt_fluxes.html'>cavity_salt_fluxes</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The two sides of (E3), in (g/kg)*kg/m^2/s:</p><a href="../proc/cavity_salt_fluxes.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_scale_impl.html'>cavity_scale_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>cavity_mask_impl</code> with a constant multiplier folded in.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_solution_reset.html'>cavity_solution_reset</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Define every component of the solution bundle.  Called FIRST by
+<code>cavity_solve_melt</code>, before any early return, because the type
+carries no default initialisers (see its docstring: they would
+bar it from a <code>do concurrent</code> <code>local(...)</code> clause on gfortran).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_solve_melt.html'>cavity_solve_melt</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Solve the three-equation system with any implemented exchange
+law, and return the full interface state plus the fluxes a
+coupling seam will consume.</p><a href="../proc/cavity_solve_melt.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_state_at_x.html'>cavity_state_at_x</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Evaluate the whole interface at a trial <code>x = ln(L+)</code>: exchange
+velocities at that stratification, the closed-form three-equation
+solve, the buoyancy flux the answer implies and the <code>L+</code> it
+re-diagnoses.  The fixed point of <code>x -&gt; ln(L+_new)</code> is the
+solution of the implicit system.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_status_counts_impl.html'>cavity_status_counts_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Reduce the per-column status plane into four counts, ON DEVICE.</p><a href="../proc/cavity_status_counts_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_status_impl.html'>cavity_status_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_t_ice.html'>cavity_t_ice</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Ice temperature actually used: exactly zero when the mode ignores
+it, so an unset or stale <code>T_ice</code> cannot leak into an insulating
+run through <code>L_eff</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_three_equation.html'>cavity_three_equation</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Closed-form solve of (E1)-(E3) on the linear liquidus carried by
+<code>eos</code>.  Returns the interface state and the canonical melt mass
+flux (kg/m^2/s, &gt; 0 melting).  See the derivation block above for
+the root selection, the cancellation-safe quadratic and the
+pre-solve melt/freeze branch.</p><a href="../proc/cavity_three_equation.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_two_equation.html'>cavity_two_equation</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Two-equation variant: the interface salinity is the FAR-FIELD
+salinity, <code>S_b = S_w</code> exactly, i.e. the <code>gamma_s -&gt; infinity</code>
+limit of the three-equation form (NOT the <code>gamma_s -&gt; 0</code> limit,
+which sends <code>T_b -&gt; T_w</code> and the melt rate to zero).  Holland &amp;
+Jenkins (1999) section 2b(2) p. 1791; Jenkins, Nicholls &amp; Corr
+(2010) eq. (6) p. 2302, where the single transfer coefficient is
+<code>Gamma_TS ~ 0.006</code> and the freezing point is evaluated at the
+far-field salinity.</p><a href="../proc/cavity_two_equation.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_ustar.html'>cavity_ustar</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Interface friction velocity (m/s),</p><a href="../proc/cavity_ustar.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/cavity_water_column_impl.html'>cavity_water_column_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>water = b - z_draft</code> — the reference water-column thickness the
+datum, the layer split and the wet-mask seed all work on.  Kept
+as one named routine so the three call sites cannot drift.</p><a href="../proc/cavity_water_column_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/cfl_cell_value.html'>cfl_cell_value</a></td>
@@ -1301,6 +1812,13 @@ tests (same convention as the BT fold&rsquo;s loud count).</p></td>
                  <td><a href='../module/rdb_ocean_diag_netcdf.html'>rdb_ocean_diag_netcdf</a></td>
                  <td>Subroutine</td>
                  <td><p>Flush + close the NetCDF file.  Idempotent.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/closed_faces_update_bt_widths.html'>closed_faces_update_bt_widths</a></td>
+                 <td><a href='../module/rdb_ocean_porous.html'>rdb_ocean_porous</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Refresh the BAROTROPIC face widths from the LIVE layer
+thicknesses when <code>&amp;vcoord_nml zfixed_closed_faces</code> is on.</p><a href="../proc/closed_faces_update_bt_widths.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/collect_tokens.html'>collect_tokens</a></td>
@@ -1665,6 +2183,34 @@ mode-split reference column depth bt_H_ref from the seeded bathymetry.
 <code>cfg</code> is intent(inout) because auto_n_inner writes cfg%ocean%bt%n_inner.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/configure_ocean_cavity.html'>configure_ocean_cavity</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Build the static ice-shelf cavity LOAD field
+<code>metrics%p_ice_ref = (rho_ref*GRAVITY)*z_draft</code> (Pa), ASSEMBLE it
+into the top-of-column pressure <code>multilayer_state_t%p_top</code>, and
+assert the counted-once datum invariant.</p><a href="../proc/configure_ocean_cavity.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/configure_ocean_cavity_melt.html'>configure_ocean_cavity_melt</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Configure the ice-shelf basal-melt slot (<code>&amp;ocean_cavity_melt_nml</code>,
+P2b): copy the knobs onto the slot&rsquo;s three flat parameter
+bundles, resolve the <code>gamma_s</code> sentinel, build the per-column
+Coriolis array the <code>hj99</code> law needs, and CHECK that the
+interface pressure the liquidus will read has actually been
+loaded.</p><a href="../proc/configure_ocean_cavity_melt.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/configure_ocean_closed_faces.html'>configure_ocean_closed_faces</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Build the static partial-step z-level FACE-CLOSURE mask
+(<code>&amp;vcoord_nml zfixed_closed_faces</code>; Adcroft, Hill &amp; Marshall
+1997; Losch 2008 §2.1 for the ice-shelf cavity).</p><a href="../proc/configure_ocean_closed_faces.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/configure_ocean_conv.html'>configure_ocean_conv</a></td>
                  <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
                  <td>Subroutine</td>
@@ -1733,6 +2279,14 @@ with its parent slot at <code>ocean_state_enter_data</code> — no explicit
 <code>!$acc update</code> needed as long as this runs before that (it does;
 see <code>rdb_driver.F90</code>).  Default <code>kappa_h = 0.0</code> leaves the
 kernel&rsquo;s short-circuit intact ⇒ bit-identical.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/configure_ocean_k_top.html'>configure_ocean_k_top</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fill <code>ms%k_top</code> / <code>k_top_u</code> / <code>k_top_v</code> — the shared index of
+the first LIVE layer counting down from the top, and the field
+every top-side consumer reads instead of spelling <code>nz</code>.</p><a href="../proc/configure_ocean_k_top.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/configure_ocean_kappa_shear.html'>configure_ocean_kappa_shear</a></td>
@@ -1860,6 +2414,15 @@ arrays from <code>metrics%geolatT/geolonT</code>.  Host-side setup — runs
 AFTER <code>configure_ocean_metrics</code> (lat/lon must be filled) and
 BEFORE <code>ocean_state_enter_data</code>.  <code>enable=.false.</code> =&gt; no-op,
 bit-identical.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/configure_ocean_top_drag.html'>configure_ocean_top_drag</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Ice-shelf TOP drag (<code>&amp;ocean_tdrag_nml</code>, Phase 4a): copy the
+variant + coefficients onto the slot, project the static
+cell-centred <code>metrics%cover_frac</code> onto the velocity FACES, and
+enforce the ONE-<code>C_d</code> rule against the melt slot.</p><a href="../proc/configure_ocean_top_drag.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/configure_ocean_tracers.html'>configure_ocean_tracers</a></td>
@@ -2535,10 +3098,29 @@ first-order upwind pick — consistent with <code>compute_h_face_upstream</code>
                  <td><p>Public only for the unit-test suite.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/derived_catalog_requires.html'>derived_catalog_requires</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Function</td>
+                 <td><p>The <code>DERIVED_REQ_*</code> code a catalog entry is gated on, <code>-1</code> for
+an unknown name.  The DECISION <code>register_derived</code> fails loud on,
+exposed as a lookup so the suite can assert it without
+provoking <code>error stop</code> — the repo&rsquo;s standing pattern for
+testing a fail-loud rule.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/derived_catalog_size.html'>derived_catalog_size</a></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Function</td>
                  <td><p>Public only for the unit-test suite.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/derived_requires_fail.html'>derived_requires_fail</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fail loud on a derived diagnostic whose prerequisite knob is
+off.  Same three-step shape <code>register_derived</code> uses for an
+unknown name — error ring, logger, <code>error stop</code> — so the C ABI
+and the console both see it.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/det_sign.html'>det_sign</a></td>
@@ -2700,6 +3282,16 @@ to fit, not to equal the file&rsquo;s global length).  Never aborts.</p></td>
                  <td>Subroutine</td>
                  <td><p>Resolve a group name to known / external / unknown and parse
 (or skip) its body up to the terminating &lsquo;/&rsquo;.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/draft_shape_ok.html'>draft_shape_ok</a></td>
+                 <td><a href='../module/rdb_ocean_z_init.html'>rdb_ocean_z_init</a></td>
+                 <td>Function</td>
+                 <td><p>True iff <code>z_draft</code> is the FULL ghosted <code>(nx_total, ny_total)</code>
+array the seeders index with <code>(ng+i, ng+j)</code> — i.e. it matches
+<code>h_layer</code>&rsquo;s horizontal extent.  Guards the <code>(1, 1)</code> placeholder
+<code>ocean_metrics_t</code> allocates when the cavity is off from ever
+being read as a field.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/drain_avail_limit.html'>drain_avail_limit</a></td>
@@ -3220,6 +3812,26 @@ reach <code>nc_create_file</code> -&gt; <code>nf90_create</code> -&gt; ENOENT -&
                  <td></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/eos_apply_tfreeze_set.html'>eos_apply_tfreeze_set</a></td>
+                 <td><a href='../module/rdb_eos.html'>rdb_eos</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Write the named liquidus coefficient SET onto the EOS handle.
+Called once, at configure time, from the earliest
+<code>configure_ocean_*</code> stage — before the flat-POD handle is copied
+onto the vmix / EPBL / kappa-shear / tidal-mixing slots and
+before <code>ocean_state_enter_data</code>, so every copy and every device
+kernel taking <code>eos_t</code> by value sees the configured set (same
+contract as <code>rho0</code> / <code>p_ref</code>; no <code>!$acc update device</code> is owed).</p><a href="../proc/eos_apply_tfreeze_set.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/eos_buoyancy_coeffs.html'>eos_buoyancy_coeffs</a></td>
+                 <td><a href='../module/rdb_eos.html'>rdb_eos</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Thermal-expansion and haline-contraction coefficients of the
+<strong>ACTIVE</strong> equation of state at a point, in the SAME DIMENSIONAL
+convention the <code>eos_t</code> members <code>alpha_T</code> / <code>beta_S</code> carry:</p><a href="../proc/eos_buoyancy_coeffs.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/eos_compute_arrays.html'>eos_compute_arrays</a></td>
                  <td><a href='../module/rdb_eos.html'>rdb_eos</a></td>
                  <td>Subroutine</td>
@@ -3232,6 +3844,14 @@ evaluate at the SINGLE, HORIZONTALLY UNIFORM reference pressure
 <code>eos%p_ref</code> (<code>&amp;ocean_eos_nml p_ref</code>, default 0 ⇒ surface/potential
 density) with the <code>H_VANISHED</code> vanishing-layer fallback to
 <code>eos%rho0</code>.</p><a href="../proc/eos_compute_arrays.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/eos_density_derivs.html'>eos_density_derivs</a></td>
+                 <td><a href='../module/rdb_eos.html'>rdb_eos</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Density sensitivities <code>∂ρ/∂T</code> and <code>∂ρ/∂S</code> of the ACTIVE equation
+of state at a point — the signed twin of <code>eos_buoyancy_coeffs</code>,
+which is where the per-variant closed forms live:</p><a href="../proc/eos_density_derivs.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/eos_density_point.html'>eos_density_point</a></td>
@@ -3813,6 +4433,16 @@ also seed <code>output_buffer</code> via this; today only the accumulator
 reset goes through here.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/fill_cavity_melt_status.html'>fill_cavity_melt_status</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Per-column <code>CAVITY_MELT_*</code> status code, as a real.  <code>0</code> is OK;
+anything else is a column that took the kernel&rsquo;s documented
+zero-melt safe state, and the console&rsquo;s warning line says how
+many there were.  Masked like the rest, so the plane cannot be
+read as &ldquo;everything is fine&rdquo; over open ocean.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/fill_coriolis_centre.html'>fill_coriolis_centre</a></td>
                  <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
                  <td>Subroutine</td>
@@ -3831,6 +4461,20 @@ generator-driven routine <code>metrics_fill_coriolis</code>, honouring
 is BIT-IDENTICAL to the legacy <code>coriolis_adv_set_beta_plane</code>;
 planetary uses the metrics geography.  The centre output is
 discarded here (filled into local scratch).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_exch_vel_s.html'>fill_exch_vel_s</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Haline exchange velocity <code>gamma_S</code> (m/s) — see <code>fill_exch_vel_t</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_exch_vel_t.html'>fill_exch_vel_t</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Thermal exchange velocity <code>gamma_T</code> (m/s) the solve CONVERGED
+on — not <code>Gamma_T·u*</code> re-derived here.  Under <code>hj99</code>/<code>yung25</code>
+the two differ by the stratification suppression.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_f_corner_seam_ghosts.html'>fill_f_corner_seam_ghosts</a></td>
@@ -3939,6 +4583,14 @@ hTr_ghost = tres_w(j, k, it) * h_ghost — unconditional.</p></td>
                  <td><a href='../module/rdb_ocean_obc_baroclinic.html'>rdb_ocean_obc_baroclinic</a></td>
                  <td>Subroutine</td>
                  <td><p>Zero-gradient fill of h_layer ghosts at open-ish edges.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_haline_driving.html'>fill_haline_driving</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>S* = S_far − S_b</code> (g/kg) — the salinity contrast the haline
+exchange acts on.  Positive under melting (meltwater freshens
+the interface).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_ice_conc.html'>fill_ice_conc</a></td>
@@ -4079,6 +4731,19 @@ closed BCs the column solve assumes; the original scalar
 kernel hard-coded those BCs via <code>α_1 = 0</code> and <code>β_nz = 0</code>.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/fill_melt.html'>fill_melt</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Basal melt mass flux (kg m-2 s-1), <strong>positive = melting</strong>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_melt_m_per_yr.html'>fill_melt_m_per_yr</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Basal melt rate in the ISOMIP+ reporting unit (m yr-1 of
+ice-equivalent freshwater) — see <code>melt_m_per_yr_factor</code>.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/fill_mld_density.html'>fill_mld_density</a></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Subroutine</td>
@@ -4088,10 +4753,12 @@ kernel hard-coded those BCs via <code>α_1 = 0</code> and <code>β_nz = 0</code>
                  <td><a href='../proc/fill_mld_density_impl.html'>fill_mld_density_impl</a></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Subroutine</td>
-                 <td><p>Per-column scan from surface (k=nz_ml) toward bed; first layer
-whose ρ exceeds (surface ρ + MLD_DENSITY_THRESHOLD) marks the
-MLD as the cumulative h-sum above it.  No crossing → MLD = full
-column depth.  Threshold met at the surface itself → MLD = 0.</p></td>
+                 <td><p>Per-column scan from the first LIVE layer (<code>k_top</code>, which is
+<code>nz_ml</code> unless a rigid top has vanished the layers above it)
+toward the bed; first layer whose ρ exceeds (surface ρ +
+MLD_DENSITY_THRESHOLD) marks the MLD as the cumulative h-sum
+above it.  No crossing → MLD = full column depth.  Threshold met
+at the surface itself → MLD = 0.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_mld_epbl.html'>fill_mld_epbl</a></td>
@@ -4130,6 +4797,12 @@ must have run <code>ocean_eos_compute</code> this step; not re-invoked here).</p
                  <td><p>Layer salinity, same pattern as temperature.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/fill_sbdry.html'>fill_sbdry</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Interface salinity <code>S_b</code> (g/kg).</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/fill_ssh.html'>fill_ssh</a></td>
                  <td><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></td>
                  <td>Subroutine</td>
@@ -4150,6 +4823,12 @@ Public only for the unit-test suite.</p></td>
                  <td></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/fill_tbdry.html'>fill_tbdry</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Interface temperature <code>T_b</code> (degC) — on the liquidus at <code>S_b</code>.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/fill_temperature.html'>fill_temperature</a></td>
                  <td><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></td>
                  <td>Subroutine</td>
@@ -4157,6 +4836,26 @@ Public only for the unit-test suite.</p></td>
 Tracer-registry indirection dereferenced HOST-side before the
 flat-impl kernel (array-of-DT deep deref blocks NVHPC device
 codegen).  Public only for the unit-test suite.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_tfreeze_ib.html'>fill_tfreeze_ib</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>T_f(S_far, p_top)</code> (degC) — the in-situ freezing point of the
+FAR FIELD at the ice base.  Distinct from <code>tbdry</code>, which is the
+freezing point of the INTERFACE salinity <code>S_b</code>; their
+difference is the whole three-equation correction, so shipping
+both makes it visible.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_thermal_driving.html'>fill_thermal_driving</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>T* = T_far − T_f(S_far, p_top)</code> (degC) — the far-field
+temperature above the IN-SITU freezing point at the interface
+pressure.  Positive drives melting.  This is the single number
+the melt rate is roughly linear in, so it is the first thing to
+look at when a melt rate looks wrong.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_tracer_ghosts_meridional.html'>fill_tracer_ghosts_meridional</a></td>
@@ -4228,6 +4927,14 @@ East outflow : u(i_e,j,k) &gt;= 0</p></td>
                  <td></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/fill_ustar_shelf.html'>fill_ustar_shelf</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Melt friction velocity <code>u*</code> (m/s), <code>max(sqrt(C_d(u²+v²+u_tide²)),
+u*_min)</code>.  This is the MELT law&rsquo;s <code>u*</code> and nothing else: it
+drives no momentum drag, and KPP/EPBL do not read it.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/fill_uv_layer_ghosts.html'>fill_uv_layer_ghosts</a></td>
                  <td><a href='../module/rdb_ocean_obc_baroclinic.html'>rdb_ocean_obc_baroclinic</a></td>
                  <td>Subroutine</td>
@@ -4263,6 +4970,28 @@ surrounding C-grid corners onto the cell centre.</p></td>
                  <td><p>Cell-centred relative vorticity using per-cell metric inverses
 <code>idxT</code>/<code>idyT</code> (= 1/dx, 1/dy on uniform Cartesian); the 0.25
 corner-average factor folds into the per-cell scale.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_water_column.html'>fill_water_column</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Water-column thickness under the shelf, <code>D = bt_H_ref + bt_eta</code>
+(m) — the ONE expression every consumer of the column depth
+uses, which is exactly what the cavity datum
+(<code>bt_H_ref = b − z_draft</code>) buys.  Masked by <code>cover_frac</code>: the
+quantity is perfectly well defined in open water, but as a
+CAVITY diagnostic a domain mean should be the mean cavity
+thickness, not that diluted by the open basin.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_z_draft.html'>fill_z_draft</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Ice-shelf draft (m, POSITIVE DOWN from the geoid) — geometry,
+so it needs only <code>&amp;ocean_cavity_dyn_nml</code> and is masked by
+<code>cover_frac</code> rather than by the melt slot&rsquo;s <code>active</code>.  Beyond
+the calving front there is no draft, which is missing data, not
+a draft of zero.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_zero_impl.html'>fill_zero_impl</a></td>
@@ -5992,6 +6721,16 @@ these; ported as a post-pass reduction (GPU-safe fail-loud, D7)
 rather than an in-loop abort.  Physical cells only.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/in_shelf_box.html'>in_shelf_box</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p><code>.true.</code> inside the shelf box.  Each of the four bounds is
+applied only when it is FINITE in the <code>CAVITY_BOUND_INF</code> sense,
+so the namelist defaults (+/-1e30) describe an unbounded shelf
+and a user who only wants a calving front in x need not describe
+y at all.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/int_default_string.html'>int_default_string</a></td>
                  <td><a href='../module/rdb_nml_schema.html'>rdb_nml_schema</a></td>
                  <td>Function</td>
@@ -6066,6 +6805,24 @@ registration path.</p></td>
                  <td><a href='../module/rdb_nml_schema.html'>rdb_nml_schema</a></td>
                  <td>Function</td>
                  <td><p>True if <code>word</code> looks like <code>N*value</code> (integer, then &lsquo;*&rsquo;).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/isomip_logistic.html'>isomip_logistic</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Function</td>
+                 <td><p><code>1/(1 + exp(t))</code>, saturated instead of overflowing.</p><a href="../proc/isomip_logistic.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/isomip_plus_bx.html'>isomip_plus_bx</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Function</td>
+                 <td><p>Along-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (2):</p><a href="../proc/isomip_plus_bx.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/isomip_plus_by.html'>isomip_plus_by</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Function</td>
+                 <td><p>Across-flow bedrock elevation, Asay-Davis et al. (2016) Eq. (4):</p><a href="../proc/isomip_plus_by.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/isopycnal_vanish_tol.html'>isopycnal_vanish_tol</a></td>
@@ -6376,6 +7133,14 @@ the previous configure-time warning to an abort.</p></td>
                  <td><p>Levenshtein edit distance between two (capped) strings.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/linear_in_z.html'>linear_in_z</a></td>
+                 <td><a href='../module/rdb_ocean_z_init.html'>rdb_ocean_z_init</a></td>
+                 <td>Function</td>
+                 <td><p>Affine profile <code>v(z) = v_ref + dv_dz*z</code> evaluated at
+geopotential height <code>z = -z_depth</code>, i.e.
+<code>v = v_ref - dv_dz*z_depth</code>.</p><a href="../proc/linear_in_z.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/load_bathymetry_into_array.html'>load_bathymetry_into_array</a></td>
                  <td><a href='../module/rdb_bathymetry.html'>rdb_bathymetry</a></td>
                  <td>Subroutine</td>
@@ -6672,6 +7437,13 @@ uninitialised, or the GM slot is absent.</p></td>
                  <td><p>Zero a device-resident 2D workspace (absent-source fallback).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/melt_m_per_yr_factor.html'>melt_m_per_yr_factor</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Function</td>
+                 <td><p>The ISOMIP+ melt-rate conversion, <code>kg m-2 s-1</code> → <code>m yr-1</code> of
+ice-equivalent freshwater: <code>f = SECONDS_PER_YEAR / rho_fw</code>.</p><a href="../proc/melt_m_per_yr_factor.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/mem_device_free_bytes.html'>mem_device_free_bytes</a></td>
                  <td><a href='../module/rdb_mem_report.html'>rdb_mem_report</a></td>
                  <td>Function</td>
@@ -6819,6 +7591,17 @@ here so tripolar metrics flow through identical index logic.</p><a href="../proc
 Length scale for the barotropic CFL <code>c_ext*dt*sqrt(1/dx^2+1/dy^2) &lt;= 1</code>
 (includes the cross-direction term; on uniform Cartesian = dx/sqrt(2)).
 Handles anisotropic cells exactly.  Host-side, configure time.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/metrics_closed_faces_alloc.html'>metrics_closed_faces_alloc</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Grow the z-level closed-face masks from their <code>(1,1,1)</code>
+placeholder to full face size.  Call ONLY when
+<code>&amp;vcoord_nml zfixed_closed_faces</code> is on, at configure time —
+after <code>init</code> and BEFORE <code>ocean_state_enter_data</code>, so the device
+map captures the final shapes (a realloc after <code>enter_data</code>
+would leave the device pointing at freed host memory).</p><a href="../proc/metrics_closed_faces_alloc.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/metrics_dx_min.html'>metrics_dx_min</a></td>
@@ -7798,6 +8581,73 @@ fall back to <code>grid%dx·grid%dy</code> (= areaT on uniform Cartesian).</p></
 conservation diagnostics — &ldquo;mass north of 30°S stays at FP.&rdquo;</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_bytes.html'>ocean_cavity_flux_bytes</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Function</td>
+                 <td><p>Counted allocatable footprint (0 when unallocated).  One
+<code>arr_bytes</code> term per array — add one here when an array joins
+the type.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_destroy.html'>ocean_cavity_flux_destroy</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Release the slot.  <code>is_init</code> is cleared FIRST.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_enter_data.html'>ocean_cavity_flux_enter_data</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Type-bound wrapper — delegates to the non-polymorphic impl so
+the device-attach map base is the heap object, not a
+polymorphic stack box.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_enter_data_impl.html'>ocean_cavity_flux_enter_data_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>copyin</code> (not <code>create</code>) throughout: <code>f_cor</code> carries a
+configure-time host fill that MUST reach the device, and the
+rest carry the zero <code>init</code> promised on both toolchains.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_exit_data.html'>ocean_cavity_flux_exit_data</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_exit_data_impl.html'>ocean_cavity_flux_exit_data_impl</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_init.html'>ocean_cavity_flux_init</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Allocate the slot.  Gated on <code>enable</code> (latched by
+<code>ocean_state_init_from_config</code> before this runs), so a run
+without a cavity pays fourteen <code>(1,1)</code> placeholders.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_flux_step.html'>ocean_cavity_flux_step</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>One cavity basal-melt update: sample the far field, solve the
+three-equation interface on every covered column, deliver the
+two owned surface-flux components, and account for the solver
+status.</p><a href="../proc/ocean_cavity_flux_step.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_cavity_mass_step.html'>ocean_cavity_mass_step</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The real-freshwater MASS update — one call, at the THERMO
+cadence, from inside the RK2 stage immediately after
+<code>ocean_surface_flux_apply_tracers</code>.</p><a href="../proc/ocean_cavity_mass_step.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_channel_drag_apply_tendencies.html'>ocean_channel_drag_apply_tendencies</a></td>
                  <td><a href='../module/rdb_ocean_bottom_drag.html'>rdb_ocean_bottom_drag</a></td>
                  <td>Subroutine</td>
@@ -7924,6 +8774,17 @@ construct a default-sized (16 slots, quiet) reader identically to
 the scaffold it replaces; <code>ocean_state_init_from_config</code> re-calls
 this with the real <code>cfg%ocean%data</code> once <code>cfg</code> is available —
 safe because nothing is registered between the two calls.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_data_input_load_static_2d.html'>ocean_data_input_load_static_2d</a></td>
+                 <td><a href='../module/rdb_ocean_data_input.html'>rdb_ocean_data_input</a></td>
+                 <td>Subroutine</td>
+                 <td><p>One-shot STATIC 2-D read: register, fill, close.  The setup-time
+convenience wrapper over <code>register_2d(time_mode="static")</code> +
+<code>fill_static_host</code> for a field that is read ONCE and never
+updated — a prescribed, time-constant geometry rather than a
+forcing.  <code>&amp;ocean_cavity_dyn_nml draft_config="file"</code> is the
+first consumer.</p><a href="../proc/ocean_data_input_load_static_2d.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_data_input_register_2d.html'>ocean_data_input_register_2d</a></td>
@@ -9801,6 +10662,27 @@ so an ice-off run never carries these arrays.</p></td>
 re-derive <code>stress_mag</code> from it.</p><a href="../proc/ocean_seam_refresh_surface_stress.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_sigma_stiffness.html'>ocean_sigma_stiffness</a></td>
+                 <td><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></td>
+                 <td>Function</td>
+                 <td><p>One face&rsquo;s terrain-following stiffness <code>|h_a-h_b|/(h_a+h_b)</code>.</p><a href="../proc/ocean_sigma_stiffness.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_sigma_stiffness_limit.html'>ocean_sigma_stiffness_limit</a></td>
+                 <td><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></td>
+                 <td>Function</td>
+                 <td><p>Accessor for <code>SIGMA_STIFFNESS_LIMIT</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_sigma_stiffness_worst.html'>ocean_sigma_stiffness_worst</a></td>
+                 <td><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Worst (largest) <code>ocean_sigma_stiffness</code> over every face joining
+two WET columns inside <code>[i0,i1] x [j0,j1]</code>, with its location,
+its two column thicknesses, and how many faces are over
+<code>SIGMA_STIFFNESS_LIMIT</code>.</p><a href="../proc/ocean_sigma_stiffness_worst.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_slopes_build_e.html'>ocean_slopes_build_e</a></td>
                  <td><a href='../module/rdb_ocean_isopycnal_slopes.html'>rdb_ocean_isopycnal_slopes</a></td>
                  <td>Subroutine</td>
@@ -9988,6 +10870,14 @@ epbl/kshear/&hellip;) — the caller sets <code>enable</code> before calling, an
 trips a zero-extent allocate.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_sponge_refresh_target.html'>ocean_sponge_refresh_target</a></td>
+                 <td><a href='../module/rdb_ocean_sponge.html'>rdb_ocean_sponge</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Re-evaluate the ANALYTIC <code>target_source="linear_z"</code> reference on
+the LIVE layer geometry: for every sponge cell (<code>idamp_h &gt; 0</code>)
+and every layer,</p><a href="../proc/ocean_sponge_refresh_target.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_sponge_snapshot_reference.html'>ocean_sponge_snapshot_reference</a></td>
                  <td><a href='../module/rdb_ocean_sponge.html'>rdb_ocean_sponge</a></td>
                  <td>Subroutine</td>
@@ -10151,10 +11041,15 @@ the masked dyn-core never evaluates <code>0*NaN</code> (a zeroed face metric
 times a NaN land contribution is still NaN).  Spec §13.3 /
 <code>land_mask_final_resolution.md</code> R-land-state:
   * <code>h_layer</code> floored to <code>H_VANISHED</code> (never 0 — avoids 1/0);
-  * tracers held at their seeded per-layer value (<code>hTr/h_old</code>),
-    re-scaled onto the floored thickness so <code>T/S = hTr/h</code> is
-    preserved and finite;
+  * tracer content zeroed (<code>hTr = 0</code>, so <code>T = S = 0</code> — finite);
   * layer + barotropic face velocities zeroed at land faces.</p><a href="../proc/ocean_state_seed_land_cells.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_surface_flux_apply_cover_const.html'>ocean_surface_flux_apply_cover_const</a></td>
+                 <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Mask the STATIC scalar <code>Q_heat</code> / <code>Q_salt</code> fill with the
+ice-shelf cover, for the <code>use_components = .false.</code> path only.</p><a href="../proc/ocean_surface_flux_apply_cover_const.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_surface_flux_apply_sw_penetration.html'>ocean_surface_flux_apply_sw_penetration</a></td>
@@ -10216,6 +11111,16 @@ stored field.  This keeps the const-flux path byte-for-byte
 unchanged and adds no second device sync of <code>Q_*</code>.</p><a href="../proc/ocean_surface_restore_apply_tracers.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_surface_stress_apply_cover.html'>ocean_surface_stress_apply_cover</a></td>
+                 <td><a href='../module/rdb_ocean_surface_stress.html'>rdb_ocean_surface_stress</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Zero the wind-stress pair on every C-grid face that touches an
+ice-covered cell, then refresh <code>stress_mag</code> from the masked
+pair.  The two halves are ONE call on purpose: a masked <code>tau</code>
+with a stale <code>stress_mag</code> would leave KPP/EPBL mixing on a wind
+that no longer reaches the water.</p><a href="../proc/ocean_surface_stress_apply_cover.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_surface_stress_apply_tendencies.html'>ocean_surface_stress_apply_tendencies</a></td>
                  <td><a href='../module/rdb_ocean_surface_stress.html'>rdb_ocean_surface_stress</a></td>
                  <td>Subroutine</td>
@@ -10274,12 +11179,28 @@ never stale relative to <code>tau_x</code>/<code>tau_y</code> regardless of call
 <code>configure_ocean_forcing</code>).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_surface_stress_set_shelf_from_ustar.html'>ocean_surface_stress_set_shelf_from_ustar</a></td>
+                 <td><a href='../module/rdb_ocean_surface_stress.html'>rdb_ocean_surface_stress</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Publish the ice-base stress from a FRICTION VELOCITY:
+<code>stress_shelf = rho_0 * u_*^2</code>.</p><a href="../proc/ocean_surface_stress_set_shelf_from_ustar.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_surfflux_alloc_components.html'>ocean_surfflux_alloc_components</a></td>
                  <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
                  <td>Subroutine</td>
-                 <td><p>Allocate the 20-field component set + the two <code>p_surf*</code> fields,
+                 <td><p>Allocate the 22-field component set + the two <code>p_surf*</code> fields,
 all <code>source=0.0_wp</code>, shape <code>(nx_total, ny_total)</code>.  Private —
 called only from <code>set_components</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_surfflux_assemble_cover_impl.html'>ocean_surfflux_assemble_cover_impl</a></td>
+                 <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Ice-shelf-cover twin of <code>ocean_surfflux_assemble_impl</code>: the
+open-water factor <code>open_f = 1 - cover_frac</code> multiplies the
+ATMOSPHERIC group and NOT the cavity group.  Grouping, spelt
+out because it is the whole point of this kernel:</p><a href="../proc/ocean_surfflux_assemble_cover_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_surfflux_assemble_impl.html'>ocean_surfflux_assemble_impl</a></td>
@@ -10289,6 +11210,14 @@ called only from <code>set_components</code>.</p></td>
 dims declared first (decl-order, ifx #8586).  See
 <code>ocean_surface_flux_assemble</code> for the physics; this is the
 arithmetic verbatim.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_surfflux_cover_const_impl.html'>ocean_surfflux_cover_const_impl</a></td>
+                 <td><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Flat <code>do concurrent</code> kernel behind
+<code>ocean_surface_flux_apply_cover_const</code> — explicit-shape dummies,
+integer dims first (decl-order, ifx #8586).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_surfflux_dealloc_components.html'>ocean_surfflux_dealloc_components</a></td>
@@ -10404,6 +11333,13 @@ the heat/salt setter are unchanged.  Host only; the scalars are
 read host-side by the apply kernel (they parameterise the
 by-value arguments passed into the device <code>_impl</code>), so no extra
 device sync is needed beyond the existing <code>copyin(this)</code>.</p><a href="../proc/ocean_surfflux_set_sw.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_surfstress_cover_impl.html'>ocean_surfstress_cover_impl</a></td>
+                 <td><a href='../module/rdb_ocean_surface_stress.html'>rdb_ocean_surface_stress</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Flat <code>do concurrent</code> kernel behind <code>ocean_surface_stress_apply_cover</code>
+— explicit-shape dummies, integer dims first (decl-order, ifx</p><a href="../proc/ocean_surfstress_cover_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_surfstress_derived_impl.html'>ocean_surfstress_derived_impl</a></td>
@@ -10609,6 +11545,73 @@ select-type -&gt; non-poly <code>_impl</code> (AMD libomptarget class-box rule).
 namelist + metrics are available (host, before enter_data).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_top_drag_apply_tendencies.html'>ocean_top_drag_apply_tendencies</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>u += dt*du_drag</code>, <code>v += dt*dv_drag</code> over the whole face array —
+layers outside the top boundary layer carry an exact zero.</p><a href="../proc/ocean_top_drag_apply_tendencies.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_bytes.html'>ocean_top_drag_bytes</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Function</td>
+                 <td><p>Counted allocatable footprint of the top-drag slot (0 when
+unallocated).  One <code>arr_bytes</code> term per array — add a term here
+when a new allocatable joins the type.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_compute_tendencies.html'>ocean_top_drag_compute_tendencies</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fill <code>du_drag</code> / <code>dv_drag</code> with the top-boundary drag
+acceleration, <code>stress_top</code> with the cell-centred stress
+magnitude, and (when <code>implicit_fold</code>) <code>lambda_top_u/v</code> with the
+<code>k = k_top</code> Rayleigh rate the vdiff diagonal consumes (the
+rate-capture row and the sink row MUST be the same row).</p><a href="../proc/ocean_top_drag_compute_tendencies.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_destroy.html'>ocean_top_drag_destroy</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Release the slot.  <code>is_init</code> is cleared FIRST.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_enter_data.html'>ocean_top_drag_enter_data</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Type-bound wrapper — delegates to the non-polymorphic impl so the
+device-attach map base is the heap object, not a polymorphic box.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_enter_data_impl.html'>ocean_top_drag_enter_data_impl</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>copyin</code> (not <code>create</code>) for the four host-filled 2-D fields —
+<code>cover_u</code>/<code>cover_v</code> are STATIC configure-time geometry and would
+otherwise reach the device as allocator leftovers
+(<code>mem:separate</code>).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_exit_data.html'>ocean_top_drag_exit_data</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_exit_data_impl.html'>ocean_top_drag_exit_data_impl</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_top_drag_init.html'>ocean_top_drag_init</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Allocate the slot.  Gated on <code>enable</code> (latched before this runs),
+so a run without an ice shelf pays five <code>(1,1)</code> placeholders and
+two <code>(1,1,1)</code> scratch buffers.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_varmix_build_static.html'>ocean_varmix_build_static</a></td>
                  <td><a href='../module/rdb_ocean_varmix.html'>rdb_ocean_varmix</a></td>
                  <td>Subroutine</td>
@@ -10686,6 +11689,14 @@ ocean path own its z_ref lifecycle.</p><a href="../proc/ocean_vcoord_build_zref_
 term here when a new allocatable joins the type.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_vcoord_closed_face_masks.html'>ocean_vcoord_closed_face_masks</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Partial-step z-level FACE CLOSURE mask for <code>VCOORD_Z_FIXED</code>
+(<code>&amp;vcoord_nml zfixed_closed_faces</code>; Adcroft, Hill &amp; Marshall
+1997; Losch 2008 §2.1 for the ice-shelf cavity).</p><a href="../proc/ocean_vcoord_closed_face_masks.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_vcoord_compute_target_h.html'>ocean_vcoord_compute_target_h</a></td>
                  <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
                  <td>Subroutine</td>
@@ -10730,6 +11741,18 @@ density-space inversion on <code>NZ_STACK_MAX</code> fixed-size locals —
 no host loop, no per-call allocate.</p><a href="../proc/ocean_vcoord_compute_target_h_rho_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_vcoord_count_ledges.html'>ocean_vcoord_count_ledges</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Function</td>
+                 <td><p>Count LEDGE cells: a cell that is LIVE at layer <code>k</code> but all four
+of whose own-layer faces are closed, i.e. water the mask has
+isolated.  A ledge needs a one-cell-wide spike in the bed or the
+draft; it is inert by construction (no flux in or out, and its
+velocity is zeroed every stage), but a non-zero count is worth
+saying out loud once at configure, because it means the mask is
+walling off real water.</p><a href="../proc/ocean_vcoord_count_ledges.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_vcoord_destroy.html'>ocean_vcoord_destroy</a></td>
                  <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
                  <td>Subroutine</td>
@@ -10768,6 +11791,32 @@ via <code>is_init</code>.</p></td>
 <code>z_ref_global</code>, <code>target_h</code>, <code>z_ref</code>.  All sized once at init —
 grids don&rsquo;t resize.  Host allocations only; <code>enter_data</code> ships
 them to the device.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_vcoord_is_terrain_following.html'>ocean_vcoord_is_terrain_following</a></td>
+                 <td><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></td>
+                 <td>Function</td>
+                 <td><p>Does this <code>VCOORD_*</code> code put the layer interfaces on surfaces
+that follow the bottom (and, under an ice shelf, the ice base)?</p><a href="../proc/ocean_vcoord_is_terrain_following.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_vcoord_k_top_from_target.html'>ocean_vcoord_k_top_from_target</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The shared FIRST-LIVE-LAYER index, counting down from the top —
+<code>multilayer_state_t%k_top</code> and its two face twins — built from
+a layer-thickness field.</p><a href="../proc/ocean_vcoord_k_top_from_target.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_vcoord_z_fixed_target.html'>ocean_vcoord_z_fixed_target</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>VCOORD_Z_FIXED</code> target grid — quasi-geopotential interfaces
+under a rigid top, with inert fillers and a partial cell at BOTH
+ends (Yung, Hallberg, Adcroft &amp; Morrison 2026, JAMES, Fig. 1b:
+quasi-z layers are geopotential and VANISH where they outcrop
+into the ice base; Asay-Davis et al. 2016 §3.1.5: z-level models
+use both partial top and bottom cells).</p><a href="../proc/ocean_vcoord_z_fixed_target.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_vdiff_bytes.html'>ocean_vdiff_bytes</a></td>
@@ -11190,6 +12239,13 @@ device-resident <code>ocean_surface_flux_t%p_surf</code> component array.</p></t
 launch, uniform branch is ~free).  Contiguous index (i) innermost.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/p_top_has_producer.html'>p_top_has_producer</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Function</td>
+                 <td><p>Is there anything in this configuration that WRITES
+<code>multilayer_state_t%p_top</code>?</p><a href="../proc/p_top_has_producer.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/parse_bdrag_variant.html'>parse_bdrag_variant</a></td>
                  <td><a href='../module/rdb_ocean_bottom_drag.html'>rdb_ocean_bottom_drag</a></td>
                  <td>Function</td>
@@ -11199,11 +12255,76 @@ a typo must not silently select the quadratic default over the
 linear form or vice versa; the two obey different physics).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/parse_buoyancy_coeffs.html'>parse_buoyancy_coeffs</a></td>
+                 <td><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></td>
+                 <td>Function</td>
+                 <td><p>Map the <code>&amp;ocean_vmix_nml buoyancy_coeffs</code> string to a
+<code>BUOY_COEFFS_*</code> tag; <code>BUOY_COEFFS_INVALID</code> for an unrecognised
+string, which <code>configure_ocean_vmix</code> turns into a fail-loud abort
+(never a silent fallback to the constants).  The accepted set
+must match the <code>nml_enum allowed=</code> list in <code>register_ocean_vmix</code>.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/parse_cadence_attr.html'>parse_cadence_attr</a></td>
                  <td><a href='../module/rdb_ocean_diag.html'>rdb_ocean_diag</a></td>
                  <td>Subroutine</td>
                  <td><p>Parse a cadence attribute <code>&lt;int&gt;&lt;unit&gt;</code> (unit s/m/h/d) to seconds.
 <code>ok=.false.</code> if <code>s</code> is not a well-formed positive cadence.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_draft_config.html'>parse_cavity_draft_config</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p><code>&amp;ocean_cavity_dyn_nml draft_config</code> -&gt; <code>CAVITY_DRAFT_*</code>.
+Returns <code>CAVITY_DRAFT_INVALID</code> on an unrecognised spelling — the
+caller fails loud; there is no silent default.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_draft_sign.html'>parse_cavity_draft_sign</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p><code>&amp;ocean_cavity_dyn_nml draft_sign</code> -&gt; <code>CAVITY_SIGN_*</code>.
+Returns <code>CAVITY_SIGN_INVALID</code> on an unrecognised spelling — the
+caller fails loud.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_draft_source.html'>parse_cavity_draft_source</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Function</td>
+                 <td><p><code>&amp;ocean_cavity_dyn_nml draft_source</code> -&gt; <code>CAVITY_SOURCE_*</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_exchange_law.html'>parse_cavity_exchange_law</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Translate an exchange-law string into a <code>CAVITY_LAW_*</code> code.
+RESERVED laws parse successfully — the refusal belongs to
+<code>cavity_exchange_velocities</code>, which returns
+<code>CAVITY_MELT_NOT_IMPLEMENTED</code> — so that a typo
+(<code>CAVITY_LAW_INVALID</code>) and an honest request for unwritten
+physics stay distinguishable.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_freshwater.html'>parse_cavity_freshwater</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Translate a <code>&amp;ocean_cavity_melt_nml freshwater</code> string into a
+<code>CAVITY_FW_*</code> code.  The accepted set MIRRORS the <code>nml_enum</code>
+registration in <code>register_ocean_cavity_melt</code> — the two lists
+move together.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_ice_mode.html'>parse_cavity_ice_mode</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Translate an ice-conduction string into a <code>CAVITY_ICE_*</code> code.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_cavity_volume_comp.html'>parse_cavity_volume_comp</a></td>
+                 <td><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></td>
+                 <td>Function</td>
+                 <td><p>Translate a <code>&amp;ocean_cavity_melt_nml volume_compensation</code> string
+into a <code>CAVITY_VC_*</code> code.  Mirrors the <code>nml_enum</code> list.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/parse_constituent_list.html'>parse_constituent_list</a></td>
@@ -11394,6 +12515,28 @@ code is rejected by <code>pv_variant_is_implemented</code> at configure.</p></td
                  <td><a href='../module/rdb_vcoord.html'>rdb_vcoord</a></td>
                  <td>Function</td>
                  <td><p>Convert a namelist string to a STRETCH_* constant.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_tdrag_variant.html'>parse_tdrag_variant</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Function</td>
+                 <td><p>Translate a namelist string into a <code>TDRAG_*</code> code.  An
+unrecognised string returns <code>TDRAG_INVALID</code> — a typo must abort
+rather than silently select one of two laws with different
+coefficient dimensions.  Accepts the same spellings as
+<code>parse_bdrag_variant</code>, deliberately: the two groups mirror.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_tfreeze_set.html'>parse_tfreeze_set</a></td>
+                 <td><a href='../module/rdb_eos.html'>rdb_eos</a></td>
+                 <td>Function</td>
+                 <td><p>Translate a <code>&amp;ocean_eos_nml tfreeze_set=...</code> string into a
+<code>TFREEZE_SET_*</code> code.  Unlike <code>parse_eos_variant</code> this one does
+NOT fall back to a default on a typo: it returns
+<code>TFREEZE_SET_INVALID</code> and <code>validate_config</code> aborts.  Silently
+defaulting would turn a mistyped liquidus into a 0.03 °C shift
+in the freezing point — a melt-rate sign change at the margin,
+with no run-time symptom at all.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/parse_tracer_recon.html'>parse_tracer_recon</a></td>
@@ -12818,6 +13961,17 @@ full i extent, reading the already x-filled corner columns — same
 corner-coverage order as <code>fill_h_layer_ghosts</code>.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/refresh_linear_z_impl.html'>refresh_linear_z_impl</a></td>
+                 <td><a href='../module/rdb_ocean_sponge.html'>rdb_ocean_sponge</a></td>
+                 <td>Subroutine</td>
+                 <td><p>One tracer plane of the <code>linear_z</code> target.  Explicit-shape
+dummies, dims declared first (<code>decl-order</code> hook).  <code>ref_tracer</code>
+is passed WHOLE and indexed by the scalar <code>it</code> inside the kernel
+— never sliced by the caller (the descriptor-walk trap the
+<code>dc-assumed-shape</code> hook exists to catch), matching
+<code>relax_map_tracer_impl</code>.</p><a href="../proc/refresh_linear_z_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/reg_io_ok.html'>reg_io_ok</a></td>
                  <td><a href='../module/rdb_ocean_data_input.html'>rdb_ocean_data_input</a></td>
                  <td>Function</td>
@@ -13029,6 +14183,26 @@ of its arms on any edge, so the schema must not narrow that.</p></td>
                  <td><p><code>&amp;ocean_bt_nml</code>: split-explicit barotropic substep controls.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/register_ocean_cavity_dyn.html'>register_ocean_cavity_dyn</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>&amp;ocean_cavity_dyn</code> (P5.1 static ice-shelf cavity geometry: the
+prescribed draft + the barotropic datum that absorbs it).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/register_ocean_cavity_melt.html'>register_ocean_cavity_melt</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>&amp;ocean_cavity_melt</code> (P2b ice-shelf basal-melt thermodynamics:
+the three-equation interface, its exchange law and the
+far-field sampling depth).  The <code>exchange_law</code> and
+<code>ice_conduction</code> enums MIRROR <code>parse_cavity_exchange_law</code> /
+<code>parse_cavity_ice_mode</code> in <code>rdb_ocean_cavity_melt</code> — the two
+lists move together, and <code>validate_config</code> re-checks them
+belt-and-braces so a RESERVED law is refused by name rather
+than silently falling through the kernel&rsquo;s dispatch.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/register_ocean_continuity.html'>register_ocean_continuity</a></td>
                  <td><a href='../module/rdb_config.html'>rdb_config</a></td>
                  <td>Subroutine</td>
@@ -13083,9 +14257,11 @@ cascade in read_config.  <code>vgrid</code> enum is {layer, z_fixed}.</p></td>
                  <td><a href='../proc/register_ocean_eos.html'>register_ocean_eos</a></td>
                  <td><a href='../module/rdb_config.html'>rdb_config</a></td>
                  <td>Subroutine</td>
-                 <td><p><code>&amp;ocean_eos_nml</code>: equation-of-state variant selector + the
+                 <td><p><code>&amp;ocean_eos_nml</code>: equation-of-state variant selector, the
+freezing-point (liquidus) coefficient set, and the
 potential-density reference pressure.
-<code>eos</code> enum mirrors <code>parse_eos_variant</code> in rdb_eos.</p></td>
+<code>eos</code> enum mirrors <code>parse_eos_variant</code> in rdb_eos;
+<code>tfreeze_set</code> mirrors <code>parse_tfreeze_set</code> in the same module.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/register_ocean_forcing.html'>register_ocean_forcing</a></td>
@@ -13197,6 +14373,13 @@ toward scalar targets.  Default OFF ⇒ bit-identical.</p></td>
 unchanged ⇒ bit-identical. No <code>damp_max</code> / <code>idamp_file</code> / <code>*_var</code>
 keys in v1 — those validate and do nothing until PR-23b adds their
 consumer (CLAUDE.md trap class &ldquo;dead knobs&rdquo;).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/register_ocean_tdrag.html'>register_ocean_tdrag</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>&amp;ocean_tdrag_nml</code>: ice-shelf TOP-drag selector + coefficients.
+<code>form</code> enum mirrors <code>parse_tdrag_variant</code> in rdb_ocean_top_drag.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/register_ocean_thermo.html'>register_ocean_thermo</a></td>
@@ -14178,6 +15361,16 @@ spec (SIM_DETAILS.md §5), mapped to Roundabout&rsquo;s bottom-up layer
 convention (k=1 bed, k=nz surface).  The spec&rsquo;s layers FLIP:</p><a href="../proc/seed_baroclinic_jet_ic.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/seed_cavity_draft.html'>seed_cavity_draft</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fill <code>metrics%z_draft</code> (and its <code>cover_frac</code> companion) from
+<code>&amp;ocean_cavity_dyn_nml</code>, then cross-validate the geometry against
+the seeded bathymetry.  Runs from <code>ocean_state_seed_from_cfg</code>
+IMMEDIATELY after the bathymetry and BEFORE the layer split and
+the wet-mask seed, which both read <code>b − z_draft</code>.</p><a href="../proc/seed_cavity_draft.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/seed_eady_ic.html'>seed_eady_ic</a></td>
                  <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
                  <td>Subroutine</td>
@@ -14239,10 +15432,9 @@ floor:</p><a href="../proc/seed_h_layer_uniform_z_impl.html" class="pull-right">
                  <td><a href='../proc/seed_land_tracer_hold_impl.html'>seed_land_tracer_hold_impl</a></td>
                  <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
                  <td>Subroutine</td>
-                 <td><p>On land T-cells, recover the seeded per-layer tracer value
-<code>val = hTr/h_old</code> and re-scale onto the <code>H_VANISHED</code> floor so
-<code>hTr = val*H_VANISHED</code> stays finite and <code>T/S</code> is held.  Wet cells
-untouched (bit-identical when <code>wet_mask≡1</code>).</p></td>
+                 <td><p>Zero the extensive tracer content <code>hTr</code> on land T-cells
+(<code>wet_mask == 0</code>).  Wet cells untouched (bit-identical when
+<code>wet_mask ≡ 1</code>).</p><a href="../proc/seed_land_tracer_hold_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/seed_tracer_stratified_impl.html'>seed_tracer_stratified_impl</a></td>
@@ -14270,6 +15462,24 @@ Must be called AFTER bathymetry, the uniform <code>h_layer</code> seed, and
 the full ocean state) to avoid a circular dependency.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/seed_ts_linear_z.html'>seed_ts_linear_z</a></td>
+                 <td><a href='../module/rdb_ocean_z_init.html'>rdb_ocean_z_init</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Seed T and S from the ANALYTIC affine geopotential profiles
+<code>T(z) = lin_t_ref + lin_dt_dz*z</code>, <code>S(z) = lin_s_ref +
+lin_ds_dz*z</code> (<code>z</code> positive UP, zero at the <code>z = 0</code> datum),
+sampled at each layer centre&rsquo;s TRUE geopotential depth and
+written as <code>hTr = value * h_layer</code>.</p><a href="../proc/seed_ts_linear_z.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/seed_vanished_tracer_hold_impl.html'>seed_vanished_tracer_hold_impl</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Zero the extensive tracer content <code>hTr</code> on any layer the target
+grid seeded as an INERT FILLER (<code>h_layer &lt;= H_VANISHED</code>),
+whether or not the column is wet.</p><a href="../proc/seed_vanished_tracer_hold_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/seed_wet_mask_impl.html'>seed_wet_mask_impl</a></td>
                  <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
                  <td>Subroutine</td>
@@ -14280,6 +15490,15 @@ present, a column is land iff <code>b &lt; land_cutoff</code>; the wetdry-aware
 seed passes <code>land_cutoff = -land_margin</code> so intertidal columns
 (bed above rest MSL but below the flood headroom) stay wet_mask=1
 and the dynamic wd_wet_dyn gate handles their wetting/drying.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/seed_zinit_overlay.html'>seed_zinit_overlay</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Dispatch the <code>&amp;ocean_zinit_nml</code> T/S overlay across its two axes:
+the profile SOURCE (<code>"file"</code> — the pre-regridded NetCDF reader;
+<code>"linear"</code> — the analytic affine <code>lin_*</code> profile) and whether a
+cavity draft is present.</p><a href="../proc/seed_zinit_overlay.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/segment_geometry.html'>segment_geometry</a></td>
@@ -14313,6 +15532,13 @@ land square is centred on the physical domain and spans the
 central <code>2*half_frac</code> fraction of each axis (e.g. <code>half_frac=0.2</code>
 ⇒ the middle 40 % is land).  <code>half_frac</code> is taken from
 <code>&amp;ocean_topo_nml slope_scale</code> at the call site (no new knob).</p><a href="../proc/set_bathymetry_island.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/set_bathymetry_isomip_plus.html'>set_bathymetry_isomip_plus</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Public only for the unit-test suite (no production module imports it);
+ignore when developing production code in other modules.</p><a href="../proc/set_bathymetry_isomip_plus.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/set_bathymetry_neverworld2.html'>set_bathymetry_neverworld2</a></td>
@@ -14360,6 +15586,25 @@ to <code>DIAG_MISSING_VALUE</code> (host only).  Default off.</p></td>
                  <td><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></td>
                  <td>Subroutine</td>
                  <td><p>Seed the module-level diagnostic remap reconstruction (host only).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/set_draft_flat.html'>set_draft_flat</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Uniform draft <code>draft</code> inside the shelf box <code>[x0,x1] x [y0,y1]</code>,
+zero outside it (open ocean, including everything beyond the
+calving front at <code>x1</code>).  Any bound at or beyond
+<code>CAVITY_BOUND_INF</code> is ignored — the shelf is then open on that
+side, which is what the namelist defaults ask for.</p><a href="../proc/set_draft_flat.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/set_draft_linear.html'>set_draft_linear</a></td>
+                 <td><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Linear-in-x draft <code>z_draft = draft0 + slope*(x - x0)</code> inside the
+shelf box, clipped at 0 from below (a formula that would lift the
+ice base above the sea surface is open water, not negative ice),
+and zero outside the box.</p><a href="../proc/set_draft_linear.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/set_local_bt_cont_types.html'>set_local_BT_cont_types</a></td>
@@ -14504,6 +15749,21 @@ y-normal face) sits one further row in for the south edge (<code>side =
 +1</code>) and shares the offset for the north edge (<code>side = -1</code>).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/sponge_band_alpha.html'>sponge_band_alpha</a></td>
+                 <td><a href='../module/rdb_ocean_sponge.html'>rdb_ocean_sponge</a></td>
+                 <td>Function</td>
+                 <td><p>Shape factor of the <code>damp_source="band"</code> ramp at cell offset <code>d</code>
+(0 = hard against the sponge-tagged wall) for a band of <code>band</code>
+cells.  The per-cell rate is <code>sponge_strength * alpha</code>.</p><a href="../proc/sponge_band_alpha.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/sponge_ramp_is_valid.html'>sponge_ramp_is_valid</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Function</td>
+                 <td><p>.true. iff <code>&amp;ocean_sponge_nml ramp</code> names a band shape the
+<code>damp_source="band"</code> filler implements.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/sponge_relax_band_x_tracer.html'>sponge_relax_band_x_tracer</a></td>
                  <td><a href='../module/rdb_ocean_sponge.html'>rdb_ocean_sponge</a></td>
                  <td>Subroutine</td>
@@ -14523,11 +15783,21 @@ edge blocks in <code>ocean_sponge_apply_tracers</code>.</p></td>
                  <td><a href='../proc/sponge_source_is_implemented.html'>sponge_source_is_implemented</a></td>
                  <td><a href='../module/rdb_config.html'>rdb_config</a></td>
                  <td>Function</td>
-                 <td><p>.true. iff <code>&amp;ocean_sponge_nml damp_source</code> / <code>target_source</code> names
-a source PR-23 v1 actually fills. <code>"file"</code> is a recognised name
-(PR-23b, needs the PR-14 reader) but has no kernel yet — a source
-with no filler must abort, not silently build an all-zero map /
-all-zero reference (the <code>lateral_closure_is_implemented</code> idiom).</p></td>
+                 <td><p>.true. iff <code>&amp;ocean_sponge_nml damp_source</code> names a source that is
+actually filled. <code>"file"</code> is a recognised name (PR-23b, needs the
+PR-14 reader) but has no kernel yet — a source with no filler
+must abort, not silently build an all-zero map (the
+<code>lateral_closure_is_implemented</code> idiom).</p><a href="../proc/sponge_source_is_implemented.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/sponge_target_is_implemented.html'>sponge_target_is_implemented</a></td>
+                 <td><a href='../module/rdb_config.html'>rdb_config</a></td>
+                 <td>Function</td>
+                 <td><p>.true. iff <code>&amp;ocean_sponge_nml target_source</code> names a reference
+state that is actually filled: <code>"ic"</code> (snapshot of the seeded
+initial condition) or <code>"linear_z"</code> (analytic affine geopotential
+profile, re-evaluated on the live layer geometry). <code>"file"</code> is
+recognised but has no reader yet (PR-23b).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/stress_scratch_ensure.html'>stress_scratch_ensure</a></td>
@@ -14720,6 +15990,29 @@ consumers cannot disagree about where the sunlight went.  Marked
 and is callable from cross-module <code>do concurrent</code> kernels.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/tdrag_variant_is_implemented.html'>tdrag_variant_is_implemented</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Function</td>
+                 <td><p><code>.true.</code> only for a top-drag variant with a real kernel.  The
+single gate <code>validate_config</code> consumes.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/tfreeze_ib_impl.html'>tfreeze_ib_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/thermal_driving_impl.html'>thermal_driving_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>T_far − eos_freezing_point(eos, S_far, p_top)</code>.  The liquidus
+comes off the SAME <code>eos_t</code> handle the solve used
+(<code>&amp;ocean_eos_nml tfreeze_set</code>), never a local copy of the
+coefficients — the two sets differ by ~0.03 degC, which is
+enough to flip the sign of this field.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/tidal_mixing_column_kernel.html'>tidal_mixing_column_kernel</a></td>
                  <td><a href='../module/rdb_ocean_tidal_mixing.html'>rdb_ocean_tidal_mixing</a></td>
                  <td>Subroutine</td>
@@ -14835,6 +16128,28 @@ be called AFTER <code>tides_update_eta_eq</code> (reads the fresh <code>eta_eq</
 <code>use_sal</code> branch kept INSIDE the single <code>do concurrent</code> (one
 launch, uniform branch is ~free).  Off ⇒ pure copy of <code>eta_eq</code>
 into <code>eta_forcing</code> ⇒ bit-identical.  Contiguous index (i) innermost.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/top_drag_fill_face_cover_impl.html'>top_drag_fill_face_cover_impl</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Project the cell-centred <code>cover_frac</code> onto velocity faces with
+the <strong>OR</strong> rule (see the module docstring for why OR and not AND
+at a calving front).  Host-side, once, at configure.</p><a href="../proc/top_drag_fill_face_cover_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/top_drag_stress_mag_impl.html'>top_drag_stress_mag_impl</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Cell-centred magnitude of the top stress (N/m^2), for the
+later <code>ustar_shelf</code> consumer:</p><a href="../proc/top_drag_stress_mag_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/top_drag_tendencies_impl.html'>top_drag_tendencies_impl</a></td>
+                 <td><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Flat device kernel: explicit-shape dummies, no derived-type
+dereference inside the <code>do concurrent</code>.</p><a href="../proc/top_drag_tendencies_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/topo_length_to_grid_units.html'>topo_length_to_grid_units</a></td>
@@ -15326,7 +16641,7 @@ ever passed on the branch guarded by the host flag
 (validate_config forces <code>enable_components</code> when
 <code>sw_source="q_sw"</code>, making this total).  <code>sf%has_sw</code> is passed as
 the <code>sw_active</code> gate — false ⇒ the <code>_impl</code>&rsquo;s <code>B_0</code> reduces to the
-unmodified legacy source line, bit-for-bit.</p></td>
+unmodified legacy source line, bit-for-bit.</p><a href="../proc/vmix_apply_kpp_overlay.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/vmix_apply_nonlocal_tendencies.html'>vmix_apply_nonlocal_tendencies</a></td>
@@ -15473,6 +16788,14 @@ centre column (wet_mask(i,j) == 0) is left unchanged — no
 leakage into or out of dry cells.</p><a href="../proc/vmix_smooth_121_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/vmix_split_ddiff_eos_impl.html'>vmix_split_ddiff_eos_impl</a></td>
+                 <td><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>buoyancy_coeffs = "eos"</code> twin of <code>vmix_split_ddiff_impl</code> — the
+SAME CVMix closed forms, the same branch structure, the same
+outputs; the only change is where <code>α</code> and <code>β</code> come from.</p><a href="../proc/vmix_split_ddiff_eos_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/vmix_split_ddiff_impl.html'>vmix_split_ddiff_impl</a></td>
                  <td><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></td>
                  <td>Subroutine</td>
@@ -15522,6 +16845,12 @@ than sampling the edge value, adding the O(CFL) correction:</p><a href="../proc/
                  <td><a href='../module/rdb_config.html'>rdb_config</a></td>
                  <td>Subroutine</td>
                  <td><p>Warn if a BC string does not match any known type</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/water_column_impl.html'>water_column_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/wave_drag_roughness_proxy.html'>wave_drag_roughness_proxy</a></td>
@@ -15747,7 +17076,7 @@ degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p></td>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

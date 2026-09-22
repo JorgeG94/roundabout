@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">34 statements</a>
+                 title=" 0.1% of total for procedures.">51 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,11 +134,11 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-i">I</a>
-            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-h_new_face">h_new_face</a>
-            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-h_old_face">h_old_face</a>
-            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-j~24">j</a>
-            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-k~27">k</a>
+            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-i~2">I</a>
+            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-h_new_face~3">h_new_face</a>
+            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-h_old_face~3">h_old_face</a>
+            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-j~361">j</a>
+            <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-k~267">k</a>
             <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-u_new_col">u_new_col</a>
             <a class="list-group-item" href="../proc/remap_x_face_velocity.html#variable-u_old_col">u_old_col</a>
         </div>
@@ -176,7 +176,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>private pure subroutine remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, method, conserve_ke, bnd_extrap, nonunif)  
+    <h2>private pure subroutine remap_x_face_velocity(nx, ny, nz, h_old, h_new, u_face_x, method, conserve_ke, zlevel_faces, bnd_extrap, nonunif)  
 </h2>
     
 
@@ -200,7 +200,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~31"></span>
+              <span class="anchor" id="variable-nx~369"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -215,7 +215,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~31"></span>
+              <span class="anchor" id="variable-ny~369"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -230,7 +230,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~26"></span>
+              <span class="anchor" id="variable-nz~318"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -245,7 +245,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_old~3"></span>
+              <span class="anchor" id="variable-h_old~11"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -260,7 +260,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~3"></span>
+              <span class="anchor" id="variable-h_new~13"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -275,7 +275,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-u_face_x~2"></span>
+              <span class="anchor" id="variable-u_face_x~3"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -290,7 +290,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~5"></span>
+              <span class="anchor" id="variable-method~9"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -320,7 +320,39 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bnd_extrap~8"></span>
+              <span class="anchor" id="variable-zlevel_faces~4"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zlevel_faces</strong></td>
+            <td>
+                <p><code>&amp;vcoord_nml zfixed_closed_faces</code> — z-level partial steps.
+Builds the face column as the OVERLAP of the two cell
+columns, <code>min(h_L, h_R)</code>, instead of their arithmetic mean,
+and then drops any layer at or below <code>H_VANISHED</code> from BOTH
+the source and the target column.  A layer that is an inert
+filler on one side then has an exactly-zero target thickness,
+which is the one case every <code>remap_column</code> variant already
+short-circuits (<code>dz_new &lt;= 0 ⇒ q_new = 0</code>), so no momentum is
+poured INTO a closed layer and none is carried OUT of one.</p>
+<p>With the arithmetic mean a one-sided filler gives
+<code>0.5·h_live &gt; 0</code> — an ordinary half-thickness live layer as
+far as the column kernel is concerned — and the remap happily
+deposits momentum in a cell that geometrically holds no
+water.  <code>min</code> is also the standard partial-cell face
+thickness, so this is not a special case bolted on: it is the
+face thickness a z-level model has all along.</p>
+<p><code>.false.</code> (default) ⇒ every expression is textually the
+arithmetic-mean form ⇒ bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bnd_extrap~3"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -335,7 +367,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nonunif~8"></span>
+              <span class="anchor" id="variable-nonunif~3"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -950,7 +982,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i"></span>
+              <span class="anchor" id="variable-i~2"></span>
               integer,
             </td>
               <td>private</td>
@@ -967,7 +999,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new_face"></span>
+              <span class="anchor" id="variable-h_new_face~3"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -984,7 +1016,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_old_face"></span>
+              <span class="anchor" id="variable-h_old_face~3"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1001,7 +1033,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~24"></span>
+              <span class="anchor" id="variable-j~361"></span>
               integer,
             </td>
               <td>private</td>
@@ -1018,7 +1050,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~27"></span>
+              <span class="anchor" id="variable-k~267"></span>
               integer,
             </td>
               <td>private</td>
@@ -1084,7 +1116,7 @@ large graphs.</div>
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
     <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_x_face_velocity</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                         </span><span class="n">conserve_ke</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">,</span><span class="w"> </span><span class="n">nonunif</span><span class="p">)</span>
+<span class="w">                                         </span><span class="n">conserve_ke</span><span class="p">,</span><span class="w"> </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">,</span><span class="w"> </span><span class="n">nonunif</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! Flat-impl x-face remap. East faces at i+1/2; u_face_x(1..nx+1) covers</span>
 <span class="w">      </span><span class="c">!! west wall (I=1), interior (I=2..nx), east wall (I=nx+1).</span>
 <span class="w">      </span><span class="c">!! `conserve_ke` (default .false.): rescale the baroclinic anomaly so column</span>
@@ -1095,6 +1127,27 @@ large graphs.</div>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">conserve_ke</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zlevel_faces</span>
+<span class="w">         </span><span class="c">!! `&amp;vcoord_nml zfixed_closed_faces` — z-level partial steps.</span>
+<span class="w">         </span><span class="c">!! Builds the face column as the OVERLAP of the two cell</span>
+<span class="w">         </span><span class="c">!! columns, `min(h_L, h_R)`, instead of their arithmetic mean,</span>
+<span class="w">         </span><span class="c">!! and then drops any layer at or below `H_VANISHED` from BOTH</span>
+<span class="w">         </span><span class="c">!! the source and the target column.  A layer that is an inert</span>
+<span class="w">         </span><span class="c">!! filler on one side then has an exactly-zero target thickness,</span>
+<span class="w">         </span><span class="c">!! which is the one case every `remap_column` variant already</span>
+<span class="w">         </span><span class="c">!! short-circuits (`dz_new &lt;= 0 ⇒ q_new = 0`), so no momentum is</span>
+<span class="w">         </span><span class="c">!! poured INTO a closed layer and none is carried OUT of one.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! With the arithmetic mean a one-sided filler gives</span>
+<span class="w">         </span><span class="c">!! `0.5·h_live &gt; 0` — an ordinary half-thickness live layer as</span>
+<span class="w">         </span><span class="c">!! far as the column kernel is concerned — and the remap happily</span>
+<span class="w">         </span><span class="c">!! deposits momentum in a cell that geometrically holds no</span>
+<span class="w">         </span><span class="c">!! water.  `min` is also the standard partial-cell face</span>
+<span class="w">         </span><span class="c">!! thickness, so this is not a special case bolted on: it is the</span>
+<span class="w">         </span><span class="c">!! face thickness a z-level model has all along.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! `.false.` (default) ⇒ every expression is textually the</span>
+<span class="w">         </span><span class="c">!! arithmetic-mean form ⇒ bit-identical.</span>
 <span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bnd_extrap</span>
 <span class="w">         </span><span class="c">!! Linear-exact boundary-cell reconstruction in the column kernel.</span>
 <span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nonunif</span>
@@ -1116,6 +1169,22 @@ large graphs.</div>
 <span class="k">               </span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_old</span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
 <span class="w">               </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_new</span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
 <span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">zlevel_faces</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">h_old</span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">                  </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">h_new</span><span class="p">(</span><span class="n">I</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">h_old_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">                  </span><span class="n">h_new_face</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
 <span class="k">            </span><span class="n">u_old_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
 <span class="w">         </span><span class="k">end do</span>
 <span class="k">         call </span><span class="n">remap_column</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
@@ -1152,7 +1221,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

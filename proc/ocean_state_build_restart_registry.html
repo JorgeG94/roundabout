@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.3% of total for procedures.">139 statements</a>
+                 title=" 0.3% of total for procedures.">145 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,8 +134,8 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-it~40">it</a>
-            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-tag~16">tag</a>
+            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-it~11">it</a>
+            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-tag">tag</a>
         </div>
       </div>
     </div>
@@ -235,6 +235,20 @@ Registered (conditionally — only when the slot&rsquo;s persistent
     top of every outer step (restart is step-aligned).
   bt_H_ref — recomputed from <code>b</code> by configure_ocean_bt_split;
     <code>b</code> is bathymetry (static), reconstructed at config time.
+  metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity
+    statics (<code>&amp;ocean_cavity_dyn_nml</code>) fall under the SAME rule,
+    and for the same reason: the draft is a PRESCRIBED, static
+    geometry, rebuilt at configure by <code>seed_cavity_draft</code> from
+    the namelist before the restart read runs, exactly as <code>b</code> and
+    <code>bt_H_ref</code> are.  Checkpointing it would create the
+    file-vs-namelist ambiguity the derived-field exclusion exists
+    to avoid (does a saved draft beat an edited namelist?), and a
+    resume whose draft disagreed with its datum would be
+    silently wrong — <code>bt_H_ref = b − z_draft</code> ties the two
+    together, so they must be rebuilt together or not at all.
+    A TIME-VARYING draft (a coupled ice sheet) is a different
+    field with a different owner and would register itself, the
+    same way a time-varying surface-flux component must.
   vcoord target_h / z_ref — recomputed per step (z_ref rebuilt
     from <code>b</code> in the seed); never prognostic.
   w_interface, mass_flux</em></em> — diagnosed each stage from the
@@ -262,7 +276,7 @@ it registers its own live persistent state here.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-state~12"></span>
+              <span class="anchor" id="variable-state~5"></span>
               type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
             </td>
 <td>intent(in),</td>
@@ -277,7 +291,7 @@ it registers its own live persistent state here.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~209"></span>
+              <span class="anchor" id="variable-grid~30"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -805,7 +819,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-it~40"></span>
+              <span class="anchor" id="variable-it~11"></span>
               integer,
             </td>
               <td>private</td>
@@ -822,7 +836,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-tag~16"></span>
+              <span class="anchor" id="variable-tag"></span>
               character(len=64),
             </td>
               <td>private</td>
@@ -916,6 +930,20 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!     top of every outer step (restart is step-aligned).</span>
 <span class="w">      </span><span class="c">!!   bt_H_ref — recomputed from `b` by configure_ocean_bt_split;</span>
 <span class="w">      </span><span class="c">!!     `b` is bathymetry (static), reconstructed at config time.</span>
+<span class="w">      </span><span class="c">!!   metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity</span>
+<span class="w">      </span><span class="c">!!     statics (`&amp;ocean_cavity_dyn_nml`) fall under the SAME rule,</span>
+<span class="w">      </span><span class="c">!!     and for the same reason: the draft is a PRESCRIBED, static</span>
+<span class="w">      </span><span class="c">!!     geometry, rebuilt at configure by `seed_cavity_draft` from</span>
+<span class="w">      </span><span class="c">!!     the namelist before the restart read runs, exactly as `b` and</span>
+<span class="w">      </span><span class="c">!!     `bt_H_ref` are.  Checkpointing it would create the</span>
+<span class="w">      </span><span class="c">!!     file-vs-namelist ambiguity the derived-field exclusion exists</span>
+<span class="w">      </span><span class="c">!!     to avoid (does a saved draft beat an edited namelist?), and a</span>
+<span class="w">      </span><span class="c">!!     resume whose draft disagreed with its datum would be</span>
+<span class="w">      </span><span class="c">!!     silently wrong — `bt_H_ref = b − z_draft` ties the two</span>
+<span class="w">      </span><span class="c">!!     together, so they must be rebuilt together or not at all.</span>
+<span class="w">      </span><span class="c">!!     A TIME-VARYING draft (a coupled ice sheet) is a different</span>
+<span class="w">      </span><span class="c">!!     field with a different owner and would register itself, the</span>
+<span class="w">      </span><span class="c">!!     same way a time-varying surface-flux component must.</span>
 <span class="w">      </span><span class="c">!!   vcoord target_h / z_ref — recomputed per step (z_ref rebuilt</span>
 <span class="w">      </span><span class="c">!!     from `b` in the seed); never prognostic.</span>
 <span class="w">      </span><span class="c">!!   w_interface, mass_flux_* — diagnosed each stage from the</span>
@@ -1115,6 +1143,31 @@ large graphs.</div>
 <span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
 <span class="w">      </span><span class="k">end if</span>
 
+<span class="w">      </span><span class="c">! --- Ice-shelf cavity basal melt (P2b): the TWO OWNED surface-flux</span>
+<span class="w">      </span><span class="c">!     components.  These ARE registered, and the exclusion rule</span>
+<span class="w">      </span><span class="c">!     above says exactly why: `Q_heat`/`Q_salt` are derived views</span>
+<span class="w">      </span><span class="c">!     and stay out, but "any filler that makes a COMPONENT</span>
+<span class="w">      </span><span class="c">!     time-varying MUST register it".  The melt rate is a function</span>
+<span class="w">      </span><span class="c">!     of the live state, so `heat_cavity`/`salt_cavity` are</span>
+<span class="w">      </span><span class="c">!     time-varying — and they are written at the END of outer step</span>
+<span class="w">      </span><span class="c">!     N and integrated on step N+1 (the ice coupler's documented</span>
+<span class="w">      </span><span class="c">!     one-step lag), so without them a warm restart would apply</span>
+<span class="w">      </span><span class="c">!     zero melt for its first step.  `optional=.true.`: an older</span>
+<span class="w">      </span><span class="c">!     checkpoint resumes with the zero seed rather than failing.</span>
+<span class="w">      </span><span class="c">!     The slot's own arrays (`cavity_flux%melt`, `t_b`, ...) are</span>
+<span class="w">      </span><span class="c">!     NOT registered — they are recomputed from state before first</span>
+<span class="w">      </span><span class="c">!     use, the same derived-field rule as `mass_flux_*`.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_heat_cavity"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_salt_cavity"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
 <span class="w">      </span><span class="c">! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice</span>
 <span class="w">      </span><span class="c">!     become PROGNOSTIC under dynamics=.true. (previously a v1</span>
 <span class="w">      </span><span class="c">!     interim sampler output — cheap to always register).</span>
@@ -1296,7 +1349,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

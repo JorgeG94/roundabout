@@ -61,6 +61,21 @@ module rdb_ice_enthalpy
       !! Liquidus slope dT_f/dS (degC/PSU) — SIS2 `DTFREEZE_DS`. Same
       !! value as the ocean-side `TFR_S_COEFF` (rdb_eos) by
       !! construction — SIS2 parity on both sides of the seam.
+      !!
+      !! DELIBERATELY NOT switched by `&ocean_eos_nml tfreeze_set`.
+      !! That knob selects the OCEAN-side liquidus that
+      !! `eos_freezing_point` returns (the sea-surface freezing
+      !! temperature the frazil / basal-flux seam works against); THIS
+      !! constant is internal to the SIS2 enthalpy relation, where it
+      !! fixes the brine-pocket melting temperature inside the ice and
+      !! is baked into the closed-form quadratic T<->E map (and into
+      !! SIS2 bit-parity). Retuning it is an ice-thermodynamics change,
+      !! not an ocean-liquidus one. Consequence, documented rather than
+      !! papered over: under `tfreeze_set = "isomip"` the ocean surface
+      !! freezing point and the ice-internal brine liquidus disagree by
+      !! ~0.03 degC. The ISOMIP+ set exists for ICE-SHELF-CAVITY work,
+      !! where the sea-ice column model is normally off; running both at
+      !! once is legal but means accepting that offset.
    real(wp), parameter, public :: ICE_ENTH_LIQ_0 = 0.0_wp
       !! Enthalpy of liquid fresh water at 0 degC (J/kg) — SIS2
       !! `ENTHALPY_LIQUID_0`. Zero-point of the enthalpy scale; kept in

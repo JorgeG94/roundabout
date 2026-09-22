@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.3% of total for derived types.</p>Including implementation: 9 statements,  0.1% of total for derived types.">9 statements</a>
+                 title="<p> 0.5% of total for derived types.</p>Including implementation: 14 statements,  0.2% of total for derived types.">14 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,11 +134,16 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-enable~21">enable</a>
-            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-file">file</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-enable~41">enable</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-file~7">file</a>
             <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-land_fill_s">land_fill_s</a>
             <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-land_fill_t">land_fill_t</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-lin_ds_dz~3">lin_ds_dz</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-lin_dt_dz~3">lin_dt_dz</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-lin_s_ref~3">lin_s_ref</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-lin_t_ref~3">lin_t_ref</a>
             <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-s_var">s_var</a>
+            <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-source~2">source</a>
             <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-t_var">t_var</a>
             <a class="list-group-item" href="../type/ocean_zinit_config_t.html#variable-z_var">z_var</a>
         </div>
@@ -323,7 +328,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-enable~21"></span>
+              <span class="anchor" id="variable-enable~41"></span>
               logical,
             </td>
               <td>public</td>
@@ -336,12 +341,14 @@ large graphs.</div>
                 <td>.false.</td>
             <td>
                 <p>Master switch.  Default <code>.false.</code> keeps the analytical IC.
-Requires <code>RDB_ENABLE_NETCDF=ON</code> at build time.</p>
+Requires <code>RDB_ENABLE_NETCDF=ON</code> at build time (the overlay
+lives in the NetCDF-gated <code>rdb_ocean_z_init</code>, including the
+<code>source = "linear"</code> path, which opens nothing).</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-file"></span>
+              <span class="anchor" id="variable-file~7"></span>
               character(len=256),
             </td>
               <td>public</td>
@@ -371,7 +378,9 @@ temp/salt/z_src with the documented name-fallbacks).</p>
 <td> =</td>
                 <td>35.0_wp</td>
             <td>
-                <p>Fallback salinity (PSU) written to dry (wet_mask &lt;= 0) columns.</p>
+                <p>Fallback salinity (PSU) written to dry (wet_mask &lt;= 0) columns.
+<code>source = "file"</code> only — the analytic path has a value
+everywhere and uses it.</p>
             </td>
         </tr>
         <tr>
@@ -393,6 +402,80 @@ temp/salt/z_src with the documented name-fallbacks).</p>
         </tr>
         <tr>
             <td>
+              <span class="anchor" id="variable-lin_ds_dz~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_ds_dz</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+                <p><code>source = "linear"</code>: <code>dS/dz</code> (PSU/m) with <strong>z positive UP</strong>.
+Note the polarity is the INVERSE of temperature&rsquo;s: salty
+water belongs at the bed, so a halinely STABLE column has
+<code>lin_ds_dz &lt; 0</code>.  <code>0</code> (the default) is a uniform column.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_dt_dz~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_dt_dz</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+                <p><code>source = "linear"</code>: <code>dT/dz</code> (degC/m) with <strong>z positive UP</strong>
+— the same convention as <code>&amp;ocean_ic_nml eady_dT_dz</code>.  A
+thermally STABLE column has <code>lin_dt_dz &gt; 0</code> (warm on top).
+<code>0</code> (the default) is a uniform column.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_s_ref~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_s_ref</strong></td>
+<td> =</td>
+                <td>35.0_wp</td>
+            <td>
+                <p><code>source = "linear"</code>: salinity (PSU) at the <code>z = 0</code> datum.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lin_t_ref~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lin_t_ref</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+                <p><code>source = "linear"</code>: temperature (degC) at the <code>z = 0</code> datum.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
               <span class="anchor" id="variable-s_var"></span>
               character(len=32),
             </td>
@@ -406,6 +489,34 @@ temp/salt/z_src with the documented name-fallbacks).</p>
                 <td>&#34;&#34;</td>
             <td>
                 <p>Salinity variable-name override; &ldquo;&rdquo; tries salt/S/salinity.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-source~2"></span>
+              character(len=32),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>source</strong></td>
+<td> =</td>
+                <td>&#34;file&#34;</td>
+            <td>
+                <p>Where the T(z)/S(z) profile comes from.</p>
+<p><code>"file"</code> (default) reads the pre-regridded NetCDF named by
+<code>file</code> and interpolates linearly in depth.</p>
+<p><code>"linear"</code> evaluates the ANALYTIC affine profiles
+<code>T(z) = lin_t_ref + lin_dt_dz*z</code>, <code>S(z) = lin_s_ref +
+lin_ds_dz*z</code> at every layer centre&rsquo;s true geopotential depth
+— no file, no interpolation, defined on ghosts and land too.
+This is the profile an idealised sloping-lid cavity (or any
+ISOMIP+-style case) needs: the <code>&amp;tracer_nml T_init_surface</code> /
+<code>T_init_bottom</code> family is linear in LAYER INDEX, so under a
+terrain-following coordinate with a tilted lid it tilts the
+isopycnals with the coordinate and the column is NOT at rest.</p>
             </td>
         </tr>
         <tr>
@@ -462,7 +573,24 @@ temp/salt/z_src with the documented name-fallbacks).</p>
 <span class="w">      </span><span class="c">!! Design + MOM6 divergences: `local_archive/specs/a2_zinit_spec.md`.</span>
 <span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
 <span class="w">         </span><span class="c">!! Master switch.  Default `.false.` keeps the analytical IC.</span>
-<span class="w">         </span><span class="c">!! Requires `RDB_ENABLE_NETCDF=ON` at build time.</span>
+<span class="w">         </span><span class="c">!! Requires `RDB_ENABLE_NETCDF=ON` at build time (the overlay</span>
+<span class="w">         </span><span class="c">!! lives in the NetCDF-gated `rdb_ocean_z_init`, including the</span>
+<span class="w">         </span><span class="c">!! `source = "linear"` path, which opens nothing).</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"file"</span>
+<span class="w">         </span><span class="c">!! Where the T(z)/S(z) profile comes from.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! `"file"` (default) reads the pre-regridded NetCDF named by</span>
+<span class="w">         </span><span class="c">!! `file` and interpolates linearly in depth.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! `"linear"` evaluates the ANALYTIC affine profiles</span>
+<span class="w">         </span><span class="c">!! `T(z) = lin_t_ref + lin_dt_dz*z`, `S(z) = lin_s_ref +</span>
+<span class="w">         </span><span class="c">!! lin_ds_dz*z` at every layer centre's true geopotential depth</span>
+<span class="w">         </span><span class="c">!! — no file, no interpolation, defined on ghosts and land too.</span>
+<span class="w">         </span><span class="c">!! This is the profile an idealised sloping-lid cavity (or any</span>
+<span class="w">         </span><span class="c">!! ISOMIP+-style case) needs: the `&amp;tracer_nml T_init_surface` /</span>
+<span class="w">         </span><span class="c">!! `T_init_bottom` family is linear in LAYER INDEX, so under a</span>
+<span class="w">         </span><span class="c">!! terrain-following coordinate with a tilted lid it tilts the</span>
+<span class="w">         </span><span class="c">!! isopycnals with the coordinate and the column is NOT at rest.</span>
 <span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="k">file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">""</span>
 <span class="w">         </span><span class="c">!! Path to the model-grid T/S NetCDF (dims x/y/z; vars</span>
 <span class="w">         </span><span class="c">!! temp/salt/z_src with the documented name-fallbacks).</span>
@@ -476,6 +604,22 @@ temp/salt/z_src with the documented name-fallbacks).</p>
 <span class="w">         </span><span class="c">!! Fallback temperature (°C) written to dry (wet_mask &lt;= 0) columns.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">land_fill_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="mf">5.0_wp</span>
 <span class="w">         </span><span class="c">!! Fallback salinity (PSU) written to dry (wet_mask &lt;= 0) columns.</span>
+<span class="w">         </span><span class="c">!! `source = "file"` only — the analytic path has a value</span>
+<span class="w">         </span><span class="c">!! everywhere and uses it.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lin_t_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="c">!! `source = "linear"`: temperature (degC) at the `z = 0` datum.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lin_dt_dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="c">!! `source = "linear"`: `dT/dz` (degC/m) with **z positive UP**</span>
+<span class="w">         </span><span class="c">!! — the same convention as `&amp;ocean_ic_nml eady_dT_dz`.  A</span>
+<span class="w">         </span><span class="c">!! thermally STABLE column has `lin_dt_dz &gt; 0` (warm on top).</span>
+<span class="w">         </span><span class="c">!! `0` (the default) is a uniform column.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lin_s_ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="mf">5.0_wp</span>
+<span class="w">         </span><span class="c">!! `source = "linear"`: salinity (PSU) at the `z = 0` datum.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lin_ds_dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="c">!! `source = "linear"`: `dS/dz` (PSU/m) with **z positive UP**.</span>
+<span class="w">         </span><span class="c">!! Note the polarity is the INVERSE of temperature's: salty</span>
+<span class="w">         </span><span class="c">!! water belongs at the bed, so a halinely STABLE column has</span>
+<span class="w">         </span><span class="c">!! `lin_ds_dz &lt; 0`.  `0` (the default) is a uniform column.</span>
 <span class="w">   </span><span class="k">end type </span><span class="n">ocean_zinit_config_t</span>
 </pre></div>
 
@@ -499,7 +643,7 @@ temp/salt/z_src with the documented name-fallbacks).</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

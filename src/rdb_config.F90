@@ -29,6 +29,26 @@ module rdb_config
       !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
 #endif
 
+   ! ------------------------------------------------------------------
+   ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.
+   !
+   ! These four keys fed `tracer_t%eos_coeff` / `tracer_t%eos_ref` via
+   ! `register_default_tracers` — a path the A-grid coastal solvers read
+   ! and the C-grid ocean path never did.  They are now RETIRED rather
+   ! than merely annotated dead: `validate_config` fails loud whenever a
+   ! namelist moves one off its historical default, naming the live
+   ! `&ocean_ic_nml` replacement.  The defaults are named here so the
+   ! type declaration and the guard can never drift apart.
+   ! ------------------------------------------------------------------
+   real(wp), parameter :: LEGACY_TRACER_S_REF = 0.0_wp
+      !! Historical `&tracer_nml S_ref` default (PSU).
+   real(wp), parameter :: LEGACY_TRACER_BETA_S = 0.78_wp
+      !! Historical `&tracer_nml beta_S` default (kg/m^3 per PSU).
+   real(wp), parameter :: LEGACY_TRACER_T_REF = 15.0_wp
+      !! Historical `&tracer_nml T_ref` default (degC).
+   real(wp), parameter :: LEGACY_TRACER_ALPHA_T = 0.17_wp
+      !! Historical `&tracer_nml alpha_T` default (kg/m^3 per degC).
+
    public :: config_t
    public :: ocean_config_t, ocean_grid_config_t, &
              ocean_coriolis_config_t, ocean_thermo_config_t, &
@@ -39,6 +59,7 @@ module rdb_config
              ocean_tracers_config_t, &
              ocean_bt_config_t, ocean_pgf_config_t, ocean_eos_config_t, &
              ocean_bdrag_config_t, &
+             ocean_tdrag_config_t, &
              ocean_hdiff_config_t, &
              ocean_hvisc_config_t, ocean_vmix_config_t, &
              ocean_vdiff_config_t, &
@@ -50,6 +71,7 @@ module rdb_config
              ocean_tidal_mixing_config_t, ocean_conv_config_t, ocean_tides_config_t, &
              ocean_porous_config_t, &
              ocean_psurf_config_t, &
+             ocean_cavity_dyn_config_t, ocean_cavity_melt_config_t, &
              ocean_continuity_config_t, ocean_isopycnal_config_t, &
              ocean_topo_config_t, &
              ocean_ic_config_t, ocean_zinit_config_t, &
@@ -66,6 +88,8 @@ module rdb_config
    public :: build_rdb_schema
    public :: resolve_bt_halo
    public :: bt_halo_auto_exclusion
+   public :: p_top_has_producer
+   public :: cavity_draft_is_uniform
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
    public :: MAX_OCEAN_LAYER_RHO_INIT
@@ -441,11 +465,54 @@ module rdb_config
          !! summed at overlaps. `"file"` recognised but aborts at
          !! `validate_config` in v1 (PR-23b, needs the PR-14 reader).
       character(len=16) :: target_source = "ic"
-         !! Reference-state source. `"ic"` (default, implemented): snapshot
-         !! the seeded initial condition (reachable as a "nudge toward a
-         !! parent climatology" via `&ocean_zinit_nml`, no new reader).
-         !! `"file"` recognised but aborts at `validate_config` in v1
-         !! (PR-23b).
+         !! Reference-state source.
+         !!
+         !! `"ic"` (default, implemented): snapshot the seeded initial
+         !! condition (reachable as a "nudge toward a parent climatology"
+         !! via `&ocean_zinit_nml`, no new reader).
+         !!
+         !! `"linear_z"`: an ANALYTIC affine geopotential profile,
+         !! `T(z) = lin_t_ref + lin_dt_dz*z` and the salinity twin,
+         !! re-evaluated on the LIVE layer geometry once per outer step.
+         !! Independent of the initial condition, which is what makes an
+         !! ISOMIP+ Ocean1 / Ocean2 (restore to a different water mass
+         !! than you start from) expressible. Every tracer that is NOT
+         !! temperature or salinity keeps the `"ic"` snapshot, and so do
+         !! `u_ref`/`v_ref`.
+         !!
+         !! `"file"` recognised but aborts at `validate_config` (PR-23b).
+      character(len=16) :: ramp = "cosine"
+         !! Shape of the `damp_source="band"` ramp from the sponge-tagged
+         !! wall (`d = 0`) inward.
+         !!
+         !! `"cosine"` (default, bit-identical): `0.5*(1 + cos(pi*d/band))`
+         !! — the legacy band kernel's own ramp.
+         !!
+         !! `"linear"`: `(band - d - 0.5)/band`, which is the CELL-CENTRE
+         !! evaluation of a rate that rises linearly from zero at the
+         !! interior edge of the band to full `sponge_strength` at the
+         !! wall. That is ISOMIP+ Eq. (20),
+         !! `gamma(x) = gamma0*max(0, (x - x_r0)/(x_r1 - x_r0))`
+         !! (Asay-Davis et al. 2016), with `gamma0 = sponge_strength` and
+         !! `band = (x_r1 - x_r0)/dx` cells — no separate `tau_boundary`
+         !! or x-range knob is needed, because the existing strength is
+         !! already `1/tau` in 1/s and the existing width already names
+         !! the range.
+      real(wp) :: lin_t_ref = 0.0_wp
+         !! `target_source="linear_z"`: potential temperature (degC) at
+         !! the `z = 0` datum. Same convention as `&ocean_zinit_nml
+         !! lin_t_ref`.
+      real(wp) :: lin_dt_dz = 0.0_wp
+         !! `target_source="linear_z"`: dT/dz (degC/m) with **z positive
+         !! UP**, so a stable column has `lin_dt_dz > 0`. Same convention
+         !! as `&ocean_zinit_nml lin_dt_dz`.
+      real(wp) :: lin_s_ref = 35.0_wp
+         !! `target_source="linear_z"`: salinity (PSU) at the `z = 0`
+         !! datum. Same convention as `&ocean_zinit_nml lin_s_ref`.
+      real(wp) :: lin_ds_dz = 0.0_wp
+         !! `target_source="linear_z"`: dS/dz (PSU/m), z positive UP, so a
+         !! stable column has `lin_ds_dz < 0`. Same convention as
+         !! `&ocean_zinit_nml lin_ds_dz`.
       logical :: relax_uv = .true.
          !! Relax `u`/`v` toward `u_ref`/`v_ref`. Default `.true.` matches
          !! today's legacy path (momentum is the one thing the legacy
@@ -678,7 +745,7 @@ module rdb_config
          !! exclusions (apply when bt_halo is set EXPLICITLY > 0; AUTO instead
          !! silently resolves to 0): wet/dry enable, use_cont_type,
          !! upstream_h_face, tides enable, psurf enable, porous enable,
-         !! supergrid/tripolar grid_config.  The set of record is
+         !! cavity_dyn enable, supergrid/tripolar grid_config.  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
    end type ocean_bt_config_t
@@ -807,6 +874,43 @@ module rdb_config
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM.  Mirrors
          !! MOM6 `Recon_Scheme`.  Only consulted when
          !! `reconstruct_for_pressure = .true.`.
+      logical :: p_top_in_bc = .false.
+         !! Add the top-of-column load `multilayer_state_t%p_top` (Pa) to
+         !! the FV_MOM6 pressure-stack surface boundary condition:
+         !! `pa(nz+1) = rho_ref*g*eta_geo + p_top`.  Default `.false.` =>
+         !! `pa(nz+1) = rho_ref*g*eta_geo`, bit-identical to every run
+         !! before this knob existed.
+         !!
+         !! WHY IT IS NOT A DOUBLE COUNT.  A depth-uniform `p_top`
+         !! perturbs EVERY layer's `PFu` by the same `-(1/rho_0)*grad
+         !! p_top` (the theorem in `compute_fv_mom6_impl`'s docstring).
+         !! The split solver subtracts the depth mean of the layer PGF
+         !! from the barotropic forcing and then folds the barotropic
+         !! solution back over the layers, so that uniform piece cancels
+         !! identically and the load's barotropic response is carried by
+         !! the `eta_forcing` seam alone — the two seams are orthogonal,
+         !! not additive.  On the UNSPLIT driver (`n_inner = 0`) there is
+         !! neither a depth-mean replacement nor a seam, so this term is
+         !! the load's ONLY path into the momentum: a correction, not a
+         !! duplicate.
+         !!
+         !! What it buys where the load is LARGE (an ice-shelf draft,
+         !! `5e6 Pa`): `pa` is built as an anomaly about `rho_ref*g*z`,
+         !! and with the load cancelled inside `pa(nz+1)` against
+         !! `rho_ref*g*eta_geo` the whole stack stays `O(1e4 Pa)` instead
+         !! of `O(5e6 Pa)`, which shrinks the `h_neglect` face-divisor
+         !! leak by the same factor.
+         !!
+         !! FV_MOM6 ONLY (both the PCM and the `reconstruct_for_pressure`
+         !! branch) — `validate_config` refuses it for any other `form`,
+         !! which carries no `pa` stack to inject into.  Orthogonal to
+         !! `&ocean_psurf_nml in_eos`: that knob puts the same `p_top`
+         !! into the EOS's IN-SITU pressure ARGUMENTS, this one into the
+         !! PGF's pressure BOUNDARY CONDITION.  Either, both or neither.
+         !! `p_top` itself is produced today only by the `&ocean_psurf_nml`
+         !! seam, so with `enable = .false.` it is the zero array and this
+         !! knob is inert — a warning says so rather than leaving it
+         !! silent.
    end type ocean_pgf_config_t
    type :: ocean_eos_config_t
       character(len=16) :: eos = "linear"
@@ -814,6 +918,50 @@ module rdb_config
          !! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.
          !! 2015 specific-volume polynomial).  "roquet_spv" is incompatible
          !! with the "fv_wright" PGF (fails loud at configure).
+      character(len=16) :: tfreeze_set = "seaice"
+         !! Named seawater freezing-point (liquidus) coefficient set for
+         !! `eos_freezing_point`, which evaluates the linear form
+         !!
+         !!   T_f = λ1·S + λ2 + λ3·p
+         !!
+         !! for every EOS variant (MOM6 keeps `TFREEZE_FORM = "LINEAR"`
+         !! as its default under any density branch).
+         !!
+         !!   * `"seaice"` (DEFAULT ⇒ bit-identical) — the SIS2/MOM6
+         !!     sea-ice liquidus, λ = (−0.054 °C/PSU, 0 °C,
+         !!     −7.53e-8 °C/Pa).  `T_f(35 PSU, 0 Pa) = −1.89 °C`.  This is
+         !!     the set the shipped sea-ice column model was ported and
+         !!     tested against.
+         !!   * `"isomip"` — the ISOMIP+ protocol liquidus (Asay-Davis et
+         !!     al. 2016, GMD 9, Table 4 p. 2483; consumed in their
+         !!     eq. (25) p. 2485), λ = (−0.0573 °C/PSU, 0.0832 °C,
+         !!     −7.53e-8 °C/Pa).  Required for an ice-shelf-cavity run
+         !!     claiming ISOMIP+ compliance, and the value the ice-shelf
+         !!     literature is unanimous on.
+         !!
+         !! WHY IT MATTERS.  At S = 34.5 the two sets differ by ~0.03 °C
+         !! — a few percent of a typical Antarctic thermal driving, and
+         !! enough to flip the SIGN of a basal melt rate over a 0.03 °C
+         !! band of ocean temperature.  A mistyped value is therefore a
+         !! fail-loud `validate_config` error, never a silent fallback.
+         !!
+         !! NAMED SETS ONLY, on purpose: λ1/λ2/λ3 are a fitted triple and
+         !! there is no free-form coefficient knob, so a configuration
+         !! cannot mix λ1 from one source with λ2 from another.  A
+         !! NONLINEAR liquidus (MOM6 `MILLERO_78`, a TEOS-10 polynomial)
+         !! is a different functional form and would arrive as its own
+         !! `form` selector at the documented seam in
+         !! `eos_freezing_point`, not as another member of this list.
+         !!
+         !! SCOPE: this is the OCEAN-side liquidus only — what
+         !! `eos_freezing_point` returns, i.e. the sea-surface freezing
+         !! temperature the frazil, frazil-uptake and basal-flux kernels
+         !! work against.  The SIS2 ice model's INTERNAL brine-pocket
+         !! liquidus slope (`ICE_DTF_DS`, `rdb_ice_enthalpy`) is baked
+         !! into its closed-form enthalpy<->temperature map and is NOT
+         !! switched here; under `"isomip"` the two therefore disagree by
+         !! ~0.03 °C.  The ISOMIP+ set is for ice-shelf-cavity work, where
+         !! the sea-ice column model is normally off.
       real(wp) :: p_ref = 0.0_wp
          !! Reference pressure (Pa, `>= 0`) at which the model's POTENTIAL
          !! density `ms%rho_layer` is evaluated.  Default 0 (surface
@@ -878,6 +1026,53 @@ module rdb_config
          !! forward-Euler (bit-identical) but unstable on thin shelf layers.
          !! Recommend `.true.` for shallow-shelf runs.
    end type ocean_bdrag_config_t
+
+   type :: ocean_tdrag_config_t
+      !! `&ocean_tdrag_nml` — ICE-SHELF TOP drag, the mirror of
+      !! `&ocean_bdrag_nml` at `k = nz`.  Requires
+      !! `&ocean_cavity_dyn_nml enable` (without a draft there is no ice
+      !! base and `cover_frac` is identically zero, so the kernel would
+      !! be a no-op with a cost).  Default `enable = .false.` ⇒ the slot
+      !! is a placeholder, no kernel runs, every path is bit-identical.
+      logical :: enable = .false.
+         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`.
+      character(len=16) :: form = "quadratic"
+         !! Top-drag variant: "quadratic" (default, `du/dt =
+         !! -C_d*|U|*u/h`, the ISOMIP+ prescription) or "linear"
+         !! (Rayleigh `du/dt = -r*u`).  Enum mirrors
+         !! `parse_tdrag_variant` in `rdb_ocean_top_drag`.
+      real(wp) :: cd = 0.0_wp
+         !! Quadratic drag coefficient (dimensionless).  ISOMIP+ value
+         !! 2.5e-3 (Asay-Davis et al. 2016 Table 4).  Zero disables the
+         !! quadratic branch.  When `&ocean_cavity_melt_nml enable`, this
+         !! is THE `C_d` for both momentum and the melt friction
+         !! velocity — see the `cdrag_top` agreement rule in
+         !! `validate_config`.
+      real(wp) :: r = 0.0_wp
+         !! Linear Rayleigh coefficient (1/s).  Active when
+         !! `form = "linear"`.
+      real(wp) :: htbl = 0.0_wp
+         !! Top-boundary-layer thickness (m) the stress is distributed
+         !! over (the mirror of `&ocean_bdrag_nml hbbl`).  Zero (default)
+         !! = layer-`nz`-only.  Positive values keep the explicit drag
+         !! rate finite where a sigma coordinate thins the top layer near
+         !! a grounding line.
+      real(wp) :: bg_vel = 0.0_wp
+         !! Background velocity floor (m/s) in the quadratic speed.
+         !! Zero (default) ⇒ the layer-only quadratic branch is the exact
+         !! algebraic mirror of the bottom drag's.
+      real(wp) :: tbl_thick_min = 0.0_wp
+         !! Minimum effective TBL thickness (m) in the `stress/h_tbl`
+         !! denominator.  Zero (default) falls back to the kernel's
+         !! `h_min` (1e-3 m), matching the bottom drag.
+      logical :: implicit = .false.
+         !! Backward-Euler top drag inside the drag kernel:
+         !! `u^{n+1} = u/(1 + dt*lambda)`, unconditionally stable for any
+         !! top-layer thickness.  Default `.false.` = explicit forward
+         !! Euler (bit-identical to the pre-knob path, but conditionally
+         !! unstable when `lambda*dt > 1`).  Mutually exclusive with
+         !! `&ocean_vdiff_nml implicit_top_drag`.
+   end type ocean_tdrag_config_t
 
    type :: ocean_hdiff_config_t
       !! `&ocean_hdiff_nml` — along-coordinate tracer Laplacian
@@ -1097,6 +1292,45 @@ module rdb_config
       real(wp) :: kpp_c_vt2 = 1.8_wp
          !! KPP unresolved-turbulence coefficient for the V_t^2 term in
          !! the bulk-Ri denominator (LMD94 eq 23).  0 disables V_t^2.
+
+      ! ---- Source of the thermal-expansion / haline-contraction pair ----
+      character(len=8) :: buoyancy_coeffs = "constant"
+         !! Where the vmix closures take their α (thermal expansion) and
+         !! β (haline contraction) from — `"constant"` (DEFAULT) or
+         !! `"eos"`.  Parsed by `parse_buoyancy_coeffs`
+         !! (`rdb_ocean_vmix.F90`); keep the `allowed=` list and that
+         !! routine's `case` arms in lockstep.
+         !!
+         !!   * `"constant"` — the scalar `&ocean_ic_nml alpha_T` /
+         !!     `beta_S` off the EOS handle, whatever the active EOS is.
+         !!     Historical behaviour ⇒ **bit-identical** for every shipped
+         !!     namelist.  For `eos = "linear"` these ARE the true
+         !!     coefficients, so the setting is physically exact there.
+         !!   * `"eos"` — `eos_buoyancy_coeffs` evaluated per column /
+         !!     per interface from the ACTIVE equation of state
+         !!     (`α = −∂ρ/∂T`, `β = +∂ρ/∂S`, both analytic).  Under
+         !!     `eos = "linear"` it returns those same handle members
+         !!     bit-for-bit, so the two settings are byte-identical
+         !!     there — the knob only bites under a NONLINEAR EOS
+         !!     (`wright` / `roquet`).
+         !!
+         !! Routes THREE consumers: the KPP `B_0` surface buoyancy flux
+         !! in both passes of `vmix_kpp_overlay_impl` (and hence the
+         !! non-local γ gate, which switches on `B_0 < 0`), and the
+         !! double-diffusion density ratio `R_ρ = α·ΔT / β·ΔS` in
+         !! `vmix_split_ddiff_*_impl`.  Every OTHER α/β-like quantity on
+         !! the ocean path already tracks the active EOS: EPBL,
+         !! kappa-shear, tidal mixing, the isopycnal slopes and Redi go
+         !! through `eos_specvol_derivs`, while PP81's N², the convective
+         !! trigger, the wave speed and MLE difference `ms%rho_layer`
+         !! itself.
+         !!
+         !! Why it matters: seawater's thermal expansion collapses toward
+         !! zero near the freezing point and roughly doubles by 1000 dbar,
+         !! so under an ice shelf a constant α mis-sizes the melt-driven
+         !! buoyancy flux that sets the boundary layer.  `validate_config`
+         !! WARNS (does not refuse) on cavity melt × nonlinear EOS ×
+         !! `"constant"`.
    end type ocean_vmix_config_t
    type :: ocean_vdiff_config_t
       !! Backward-Euler vertical-friction solver knobs (`&ocean_vdiff_nml`).
@@ -1124,6 +1358,23 @@ module rdb_config
          !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and
          !! incompatible with HBBL-distributed drag (`hbbl > 0`); both fail
          !! loud at configure.
+      logical :: implicit_top_drag = .false.
+         !! Fold the ICE-SHELF TOP drag into the vdiff `k = nz` DIAGONAL
+         !! (`&ocean_tdrag_nml`'s mirror of `implicit_drag`) instead of
+         !! the explicit pre-solve add.  The wind stress already owns
+         !! that row's RHS; a drag is a diagonal term, so the two
+         !! compose — but on a face the ice covers, the wind RHS is
+         !! MASKED OFF here (there is no atmosphere under a shelf).
+         !! That masking is now BELT AND BRACES and kept deliberately:
+         !! the cover mask zeroes the `tau` pair at its source, so the
+         !! factor multiplies zero, and it stays so the fold is correct
+         !! STANDALONE if a later forcing path ever writes `tau` after
+         !! the configure-time mask.
+         !! Requires `&ocean_tdrag_nml enable`; mutually exclusive with
+         !! `&ocean_tdrag_nml implicit` (both would damp the top layer)
+         !! and with `htbl > 0` (the fold is one `k = nz` rate and
+         !! cannot represent a distributed band).  All fail loud at
+         !! configure.  Default `.false.` ⇒ bit-identical.
       logical :: bbl_glue = .false.
          !! MOM6 `bottomdraglaw` coupling parity: raise the momentum-solve
          !! interface viscosity to `kv_bbl` within botfn reach of the bed
@@ -1717,6 +1968,308 @@ module rdb_config
          !! file-driven load needs a `register_tag` entry, not new reader
          !! machinery.
    end type ocean_psurf_config_t
+   type :: ocean_cavity_dyn_config_t
+      !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,
+      !! Phase 5.1).  A prescribed, time-constant ice draft `z_draft(i,j)`
+      !! (m, positive DOWN — the depth of the ice base below `z = 0`) is
+      !! laid over the bed and absorbed into the barotropic DATUM:
+      !!
+      !!     bt_H_ref = b - z_draft      (was: bt_H_ref = b)
+      !!
+      !! so the column starts with `bt_eta = sum(h_layer) - bt_H_ref = 0`
+      !! under the shelf and every consumer of the water-column thickness
+      !! `D = bt_H_ref + bt_eta` is correct without its own cavity branch.
+      !! This is Losch (2008) §2.1's convention verbatim ("the
+      !! 'sea-surface height' eta is the deviation from the 'reference'
+      !! ice-shelf draft h"), not a divergence from it.
+      !!
+      !! The isostatic load `p_ice_ref = rho_ref*GRAVITY*z_draft` (Pa) is
+      !! built at configure and assembled into the top-of-column pressure
+      !!
+      !!     ms%p_top = metrics%p_ice_ref + sf%p_surf
+      !!
+      !! whose consumers are the FV_MOM6 surface BC
+      !! (`&ocean_pgf_nml p_top_in_bc`, REQUIRED unless the draft is
+      !! uniform) and the in-situ EOS pressure (`&ocean_psurf_nml
+      !! in_eos`).  The load is deliberately NOT added to `sf%p_surf`:
+      !! the datum `bt_H_ref = b - z_draft` already carries its whole
+      !! barotropic effect, and `eta_ib` is built from the assembled
+      !! `sf%p_surf`, so only the load ANOMALY belongs on that seam.
+      !!
+      !! `enable = .false.` (default) keeps `z_draft` at its `(1,1)`
+      !! placeholder, `bt_H_ref = b`, and every path bit-identical.
+      !! Knob table: `docs/generated_nml_knobs.md`.
+      logical :: enable = .false.
+         !! Master switch.  Requires the ocean multilayer path, the split
+         !! solver, `&ocean_pgf_nml form="fv_mom6"`, `vcoord_type` in
+         !! {sigma, zstar} and a single rank; mutually exclusive with
+         !! wet/dry, porous barriers, sea ice, `bt_halo > 0`, tidal SAL
+         !! and `gfs_scale /= 1` (every one of those fails loud at
+         !! configure, naming the knob and the reason).
+      character(len=32) :: draft_config = "none"
+         !! Analytic draft shape.  `"none"` (default): `z_draft = 0`
+         !! everywhere — the identity, even with `enable = .true.`.
+         !! `"flat"`: uniform `draft_depth` inside the shelf box
+         !! `[draft_x0, draft_x1] x [draft_y0, draft_y1]`, 0 outside (the
+         !! open ocean beyond the calving front at `draft_x1`).
+         !! `"linear"`: `z_draft = draft_depth + draft_slope*(x - draft_x0)`
+         !! inside the same box, clipped at 0 below.  `"file"`: a static
+         !! 2-D NetCDF draft — NOT implemented (fails loud); the
+         !! MPI-correct static-2-D reader is a later slice, and it is the
+         !! only route to an ISOMIP+ draft, which has no analytic form
+         !! (Asay-Davis et al. 2016 §3.1.1).
+      character(len=32) :: draft_source = "draft"
+         !! What the draft is prescribed FROM.  `"draft"` (default): the
+         !! geometry above IS the ice-base depth.  `"thickness"`: the
+         !! formula gives an ice THICKNESS, converted by the
+         !! Boussinesq-isostatic (flotation) relation
+         !! `z_draft = rho_ice*h_ice/rho_0`.  `"in_situ"` (true isostasy,
+         !! `p_ice = g*integral(rho_hat)`) needs a per-column root find,
+         !! does not admit exact discrete rest, and is deliberately NOT
+         !! implemented (fails loud).
+      real(wp) :: draft_depth = 0.0_wp
+         !! Draft amplitude (m, positive down) — the uniform value for
+         !! `"flat"`, the value at `draft_x0` for `"linear"`.  Under
+         !! `draft_source = "thickness"` it is an ice THICKNESS instead.
+      real(wp) :: draft_slope = 0.0_wp
+         !! `"linear"` only: d(draft)/dx, dimensionless (m of draft per m
+         !! of x).  Positive deepens the ice base toward +x.  Converted
+         !! from metres to GRID units at the dispatch (metres on a
+         !! Cartesian grid, degrees on spherical/curvilinear), the same
+         !! way `&ocean_topo_nml slope_scale` is.
+      real(wp) :: draft_x0 = -1.0e30_wp
+         !! Western edge of the shelf box (m, GLOBAL physical coordinate),
+         !! and the ANCHOR of the `"linear"` profile (`draft_depth` is the
+         !! draft AT `draft_x0`), which is why `"linear"` requires a
+         !! finite value here.  The default +/-1e30 on all four bounds is
+         !! the "no limit on this side" sentinel: the shelf then covers
+         !! the whole domain INCLUDING the ghost band, which is what a
+         !! shelf that reaches a wall needs (a box stopping at x = 0 puts
+         !! a phantom calving front one cell outside the west wall).
+      real(wp) :: draft_x1 = 1.0e30_wp
+         !! Eastern edge of the shelf box = the CALVING FRONT (m): beyond
+         !! it the draft is 0 (open ocean).  Default: no eastern limit.
+      real(wp) :: draft_y0 = -1.0e30_wp
+         !! Southern edge of the shelf box (m).  Default: no limit.
+      real(wp) :: draft_y1 = 1.0e30_wp
+         !! Northern edge of the shelf box (m).  Default: no limit.
+      character(len=256) :: draft_file = ""
+         !! `draft_config="file"`: path to the NetCDF carrying the static
+         !! ice draft.  The variable named by `draft_var` must be rank 3
+         !! in FORTRAN storage order `(x, y, t)` — which is how a C or
+         !! Python writer (and `ncdump`) spells `(nTime, ny, nx)` — with a
+         !! time coordinate variable; RECORD 1 is read and the field is
+         !! never re-read.  There is NO horizontal interpolation: the file
+         !! must already be on the model grid (`nx x ny` physical cells),
+         !! exactly as `bathymetry_file` and `&ocean_zinit_nml file`
+         !! require.  Single rank only (fail-loud otherwise).
+      character(len=64) :: draft_var = "iceDraft"
+         !! `draft_config="file"`: name of the 2-D variable to read.  The
+         !! default is the ISOMIP+ geometry file's own spelling
+         !! (Asay-Davis et al. 2016 Sect. 3.3).
+      character(len=16) :: draft_sign = "depth"
+         !! `draft_config="file"`: the SIGN CONVENTION of the file values.
+         !! There is no default that guesses from the data — the two
+         !! conventions differ by the whole ice load, and a field that is
+         !! partly open water (zeros) is indistinguishable by inspection.
+         !!
+         !!   * `"depth"` / `"positive_down"` (default) — the values ARE
+         !!     the ice-base depth, `>= 0`, Roundabout's own convention.
+         !!   * `"elevation"` / `"positive_up"` — the values are the
+         !!     ice-base ELEVATION `z_d`, `<= 0` under a floating shelf.
+         !!     Negated on load.  **This is what the ISOMIP+ geometry file
+         !!     needs**: its `iceDraft` is "the elevation of the
+         !!     ice-ocean interface (z_d)".
+         !!
+         !! A file in the wrong convention produces a negative depth and
+         !! is caught fail-loud by the existing non-negativity check, not
+         !! silently accepted.
+      real(wp) :: h_min_cavity = 10.0_wp
+         !! GROUNDING cutoff (m): a column whose water thickness
+         !! `b - z_draft` is below this is LAND — it goes through the same
+         !! `seed_wet_mask_impl` the bathymetry uses, so the static
+         !! metric-zeroing land mask and the finite land-state hold for
+         !! free.  Never a thin film of water under grounded ice.
+         !! ISOMIP+ §3.1.5 leaves the choice to the modeller and notes
+         !! ~40 m (two cells) for z-level models; sigma is less
+         !! restricted, hence 10 m.
+      real(wp) :: grounded_max_frac = 0.5_wp
+         !! Sanity bound: if more than this fraction of the interior
+         !! columns ground, configure fails loud rather than silently
+         !! running a domain that is mostly land.
+      real(wp) :: rho_ice = 918.0_wp
+         !! Ice density (kg/m^3), consulted ONLY by
+         !! `draft_source = "thickness"`.
+   end type ocean_cavity_dyn_config_t
+
+   type :: ocean_cavity_melt_config_t
+      !! Ice-shelf basal-melt THERMODYNAMICS (`&ocean_cavity_melt_nml`,
+      !! Phase 2b).  The three-equation interface of Holland & Jenkins
+      !! (1999), solved once per thermo step on every ice-covered column
+      !! and delivered to the ocean as two OWNED surface-flux components
+      !! (`heat_cavity`, `salt_cavity`).
+      !!
+      !! GEOMETRY IS A DIFFERENT GROUP.  The draft, the cover mask and
+      !! the barotropic datum are `&ocean_cavity_dyn_nml`'s, and this
+      !! group REQUIRES it: without a draft there is no interface to melt
+      !! and `cover_frac` is identically zero.  The split is the
+      !! per-concern sub-namelist convention, and it is also the honest
+      !! one — a datum-only cavity run is a legitimate configuration.
+      !!
+      !! VIRTUAL OR REAL MASS — `freshwater` picks (Phase 3).
+      !! `"virtual"` (default, bit-identical) delivers the meltwater as a
+      !! virtual salt flux at fixed column mass; `"mass"` adds the real
+      !! Boussinesq volume to the top layer and lets the dilution happen
+      !! by itself.  See that knob, and
+      !! `docs/CAPABILITIES_AND_LIMITATIONS.md`.
+      !!
+      !! `enable = .false.` (default) ⇒ no slot arrays, no kernel, no
+      !! component written, byte-identical.  Knob table:
+      !! `docs/generated_nml_knobs.md`.
+      logical :: enable = .false.
+         !! Master switch.  Requires `&ocean_cavity_dyn_nml enable`,
+         !! `&ocean_eos_nml tfreeze_set="isomip"` and
+         !! `&ocean_forcing_nml enable_components`; mutually exclusive
+         !! with atmospheric surface forcing (wind stress, surface
+         !! restoring, shortwave penetration, the uniform scalar
+         !! `q_heat`/`q_salt`) until the per-cell cover mask lands, and
+         !! with sea ice.  Every one of those fails loud at configure,
+         !! naming the knob and the follow-up.  `&ocean_psurf_nml`
+         !! composes freely: the liquidus reads the ASSEMBLED
+         !! `ms%p_top = p_ice_ref + sf%p_surf`, so an atmospheric load
+         !! under the shelf depresses the freezing point with no extra
+         !! wiring.
+      character(len=32) :: exchange_law = "const_gamma"
+         !! Turbulent exchange-velocity law.  `"const_gamma"` (default)
+         !! is `gamma = Gamma*u*` — Jenkins, Nicholls & Corr (2010)
+         !! eqs. (1),(2),(5) p. 2300 and the ISOMIP+ form.  `"hj99"` is
+         !! Holland & Jenkins (1999) eqs. (14)-(18) p. 1792 (needs a
+         !! non-zero Coriolis parameter under the cover).  `"yung25"` is
+         !! Yung et al. (2025) "StratFeedback" eqs. (7)-(8) p. 5832.
+         !! Every other name the kernel's enum reserves
+         !! (`jenkins91`, `rosevear22`, `vt19`, `mk18`, `burchard22`,
+         !! `jenkins21`) PARSES but is refused at configure naming
+         !! `CAVITY_MELT_NOT_IMPLEMENTED` — a reserved law and a typo
+         !! must stay distinguishable.
+      real(wp) :: gamma_t = 2.2e-2_wp
+         !! Dimensionless heat-transfer coefficient `Gamma_T` of
+         !! `gamma_t = Gamma_T*u*`.  ISOMIP+ starting guess, Asay-Davis
+         !! et al. (2016) §3.2.1 p. 2487 — **a starting guess, not a
+         !! constant of nature**: the protocol has participants tune it,
+         !! and Yung et al. (2026) Table 2 p. 2058 shows the twelve
+         !! submissions spanning 0.011 to 0.2.  Re-derive it per vertical
+         !! coordinate; a single value across a coordinate sweep makes
+         !! the sweep measure its own tuning.
+      real(wp) :: gamma_s = -1.0_wp
+         !! Dimensionless salt-transfer coefficient `Gamma_S`.
+         !! **Negative = unset ⇒ resolved to `gamma_t/35`**, the ISOMIP+
+         !! ratio (Asay-Davis et al. (2016) Table 4 p. 2483, after
+         !! Jenkins, Nicholls & Corr (2010) p. 2309: the ratio "should
+         !! lie somewhere in the range 35-70.  Adopting a value at the
+         !! lower end of this range...").  Zero and positive values are
+         !! taken literally, so `gamma_s = 0` is refused as a range
+         !! error rather than silently re-triggering the default.
+      real(wp) :: cdrag_top = 2.5e-3_wp
+         !! Top drag coefficient `C_D,top` entering the MELT friction
+         !! velocity `u*^2 = C_D (U^2 + u_tide^2)`.  ISOMIP+ Table 4
+         !! p. 2483.  The least constrained number in the subject: the
+         !! literature spans 1.5e-3 (Holland & Jenkins 1999 Table 1) to
+         !! 9.7e-3 (Jenkins et al. 2010 Table 2).  **This knob does not
+         !! yet drive any momentum drag** — top drag is Phase 4; here it
+         !! only scales `u*` for the exchange velocities.
+      real(wp) :: u_tide = 1.0e-2_wp
+         !! RMS tidal velocity (m/s) in the melt friction velocity —
+         !! ISOMIP+ Table 4 p. 2483 and eq. (27) p. 2485, after Jenkins,
+         !! Nicholls & Corr (2010) eq. (10) p. 2309.  TRAP, and the
+         !! protocol says it outright (p. 2486): "The computation of top
+         !! and bottom drag do not incorporate utidal" — it belongs to
+         !! the melt `u*` ONLY.
+      real(wp) :: ustar_min = 1.0e-4_wp
+         !! Friction-velocity floor (m/s) — Yung et al. (2025) eq. (14)
+         !! p. 5836, value from their Table 2 p. 5838.  It exists because
+         !! "a friction velocity of zero (perhaps created by initialising
+         !! the model at rest) will result in identically zero melt ...
+         !! which would be inconsistent with the presence of heat
+         !! available for melting".
+      character(len=32) :: ice_conduction = "insulating"
+         !! Ice-side heat conduction.  `"insulating"` (default) is
+         !! `q_ice = 0`, which the ISOMIP+ protocol PRESCRIBES
+         !! (Asay-Davis et al. (2016) Table 4 p. 2483 sets `kappa_i = 0`
+         !! and p. 2485 instructs participants not to use the H&J99
+         !! advection-diffusion scheme); `t_ice` is then unread.
+         !! `"adv_diff"` is Holland & Jenkins (1999) eq. (31) p. 1794 in
+         !! its melting asymptote, which collapses to
+         !! `q_ice = m_mass*c_i*(T_b - T_ice)` and is zero on freezing.
+         !! `"diffusive"` is RESERVED and refused: it changes the
+         !! melt/freeze BRANCH logic, not just a coefficient.
+      real(wp) :: t_ice = -25.0_wp
+         !! Ice interior temperature (degC), read by
+         !! `ice_conduction="adv_diff"` only — Holland & Jenkins (1999)
+         !! Table 1 p. 1790 uses `T_S ~ -25`.  Under `"insulating"` the
+         !! kernel substitutes exactly zero, so a stale value here cannot
+         !! leak into an insulating run.
+      real(wp) :: s_ice = 0.0_wp
+         !! Ice salinity (g/kg), `>= 0`.  Zero is the ISOMIP+ value
+         !! (Asay-Davis et al. (2016) Table 4 p. 2483).  It must stay
+         !! strictly below the far-field salinity — that inequality is
+         !! what the three-equation root bracketing rests on — and a
+         !! column violating it is COUNTED and given zero melt, not
+         !! guessed at.
+      real(wp) :: far_field_depth = 10.0_wp
+         !! Thickness (m) below the ice base over which the far-field
+         !! `(T, S, u, v)` are thickness-averaged, with a partial last
+         !! layer.  **Metres, deliberately, never "layer nz".**  The melt
+         !! rate is roughly linear in the thermal driving it is handed,
+         !! and how far from the ice that was sampled is the dominant
+         !! resolution artefact in the subject (Gwyther et al. 2020;
+         !! Burchard et al. (2022) Table 2 p. 15 — the all-bulk error
+         !! GROWS under refinement; Yung et al. (2026) p. 2074).  No
+         !! protocol prescribes a value; 10 m is this repository's
+         !! default and it must be held FIXED across any
+         !! vertical-coordinate comparison, or the comparison measures
+         !! the sampling depth instead.
+      character(len=16) :: freshwater = "virtual"
+         !! How the meltwater reaches the ocean.
+         !!
+         !! `"virtual"` (**default ⇒ bit-identical**) — no mass moves.
+         !! The dilution is emulated at FIXED column mass by the exact
+         !! fixed-mass equivalent salt flux `-m*(S_far - s_ice)`
+         !! (derivation in `rdb_ocean_cavity_flux`'s module docstring).
+         !!
+         !! `"mass"` — the meltwater is a REAL Boussinesq VOLUME source
+         !! on the top layer, `dh = m*dt/rho_0`, and the salinity falls
+         !! by dilution on its own.  The virtual salt flux is then NOT
+         !! also applied to the tracer (that would double-count); it is
+         !! RETAINED in the assembled `Q_salt` solely as the surface
+         !! buoyancy forcing KPP/EPBL read for `B_0`, and removed again
+         !! from salinity (and from the pseudo-salt mirror) by the same
+         !! in-stage kernel that adds the volume.  The top layer's heat
+         !! additionally gains the enthalpy of the added water,
+         !! `m*c_w*T_b`.
+         !!
+         !! `"mass"` is refused (fail loud, naming the follow-up)
+         !! together with dynamic wet/dry and with a windowed
+         !! tracer-advection ratio > 1.
+      character(len=32) :: volume_compensation = "none"
+         !! What to do with the volume `freshwater="mass"` adds to a
+         !! CLOSED domain.  Requires `freshwater="mass"`.
+         !!
+         !! `"none"` (default) — nothing; the domain fills up.  Correct
+         !! for a short run and for a domain with an open boundary that
+         !! can pass the volume out.
+         !!
+         !! `"uniform_open_ocean"` — each thermo step the
+         !! domain-integrated melt volume is removed again, spread
+         !! UNIFORMLY (per unit area) over the wet cells the ice does
+         !! NOT cover, each parcel carrying that cell's own T and S so
+         !! no concentration there is changed.  Tracked as a mass, salt
+         !! and heat SINK in all three console budgets.  This is the
+         !! sea-level compensation ISOMIP+ Sect. 3.1.3 allows for the
+         !! closed Ocean3/4 domains; Ocean0-2 have a restoring sponge
+         !! that does not remove volume, so without it their cavity
+         !! fills at metres per year.
+   end type ocean_cavity_melt_config_t
+
    type :: ocean_continuity_config_t
       real(wp) :: h_min = 1.0e-6_wp
          !! Floor used by the PPM positivity limiter (MOM6
@@ -1899,6 +2452,16 @@ module rdb_config
       real(wp) :: coriolis_y_ref = 0.0_wp
          !! Reference y-coordinate (m) at which f = coriolis_f under
          !! the beta-plane: f(y) = coriolis_f + beta*(y - y_ref).
+      real(wp) :: x_origin = 0.0_wp
+         !! Absolute x-coordinate (m) of the domain's WEST edge, for the
+         !! formula bathymetries whose published formula is written in an
+         !! absolute coordinate frame rather than a domain-relative one.
+         !! Read ONLY by `topo_config="isomip_plus"`, whose bedrock
+         !! polynomial is a function of the MISMIP+ `x` that runs from the
+         !! ice divide at 0, while the ISOMIP+ *ocean* box starts at
+         !! `x = 320 km` (Asay-Davis et al. 2016, Table 3 `x0`).  Default
+         !! `0` ⇒ the model's own `x = 0` west edge ⇒ bit-identical for
+         !! every other `topo_config`.
    end type ocean_topo_config_t
    type :: ocean_ic_config_t
       !! Initial-condition overlay + EOS reference state.  Drives
@@ -1912,10 +2475,43 @@ module rdb_config
          !! f-plane; "baroclinic_jet" runs the two-layer reduced-gravity
          !! baroclinic-instability jet (SIM_DETAILS.md §5).
       real(wp) :: alpha_T = 1.7e-4_wp
-         !! Linear-EOS thermal-expansion coefficient (kg/m³ per °C).
+         !! Linear-EOS thermal-expansion coefficient, **DIMENSIONAL**
+         !! (kg/m³ per °C) — see `beta_S` for the conversion from the
+         !! fractional 1/°C coefficient most protocols quote.
+      real(wp) :: beta_S = 7.6e-4_wp
+         !! Linear-EOS haline contraction coefficient, **DIMENSIONAL**
+         !! (kg/m³ per PSU).
+         !!
+         !! UNITS TRAP.  Roundabout's linear EOS is written as the
+         !! DENSITY-ANOMALY form
+         !!
+         !!   rho = rho_0 + beta_S·(S − S_ref) − alpha_T·(T − T_ref)
+         !!
+         !! so `alpha_T`/`beta_S` carry kg/m³ per unit T/S.  Most
+         !! protocols (ISOMIP+, Asay-Davis et al. 2016 among them) quote
+         !! the FRACTIONAL coefficients of the equivalent form
+         !!
+         !!   rho = rho_0·(1 − alpha·(T − T_ref) + beta·(S − S_ref))
+         !!
+         !! with alpha in 1/°C and beta in 1/PSU.  Convert by
+         !! multiplying through by `rho_0`:
+         !!
+         !!   alpha_T = rho_0 · alpha      beta_S = rho_0 · beta
+         !!
+         !! e.g. ISOMIP+ (alpha = 3.733e-5 1/°C, beta = 7.843e-4 1/PSU,
+         !! rho_0 = 1027.51) becomes `alpha_T = 3.8356948e-2`,
+         !! `beta_S = 8.0587609e-1`.  Feeding the fractional numbers
+         !! straight in under-states the density response ~1000×, which
+         !! looks like a plausible but far too weakly stratified run.
+      real(wp) :: T_ref = 10.0_wp
+         !! Linear-EOS reference temperature (°C) — the T at which the
+         !! thermal anomaly term vanishes.
+      real(wp) :: S_ref = 35.0_wp
+         !! Linear-EOS reference salinity (PSU) — the S at which the
+         !! haline anomaly term vanishes.
       real(wp) :: rho_0 = 1035.0_wp
          !! Reference density (kg/m³) for the linear EOS and Boussinesq
-         !! PGF.
+         !! PGF — the density at `(T_ref, S_ref)`.
       real(wp) :: layer_rho_init(MAX_OCEAN_LAYER_RHO_INIT) = -1.0_wp
          !! Per-layer initial density (kg/m³), `k=1` bed → `k=nz`
          !! surface, mirroring MOM6's `COORD_CONFIG="gprime"` IC.  Any
@@ -1991,7 +2587,24 @@ module rdb_config
       !! Design + MOM6 divergences: `local_archive/specs/a2_zinit_spec.md`.
       logical :: enable = .false.
          !! Master switch.  Default `.false.` keeps the analytical IC.
-         !! Requires `RDB_ENABLE_NETCDF=ON` at build time.
+         !! Requires `RDB_ENABLE_NETCDF=ON` at build time (the overlay
+         !! lives in the NetCDF-gated `rdb_ocean_z_init`, including the
+         !! `source = "linear"` path, which opens nothing).
+      character(len=32) :: source = "file"
+         !! Where the T(z)/S(z) profile comes from.
+         !!
+         !! `"file"` (default) reads the pre-regridded NetCDF named by
+         !! `file` and interpolates linearly in depth.
+         !!
+         !! `"linear"` evaluates the ANALYTIC affine profiles
+         !! `T(z) = lin_t_ref + lin_dt_dz*z`, `S(z) = lin_s_ref +
+         !! lin_ds_dz*z` at every layer centre's true geopotential depth
+         !! — no file, no interpolation, defined on ghosts and land too.
+         !! This is the profile an idealised sloping-lid cavity (or any
+         !! ISOMIP+-style case) needs: the `&tracer_nml T_init_surface` /
+         !! `T_init_bottom` family is linear in LAYER INDEX, so under a
+         !! terrain-following coordinate with a tilted lid it tilts the
+         !! isopycnals with the coordinate and the column is NOT at rest.
       character(len=256) :: file = ""
          !! Path to the model-grid T/S NetCDF (dims x/y/z; vars
          !! temp/salt/z_src with the documented name-fallbacks).
@@ -2005,6 +2618,22 @@ module rdb_config
          !! Fallback temperature (°C) written to dry (wet_mask <= 0) columns.
       real(wp) :: land_fill_s = 35.0_wp
          !! Fallback salinity (PSU) written to dry (wet_mask <= 0) columns.
+         !! `source = "file"` only — the analytic path has a value
+         !! everywhere and uses it.
+      real(wp) :: lin_t_ref = 0.0_wp
+         !! `source = "linear"`: temperature (degC) at the `z = 0` datum.
+      real(wp) :: lin_dt_dz = 0.0_wp
+         !! `source = "linear"`: `dT/dz` (degC/m) with **z positive UP**
+         !! — the same convention as `&ocean_ic_nml eady_dT_dz`.  A
+         !! thermally STABLE column has `lin_dt_dz > 0` (warm on top).
+         !! `0` (the default) is a uniform column.
+      real(wp) :: lin_s_ref = 35.0_wp
+         !! `source = "linear"`: salinity (PSU) at the `z = 0` datum.
+      real(wp) :: lin_ds_dz = 0.0_wp
+         !! `source = "linear"`: `dS/dz` (PSU/m) with **z positive UP**.
+         !! Note the polarity is the INVERSE of temperature's: salty
+         !! water belongs at the bed, so a halinely STABLE column has
+         !! `lin_ds_dz < 0`.  `0` (the default) is a uniform column.
    end type ocean_zinit_config_t
    type :: ocean_data_config_t
       !! `&ocean_data_nml`: the shared time-varying NetCDF input reader
@@ -2355,6 +2984,9 @@ module rdb_config
       type(ocean_pgf_config_t)        :: pgf
       type(ocean_eos_config_t)        :: eos
       type(ocean_bdrag_config_t)      :: bdrag
+      type(ocean_tdrag_config_t)      :: tdrag
+         !! Ice-shelf TOP drag (`&ocean_tdrag_nml`).  Default off ⇒
+         !! bit-identical.
       type(ocean_hdiff_config_t)      :: hdiff
          !! Along-coordinate tracer Laplacian (`&ocean_hdiff_nml`).
          !! Default `kappa_h = 0.0` ⇒ bit-identical.
@@ -2376,6 +3008,12 @@ module rdb_config
       type(ocean_ddiff_config_t)      :: ddiff
       type(ocean_tides_config_t)      :: tides
       type(ocean_psurf_config_t)      :: psurf
+      type(ocean_cavity_dyn_config_t) :: cavity_dyn
+         !! Static ice-shelf cavity geometry (`&ocean_cavity_dyn_nml`).
+         !! Default-OFF ⇒ bit-identical.
+      type(ocean_cavity_melt_config_t) :: cavity_melt
+         !! Ice-shelf basal-melt thermodynamics
+         !! (`&ocean_cavity_melt_nml`).  Default-OFF ⇒ bit-identical.
       type(ocean_continuity_config_t)  :: continuity
       type(ocean_isopycnal_config_t)   :: isopycnal
          !! Lagrangian grounding-stability controls (`&ocean_isopycnal_nml`).
@@ -2585,10 +3223,13 @@ module rdb_config
          !! together with `S_init_bottom`.
       real(wp) :: S_init_bottom = 0.0_wp
          !! Initial salinity at the bed (k=1, PSU).
-      real(wp) :: S_ref = 0.0_wp
-         !! Reference salinity in EOS (PSU); density anomaly = beta_S*(S - S_ref)
-      real(wp) :: beta_S = 0.78_wp
-         !! Haline contraction coefficient (kg/m^3 per PSU)
+      real(wp) :: S_ref = LEGACY_TRACER_S_REF
+         !! RETIRED coastal-legacy EOS reference salinity (PSU).  The live
+         !! ocean-path spelling is `&ocean_ic_nml S_ref`; moving this one
+         !! off its default is a fail-loud configure error.
+      real(wp) :: beta_S = LEGACY_TRACER_BETA_S
+         !! RETIRED coastal-legacy haline contraction coefficient
+         !! (kg/m^3 per PSU).  Live spelling: `&ocean_ic_nml beta_S`.
       real(wp) :: S_min = 0.0_wp
          !! Lower physical bound for salinity (PSU)
       real(wp) :: S_max = 40.0_wp
@@ -2608,11 +3249,13 @@ module rdb_config
          !! together with `T_init_bottom`.
       real(wp) :: T_init_bottom = 0.0_wp
          !! Initial temperature at the bed (k=1, degC).
-      real(wp) :: T_ref = 15.0_wp
-         !! Reference temperature in EOS (degC); density anomaly = -alpha_T*(T - T_ref)
-      real(wp) :: alpha_T = 0.17_wp
-         !! Thermal expansion coefficient (kg/m^3 per degC); ~0.17 near 15 degC.
-         !! Set to 0 to decouple temperature from dynamics (pure passive tracer).
+      real(wp) :: T_ref = LEGACY_TRACER_T_REF
+         !! RETIRED coastal-legacy EOS reference temperature (degC).  The
+         !! live ocean-path spelling is `&ocean_ic_nml T_ref`; moving this
+         !! one off its default is a fail-loud configure error.
+      real(wp) :: alpha_T = LEGACY_TRACER_ALPHA_T
+         !! RETIRED coastal-legacy thermal expansion coefficient
+         !! (kg/m^3 per degC).  Live spelling: `&ocean_ic_nml alpha_T`.
       real(wp) :: T_min = -2.0_wp
          !! Lower physical bound for temperature (degC); seawater freezing
       real(wp) :: T_max = 40.0_wp
@@ -2714,6 +3357,33 @@ module rdb_config
          !! are caller obligations and neither was ever checked; a violation
          !! silently CREATES or DELETES tracer mass.  Diagnostic knob —
          !! .false. (default) = the check never runs = bit-identical.
+      logical :: zfixed_closed_faces = .false.
+         !! **Partial-step z-level face closure** under
+         !! `vcoord_type = "z_fixed"` (Adcroft, Hill & Marshall 1997;
+         !! Losch 2008 for the ice-shelf cavity).  A layer whose nominal
+         !! geopotential range lies inside the bed — or inside the ice
+         !! draft — carries an inert FILLER of thickness `zstar_h_min`
+         !! (`<= H_VANISHED`).  A velocity face where layer `k` is a
+         !! filler on EITHER side is not a thin passage, it is a WALL for
+         !! that layer: no normal velocity, no mass / tracer flux, and
+         !! FREE-SLIP on the tangential component.  Leaving it open makes
+         !! the FV pressure gradient integrate across a staircase step of
+         !! height `Δz_step`, which drives
+         !! `|ρ′|·g·Δz_step/(ρ₀·dx)` out of a resting stratified state —
+         !! independent of the filler thickness, so no `h`-gate reaches
+         !! it.
+         !!
+         !! ON builds a STATIC 0/1 per-layer face mask
+         !! (`ocean_metrics_t%open_u` / `open_v`) once at configure from
+         !! the `z_fixed` target at `η = 0`, and composes it
+         !! multiplicatively with the land metrics and the porous-barrier
+         !! open-area fraction:
+         !! `dy_eff(i,j,k) = dy_cu(i,j)·por_face_area_u(i,j,k)·open_u(i,j,k)`.
+         !!
+         !! Default `.false.` ⇒ the mask arrays stay at their `(1,1,1)`
+         !! placeholder, no kernel branch is taken, byte-identical.
+         !! Refused on any coordinate but `z_fixed`, and without a
+         !! resolved `z_fixed_h_ref` (there would be no fillers to close).
 
       ! Logging parameters
       character(len=16) :: log_level = "info"
@@ -3196,7 +3866,8 @@ contains
       use rdb_ocean_horizontal_viscosity, only: aniso_mode_is_implemented
       use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent
       use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z, &
-                               H_VANISHED
+                               VCOORD_ZSIGMA, VCOORD_LAGRANGIAN, VCOORD_ZSTAR_SIGMA, &
+                               VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, H_VANISHED
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                           OBC_INVALID
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
@@ -3211,6 +3882,18 @@ contains
       use rdb_ocean_surface_flux, only: sw_source_is_implemented
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 bkgnd_henyey_conflicts_profile
+      use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID
+      use rdb_ocean_top_drag, only: parse_tdrag_variant, tdrag_variant_is_implemented, &
+                                    TDRAG_LINEAR, TDRAG_QUADRATIC
+      use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
+                                       CAVITY_LAW_INVALID, CAVITY_LAW_CONST_GAMMA, &
+                                       CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25, &
+                                       CAVITY_ICE_INVALID, CAVITY_ICE_INSULATING, &
+                                       CAVITY_ICE_ADV_DIFF, &
+                                       parse_cavity_freshwater, parse_cavity_volume_comp, &
+                                       CAVITY_FW_INVALID, CAVITY_FW_VIRTUAL, CAVITY_FW_MASS, &
+                                       CAVITY_VC_INVALID, CAVITY_VC_NONE, CAVITY_VC_UNIFORM_OPEN
+      use rdb_ocean_cavity, only: parse_cavity_draft_sign, CAVITY_SIGN_INVALID
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
          !! Non-zero on any cross-knob semantic validation failure when
@@ -3397,6 +4080,72 @@ contains
          has_error = .true.
       end if
 
+      ! Retired coastal-legacy `&tracer_nml` linear-EOS quartet.  These
+      ! four keys reach `tracer_t%eos_coeff`/`eos_ref` and nothing else;
+      ! the C-grid ocean path's linear EOS reads `&ocean_ic_nml` alone.
+      ! A knob that validates and silently does nothing is the bug, so
+      ! moving any of them off its historical default is fatal and names
+      ! the live replacement rather than being quietly ignored.
+      if (cfg%alpha_T /= LEGACY_TRACER_ALPHA_T) then
+         call logger%error("&tracer_nml alpha_T is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml alpha_T "// &
+                           "(kg/m^3 per degC) instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%beta_S /= LEGACY_TRACER_BETA_S) then
+         call logger%error("&tracer_nml beta_S is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_coeff, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml beta_S "// &
+                           "(kg/m^3 per PSU) instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%T_ref /= LEGACY_TRACER_T_REF) then
+         call logger%error("&tracer_nml T_ref is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml T_ref (degC) "// &
+                           "instead, or delete the key.")
+         has_error = .true.
+      end if
+      if (cfg%S_ref /= LEGACY_TRACER_S_REF) then
+         call logger%error("&tracer_nml S_ref is RETIRED on the ocean path: it only ever "// &
+                           "reached tracer_t%eos_ref, which no ocean kernel reads, so "// &
+                           "setting it changed nothing. Use &ocean_ic_nml S_ref (PSU) "// &
+                           "instead, or delete the key.")
+         has_error = .true.
+      end if
+
+      ! Linear-EOS stratified salinity IC: both ends must be set (the
+      ! seed gates on `/= 0` for BOTH, mirroring T_init_surface/bottom),
+      ! so exactly one non-zero is a silently-uniform column — the same
+      ! class of bug the retired knobs above were.
+      if ((cfg%S_init_surface /= 0.0_wp) .neqv. (cfg%S_init_bottom /= 0.0_wp)) then
+         call logger%error("&tracer_nml S_init_surface / S_init_bottom must BOTH be "// &
+                           "non-zero to build the linear S(z) IC (they gate together, "// &
+                           "exactly as T_init_surface/T_init_bottom do); one alone is "// &
+                           "ignored and the column stays uniform at initial_salinity.")
+         has_error = .true.
+      end if
+
+      ! Freezing-point (liquidus) coefficient set.  Belt-and-braces on top
+      ! of the `nml_enum allowed=` list, in the style of the
+      ! `conc_config` check above — and NOT optional: `parse_tfreeze_set`
+      ! deliberately has no default fallback, so a string that reaches
+      ! `eos_apply_tfreeze_set` unrecognised would silently leave the
+      ! sea-ice set in place.  At S = 34.5 the two shipped sets differ by
+      ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
+      ! basal melt rate — a mistyped liquidus must stop the run.
+      if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) == TFREEZE_SET_INVALID) then
+         call logger%error("&ocean_eos_nml tfreeze_set = '"// &
+                           trim(cfg%ocean%eos%tfreeze_set)// &
+                           "' is not recognised (allowed: seaice, isomip). "// &
+                           "'seaice' is the SIS2/MOM6 sea-ice liquidus "// &
+                           "(-0.054*S - 7.53e-8*p); 'isomip' is the ISOMIP+ "// &
+                           "ice-shelf-cavity set (-0.0573*S + 0.0832 - 7.53e-8*p, "// &
+                           "Asay-Davis et al. 2016 Table 4).")
+         has_error = .true.
+      end if
+
       ! Ocean diag manager
       if (trim(cfg%sim_type) == "ocean") then
          if (trim(cfg%ocean%diag%vgrid) /= "layer" .and. &
@@ -3454,10 +4203,11 @@ contains
              trim(cfg%ocean%topo%topo_config) /= "neverworld2" .and. &
              trim(cfg%ocean%topo%topo_config) /= "island" .and. &
              trim(cfg%ocean%topo%topo_config) /= "double_drake" .and. &
+             trim(cfg%ocean%topo%topo_config) /= "isomip_plus" .and. &
              trim(cfg%ocean%topo%topo_config) /= "file") then
             call logger%error("Invalid topo_config = '"//trim(cfg%ocean%topo%topo_config)// &
                               "': must be 'flat', 'spoon', 'seamount', 'neverworld2', "// &
-                              "'island', 'double_drake', or 'file'")
+                              "'island', 'double_drake', 'isomip_plus', or 'file'")
             has_error = .true.
          end if
          if (trim(cfg%ocean%ic%ic_config) /= "" .and. &
@@ -3515,6 +4265,45 @@ contains
             has_error = .true.
          end if
 
+         ! `VCOORD_ZSIGMA` is NOT a working coordinate on the ocean path.
+         ! Its deep branch reads `z_ref_global` as a table of absolute
+         ! reference depths in METRES
+         ! (`z_top_k = min(z_ref_global(nz-k), column_total)`,
+         ! `rdb_ocean_vcoord :: ocean_vcoord_compute_target_h_impl`), but the
+         ! ONLY writer of that array anywhere in `src/` is the DIMENSIONLESS
+         ! `z_ref_global(k) = k/nz` init in `ocean_vcoord_init` — nothing on
+         ! the namelist path or the Python path ever replaces it with metres.
+         ! So every z-level interval is `1/nz` metres, every layer collapses,
+         ! and the whole column is dumped into `target_h(:,:,1)` (the BED
+         ! layer) by the deficit line.  `Sum target_h = H + eta` still holds,
+         ! which is exactly why no conservation test ever caught it; the
+         ! placement is measured interface-by-interface in
+         ! `test_ocean_vcoord_interface_depths ::
+         ! documents_zsigma_dimensionless_zref_collapse` (nine 0.1 m layers
+         ! in the top 90 cm of a 1000 m column).
+         !
+         ! Refuse it rather than silently running a broken coordinate.  No
+         ! shipped namelist selects it.  Follow-up: fill `z_ref_global` in
+         ! metres (the family is the natural seat for a sigma-near-the-top /
+         ! z-below HYBRID), then delete this refusal and the `documents_*`
+         ! test with it.  `VCOORD_ZSTAR_SIGMA` consumes the same table
+         ! FRACTIONALLY (rescaled by `z_ref_global(nz)`) so it is unaffected
+         ! by the units — but note that with a uniform table its deep branch
+         ! is numerically indistinguishable from SIGMA.
+         if (parse_vcoord_type(cfg%vcoord_type, default_code=VCOORD_EULERIAN_Z) &
+             == VCOORD_ZSIGMA) then
+            call logger%error("&vcoord_nml vcoord_type = 'zsigma' is refused on the "// &
+                              "ocean path: its deep branch reads `z_ref_global` as "// &
+                              "absolute depths in METRES, but the only writer of that "// &
+                              "table is the dimensionless `k/nz` init, so every "// &
+                              "z-level interval is 1/nz metres and the whole column "// &
+                              "collapses into the bed layer (the column sum is still "// &
+                              "exact, which is why it looked healthy).  Use 'sigma', "// &
+                              "'zstar', 'zstar_sigma' or 'zstar_full'; ZSIGMA returns "// &
+                              "when `z_ref_global` is filled in metres.")
+            has_error = .true.
+         end if
+
          ! `&vcoord_nml zstar_h_min` carries TWO different contracts, picked
          ! by the coordinate family rather than by the value (see
          ! `rdb_vcoord :: vcoord_h_min_role`).  On the GEOMETRIC families
@@ -3529,14 +4318,26 @@ contains
          ! ghost T/S, a PGF column entry, a remap-drain concentration, a vdiff
          ! interface) while the coordinate still treats them as throwaway.
          !
-         ! WARN, do not abort, on that one: the repo's own Python worked
-         ! example (`python/tests/test_worked_example.py`,
-         ! `ZStarFull(h_min=1.0e-3)`) is in exactly this band today, so a hard
-         ! refusal would stop a configuration that runs.  The silence was the
-         ! defect; promoting this to `has_error` is a deliberate,
-         ! answer-changing follow-up once that example is corrected.  A
-         ! non-positive floor IS refused — nothing in the tree sets one and it
-         ! defeats the knob's single documented purpose.
+         ! This was a WARNING until the rigid-top work made it blocking.  The
+         ! reason it is now an ERROR: a coordinate that vanishes layers
+         ! against the TOP of the column (an ice-shelf cavity) puts its
+         ! fillers where the surface fluxes, the pressure gradient, the melt
+         ! sampler and the tracer budgets all read — so a filler that is not
+         ! skipped is not a cosmetic slip, it is a conservation hole.  The
+         ! only configuration in the tree that sat in the band was the repo's
+         ! own Python worked example (`python/tests/test_worked_example.py`,
+         ! `ZStarFull(h_min=1.0e-3)`), corrected in the same change.
+         !
+         ! NOTE the boundary this must NOT move: five shipped namelists set
+         ! `zstar_h_min = 1.5e-4`, H_VANISHED EXACTLY, which is legal —
+         ! `vcoord_h_min_is_coherent` is a strict `>` and every downstream
+         ! vanish test is a strict `> H_VANISHED`, so a layer on the marker
+         ! reads as vanished.  Relaxing either to `>=` would refuse the
+         ! canonical double-gyre reference; `test_ocean_vcoord_hygiene ::
+         ! h_min_on_the_marker_is_accepted` guards that.
+         !
+         ! A non-positive floor was already refused and still is — it defeats
+         ! the knob's single documented purpose.
          block
             integer :: hmin_vcoord_code
             hmin_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
@@ -3547,22 +4348,22 @@ contains
                                     to_string(cfg%zstar_h_min)//" must be > 0: it exists "// &
                                     "so a vanishing layer's target thickness is never "// &
                                     "exactly zero (kernels that divide by h_layer)")
-                  has_error = .true.
                else
-                  call logger%warning("&vcoord_nml zstar_h_min = "// &
-                                      to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
-                                      to_string(H_VANISHED)//" m under vcoord_type = '"// &
-                                      trim(cfg%vcoord_type)//"': that family uses the knob "// &
-                                      "as an anti-zero floor for BELOW-BED filler layers, "// &
-                                      "which are meant to stay vanished — above "// &
-                                      "H_VANISHED they become dynamically live "// &
-                                      "(EOS/PGF/remap-drain/vdiff) while the coordinate "// &
-                                      "still treats them as throwaway.  For a genuinely "// &
-                                      "live minimum layer thickness use "// &
-                                      "&ocean_isopycnal_nml angstrom_h (the D4 floor "// &
-                                      "knob); the rho/hycom regrid has its own "// &
-                                      "keep-alive floor")
+                  call logger%error("&vcoord_nml zstar_h_min = "// &
+                                    to_string(cfg%zstar_h_min)//" m exceeds H_VANISHED = "// &
+                                    to_string(H_VANISHED)//" m under vcoord_type = '"// &
+                                    trim(cfg%vcoord_type)//"': that family uses the knob "// &
+                                    "as an anti-zero floor for filler layers that are "// &
+                                    "MEANT to stay vanished — above H_VANISHED they "// &
+                                    "become dynamically live (EOS/PGF/remap-drain/vdiff) "// &
+                                    "while the coordinate still treats them as "// &
+                                    "throwaway.  Use a value <= "// &
+                                    to_string(H_VANISHED)//"; for a genuinely live "// &
+                                    "minimum layer thickness use &ocean_isopycnal_nml "// &
+                                    "angstrom_h (the D4 floor knob); the rho/hycom "// &
+                                    "regrid has its own keep-alive floor")
                end if
+               has_error = .true.
             end if
             ! NOTE the boundary, deliberately NOT warned about at runtime:
             ! the five shipped namelists set `zstar_h_min = 1.5e-4`, which is
@@ -3891,6 +4692,41 @@ contains
                            "split-apply path (ocean_bdrag implicit) for HBBL")
          has_error = .true.
       end if
+      ! `implicit_top_drag` is the `k = nz` twin of the rule above, plus
+      ! one of its own: the surface row is the row the WIND stress owns
+      ! as a Neumann RHS, so the fold both adds a diagonal term and
+      ! masks that RHS off on the faces the ice covers.  That is only
+      ! meaningful with a top drag configured.
+      if (cfg%ocean%vdiff%implicit_top_drag) then
+         if (.not. cfg%ocean%tdrag%enable) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag=.true. requires "// &
+                              "&ocean_tdrag_nml enable=.true.  The fold consumes the "// &
+                              "top-drag slot's lambda_top_u/v and its face cover "// &
+                              "masks; with the slot disabled those are placeholder "// &
+                              "arrays and the knob would silently do nothing except "// &
+                              "look like a top drag was configured.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tdrag%implicit) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag is mutually "// &
+                              "exclusive with &ocean_tdrag_nml implicit: both damp "// &
+                              "the top layer, so running both is a DOUBLE COUNT, not "// &
+                              "a stronger drag.  Pick one — the vdiff fold if the "// &
+                              "column also has real vertical viscosity to couple "// &
+                              "against, the in-kernel backward-Euler form otherwise.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tdrag%htbl > 0.0_wp) then
+            call logger%error("&ocean_vdiff_nml implicit_top_drag does not support "// &
+                              "the HTBL-distributed top drag (&ocean_tdrag_nml htbl "// &
+                              "> 0): the fold is a SINGLE k = nz Rayleigh rate on the "// &
+                              "diagonal and cannot represent a band spread over "// &
+                              "several layers (the mirror of the implicit_drag/HBBL "// &
+                              "restriction).  Use &ocean_tdrag_nml implicit for a "// &
+                              "distributed top drag.")
+            has_error = .true.
+         end if
+      end if
       ! `bbl_glue` (MOM6 bottomdraglaw coupling parity, PGF_BUG.md §9)
       ! needs the harmonic-z bookkeeping that only the hvel_mom6 path
       ! builds, replaces the implicit-drag bed fold (so that fold must be
@@ -4131,15 +4967,25 @@ contains
          ! consumer selected the knob legitimately does nothing, and the
          ! house rule (cf. &ocean_tidal_mixing_nml e_uniform) is to SAY so
          ! rather than let a user believe a cavity load reached the EOS.
-         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright") then
+         ! E4 adds a THIRD ported consumer: `buoyancy_coeffs="eos"` seeds
+         ! the KPP B_0 coefficients at `p_top` and the double-diffusion
+         ! interface stack from it, so the knob is no longer inert when
+         ! that is selected.
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_wright" .and. &
+             .not. cfg%ocean%epbl%enable .and. &
+             trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) /= "eos") then
             call logger%warning("&ocean_psurf_nml in_eos=.true. is INERT for "// &
                                 "&ocean_pgf_nml form='"// &
-                                trim(adjustl(cfg%ocean%pgf%form))//"': the only "// &
-                                "ported in-situ EOS pressure is the FV_WRIGHT "// &
-                                "Picard column sweep. The other PGF forms read "// &
-                                "the POTENTIAL density ms%rho_layer, which is "// &
-                                "referenced to the uniform &ocean_eos_nml p_ref "// &
-                                "BY DESIGN and is not offset by the load.")
+                                trim(adjustl(cfg%ocean%pgf%form))//"' with no "// &
+                                "other ported in-situ consumer: the ported ones "// &
+                                "are the FV_WRIGHT Picard column sweep, the "// &
+                                "EPBL column stack (&ocean_epbl_nml) and the "// &
+                                "EOS-derived buoyancy coefficients "// &
+                                "(&ocean_vmix_nml buoyancy_coeffs='eos'). The "// &
+                                "other PGF forms read the POTENTIAL density "// &
+                                "ms%rho_layer, which is referenced to the "// &
+                                "uniform &ocean_eos_nml p_ref BY DESIGN and is "// &
+                                "not offset by the load.")
          end if
          if (.not. cfg%ocean%psurf%enable) then
             call logger%error("&ocean_psurf_nml in_eos=.true. requires "// &
@@ -4147,14 +4993,12 @@ contains
                               "assembled sf%p_surf the seam owns)")
             has_error = .true.
          end if
-         if (cfg%ocean%epbl%enable) then
-            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
-                              "with &ocean_epbl_nml enable=.true. — EPBL builds "// &
-                              "its own column pressure from 0 Pa at the surface "// &
-                              "(epbl_column_kernel `pres`/`p_mid`), which also "// &
-                              "weights its PE ledger; not yet ported to p_top")
-            has_error = .true.
-         end if
+         ! EPBL was refused here until Phase 4b.  It is PORTED now:
+         ! `epbl_column_kernel` seeds its stack at `ms%p_top(i,j)` when
+         ! `in_eos`, which moves BOTH consumers of that stack (the
+         ! in-situ `eos_specvol_derivs` argument and the PE weight
+         ! `dmass*p_mid*dsv`) together.  Gate:
+         ! `test_ocean_bl_under_ice` (`epbl_p_top_*`).
          if (cfg%ocean%kshear%enable) then
             call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
                               "with &ocean_kappa_shear_nml enable=.true. — "// &
@@ -4199,6 +5043,1032 @@ contains
                               "exactly what an ice-shelf load changes; not yet ported")
             has_error = .true.
          end if
+      end if
+      ! ---- Z-level T/S initial-condition overlay (`&ocean_zinit_nml`) ----
+      if (cfg%ocean%zinit%enable) then
+         select case (trim(adjustl(cfg%ocean%zinit%source)))
+         case ("file")
+            if (len_trim(cfg%ocean%zinit%file) == 0) then
+               call logger%error("&ocean_zinit_nml enable=.true. with "// &
+                                 "source='file' requires a non-blank file= path.")
+               has_error = .true.
+            end if
+         case ("linear")
+            ! An analytic profile plus a file path is ambiguous: the file
+            ! would be silently ignored.  Say so rather than pick one.
+            if (len_trim(cfg%ocean%zinit%file) > 0) then
+               call logger%error("&ocean_zinit_nml source='linear' takes the "// &
+                                 "analytic lin_* profile and opens NOTHING, so the "// &
+                                 "file='"//trim(adjustl(cfg%ocean%zinit%file))// &
+                                 "' you also set would be silently ignored.  Pick "// &
+                                 "one: drop file=, or set source='file'.")
+               has_error = .true.
+            end if
+         case default
+            call logger%error("&ocean_zinit_nml source='"// &
+                              trim(adjustl(cfg%ocean%zinit%source))// &
+                              "' is not a known profile source; expected 'file' "// &
+                              "(pre-regridded NetCDF) or 'linear' (analytic "// &
+                              "affine T(z)/S(z)).")
+            has_error = .true.
+         end select
+      end if
+      ! ---- Top-of-column load in the PGF surface boundary condition (P5.0) ----
+      ! `pa(nz+1) = rho_ref*g*eta_geo + ms%p_top`.  Only the FV_MOM6 family
+      ! builds a `pa` stack at all — `mont` hard-zeroes `M(nz)` and
+      ! `fv_lite`/`fv_wright` seed `p_edge(nz+1) = 0` — so there is
+      ! literally no boundary condition to inject anywhere else.  Refuse
+      ! rather than accept a knob that would silently do nothing on a form
+      ! the user believes is carrying an ice load.
+      if (cfg%ocean%pgf%p_top_in_bc) then
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
+            call logger%error("&ocean_pgf_nml p_top_in_bc=.true. requires "// &
+                              "form='fv_mom6' (got '"// &
+                              trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
+                              "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
+                              "boundary condition the load is injected into; mont "// &
+                              "hard-zeroes M(nz) and fv_lite/fv_wright seed "// &
+                              "p_edge(nz+1)=0.")
+            has_error = .true.
+         end if
+         ! Inert-configuration warning, not a refusal (the house rule, cf.
+         ! &ocean_psurf_nml in_eos and &ocean_tidal_mixing_nml e_uniform).
+         ! `ms%p_top = metrics%p_ice_ref + sf%p_surf` has TWO producers,
+         ! and the warning must name both or it is a lie: the
+         ! &ocean_psurf_nml seam (the atmospheric half, `sf%p_surf`) and
+         ! the &ocean_cavity_dyn_nml ice-shelf load (the static half,
+         ! `p_ice_ref = rho_ref*g*z_draft`, assembled in
+         ! `configure_ocean_cavity`).  Under a cavity `p_top` carries the
+         ! ice load and `p_top_in_bc` is not merely live — it is REQUIRED
+         ! for a varying draft, refused above and again at configure.  The
+         ! warning fires only when NEITHER producer is on, which is the
+         ! one case in which `p_top` really is the zero array it was
+         ! allocated as.
+         if (.not. p_top_has_producer(cfg)) then
+            call logger%warning("&ocean_pgf_nml p_top_in_bc=.true. is INERT "// &
+                                "without a producer for ms%p_top: enable "// &
+                                "&ocean_psurf_nml (the atmospheric surface-pressure "// &
+                                "seam) or &ocean_cavity_dyn_nml (the static "// &
+                                "ice-shelf load), else p_top is the zero array and "// &
+                                "pa(nz+1) is unchanged.")
+         end if
+      end if
+      ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
+      ! The draft is absorbed into the barotropic DATUM (bt_H_ref =
+      ! b - z_draft), so every consumer of the water-column thickness
+      ! D = bt_H_ref + bt_eta is correct with no cavity branch of its own.
+      ! What that buys is paid for by a narrow envelope, and EVERY
+      ! restriction below fails loud naming the knob and the reason: a
+      ! cavity that silently runs outside it looks plausible and is wrong
+      ! (a coordinate anchored at z = 0 under 500 m of ice, a second
+      ! un-reconciled surface load, a wide-halo BT clone with no draft).
+      if (cfg%ocean%cavity_dyn%enable) then
+         if (trim(cfg%sim_type) /= "ocean") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "sim_type='ocean'")
+            has_error = .true.
+         end if
+         ! --- geometry source envelope ---
+         select case (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)))
+         case ("none", "flat", "linear")
+            continue
+         case ("file")
+            ! Ships single-rank, through the PR-14 static-2-D reader
+            ! (`ocean_data_input_load_static_2d`), which DOES apply the
+            ! global offset — but the cavity as a whole is single-rank
+            ! fenced below, and the loader re-asserts it.
+            if (len_trim(cfg%ocean%cavity_dyn%draft_file) == 0) then
+               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                                 "draft_file")
+               has_error = .true.
+            end if
+            if (len_trim(cfg%ocean%cavity_dyn%draft_var) == 0) then
+               call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
+                                 "draft_var (the 2-D variable name; ISOMIP+ ships "// &
+                                 "'iceDraft')")
+               has_error = .true.
+            end if
+            if (parse_cavity_draft_sign(cfg%ocean%cavity_dyn%draft_sign) == &
+                CAVITY_SIGN_INVALID) then
+               call logger%error("&ocean_cavity_dyn_nml draft_sign='"// &
+                                 trim(adjustl(cfg%ocean%cavity_dyn%draft_sign))// &
+                                 "' is not recognised (depth|positive_down|"// &
+                                 "elevation|positive_up).  There is no default that "// &
+                                 "guesses from the data: the ISOMIP+ file carries an "// &
+                                 "ELEVATION (z_d <= 0) and a depth file carries "// &
+                                 "z_draft >= 0, and the two differ by the whole load.")
+               has_error = .true.
+            end if
+         case default
+            call logger%error("&ocean_cavity_dyn_nml draft_config='"// &
+                              trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                              "' is not recognised (none|flat|linear|file)")
+            has_error = .true.
+         end select
+         select case (trim(adjustl(cfg%ocean%cavity_dyn%draft_source)))
+         case ("draft", "thickness")
+            continue
+         case ("in_situ")
+            call logger%error("&ocean_cavity_dyn_nml draft_source='in_situ' (true "// &
+                              "isostasy, p_ice = g*int(rho)) is not implemented: it "// &
+                              "needs a per-column root find and does NOT admit exact "// &
+                              "discrete rest in the split solver.  Use 'draft' "// &
+                              "(the Boussinesq-isostatic flotation load ISOMIP+ "// &
+                              "prescribes) or 'thickness'.")
+            has_error = .true.
+         case default
+            call logger%error("&ocean_cavity_dyn_nml draft_source='"// &
+                              trim(adjustl(cfg%ocean%cavity_dyn%draft_source))// &
+                              "' is not recognised (draft|thickness|in_situ)")
+            has_error = .true.
+         end select
+         ! `"linear"` measures its profile from `draft_x0`, so an
+         ! unbounded (sentinel) anchor would make `draft_depth` meaningless
+         ! and the whole shelf depth an artefact of 1e30*slope.
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "linear" .and. &
+             abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_config='linear' requires "// &
+                              "a finite draft_x0: it is the ANCHOR of the profile "// &
+                              "(draft_depth is the draft AT draft_x0), not just the "// &
+                              "western edge of the box.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%draft_depth < 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_depth must be >= 0 "// &
+                              "(it is a DEPTH below z = 0, positive down)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%h_min_cavity <= 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml h_min_cavity must be > 0 "// &
+                              "(the grounding cutoff; 0 would admit a zero-thickness "// &
+                              "water column under the ice)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%grounded_max_frac <= 0.0_wp .or. &
+             cfg%ocean%cavity_dyn%grounded_max_frac > 1.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml grounded_max_frac must be in "// &
+                              "(0, 1] (the fraction of interior columns allowed to "// &
+                              "ground)")
+            has_error = .true.
+         end if
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_source)) == "thickness" .and. &
+             cfg%ocean%cavity_dyn%rho_ice <= 0.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml draft_source='thickness' "// &
+                              "requires rho_ice > 0")
+            has_error = .true.
+         end if
+         ! --- the one atmospheric-forcing path the cover mask does NOT
+         !     reach (P2c) ---
+         ! Every static forcing field is masked: the wind pair and the
+         ! scalar q_heat/q_salt once at configure, the component bands
+         ! every thermo step in the assembler.  The FILE-DRIVEN override
+         ! is the exception: `ocean_data_forcing_apply` rewrites `tau_x`/
+         ! `tau_y` (and, with `heat_to_component=.false.`, `Q_heat`
+         ! itself) from the next time bracket with no access to
+         ! `metrics%cover_frac` — it is handed `ss`, `sf`, `grid` and
+         ! `bc`, and nothing else.  Re-masking per bracket means
+         ! threading the metrics slot through the reader, which is a
+         ! separate change.  Refused rather than half-wired: a cavity run
+         ! whose wind is silently restored to its unmasked file value on
+         ! the first bracket read looks entirely plausible and is wrong.
+         if (cfg%ocean%dataovr%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_dataovr_nml enable=.true.  The "// &
+                              "ice-cover mask on the atmospheric forcing is applied "// &
+                              "to the wind pair at configure and to the surface-flux "// &
+                              "components in the assembler; the data-override reader "// &
+                              "rewrites tau_x/tau_y (and Q_heat, unless "// &
+                              "heat_to_component=.true.) per time bracket without "// &
+                              "the cover, which would restore the unmasked "// &
+                              "atmosphere under the shelf.  Follow-up: thread "// &
+                              "cover_frac through ocean_data_forcing_apply and the "// &
+                              "ocean_seam_refresh_surface_stress seam.")
+            has_error = .true.
+         end if
+         ! --- pressure-gradient envelope ---
+         if (trim(adjustl(cfg%ocean%pgf%form)) /= "fv_mom6") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "&ocean_pgf_nml form='fv_mom6' (got '"// &
+                              trim(adjustl(cfg%ocean%pgf%form))//"'). Only the "// &
+                              "FV_MOM6 family builds the pa(nz+1) pressure-stack "// &
+                              "boundary condition the ice load is injected into; "// &
+                              "mont hard-zeroes M(nz) and fv_lite/fv_wright seed "// &
+                              "p_edge(nz+1)=0.")
+            has_error = .true.
+         end if
+         ! P5.2 — the load must have a consumer once it has a GRADIENT.
+         ! `p_top_in_bc` is the only route by which the isostatic load
+         ! rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) surface BC;
+         ! without it a varying draft leaves the pressure stack ~5e6 Pa
+         ! off its anomaly scale, the unsplit driver feels a raw
+         ! g*grad(z_draft), and `correction_h_weighted` turns the
+         ! uncancelled depth-uniform force into a real per-layer shear.
+         ! REFUSED rather than auto-enabled: an answer-changing knob that
+         ! a second namelist group switches on behind the user's back is
+         ! exactly the class of silent coupling this file exists to
+         ! prevent.  A UNIFORM draft is exempt — a load with no gradient
+         ! is bit-identically inert in the top BC (the theorem in
+         ! `compute_fv_mom6_impl`'s docstring) — which is what keeps the
+         ! flat-lid datum-equivalence gate expressible.  `draft_config`
+         ! "none" is uniform (identically zero); "flat" is uniform only
+         ! when no box bound clips it, else the calving front is a step.
+         if (.not. cfg%ocean%pgf%p_top_in_bc) then
+            block
+               character(len=:), allocatable :: dcfg
+               dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
+               if (.not. cavity_draft_is_uniform(cfg)) then
+                  call logger%error("&ocean_cavity_dyn_nml enable=.true. with "// &
+                                    "draft_config='"//dcfg//"' requires "// &
+                                    "&ocean_pgf_nml p_top_in_bc=.true.  That knob is "// &
+                                    "the ONLY route by which the isostatic load "// &
+                                    "rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) "// &
+                                    "surface boundary condition; without it a draft "// &
+                                    "that VARIES leaves the pressure stack ~5e6 Pa "// &
+                                    "off its anomaly scale and the column out of "// &
+                                    "hydrostatic balance.  Only a draft that is "// &
+                                    "uniform over the whole domain is exempt (a load "// &
+                                    "with no gradient is provably inert there).")
+                  has_error = .true.
+               end if
+            end block
+         end if
+         if (cfg%ocean%pgf%gfs_scale /= 1.0_wp) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
+                              "&ocean_pgf_nml gfs_scale=1: the datum "// &
+                              "(bt_H_ref, which the barotropic substep feels "// &
+                              "through g_bt = gfs_scale*GRAVITY) and the load "// &
+                              "(rho_ref*GRAVITY*z_draft, which the PGF feels "// &
+                              "through GRAVITY) would then sit on two different "// &
+                              "gravities and drift apart.")
+            has_error = .true.
+         end if
+         ! --- vertical-coordinate envelope ---
+         ! sigma (and zstar-lite, which shares its ocean branch) rescales
+         ! the live column and so follows the draft for free; `z_fixed`
+         ! is the FIRST family taught about the ice base explicitly
+         ! (P6.2) — it reads `vcoord%z_top`, keeps its nominal interface
+         ! depths GEOPOTENTIAL, vanishes the layers that outcrop into the
+         ! ice to the inert filler and cuts the first live layer at the
+         ! draft (Yung, Hallberg, Adcroft & Morrison 2026, JAMES 18,
+         ! e2025MS005645, Fig. 1b).  Its own envelope is fenced below.
+         !
+         ! The refusal used to be a two-value whitelist whose message
+         ! enumerated SIX families and named neither `lagrangian` nor
+         ! `zstar_sigma` — both of which it refused.  A refusal that does
+         ! not name what it refused, or gives a reason that is not the
+         ! real one, sends the operator to fix the wrong thing.  So the
+         ! accept test stays a whitelist (nothing else has been validated
+         ! under a shelf) but the message now carries the offending
+         ! family's OWN reason, and the reasons are not all "anchors at
+         ! z = 0": three of the seven refused families are geometrically
+         ! datum-safe and are refused for want of validation, which is a
+         ! different, and recoverable, kind of no.  Measured per family in
+         ! `test_ocean_vcoord_interface_depths`.
+         block
+            integer :: cav_vcoord_code
+            real(wp) :: cav_h_nominal
+            character(len=:), allocatable :: cav_reason
+            cav_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
+                                                default_code=VCOORD_EULERIAN_Z)
+            if (.not. (cav_vcoord_code == VCOORD_SIGMA .or. &
+                       cav_vcoord_code == VCOORD_ZSTAR .or. &
+                       cav_vcoord_code == VCOORD_Z_FIXED)) then
+               select case (cav_vcoord_code)
+               case (VCOORD_LAGRANGIAN)
+                  cav_reason = "'lagrangian' is geometrically datum-FREE (the target "// &
+                               "IS the live h_layer and the remap is a no-op), so the "// &
+                               "placement objection does not apply to it.  It is "// &
+                               "refused in v1 only because no cavity run has been "// &
+                               "validated on an isopycnal coordinate; it is the "// &
+                               "intended isopycnal control leg of the coordinate study"
+               case (VCOORD_EULERIAN_Z)
+                  cav_reason = "'eulerian_z' is a stretched SIGMA with the free "// &
+                               "surface DROPPED (it is not a geopotential coordinate "// &
+                               "despite the name), and the dropped eta — not a z "// &
+                               "anchor — is why it cannot carry an ice-base "// &
+                               "displacement"
+               case (VCOORD_ZSIGMA)
+                  cav_reason = "'zsigma' is refused on EVERY path, cavity or not: its "// &
+                               "deep branch reads z_ref_global as metres while the "// &
+                               "only writer fills it with the dimensionless k/nz"
+               case (VCOORD_ZSTAR_SIGMA)
+                  cav_reason = "'zstar_sigma' is a purely FRACTIONAL rescale of the "// &
+                               "global reference table, hence datum-invariant and "// &
+                               "geometrically safe under a draft.  It is refused in "// &
+                               "v1 only because it follows BOTH boundaries (so it "// &
+                               "solves nothing a cavity needs) and no cavity run has "// &
+                               "been validated on it"
+               case (VCOORD_ZSTAR_FULL)
+                  cav_reason = "'zstar_full' builds its per-column reference table "// &
+                               "from the TRUE bed while the target walk sees only the "// &
+                               "live thickness, so under a draft it keeps the table's "// &
+                               "SHALLOW entries: the fine near-surface band lands "// &
+                               "against the ice base and the deep water is carried by "// &
+                               "shallow-ocean spacing.  It does not merely anchor at "// &
+                               "z = 0, it inverts which half of the column is resolved"
+               case default
+                  cav_reason = "'"//trim(cfg%vcoord_type)//"' is a DENSITY-space "// &
+                               "coordinate with no geometric anchor, so the placement "// &
+                               "objection does not apply.  It is refused in v1 because "// &
+                               "cavity x isopycnal is unvalidated; note also that "// &
+                               "hycom's z* nominal-floor band accumulates from the "// &
+                               "column top, so under a shelf that band is "// &
+                               "draft-FOLLOWING and must not be quoted as z-like"
+               end select
+               call logger%error("&ocean_cavity_dyn_nml enable=.true. accepts "// &
+                                 "vcoord_type='sigma', 'zstar' (zstar-lite) or "// &
+                                 "'z_fixed' ONLY — the two families that rescale the "// &
+                                 "live column and so follow the ice base for free, "// &
+                                 "plus the one that has been TAUGHT the ice base "// &
+                                 "(z_fixed reads vcoord%z_top, keeps its nominal "// &
+                                 "interface depths geopotential, and vanishes the "// &
+                                 "layers that outcrop into the ice).  Got '"// &
+                                 trim(cfg%vcoord_type)//"': "//cav_reason//".")
+               has_error = .true.
+            end if
+
+            if (cav_vcoord_code == VCOORD_Z_FIXED) then
+               ! ---- The staircase, and why this is a WARNING ----
+               !
+               ! A z-like coordinate removes the interior sigma tilt but
+               ! replaces it with the ice-base STAIRCASE: where the draft
+               ! crosses a nominal level the two columns' filler counts
+               ! differ by one, the interface offset across that face
+               ! jumps by up to `h_nominal`, and the FV_MOM6 acceleration
+               ! in a vanished layer is h-INDEPENDENT.  The corrections
+               ! that arrest it — top-side mass weighting (MWIPG) and the
+               ! interior reference interface, Yung, Hallberg, Adcroft &
+               ! Morrison (2026), JAMES 18, e2025MS005645, §3.3.2 and
+               ! §3.2 — are NOT implemented.  A UNIFORM draft has no
+               ! staircase (every column vanishes the same layers and
+               ! cuts at the same depth, so every interface offset is
+               ! identically zero) and is validated bit-zero to 30 days;
+               ! a VARYING draft is not validated at all, and measured on
+               ! `cavity_sloping_lid_rest_zfixed.nml` it is 47x the sigma
+               ! leg's resting pressure-gradient residual at step 1 and
+               ! ends in a non-finite state on day 18 (gfortran) or a
+               ! saturated En = 3.8E-04 (nvfortran GPU).
+               !
+               ! WARNING, not a refusal, deliberately: those corrections
+               ! are the next slices and they need this configuration to
+               ! be runnable to be developed and measured against.  What
+               ! the user must not do is walk into it silently.
+               if (.not. cavity_draft_is_uniform(cfg)) then
+                  call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                      "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                      "(draft_config='"// &
+                                      trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                      "') is NOT VALIDATED.  Only a UNIFORM draft is: "// &
+                                      "there every column vanishes the same layers and "// &
+                                      "cuts at the same depth, so the answer is "// &
+                                      "bit-zero at rest.  Where the draft crosses a "// &
+                                      "nominal level the filler count changes column "// &
+                                      "to column and the ice-base STAIRCASE drives a "// &
+                                      "spurious pressure gradient this build cannot "// &
+                                      "arrest: the top-side mass weighting (MWIPG) and "// &
+                                      "the interior reference interface — Yung, "// &
+                                      "Hallberg, Adcroft & Morrison (2026), JAMES 18, "// &
+                                      "e2025MS005645, sections 3.3.2 and 3.2 — are not "// &
+                                      "implemented.  Measured at rest: 47x the sigma "// &
+                                      "leg's step-1 residual, and the run does not "// &
+                                      "survive 30 days.  Use vcoord_type='sigma' for a "// &
+                                      "sloping lid until those land.")
+               end if
+               ! ---- z_fixed × cavity, v1 envelope ----
+               !
+               ! Under a quasi-geopotential coordinate the ice base cuts
+               ! the nominal stack, so on an ICE-COVERED column `k = nz`
+               ! is an inert filler (`h <= H_VANISHED`), NOT the
+               ! ice-adjacent live layer.  This is a state no consumer in
+               ! the tree has ever seen: no family on this branch
+               ! vanishes a layer against the TOP.  The shared
+               ! `k_top(i,j)` (the first live layer, counting down) that
+               ! fixes them is the NEXT slice — P6.3 for the tracer/flux
+               ! consumers, P6.4 for momentum and the boundary-layer
+               ! schemes — so until it lands the only thing this
+               ! combination may run is ADIABATIC DYNAMICS.
+               !
+               ! What is NOT refused, and why: OPEN-OCEAN columns have
+               ! `z_top = 0`, so `k = nz` is live there and behaves
+               ! exactly as today; and on a COVERED column the binary
+               ! cover mask (`cover_frac`) already zeroes every
+               ! ATMOSPHERIC input at source — wind stress (and with it
+               ! `stress_mag`, hence u*), the scalar and assembled
+               ! surface heat/salt fluxes, the shortwave deposit and both
+               ! restoring increments.  Those therefore compose with a
+               ! vanished `k = nz` and are left alone.  What follows is
+               ! everything that acts ON the ice-adjacent layer itself,
+               ! and so is not masked by anything.
+               ! NOTE `&ocean_cavity_melt_nml enable` and
+               ! `&ocean_tdrag_nml enable` used to be refused HERE, and
+               ! are not any more: both are routed through the shared
+               ! first-live-layer index `ms%k_top` (and its two face
+               ! twins) — P6.3/P6.4.  The melt heat/salt deposit and the
+               ! `freshwater="mass"` column source land on
+               ! `k_top(i,j)`; the ice-ocean drag's band walk starts at
+               ! `k_top_u/v`, gates on `H_VANISHED` instead of on zero,
+               ! and captures its implicit-fold rate on the same row the
+               ! vdiff diagonal adds it to.  `k_top ≡ nz` off a rigid
+               ! top, so nothing else moved.
+               if (cfg%ocean%vmix%use_kpp) then
+                  call logger%error("&ocean_vmix_nml use_kpp=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: KPP's "// &
+                                    "surface reference column is k = nz "// &
+                                    "(b_ref = -g*rho_layer(nz)/rho_0, "// &
+                                    "d_centre_ref = h(nz)/2), which on a covered "// &
+                                    "column is the filler — a spurious buoyancy jump "// &
+                                    "at the very first interface and a reference "// &
+                                    "depth of ~1e-4 m.  Set use_kpp=.false. (an "// &
+                                    "adiabatic cavity run is the v1 envelope).  "// &
+                                    "Needs the shared k_top: follow-up P6.4.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%epbl%enable) then
+                  call logger%error("&ocean_epbl_nml enable=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the EPBL "// &
+                                    "column captures the surface at k = nz and gates "// &
+                                    "on `h > 0` rather than on H_VANISHED, so a "// &
+                                    "filler top layer reaches the specific-volume "// &
+                                    "derivatives as an absurd concentration.  Needs "// &
+                                    "the shared k_top: follow-up P6.4.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%tracers%enable_ideal_age) then
+                  call logger%error("&ocean_tracers_nml enable_ideal_age=.true. is "// &
+                                    "refused with vcoord_type='z_fixed' under a "// &
+                                    "cavity: the young-band reset writes "// &
+                                    "hTr_age(:,:,nz) = young*h(:,:,nz), which on a "// &
+                                    "covered column ventilates a filler (and there "// &
+                                    "is no ventilation under a shelf at all).  "// &
+                                    "Follow-up P6.3.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%gm%enable) then
+                  call logger%error("&ocean_gm_nml enable=.true. is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity: the "// &
+                                    "non-divergence closure dumps the residual "// &
+                                    "streamfunction transport into k = nz.  GM x "// &
+                                    "cavity is unvalidated on any coordinate; "// &
+                                    "revisited with the coordinate study.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%redi%enable .or. cfg%ocean%slopes%enable) then
+                  call logger%error("&ocean_redi_nml / &ocean_slopes_nml enable="// &
+                                    ".true. is refused with vcoord_type='z_fixed' "// &
+                                    "under a cavity: the isopycnal-slope surface "// &
+                                    "fill is built from h(:,:,nz), the filler on a "// &
+                                    "covered column.  Unvalidated with a cavity on "// &
+                                    "any coordinate; revisited with the coordinate "// &
+                                    "study.")
+                  has_error = .true.
+               end if
+               ! ---- kappa_h: refused ONLY with the face mask off ----
+               !
+               ! The objection is unchanged where it still applies: the
+               ! along-coordinate tracer diffusion gates its T = hTr/h
+               ! division on `h > 0` (1/0 armour) and not on H_VANISHED,
+               ! weights the face flux by the ARITHMETIC mean thickness
+               ! — a filler beside a 20 m cell is weighted by 10 m — and
+               ! carries no mass-availability limiter, so it can drive a
+               ! vanished cell's hTr strongly negative in one step.
+               !
+               ! But `&vcoord_nml zfixed_closed_faces` already answers
+               ! it, from the other end: `ocean_hdiff_tracer_step`
+               ! multiplies every face flux by `metrics%open_u/open_v`,
+               ! which is exactly zero wherever the layer is a filler on
+               ! EITHER side.  A filler cell then has all four of its
+               ! own-layer faces closed, so its hTr divergence is
+               ! identically zero and the garbage concentration the
+               ! `h > 0` gate computes for it never leaves the cell.
+               ! Flux-zero, not flux-limited, so the scheme stays
+               ! conservative by construction.  That is the P6.5 gate,
+               ! reached through the mask instead of through a new
+               ! threshold — and it is a strictly stronger statement,
+               ! because it also closes the partial⇄filler face the
+               ! threshold alone would leave open on the thick side.
+               if (cfg%ocean%hdiff%kappa_h /= 0.0_wp .and. &
+                   .not. cfg%zfixed_closed_faces) then
+                  call logger%error("&ocean_hdiff_nml kappa_h /= 0 is refused with "// &
+                                    "vcoord_type='z_fixed' under a cavity UNLESS "// &
+                                    "&vcoord_nml zfixed_closed_faces=.true.: the "// &
+                                    "along-coordinate tracer diffusion gates its "// &
+                                    "T = hTr/h division on `h > 0` (1/0 armour), "// &
+                                    "not on H_VANISHED, weights the face flux by the "// &
+                                    "ARITHMETIC mean thickness — so a filler beside "// &
+                                    "a 20 m cell is weighted by 10 m — and has no "// &
+                                    "mass-availability limiter, so it can drive a "// &
+                                    "vanished cell's hTr strongly negative in one "// &
+                                    "step.  With the partial-step face mask on, "// &
+                                    "every face touching a filler is CLOSED and the "// &
+                                    "flux is exactly zero, which answers all three.  "// &
+                                    "Set zfixed_closed_faces=.true., or kappa_h=0.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%kshear%enable) then
+                  call logger%error("&ocean_kappa_shear_nml enable=.true. is refused "// &
+                                    "with vcoord_type='z_fixed' under a cavity: the "// &
+                                    "JHL08 column solve closes its SURFACE row on "// &
+                                    "k = nz (u_c/v_c/t_c/s_c(nz)), which on a "// &
+                                    "covered column is an inert filler inside the "// &
+                                    "ice draft, and its own massless-merge helper is "// &
+                                    "off by default.  Not covered by the shared "// &
+                                    "k_top (P6.3/P6.4), which routes the FORCING "// &
+                                    "sites; a column solver wants the compacted "// &
+                                    "column rdb_massless already builds.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%tidal_mixing%enable) then
+                  call logger%error("&ocean_tidal_mixing_nml enable=.true. is "// &
+                                    "refused with vcoord_type='z_fixed' under a "// &
+                                    "cavity: the N^2 column sets its top boundary "// &
+                                    "at k = nz and forms the k = nz-1 interface "// &
+                                    "spacing as 0.5*(h(nz-1) + h(nz)), which on a "// &
+                                    "covered column HALVES that spacing against a "// &
+                                    "filler and inflates the buoyancy frequency at "// &
+                                    "the first live interface.  Unvalidated under a "// &
+                                    "rigid top.")
+                  has_error = .true.
+               end if
+               if (cfg%regrid_time_scale > 0.0_wp) then
+                  call logger%error("&vcoord_nml regrid_time_scale > 0 is refused "// &
+                                    "with vcoord_type='z_fixed' under a cavity: the "// &
+                                    "grid time-filter is a per-layer convex blend "// &
+                                    "that does not respect the vanish marker, so a "// &
+                                    "filler relaxing toward h_min from a live "// &
+                                    "thickness passes THROUGH H_VANISHED and the "// &
+                                    "layer oscillates live/dead on successive steps "// &
+                                    "— the remap drain deleting its content on the "// &
+                                    "step it reads dead.  Excluding the fillers from "// &
+                                    "the blend is its own change.")
+                  has_error = .true.
+               end if
+               ! ISOMIP+ (Asay-Davis et al. 2016 §3.1.5): "the minimum
+               ! thickness is likely to be approximately two grid cells
+               ! (~40 m if z levels are equally spaced)".  Under a
+               ! terrain-following coordinate a just-afloat column still
+               ! carries all nz layers; under a z-like one a column
+               ! thinner than 2*h_nominal carries ONE partial live layer
+               ! and nz-1 fillers, and every column-walking consumer then
+               ! operates on a single cell.  `h_nominal` is
+               ! `max_depth/nz` — Z_FIXED's spacing is written from
+               ! `&ocean_topo_nml max_depth`, deliberately with no second
+               ! spelling.
+               cav_h_nominal = 0.0_wp
+               if (cfg%nz_layers > 0) then
+                  cav_h_nominal = cfg%ocean%topo%max_depth/real(cfg%nz_layers, wp)
+               end if
+               if (cav_h_nominal > 0.0_wp .and. &
+                   cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*cav_h_nominal) then
+                  call logger%error("&ocean_cavity_dyn_nml h_min_cavity = "// &
+                                    to_string(cfg%ocean%cavity_dyn%h_min_cavity)// &
+                                    " m is below 2*h_nominal = "// &
+                                    to_string(2.0_wp*cav_h_nominal)//" m "// &
+                                    "(h_nominal = &ocean_topo_nml max_depth / "// &
+                                    "nz_layers = "//to_string(cav_h_nominal)// &
+                                    " m), which vcoord_type='z_fixed' requires under "// &
+                                    "a cavity: a thinner water column carries a "// &
+                                    "single partial live layer and nz-1 inert "// &
+                                    "fillers.  This is ISOMIP+'s own rule "// &
+                                    "(Asay-Davis et al. 2016, GMD 9, 2471, "// &
+                                    "§3.1.5).  NOTE it moves the grounding line "// &
+                                    "relative to a sigma leg — a confound the "// &
+                                    "coordinate study must control for.")
+                  has_error = .true.
+               end if
+            end if
+         end block
+         if (trim(cfg%thickness_config) == "uniform_z") then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with thickness_config='uniform_z': that "// &
+                              "seed lays uniform z interfaces from z = 0 down, so "// &
+                              "under a draft it would fill the ice with water.  Use "// &
+                              "the default sigma-style split.")
+            has_error = .true.
+         end if
+         ! NOTE: `&ocean_zinit_nml enable` used to be refused here — the
+         ! overlay measured depth from the COLUMN TOP, which under a
+         ! draft is `z_draft` metres below `z = 0`, so a geopotential
+         ! profile landed systematically too shallow.  `build_z_ctr` now
+         ! takes the column-top depth and the seed passes
+         ! `metrics%z_draft`, so the two compose and the refusal is gone.
+         ! --- solver envelope ---
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. requires the "// &
+                              "SPLIT solver (&ocean_bt_nml n_inner >= 1, or "// &
+                              "auto_n_inner): the unsplit driver has neither the "// &
+                              "barotropic correction nor the eta_forcing seam, so it "// &
+                              "carries no barotropic response to a surface load and "// &
+                              "the cavity is unvalidated there.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_bt_nml bt_halo > 0: the "// &
+                              "wide-halo BT clone rebuilds its own metrics from the "// &
+                              "grid formula and carries no z_draft, so its reference "// &
+                              "depth would be the bed and its solve would ignore the "// &
+                              "ice.")
+            has_error = .true.
+         end if
+         if (cfg%px*cfg%py > 1) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is single-rank in "// &
+                              "v1 (px*py = "//to_string(cfg%px*cfg%py)//").  The "// &
+                              "draft halo itself is two lines, but the grounding "// &
+                              "statistics are global reductions the v1 configure does "// &
+                              "not take, and draft_config='file' inherits the "// &
+                              "local-nx reader.  Lifting the fence is its own PR.")
+            has_error = .true.
+         end if
+         ! --- mutually exclusive capabilities ---
+         if (cfg%ocean%wetdry%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_wetdry_nml enable: both decide "// &
+                              "whether a column can carry water, from different "// &
+                              "thresholds, and wet/dry also forces split_scheme="// &
+                              "'ssp_rk2'.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%porous%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_porous_nml enable: both narrow "// &
+                              "the same faces from static geometry and the "// &
+                              "combination is unvalidated.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_ice_nml enable: sea ice is a "// &
+                              "SECOND surface load on the same column, and the two "// &
+                              "are not reconciled in v1.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tides%enable .and. cfg%ocean%tides%use_sal) then
+            call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_tides_nml use_sal: the scalar "// &
+                              "SAL elevation is beta_sal*bt_eta, and under the cavity "// &
+                              "datum bt_eta is the departure from the LOADED "// &
+                              "equilibrium, not the sea-surface elevation the SAL "// &
+                              "response is defined on.  The body tide itself "// &
+                              "(enable alone) is datum-independent and allowed.")
+            has_error = .true.
+         end if
+         ! --- honest-inertness warnings (the house rule: warn, do not refuse) ---
+         if (trim(adjustl(cfg%ocean%cavity_dyn%draft_config)) == "none") then
+            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with "// &
+                                "draft_config='none': z_draft is identically zero, so "// &
+                                "bt_H_ref = b and the run is bit-identical to a "// &
+                                "cavity-free one.")
+         end if
+         ! Design Q4: WARN, do not refuse, on cavity x in_eos=.false.  The
+         ! load is depth-uniform in `pa`, so the rest and equivalence
+         ! gates pass either way; what is wrong without `in_eos` is the
+         ! THERMOBARICITY, and only a pressure-dependent EOS has any.  A
+         ! linear EOS is pressure-blind, so there the knob is honestly
+         ! inert and there is nothing to warn about.
+         if (.not. cfg%ocean%psurf%in_eos .and. &
+             trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+            call logger%warning("&ocean_cavity_dyn_nml enable=.true. with a "// &
+                                "NONLINEAR equation of state (&ocean_eos_nml eos='"// &
+                                trim(adjustl(cfg%ocean%eos%eos))//"') but without "// &
+                                "&ocean_psurf_nml in_eos=.true.: the in-situ EOS "// &
+                                "pressure still starts at 0 Pa at the ice base, so "// &
+                                "the EOS ignores up to ~5e6 Pa of ice load (wrong "// &
+                                "thermobaricity, wrong freezing point).  Harmless "// &
+                                "for the rest and equivalence gates; not for a "// &
+                                "production cavity.")
+         end if
+      end if
+      ! ---- Ice-shelf basal melt, v1 scope (Phase 2b) ----
+      ! Every restriction fails loud.  One of them exists because a piece
+      ! of the coupling is NOT in this slice: there is no per-cell cover
+      ! mask on the atmospheric forcing yet, and leaving that silently
+      ! half-wired would run an atmosphere through several hundred metres
+      ! of solid ice.  The interface pressure is NOT such a gap — the
+      ! cavity assembles `ms%p_top = p_ice_ref + sf%p_surf` (P5.2) and
+      ! the melt liquidus is its third consumer.
+      if (cfg%ocean%cavity_melt%enable) then
+         if (.not. cfg%ocean%cavity_dyn%enable) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_cavity_dyn_nml enable=.true.  The melt "// &
+                              "interface stands on that group's geometry: without a "// &
+                              "draft there is no ice base, cover_frac is identically "// &
+                              "zero and the kernel would never be called.")
+            has_error = .true.
+         end if
+         if (trim(adjustl(cfg%ocean%eos%tfreeze_set)) /= "isomip") then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_eos_nml tfreeze_set='isomip' (got '"// &
+                              trim(adjustl(cfg%ocean%eos%tfreeze_set))//"').  The "// &
+                              "two shipped liquidi differ by ~0.03 degC at S = 34.5, "// &
+                              "which is enough to flip the SIGN of the basal melt "// &
+                              "rate over a 0.03 degC band of far-field temperature — "// &
+                              "the sea-ice set is not a defensible default for a "// &
+                              "cavity.")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true.  The melt "// &
+                              "fluxes are delivered as the OWNED components "// &
+                              "heat_cavity/salt_cavity, which are allocated only "// &
+                              "with the component set, and only "// &
+                              "ocean_surface_flux_assemble folds them into "// &
+                              "Q_heat/Q_salt.  Writing Q_heat/Q_salt directly is "// &
+                              "refused by the fill contract — the sea-ice coupler "// &
+                              "full-overwrites those.")
+            has_error = .true.
+         end if
+         block
+            integer :: melt_law_code, melt_ice_code
+            melt_law_code = parse_cavity_exchange_law(cfg%ocean%cavity_melt%exchange_law)
+            select case (melt_law_code)
+            case (CAVITY_LAW_CONST_GAMMA, CAVITY_LAW_HJ99, CAVITY_LAW_YUNG25)
+               continue
+            case (CAVITY_LAW_INVALID)
+               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                                 "' is not recognised (shipped: const_gamma, hj99, "// &
+                                 "yung25).")
+               has_error = .true.
+            case default
+               call logger%error("&ocean_cavity_melt_nml exchange_law = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                                 "' is RESERVED, not implemented "// &
+                                 "(CAVITY_MELT_NOT_IMPLEMENTED).  Its enum value is "// &
+                                 "nailed down so adding it later is not a "// &
+                                 "renumbering, and the Python prototype has it, but "// &
+                                 "no Fortran physics ships.  Shipped: const_gamma, "// &
+                                 "hj99, yung25.")
+               has_error = .true.
+            end select
+            ! Holland & Jenkins (1999) eq. (15) p. 1792 takes
+            ! `ln(u* xi_N eta*^2 / (|f| h_nu))` and eq. (18) divides by
+            ! `f L_O`: the law does not exist on the equator.  The
+            ! per-column check over the covered cells is taken at
+            ! configure (`configure_ocean_cavity_melt`), where f_centre
+            ! exists; here we can only catch the whole-domain f = 0 case,
+            ! and catching it early is worth the duplication.
+            if (melt_law_code == CAVITY_LAW_HJ99) then
+               if (cfg%coriolis_f == 0.0_wp .and. &
+                   cfg%ocean%topo%coriolis_beta == 0.0_wp) then
+                  call logger%error("&ocean_cavity_melt_nml exchange_law='hj99' on an "// &
+                                    "f = 0 grid (coriolis_f = 0, coriolis_beta = 0). "// &
+                                    "Holland & Jenkins (1999) eq. (15) takes "// &
+                                    "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, "// &
+                                    "so the law has no value there — the same "// &
+                                    "fail-loud stance &ocean_vmix_nml bkgnd_henyey "// &
+                                    "takes on a cartesian grid.  Use "// &
+                                    "exchange_law='const_gamma' or set a Coriolis "// &
+                                    "parameter.")
+                  has_error = .true.
+               end if
+            end if
+            melt_ice_code = parse_cavity_ice_mode(cfg%ocean%cavity_melt%ice_conduction)
+            select case (melt_ice_code)
+            case (CAVITY_ICE_INSULATING, CAVITY_ICE_ADV_DIFF)
+               continue
+            case (CAVITY_ICE_INVALID)
+               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
+                                 "' is not recognised (shipped: insulating, "// &
+                                 "adv_diff).")
+               has_error = .true.
+            case default
+               call logger%error("&ocean_cavity_melt_nml ice_conduction = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))// &
+                                 "' is RESERVED, not implemented "// &
+                                 "(CAVITY_MELT_NOT_IMPLEMENTED).  The steady "// &
+                                 "diffusive form makes q_ice independent of m_mass, "// &
+                                 "so sign(m) = sign(T*) no longer holds and the "// &
+                                 "pre-solve melt/freeze branch has to be revisited — "// &
+                                 "it is not a coefficient change.")
+               has_error = .true.
+            end select
+         end block
+         if (cfg%ocean%cavity_melt%gamma_t <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml gamma_t must be > 0 (it "// &
+                              "multiplies u* to give the heat exchange velocity; "// &
+                              "zero is identically zero melt, which is what "// &
+                              "enable=.false. is for).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%gamma_s >= 0.0_wp .and. &
+             cfg%ocean%cavity_melt%gamma_s <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml gamma_s = 0 is refused: the "// &
+                              "three-equation form divides by gamma_s.  Leave it "// &
+                              "NEGATIVE (the default) to take the ISOMIP+ "// &
+                              "gamma_t/35, or set a positive value.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%far_field_depth <= 0.0_wp) then
+            call logger%error("&ocean_cavity_melt_nml far_field_depth must be > 0 m "// &
+                              "(it is the thickness the far-field T/S/u are averaged "// &
+                              "over; zero would sample nothing).")
+            has_error = .true.
+         end if
+         ! --- Phase 3: real freshwater MASS, and its sea-level partner ---
+         ! `freshwater="mass"` moves the meltwater as a REAL Boussinesq
+         ! volume on the top layer.  Two envelope holes are refused BY
+         ! NAME rather than half-wired, because each would put the mass
+         ! source and the machinery that owns `h_layer(:,:,nz)` out of
+         ! step with one another:
+         !
+         !   * dynamic wet/dry re-decides every step which columns carry
+         !     water, and its positive-definite outflow limiter is the
+         !     other writer of a top-layer thickness source.  Composing
+         !     the two needs the limiter to SEE the melt volume;
+         !   * a windowed tracer-advection ratio > 1 freezes `hTr` for
+         !     `ratio` steps while `h` keeps moving, so the dilution the
+         !     mass form relies on would be applied to a tracer load that
+         !     is deliberately stale.
+         block
+            integer :: fw_code, vc_code
+            fw_code = parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater)
+            vc_code = parse_cavity_volume_comp(cfg%ocean%cavity_melt%volume_compensation)
+            if (fw_code == CAVITY_FW_INVALID) then
+               call logger%error("&ocean_cavity_melt_nml freshwater = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%freshwater))// &
+                                 "' is not recognised (shipped: virtual, mass).")
+               has_error = .true.
+            end if
+            if (vc_code == CAVITY_VC_INVALID) then
+               call logger%error("&ocean_cavity_melt_nml volume_compensation = '"// &
+                                 trim(adjustl(cfg%ocean%cavity_melt%volume_compensation))// &
+                                 "' is not recognised (shipped: none, "// &
+                                 "uniform_open_ocean).")
+               has_error = .true.
+            end if
+            if (fw_code == CAVITY_FW_MASS) then
+               if (cfg%ocean%wetdry%enable) then
+                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
+                                    "refused with &ocean_wetdry_nml enable=.true.  "// &
+                                    "Wet/dry owns the other top-layer thickness "// &
+                                    "source (its positive-definite outflow limiter) "// &
+                                    "and re-decides per step which columns hold "// &
+                                    "water; composing the two needs the limiter to "// &
+                                    "see the melt volume.  Follow-up: "// &
+                                    "'cavity real freshwater under wet/dry'.")
+                  has_error = .true.
+               end if
+               if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
+                  call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
+                                    "refused with &ocean_vmix_nml "// &
+                                    "dt_tracer_advect_ratio > 1.  The windowed drain "// &
+                                    "holds hTr fixed for the window while h keeps "// &
+                                    "moving, so the dilution the mass form relies on "// &
+                                    "would act on a deliberately stale tracer load.  "// &
+                                    "Follow-up: 'cavity real freshwater under the "// &
+                                    "windowed tracer-advect drain'.")
+                  has_error = .true.
+               end if
+            end if
+            if (vc_code == CAVITY_VC_UNIFORM_OPEN .and. fw_code /= CAVITY_FW_MASS) then
+               call logger%error("&ocean_cavity_melt_nml volume_compensation="// &
+                                 "'uniform_open_ocean' requires freshwater='mass'.  "// &
+                                 "The virtual form adds no volume, so there is "// &
+                                 "nothing to compensate and the sink would be a "// &
+                                 "pure, unexplained mass loss.")
+               has_error = .true.
+            end if
+         end block
+         ! --- the cover mask SHIPS (P2c) ---
+         ! Wind stress, surface restoring, shortwave penetration and the
+         ! uniform scalar q_heat/q_salt were each refused here while
+         ! there was no per-cell ice-COVER MASK on the atmospheric
+         ! forcing.  There is one now:
+         !
+         !   * the wind-stress PAIR is masked face-wise at configure
+         !     (`ocean_surface_stress_apply_cover`, called from
+         !     `configure_ocean_cavity`), which also silences the
+         !     implicit vdiff stress fold and the MLE front sampler —
+         !     both read `ss%tau_x` raw — and refreshes `stress_mag`, so
+         !     KPP/EPBL `u*` is zero-wind under cover;
+         !   * `q_heat`/`q_salt`, the radiative/turbulent bands, the
+         !     mass-flux enthalpies and `salt_flux` are masked in
+         !     `ocean_surface_flux_assemble` (cover-aware twin), which is
+         !     the one place they are still separable from the cavity's
+         !     own `heat_cavity`/`salt_cavity` — and which makes the
+         !     `Q_heat`/`Q_salt` KPP/EPBL read for `B_0` the MASKED
+         !     values;
+         !   * shortwave penetration and surface restoring carry the
+         !     factor themselves (they do not route through `Q_*`).
+         !
+         ! `&ocean_psurf_nml enable` was never refused here: the cavity
+         ! is the `ms%p_top` producer (P5.2: `p_ice_ref + sf%p_surf`), so
+         ! the seam composes with the ice load rather than clobbering it.
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_cavity_melt_nml enable=.true. is mutually "// &
+                              "exclusive with &ocean_ice_nml enable=.true.  Sea ice "// &
+                              "full-overwrites heat_added/salt_flux and runs its own "// &
+                              "instant-relaxation basal flux with a DIFFERENT "// &
+                              "liquidus set; two interface thermodynamics in one "// &
+                              "column is not a configuration.")
+            has_error = .true.
+         end if
+         ! (E4) Constant α/β under a NONLINEAR EOS in a cavity — a WARNING,
+         ! deliberately, not a refusal.  ISOMIP+ prescribes the LINEAR EOS
+         ! (Asay-Davis et al. 2016 Table 4), and there the constants ARE
+         ! that EOS's exact coefficients, so every shipped cavity namelist
+         ! is unaffected and must keep running untouched.  Under Wright or
+         ! Roquet the pair is a constant stand-in for a coefficient that
+         ! collapses toward zero at the freezing point and roughly doubles
+         ! by 1000 dbar — exactly the corner a cavity sits in.
+         if (trim(adjustl(cfg%ocean%vmix%buoyancy_coeffs)) == "constant" .and. &
+             trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+            call logger%warning("&ocean_cavity_melt_nml enable=.true. with a "// &
+                                "NONLINEAR EOS (&ocean_eos_nml eos='"// &
+                                trim(adjustl(cfg%ocean%eos%eos))//"') but "// &
+                                "&ocean_vmix_nml buoyancy_coeffs='constant'.  The "// &
+                                "KPP surface buoyancy flux B_0 and the "// &
+                                "double-diffusion density ratio will size the "// &
+                                "melt-driven buoyancy with the SCALAR "// &
+                                "&ocean_ic_nml alpha_T/beta_S, not with the "// &
+                                "derivatives of the density this run actually "// &
+                                "integrates.  Near the freezing point thermal "// &
+                                "expansion is several times smaller than at 10 degC "// &
+                                "and grows strongly with pressure, so the boundary "// &
+                                "layer under the shelf can be mis-sized (and in the "// &
+                                "cold-fresh corner mis-signed).  Set "// &
+                                "buoyancy_coeffs='eos' unless you are reproducing a "// &
+                                "constant-coefficient reference.")
+         end if
+      end if
+      ! ---- Ice-shelf TOP drag (&ocean_tdrag_nml, Phase 4a) ----
+      ! Default off ⇒ this whole block is skipped and every path is
+      ! bit-identical.  Every restriction below fails loud: a top drag
+      ! that is silently inert (no cover, no coefficient) is worse than
+      ! no top drag, because a cavity circulation would then be
+      ! frictionless at the ice and LOOK like it was damped.
+      if (cfg%ocean%tdrag%enable) then
+         if (.not. cfg%ocean%cavity_dyn%enable) then
+            call logger%error("&ocean_tdrag_nml enable=.true. requires "// &
+                              "&ocean_cavity_dyn_nml enable=.true.  The top drag "// &
+                              "stands on that group's geometry: without a draft "// &
+                              "there is no ice base, cover_frac is identically zero, "// &
+                              "and every face mask would be zero — an inert kernel "// &
+                              "with a cost.  An OPEN surface's momentum boundary "// &
+                              "condition is the wind stress (&ocean_topo_nml "// &
+                              "wind_config), not a drag.")
+            has_error = .true.
+         end if
+         block
+            integer :: tdrag_code
+            tdrag_code = parse_tdrag_variant(cfg%ocean%tdrag%form)
+            if (.not. tdrag_variant_is_implemented(tdrag_code)) then
+               call logger%error("&ocean_tdrag_nml form = '"// &
+                                 trim(adjustl(cfg%ocean%tdrag%form))// &
+                                 "' is not recognised (quadratic|linear).  The two "// &
+                                 "forms take coefficients of DIFFERENT dimensions "// &
+                                 "(cd dimensionless, r in 1/s), so a typo cannot be "// &
+                                 "defaulted.")
+               has_error = .true.
+            else if (tdrag_code == TDRAG_QUADRATIC .and. cfg%ocean%tdrag%cd <= 0.0_wp) then
+               call logger%error("&ocean_tdrag_nml form='quadratic' requires cd > 0 "// &
+                                 "(ISOMIP+ prescribes 2.5e-3).  cd = 0 is an "// &
+                                 "identically zero drag, which is what enable=.false. "// &
+                                 "is for.")
+               has_error = .true.
+            else if (tdrag_code == TDRAG_LINEAR .and. cfg%ocean%tdrag%r <= 0.0_wp) then
+               call logger%error("&ocean_tdrag_nml form='linear' requires r > 0 "// &
+                                 "(1/s).  r = 0 is an identically zero drag, which "// &
+                                 "is what enable=.false. is for.")
+               has_error = .true.
+            end if
+            ! ---- ONE drag coefficient for momentum and melt ----
+            ! MOM6 carries two independent top-drag coefficients (one in
+            ! the momentum BC, one in the melt u*); we deliberately do
+            ! not.  A cavity in which the ice base takes momentum out of
+            ! the flow at one C_d and reports a friction velocity built
+            ! on another is not a closure, it is two closures sharing a
+            ! boundary.  So: when both groups are on, the melt slot TAKES
+            ! its C_d from this group (`configure_ocean_cavity_melt`), and
+            ! a user who set both to DIFFERENT values is told rather than
+            ! silently overridden.
+            if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_QUADRATIC) then
+               if (cfg%ocean%cavity_melt%cdrag_top /= cfg%ocean%tdrag%cd) then
+                  call logger%error("&ocean_tdrag_nml cd = "// &
+                                    to_string(cfg%ocean%tdrag%cd)//" and "// &
+                                    "&ocean_cavity_melt_nml cdrag_top = "// &
+                                    to_string(cfg%ocean%cavity_melt%cdrag_top)// &
+                                    " disagree.  There is ONE ice-base drag "// &
+                                    "coefficient in this model: the same C_d sets "// &
+                                    "the momentum sink and the melt friction "// &
+                                    "velocity u* = sqrt(C_d*(U^2 + u_tide^2)).  Set "// &
+                                    "them equal (or leave cdrag_top at its default "// &
+                                    "and set &ocean_tdrag_nml cd alone).")
+                  has_error = .true.
+               end if
+            end if
+            if (cfg%ocean%cavity_melt%enable .and. tdrag_code == TDRAG_LINEAR) then
+               call logger%warning("&ocean_tdrag_nml form='linear' with "// &
+                                   "&ocean_cavity_melt_nml enable=.true.: the melt "// &
+                                   "friction velocity is quadratic by construction "// &
+                                   "(u* = sqrt(C_d*(U^2 + u_tide^2))), so it keeps "// &
+                                   "its own cdrag_top and the momentum sink uses r. "// &
+                                   "The two boundary conditions are then NOT the "// &
+                                   "same closure — intended for analytic work only.")
+            end if
+         end block
       end if
       ! ---- Dynamic wetting/drying v1 scope (docs/ocean_wetdry_plan.md §6) ----
       ! Every restriction fails loud: silently running wet/dry outside its
@@ -4560,11 +6430,30 @@ contains
                               "': must be 'band' ('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
          end if
-         if (.not. sponge_source_is_implemented(cfg%ocean%sponge%target_source)) then
+         if (.not. sponge_target_is_implemented(cfg%ocean%sponge%target_source)) then
             call logger%error("&ocean_sponge_nml enable=.true. with unimplemented "// &
                               "target_source = '"//trim(cfg%ocean%sponge%target_source)// &
-                              "': must be 'ic' ('file' is PR-23b, needs the PR-14 reader)")
+                              "': must be 'ic' or 'linear_z' "// &
+                              "('file' is PR-23b, needs the PR-14 reader)")
             has_error = .true.
+         end if
+         if (.not. sponge_ramp_is_valid(cfg%ocean%sponge%ramp)) then
+            call logger%error("&ocean_sponge_nml ramp = '"//trim(cfg%ocean%sponge%ramp)// &
+                              "': must be 'cosine' (default, the legacy band shape) "// &
+                              "or 'linear' (ISOMIP+ Eq. 20)")
+            has_error = .true.
+         end if
+         ! A `linear_z` target with both gradients AND both references left
+         ! at their defaults would relax toward T = 0 degC / S = 35 PSU
+         ! everywhere — almost certainly not what was meant, and silent.
+         if (trim(cfg%ocean%sponge%target_source) == "linear_z" .and. &
+             cfg%ocean%sponge%lin_t_ref == 0.0_wp .and. &
+             cfg%ocean%sponge%lin_dt_dz == 0.0_wp .and. &
+             cfg%ocean%sponge%lin_ds_dz == 0.0_wp) then
+            call logger%warning("&ocean_sponge_nml target_source='linear_z' with "// &
+                                "lin_t_ref = lin_dt_dz = lin_ds_dz = 0: the sponge will "// &
+                                "relax toward a uniform T = 0 degC column. Set the "// &
+                                "lin_* profile knobs.")
          end if
          ! relax_h (interior-interface thickness damping) is NOT implemented
          ! in PR-23 v1 — deferred to PR-23b alongside the file targets (the
@@ -4878,6 +6767,19 @@ contains
                               "with &ocean_porous_nml enable (the wide-halo "// &
                               "metrics shadow carries no porous statistics, so the "// &
                               "BT solve would silently transport on un-narrowed widths)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_dyn%enable) then
+            ! Same failure mode as porous, one level up: `metrics_w` is
+            ! re-filled from the grid formula and carries no `z_draft`, so
+            ! the wide fast loop would take the BED as its reference depth
+            ! and solve a column that is twice as deep as the cavity's.
+            ! (The cavity block above refuses this from its own side too —
+            ! the knob that is "wrong" depends on which one the user meant.)
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with &ocean_cavity_dyn_nml enable (the wide-halo "// &
+                              "metrics shadow carries no ice draft, so the BT solve "// &
+                              "would reference the bed instead of the ice base)")
             has_error = .true.
          end if
          if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
@@ -5257,12 +7159,79 @@ contains
          reason = "psurf enable"
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
+      else if (cfg%ocean%cavity_dyn%enable) then
+         ! The wide BT clone rebuilds `metrics_w` from the grid formula and
+         ! carries no `z_draft`, so its reference depth would be the BED —
+         ! it would solve a 1000 m ocean where the cavity has 500 m of
+         ! water under 500 m of ice.  `validate_config` refuses an EXPLICIT
+         ! `bt_halo > 0`; AUTO must resolve to 0 here or a multi-rank
+         ! cavity run manufactures a width the user never asked for and
+         ! then trips that abort.
+         reason = "cavity_dyn enable"
       else if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
                trim(cfg%ocean%grid%grid_config) == "tripolar") then
          reason = "grid_config='"//trim(cfg%ocean%grid%grid_config)//"'"
       end if
       excluded = len_trim(reason) > 0
    end subroutine bt_halo_auto_exclusion
+
+   pure function p_top_has_producer(cfg) result(has)
+      !! Is there anything in this configuration that WRITES
+      !! `multilayer_state_t%p_top`?
+      !!
+      !! `p_top = metrics%p_ice_ref + sf%p_surf` has exactly two
+      !! producers, and both halves count:
+      !!
+      !!   * `&ocean_psurf_nml enable` — the atmospheric surface-pressure
+      !!     seam, which fills `sf%p_surf` and refreshes `p_top` once per
+      !!     outer step in `ocean_dyn_step_split`;
+      !!   * `&ocean_cavity_dyn_nml enable` — the STATIC ice-shelf load
+      !!     `p_ice_ref = rho_ref*GRAVITY*z_draft`, assembled into
+      !!     `p_top` by `configure_ocean_cavity`.  Static is not the same
+      !!     as absent: the draft never changes, so the configure-time
+      !!     assembly is the final value and there is nothing to refresh.
+      !!
+      !! Used by the `&ocean_pgf_nml p_top_in_bc` inert-knob warning,
+      !! which must name both — a cavity run is precisely the case where
+      !! `p_top_in_bc` is not merely live but REQUIRED (for a draft that
+      !! varies), so warning that it is inert there was telling the user
+      !! the opposite of the truth.
+      type(config_t), intent(in) :: cfg
+      logical :: has
+      has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
+   end function p_top_has_producer
+
+   pure function cavity_draft_is_uniform(cfg) result(uniform)
+      !! Is the configured ice-shelf draft UNIFORM over the whole array?
+      !!
+      !! The one predicate, so the two rules that turn on it cannot drift
+      !! apart: the `&ocean_pgf_nml p_top_in_bc` REFUSAL (a load with a
+      !! gradient must have a consumer — a uniform load is bit-identically
+      !! inert in the FV_MOM6 top BC, which is the theorem in
+      !! `compute_fv_mom6_impl`'s docstring), and the `z_fixed` x cavity
+      !! staircase WARNING (only a uniform draft is validated on a
+      !! quasi-geopotential coordinate).
+      !!
+      !! `draft_config = "none"` is uniform because it is identically
+      !! zero.  `"flat"` is uniform only when NO box bound clips it —
+      !! a clipped flat draft has a calving front, which is a step, and a
+      !! step is the largest gradient in the domain.  `"linear"` and
+      !! `"file"` are never assumed uniform: this is a NAMELIST-level
+      !! predicate and cannot see the filled array (the configure-time
+      !! twin in `configure_ocean_cavity` tests `maxval /= minval` on the
+      !! field itself, which is the stricter check and runs later).
+      type(config_t), intent(in) :: cfg
+      logical :: uniform
+      character(len=:), allocatable :: dcfg
+      dcfg = trim(adjustl(cfg%ocean%cavity_dyn%draft_config))
+      uniform = (dcfg == "none")
+      if (dcfg == "flat") then
+         uniform = abs(cfg%ocean%cavity_dyn%draft_x0) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_x1) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_y0) >= 1.0e29_wp .and. &
+                   abs(cfg%ocean%cavity_dyn%draft_y1) >= 1.0e29_wp
+      end if
+   end function cavity_draft_is_uniform
 
    subroutine warn_unknown_bc(bc_str, param_name)
       !! Warn if a BC string does not match any known type
@@ -5334,19 +7303,52 @@ contains
       end do
    end function diag_density_levels_ok
    pure logical function sponge_source_is_implemented(tag) result(ok)
-      !! .true. iff `&ocean_sponge_nml damp_source` / `target_source` names
-      !! a source PR-23 v1 actually fills. `"file"` is a recognised name
-      !! (PR-23b, needs the PR-14 reader) but has no kernel yet — a source
-      !! with no filler must abort, not silently build an all-zero map /
-      !! all-zero reference (the `lateral_closure_is_implemented` idiom).
+      !! .true. iff `&ocean_sponge_nml damp_source` names a source that is
+      !! actually filled. `"file"` is a recognised name (PR-23b, needs the
+      !! PR-14 reader) but has no kernel yet — a source with no filler
+      !! must abort, not silently build an all-zero map (the
+      !! `lateral_closure_is_implemented` idiom).
+      !!
+      !! Kept under its original name because it is the DAMP axis; the
+      !! TARGET axis has its own predicate below. They were one function
+      !! until `"linear_z"` arrived, at which point a shared list would
+      !! have accepted `damp_source="linear_z"` — a spelling with no
+      !! meaning on that axis — as valid.
       character(len=*), intent(in) :: tag
       select case (trim(tag))
-      case ("band", "ic")
+      case ("band")
          ok = .true.
       case default
          ok = .false.
       end select
    end function sponge_source_is_implemented
+
+   pure logical function sponge_target_is_implemented(tag) result(ok)
+      !! .true. iff `&ocean_sponge_nml target_source` names a reference
+      !! state that is actually filled: `"ic"` (snapshot of the seeded
+      !! initial condition) or `"linear_z"` (analytic affine geopotential
+      !! profile, re-evaluated on the live layer geometry). `"file"` is
+      !! recognised but has no reader yet (PR-23b).
+      character(len=*), intent(in) :: tag
+      select case (trim(tag))
+      case ("ic", "linear_z")
+         ok = .true.
+      case default
+         ok = .false.
+      end select
+   end function sponge_target_is_implemented
+
+   pure logical function sponge_ramp_is_valid(tag) result(ok)
+      !! .true. iff `&ocean_sponge_nml ramp` names a band shape the
+      !! `damp_source="band"` filler implements.
+      character(len=*), intent(in) :: tag
+      select case (trim(tag))
+      case ("cosine", "linear")
+         ok = .true.
+      case default
+         ok = .false.
+      end select
+   end function sponge_ramp_is_valid
 
    ! ==================================================================
    ! Strict-schema construction (rdb_nml_schema).  Lives here (not in
@@ -5387,6 +7389,8 @@ contains
       call register_ddiff(cfg, schema)
       call register_ocean_tides(cfg, schema)
       call register_ocean_psurf(cfg, schema)
+      call register_ocean_cavity_dyn(cfg, schema)
+      call register_ocean_cavity_melt(cfg, schema)
       call register_epbl(cfg, schema)
       call register_wavespeed(cfg, schema)
       call register_foxkemper(cfg, schema)
@@ -5407,6 +7411,7 @@ contains
       call register_ocean_pgf(cfg, schema)
       call register_ocean_eos(cfg, schema)
       call register_ocean_bdrag(cfg, schema)
+      call register_ocean_tdrag(cfg, schema)
       call register_ocean_hdiff(cfg, schema)
       call register_ocean_hvisc(cfg, schema)
       call register_ocean_vmix(cfg, schema)
@@ -5612,6 +7617,10 @@ contains
                              "ALE remap: fail loud when a column violates the overlap "// &
                              "sweep's preconditions (non-negative thicknesses, "// &
                              "matching column totals)"))
+      pl => cfg%zfixed_closed_faces
+      call g%add(nml_logical("zfixed_closed_faces", pl, &
+                             "z_fixed partial steps: close every face whose layer is "// &
+                             "an inert filler on either side (z-level wall, free-slip)"))
       call schema%add_group(g)
    end subroutine register_vcoord
 
@@ -6146,6 +8155,180 @@ contains
       call schema%add_group(g)
    end subroutine register_ocean_psurf
 
+   subroutine register_ocean_cavity_dyn(cfg, schema)
+      !! `&ocean_cavity_dyn` (P5.1 static ice-shelf cavity geometry: the
+      !! prescribed draft + the barotropic datum that absorbs it).
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+
+      g%name = "ocean_cavity_dyn"
+      g%doc = "Static ice-shelf cavity geometry: prescribed draft + "// &
+              "barotropic datum bt_H_ref = b - z_draft."
+
+      pl => cfg%ocean%cavity_dyn%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (single-rank, split solver, "// &
+                             "fv_mom6 PGF, sigma/zstar only)"))
+      ps => cfg%ocean%cavity_dyn%draft_config
+      call g%add(nml_enum("draft_config", ps, &
+                          "Draft source: analytic shape, or 'file' (static 2-D "// &
+                          "NetCDF on the model grid, single rank)", &
+                          allowed=[character(len=15) :: "none", "flat", &
+                                   "linear", "file"]))
+      ps => cfg%ocean%cavity_dyn%draft_source
+      call g%add(nml_enum("draft_source", ps, &
+                          "Whether the formula gives the ice-base DEPTH or "// &
+                          "an ice THICKNESS ('in_situ' isostasy is deferred)", &
+                          allowed=[character(len=15) :: "draft", "thickness", &
+                                   "in_situ"]))
+      pr => cfg%ocean%cavity_dyn%draft_depth
+      call g%add(nml_real("draft_depth", pr, &
+                          "Draft amplitude (ice thickness under "// &
+                          "draft_source='thickness')", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_slope
+      call g%add(nml_real("draft_slope", pr, &
+                          "d(draft)/dx for draft_config='linear' "// &
+                          "(dimensionless; converted to grid units)"))
+      pr => cfg%ocean%cavity_dyn%draft_x0
+      call g%add(nml_real("draft_x0", pr, &
+                          "Western edge of the shelf box, and the anchor of "// &
+                          "the 'linear' profile (+/-1e30 => no limit)", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_x1
+      call g%add(nml_real("draft_x1", pr, &
+                          "Eastern edge of the shelf box = the calving front "// &
+                          "(+/-1e30 => no limit)", units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_y0
+      call g%add(nml_real("draft_y0", pr, &
+                          "Southern edge of the shelf box (+/-1e30 => no limit)", &
+                          units="m"))
+      pr => cfg%ocean%cavity_dyn%draft_y1
+      call g%add(nml_real("draft_y1", pr, &
+                          "Northern edge of the shelf box (+/-1e30 => no limit)", &
+                          units="m"))
+      ps => cfg%ocean%cavity_dyn%draft_file
+      call g%add(nml_string("draft_file", ps, &
+                            "draft_config='file': NetCDF path (variable must be "// &
+                            "(x,y,t) Fortran order, on the model grid; record 1 read)"))
+      ps => cfg%ocean%cavity_dyn%draft_var
+      call g%add(nml_string("draft_var", ps, &
+                            "draft_config='file': 2-D variable name (ISOMIP+ ships "// &
+                            "'iceDraft')"))
+      ps => cfg%ocean%cavity_dyn%draft_sign
+      call g%add(nml_enum("draft_sign", ps, &
+                          "draft_config='file': sign convention of the file values "// &
+                          "(ISOMIP+ iceDraft is an ELEVATION)", &
+                          allowed=[character(len=14) :: "depth", "positive_down", &
+                                   "elevation", "positive_up"]))
+      pr => cfg%ocean%cavity_dyn%h_min_cavity
+      call g%add(nml_real("h_min_cavity", pr, &
+                          "Grounding cutoff: b - z_draft below this is LAND "// &
+                          "(never a thin film under grounded ice)", units="m"))
+      pr => cfg%ocean%cavity_dyn%grounded_max_frac
+      call g%add(nml_real("grounded_max_frac", pr, &
+                          "Fail loud if more than this fraction of the "// &
+                          "interior columns ground"))
+      pr => cfg%ocean%cavity_dyn%rho_ice
+      call g%add(nml_real("rho_ice", pr, &
+                          "Ice density, consulted only by "// &
+                          "draft_source='thickness'", units="kg/m^3"))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_cavity_dyn
+
+   subroutine register_ocean_cavity_melt(cfg, schema)
+      !! `&ocean_cavity_melt` (P2b ice-shelf basal-melt thermodynamics:
+      !! the three-equation interface, its exchange law and the
+      !! far-field sampling depth).  The `exchange_law` and
+      !! `ice_conduction` enums MIRROR `parse_cavity_exchange_law` /
+      !! `parse_cavity_ice_mode` in `rdb_ocean_cavity_melt` — the two
+      !! lists move together, and `validate_config` re-checks them
+      !! belt-and-braces so a RESERVED law is refused by name rather
+      !! than silently falling through the kernel's dispatch.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+
+      g%name = "ocean_cavity_melt"
+      g%doc = "Ice-shelf basal-melt thermodynamics: the three-equation "// &
+              "interface, its exchange law, and the far-field sampling depth."
+
+      pl => cfg%ocean%cavity_melt%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (requires &ocean_cavity_dyn_nml, "// &
+                             "tfreeze_set='isomip' and the surface-flux "// &
+                             "component set)"))
+      ps => cfg%ocean%cavity_melt%exchange_law
+      call g%add(nml_enum("exchange_law", ps, &
+                          "Turbulent exchange law; laws other than "// &
+                          "const_gamma/hj99/yung25 are RESERVED and refused "// &
+                          "at configure", &
+                          allowed=[character(len=12) :: "const_gamma", "hj99", &
+                                   "yung25", "jenkins91", "rosevear22", "vt19", &
+                                   "mk18", "burchard22", "jenkins21"]))
+      pr => cfg%ocean%cavity_melt%gamma_t
+      call g%add(nml_real("gamma_t", pr, &
+                          "Dimensionless heat-transfer coefficient Gamma_T "// &
+                          "(ISOMIP+ starting guess; tune per coordinate)", &
+                          min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%gamma_s
+      call g%add(nml_real("gamma_s", pr, &
+                          "Dimensionless salt-transfer coefficient Gamma_S "// &
+                          "(negative = unset = gamma_t/35)"))
+      pr => cfg%ocean%cavity_melt%cdrag_top
+      call g%add(nml_real("cdrag_top", pr, &
+                          "Top drag coefficient for the MELT friction velocity "// &
+                          "(no momentum drag yet - that is Phase 4)", &
+                          min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%u_tide
+      call g%add(nml_real("u_tide", pr, &
+                          "RMS tidal velocity in the melt u* only, never the drag", &
+                          units="m/s", min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%ustar_min
+      call g%add(nml_real("ustar_min", pr, &
+                          "Friction-velocity floor (Yung et al. 2025 eq. 14)", &
+                          units="m/s", min=0.0_wp))
+      ps => cfg%ocean%cavity_melt%ice_conduction
+      call g%add(nml_enum("ice_conduction", ps, &
+                          "Ice-side conduction; 'diffusive' is RESERVED and "// &
+                          "refused (it changes the melt/freeze branch logic)", &
+                          allowed=[character(len=10) :: "insulating", "adv_diff", &
+                                   "diffusive"]))
+      pr => cfg%ocean%cavity_melt%t_ice
+      call g%add(nml_real("t_ice", pr, &
+                          "Ice interior temperature; read by ice_conduction="// &
+                          "'adv_diff' only", units="degC"))
+      pr => cfg%ocean%cavity_melt%s_ice
+      call g%add(nml_real("s_ice", pr, &
+                          "Ice salinity; must stay strictly below the far-field "// &
+                          "salinity", units="g/kg", min=0.0_wp))
+      pr => cfg%ocean%cavity_melt%far_field_depth
+      call g%add(nml_real("far_field_depth", pr, &
+                          "Thickness below the ice base the far-field T/S/u are "// &
+                          "averaged over (METRES, not layers)", units="m", &
+                          min=0.0_wp))
+      ps => cfg%ocean%cavity_melt%freshwater
+      call g%add(nml_enum("freshwater", ps, &
+                          "Meltwater delivery: 'virtual' (default, fixed "// &
+                          "column mass) or 'mass' (real Boussinesq volume on "// &
+                          "the top layer)", &
+                          allowed=[character(len=8) :: "virtual", "mass"]))
+      ps => cfg%ocean%cavity_melt%volume_compensation
+      call g%add(nml_enum("volume_compensation", ps, &
+                          "Sea-level compensation for freshwater='mass': "// &
+                          "'none' (default) or 'uniform_open_ocean' (remove the "// &
+                          "melt volume again over uncovered wet cells)", &
+                          allowed=[character(len=20) :: "none", "uniform_open_ocean"]))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_cavity_melt
+
    subroutine register_epbl(cfg, schema)
       !! `&ocean_epbl` (Reichl & Hallberg 2018 energetics-based PBL).
       type(config_t), target, intent(in) :: cfg
@@ -6466,17 +8649,18 @@ contains
       call g%add(nml_real("initial_salinity", pr, "Initial salinity (uniform IC)", units="PSU"))
       pr => cfg%S_ref
       call g%add(nml_real("S_ref", pr, "EOS reference salinity", units="PSU", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_ref via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path -- the EOS reference the ocean path actually uses is "// &
-                          "&ocean_eos_nml / &ocean_ic_nml's own S_ref (D2.5's alpha_T trap, "// &
-                          "generalised; found by the P4 dead-knob sweep, 2026-09-10)."))
+                          "path. The live ocean-path spelling is &ocean_ic_nml S_ref; setting "// &
+                          "THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%beta_S
       call g%add(nml_real("beta_S", pr, "Haline contraction coefficient", units="kg/m^3/PSU", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_coeff via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_coeff via "// &
                           "register_default_tracers but eos_coeff is read nowhere on the "// &
-                          "ocean path (D2.5's alpha_T trap, generalised; found by the P4 "// &
-                          "dead-knob sweep, 2026-09-10)."))
+                          "ocean path. The live ocean-path spelling is &ocean_ic_nml beta_S; "// &
+                          "setting THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%S_min
       call g%add(nml_real("S_min", pr, "Lower physical bound for salinity", units="PSU", &
                           dead_on_ocean_path="stored onto tracer_t%tr_min via "// &
@@ -6494,32 +8678,30 @@ contains
                           "ocean path -- the ocean path's background salt diffusivity is "// &
                           "&ocean_vmix_nml ks_bg (found by the P4 dead-knob sweep, 2026-09-10)."))
       pr => cfg%S_init_surface
-      call g%add(nml_real("S_init_surface", pr, "Initial surface salinity (stratified IC)", units="PSU", &
-                          dead_on_ocean_path="accepted and validated but read nowhere in src/ "// &
-                          "-- unlike its temperature sibling (T_init_surface, which IS wired "// &
-                          "into rdb_ocean_state.F90), there is no stratified-salinity IC path "// &
-                          "that consumes this (found by the P4 dead-knob sweep, 2026-09-10)."))
+      call g%add(nml_real("S_init_surface", pr, &
+                          "Initial surface salinity at k=nz (linear-in-layer stratified IC; "// &
+                          "needs S_init_bottom non-zero too)", units="PSU", min=0.0_wp))
       pr => cfg%S_init_bottom
-      call g%add(nml_real("S_init_bottom", pr, "Initial bed salinity (stratified IC)", units="PSU", &
-                          dead_on_ocean_path="accepted and validated but read nowhere in src/ "// &
-                          "-- unlike its temperature sibling (T_init_bottom, which IS wired "// &
-                          "into rdb_ocean_state.F90), there is no stratified-salinity IC path "// &
-                          "that consumes this (found by the P4 dead-knob sweep, 2026-09-10)."))
+      call g%add(nml_real("S_init_bottom", pr, &
+                          "Initial bed salinity at k=1 (linear-in-layer stratified IC; "// &
+                          "needs S_init_surface non-zero too)", units="PSU", min=0.0_wp))
       pr => cfg%initial_temperature
       call g%add(nml_real("initial_temperature", pr, "Initial temperature (uniform IC)", units="degC"))
       pr => cfg%T_ref
       call g%add(nml_real("T_ref", pr, "EOS reference temperature", units="degC", &
-                          dead_on_ocean_path="stored onto tracer_t%eos_ref via "// &
+                          dead_on_ocean_path="RETIRED -- stored onto tracer_t%eos_ref via "// &
                           "register_default_tracers but eos_ref is read nowhere on the ocean "// &
-                          "path (D2.5's alpha_T trap, generalised; found by the P4 dead-knob "// &
-                          "sweep, 2026-09-10)."))
+                          "path. The live ocean-path spelling is &ocean_ic_nml T_ref; setting "// &
+                          "THIS one to anything other than its default is a fail-loud "// &
+                          "configure error (validate_config)."))
       pr => cfg%alpha_T
       call g%add(nml_real("alpha_T", pr, "Thermal expansion coefficient", units="kg/m^3/degC", &
-                          dead_on_ocean_path="the coastal-legacy alpha_T (D2.5): stored onto "// &
-                          "tracer_t%eos_coeff via register_default_tracers but eos_coeff is "// &
-                          "read nowhere on the ocean path. The ocean path's own alpha_T is "// &
-                          "&ocean_ic_nml alpha_T (rdb_ocean_state.F90:525) -- setting THIS "// &
-                          "one is silent."))
+                          dead_on_ocean_path="RETIRED -- the coastal-legacy alpha_T (D2.5): "// &
+                          "stored onto tracer_t%eos_coeff via register_default_tracers but "// &
+                          "eos_coeff is read nowhere on the ocean path. The live ocean-path "// &
+                          "spelling is &ocean_ic_nml alpha_T; setting THIS one to anything "// &
+                          "other than its default is a fail-loud configure error "// &
+                          "(validate_config)."))
       pr => cfg%T_min
       call g%add(nml_real("T_min", pr, "Lower physical bound for temperature", units="degC", &
                           dead_on_ocean_path="stored onto tracer_t%tr_min via "// &
@@ -7001,7 +9183,26 @@ contains
       ps => cfg%ocean%sponge%target_source
       call g%add(nml_enum("target_source", ps, &
                           "Reference-state source", &
-                          allowed=[character(len=4) :: "ic", "file"]))
+                          allowed=[character(len=8) :: "ic", "linear_z", "file"]))
+      ps => cfg%ocean%sponge%ramp
+      call g%add(nml_enum("ramp", ps, &
+                          "Band ramp shape from the sponge wall inward "// &
+                          "('linear' is ISOMIP+ Eq. 20)", &
+                          allowed=[character(len=6) :: "cosine", "linear"]))
+      pr => cfg%ocean%sponge%lin_t_ref
+      call g%add(nml_real("lin_t_ref", pr, &
+                          "target_source='linear_z': T at the z = 0 datum", units="degC"))
+      pr => cfg%ocean%sponge%lin_dt_dz
+      call g%add(nml_real("lin_dt_dz", pr, &
+                          "target_source='linear_z': dT/dz, z positive UP "// &
+                          "(stable => > 0)", units="degC/m"))
+      pr => cfg%ocean%sponge%lin_s_ref
+      call g%add(nml_real("lin_s_ref", pr, &
+                          "target_source='linear_z': S at the z = 0 datum", units="PSU"))
+      pr => cfg%ocean%sponge%lin_ds_dz
+      call g%add(nml_real("lin_ds_dz", pr, &
+                          "target_source='linear_z': dS/dz, z positive UP "// &
+                          "(stable => < 0)", units="PSU/m"))
       pl => cfg%ocean%sponge%relax_uv
       call g%add(nml_logical("relax_uv", pl, &
                              "Relax u/v toward u_ref/v_ref"))
@@ -7311,13 +9512,20 @@ contains
       pi => cfg%ocean%pgf%recon_scheme
       call g%add(nml_int("recon_scheme", pi, &
                          "In-layer reconstruction scheme: 1=PLM, 2=PPM", min=1, max=2))
+      pl => cfg%ocean%pgf%p_top_in_bc
+      call g%add(nml_logical("p_top_in_bc", pl, &
+                             "FV_MOM6: add the top-of-column load ms%p_top to "// &
+                             "the pressure-stack surface boundary condition "// &
+                             "pa(nz+1) = rho_ref*g*eta + p_top"))
       call schema%add_group(g)
    end subroutine register_ocean_pgf
 
    subroutine register_ocean_eos(cfg, schema)
-      !! `&ocean_eos_nml`: equation-of-state variant selector + the
+      !! `&ocean_eos_nml`: equation-of-state variant selector, the
+      !! freezing-point (liquidus) coefficient set, and the
       !! potential-density reference pressure.
-      !! `eos` enum mirrors `parse_eos_variant` in rdb_eos.
+      !! `eos` enum mirrors `parse_eos_variant` in rdb_eos;
+      !! `tfreeze_set` mirrors `parse_tfreeze_set` in the same module.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -7325,11 +9533,18 @@ contains
       real(wp), pointer :: pr
 
       g%name = "ocean_eos"
-      g%doc = "Equation-of-state variant selector + reference pressure."
+      g%doc = "Equation-of-state variant selector, liquidus set + reference pressure."
       ps => cfg%ocean%eos%eos
       call g%add(nml_enum("eos", ps, "Equation-of-state variant", &
                           allowed=[character(len=10) :: "linear", "wright", &
                                    "roquet_spv", "teos10"]))
+      ps => cfg%ocean%eos%tfreeze_set
+      call g%add(nml_enum("tfreeze_set", ps, &
+                          "Named liquidus coefficient set for eos_freezing_point "// &
+                          "(T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 "// &
+                          "(-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ "// &
+                          "(-0.0573, 0.0832, -7.53e-8)", &
+                          allowed=[character(len=6) :: "seaice", "isomip"]))
       pr => cfg%ocean%eos%p_ref
       call g%add(nml_real("p_ref", pr, &
                           "Reference pressure for the potential density "// &
@@ -7379,6 +9594,52 @@ contains
                              "Backward-Euler implicit drag (stable for thin bottom layers)"))
       call schema%add_group(g)
    end subroutine register_ocean_bdrag
+
+   subroutine register_ocean_tdrag(cfg, schema)
+      !! `&ocean_tdrag_nml`: ice-shelf TOP-drag selector + coefficients.
+      !! `form` enum mirrors `parse_tdrag_variant` in rdb_ocean_top_drag.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+      logical, pointer :: pl
+
+      g%name = "ocean_tdrag"
+      g%doc = "Ice-shelf top-drag selector + coefficients (mirror of &ocean_bdrag_nml)."
+      pl => cfg%ocean%tdrag%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Enable the ice-shelf top drag (requires "// &
+                             "&ocean_cavity_dyn_nml enable)"))
+      ps => cfg%ocean%tdrag%form
+      call g%add(nml_enum("form", ps, "Top-drag variant", &
+                          allowed=[character(len=9) :: "quadratic", "linear"]))
+      pr => cfg%ocean%tdrag%cd
+      call g%add(nml_real("cd", pr, &
+                          "Quadratic top-drag coefficient (0 disables); must equal "// &
+                          "&ocean_cavity_melt_nml cdrag_top when melt is on", &
+                          min=0.0_wp))
+      pr => cfg%ocean%tdrag%r
+      call g%add(nml_real("r", pr, "Linear Rayleigh top-drag coefficient (0 disables)", &
+                          units="1/s", min=0.0_wp))
+      pr => cfg%ocean%tdrag%htbl
+      call g%add(nml_real("htbl", pr, &
+                          "Top-boundary-layer thickness for distributed drag "// &
+                          "(0 = layer-nz only)", units="m", min=0.0_wp))
+      pr => cfg%ocean%tdrag%bg_vel
+      call g%add(nml_real("bg_vel", pr, &
+                          "Background velocity floor in the quadratic top-drag speed", &
+                          units="m/s", min=0.0_wp))
+      pr => cfg%ocean%tdrag%tbl_thick_min
+      call g%add(nml_real("tbl_thick_min", pr, &
+                          "Minimum effective TBL thickness (0 = fall back to h_min)", &
+                          units="m", min=0.0_wp))
+      pl => cfg%ocean%tdrag%implicit
+      call g%add(nml_logical("implicit", pl, &
+                             "Backward-Euler top drag inside the drag kernel "// &
+                             "(stable for thin top layers)"))
+      call schema%add_group(g)
+   end subroutine register_ocean_tdrag
 
    subroutine register_ocean_hdiff(cfg, schema)
       !! `&ocean_hdiff_nml`: along-coordinate tracer Laplacian
@@ -7587,6 +9848,14 @@ contains
       call g%add(nml_real("kpp_c_vt2", pr, &
                           "KPP unresolved-turbulence V_t^2 coefficient (0 disables V_t^2)", &
                           min=0.0_wp))
+      ! E4: source of the alpha/beta pair the KPP B_0 and the
+      ! double-diffusion density ratio use.  The `allowed=` list must stay
+      ! in lockstep with `parse_buoyancy_coeffs` (rdb_ocean_vmix.F90).
+      ps => cfg%ocean%vmix%buoyancy_coeffs
+      call g%add(nml_enum("buoyancy_coeffs", ps, &
+                          "Source of alpha/beta for KPP B_0 + double diffusion: "// &
+                          "constant (scalar &ocean_ic_nml pair) | eos (active EOS derivatives)", &
+                          allowed=[character(len=8) :: "constant", "eos"]))
       call schema%add_group(g)
    end subroutine register_ocean_vmix
 
@@ -7611,6 +9880,10 @@ contains
       pl => cfg%ocean%vdiff%implicit_drag
       call g%add(nml_logical("implicit_drag", pl, &
                              "Fold bottom drag into the vdiff bed (k=1) diagonal"))
+      pl => cfg%ocean%vdiff%implicit_top_drag
+      call g%add(nml_logical("implicit_top_drag", pl, &
+                             "Fold the ice-shelf top drag into the vdiff surface "// &
+                             "(k=nz) diagonal, masking the wind RHS under cover"))
       pl => cfg%ocean%vdiff%hvel_mom6
       call g%add(nml_logical("hvel_mom6", pl, &
                              "MOM6 HARMONIC_VISC parity: harmonic momentum face "// &
@@ -7711,7 +9984,8 @@ contains
       ps => cfg%ocean%topo%topo_config
       call g%add(nml_enum("topo_config", ps, "Bathymetry profile selector", &
                           allowed=[character(len=12) :: "flat", "spoon", "seamount", &
-                                   "neverworld2", "island", "double_drake", "file"]))
+                                   "neverworld2", "island", "double_drake", &
+                                   "isomip_plus", "file"]))
       pr => cfg%ocean%topo%max_depth
       call g%add(nml_real("max_depth", pr, "Basin maximum depth", units="m"))
       pr => cfg%ocean%topo%edge_depth
@@ -7741,6 +10015,10 @@ contains
       pr => cfg%ocean%topo%coriolis_y_ref
       call g%add(nml_real("coriolis_y_ref", pr, "Reference y where f = coriolis_f under beta-plane", &
                           units="m"))
+      pr => cfg%ocean%topo%x_origin
+      call g%add(nml_real("x_origin", pr, &
+                          "Absolute x of the domain west edge, for topo_config='isomip_plus' "// &
+                          "(ISOMIP+ ocean box starts at the MISMIP+ x = 320 km)", units="m"))
       call schema%add_group(g)
    end subroutine register_ocean_topo
 
@@ -7763,8 +10041,21 @@ contains
                           allowed=[character(len=22) :: "", "eady", &
                                    "geostrophic_adjustment", "baroclinic_jet"]))
       pr => cfg%ocean%ic%alpha_T
-      call g%add(nml_real("alpha_T", pr, "Linear-EOS thermal-expansion coefficient", &
+      call g%add(nml_real("alpha_T", pr, &
+                          "Linear-EOS thermal-expansion coefficient (DIMENSIONAL: "// &
+                          "multiply a fractional 1/degC coefficient by rho_0)", &
                           units="kg/m^3/degC"))
+      pr => cfg%ocean%ic%beta_S
+      call g%add(nml_real("beta_S", pr, &
+                          "Linear-EOS haline contraction coefficient (DIMENSIONAL: "// &
+                          "multiply a fractional 1/PSU coefficient by rho_0)", &
+                          units="kg/m^3/PSU", min=0.0_wp))
+      pr => cfg%ocean%ic%T_ref
+      call g%add(nml_real("T_ref", pr, "Linear-EOS reference temperature", &
+                          units="degC", min=-273.15_wp))
+      pr => cfg%ocean%ic%S_ref
+      call g%add(nml_real("S_ref", pr, "Linear-EOS reference salinity", &
+                          units="PSU", min=0.0_wp))
       pr => cfg%ocean%ic%rho_0
       call g%add(nml_real("rho_0", pr, "Reference density for the linear EOS / Boussinesq PGF", &
                           units="kg/m^3"))
@@ -7837,6 +10128,12 @@ contains
       pl => cfg%ocean%zinit%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (default off; requires RDB_ENABLE_NETCDF=ON)"))
+      ps => cfg%ocean%zinit%source
+      call g%add(nml_enum("source", ps, &
+                          "Where the T(z)/S(z) profile comes from: a "// &
+                          "pre-regridded NetCDF, or the analytic affine "// &
+                          "lin_* profile (no file)", &
+                          allowed=[character(len=15) :: "file", "linear"]))
       ps => cfg%ocean%zinit%file
       call g%add(nml_string("file", ps, "Path to the model-grid T/S NetCDF"))
       ps => cfg%ocean%zinit%t_var
@@ -7852,6 +10149,20 @@ contains
       call g%add(nml_real("land_fill_t", pr, "Fallback temperature for dry columns", units="degC"))
       pr => cfg%ocean%zinit%land_fill_s
       call g%add(nml_real("land_fill_s", pr, "Fallback salinity for dry columns", units="PSU"))
+      pr => cfg%ocean%zinit%lin_t_ref
+      call g%add(nml_real("lin_t_ref", pr, &
+                          "source='linear': temperature at the z = 0 datum", units="degC"))
+      pr => cfg%ocean%zinit%lin_dt_dz
+      call g%add(nml_real("lin_dt_dz", pr, &
+                          "source='linear': dT/dz, z positive UP (stable > 0)", &
+                          units="degC/m"))
+      pr => cfg%ocean%zinit%lin_s_ref
+      call g%add(nml_real("lin_s_ref", pr, &
+                          "source='linear': salinity at the z = 0 datum", units="PSU"))
+      pr => cfg%ocean%zinit%lin_ds_dz
+      call g%add(nml_real("lin_ds_dz", pr, &
+                          "source='linear': dS/dz, z positive UP (stable < 0)", &
+                          units="PSU/m"))
       call schema%add_group(g)
    end subroutine register_ocean_zinit
 

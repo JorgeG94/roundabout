@@ -14,6 +14,7 @@ module rdb_ocean_setup
 #else
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
+   use rdb_constants, only: H_VANISHED
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
@@ -22,16 +23,26 @@ module rdb_ocean_setup
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_GPRIME, OPGF_VARIANT_FV_MOM6, &
                                        OPGF_VARIANT_FV_WRIGHT, parse_opgf_variant
    use rdb_eos, only: parse_eos_variant, eos_validate, &
-                      EOS_VARIANT_ROQUET_SPV
+                      EOS_VARIANT_ROQUET_SPV, &
+                      parse_tfreeze_set, eos_apply_tfreeze_set, &
+                      TFREEZE_SET_SEAICE
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_EULERIAN_Z, &
-                               VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN
+                               VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN, &
+                               VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
+                               ocean_vcoord_closed_face_masks, &
+                               ocean_vcoord_k_top_from_target, &
+                               ocean_vcoord_count_ledges
    use rdb_vcoord, only: parse_remap_method
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
+   use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
+                                 top_drag_fill_face_cover_impl
    use rdb_ocean_lateral_mix, only: parse_lateral_closure, LMIX_NONE, &
                                     LMIX_LEITH, LMIX_SMAGORINSKY, &
                                     LMIX_BIHARMONIC, LMIX_LEITH_BIHARM
    use rdb_ocean_horizontal_viscosity, only: ocean_hvisc_set_aniso_direction
-   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_derived
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_set_derived, &
+                                       ocean_surface_stress_apply_cover
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_apply_cover_const
    use rdb_coriolis_adv, only: parse_pv_variant, PV_VARIANT_SADOURNY_HK, &
                                CORNER_H_CELL_MEAN, CORNER_H_MOM6_AREA, &
                                parse_pv_adv_scheme
@@ -44,6 +55,7 @@ module rdb_ocean_setup
                                        OBC_MAX_TIDAL_CONSTITUENTS, &
                                        ocean_bc_face_tag_t, &
                                        obc_tide_nodal_fill, obc_match_constituent
+   use rdb_ocean_sponge, only: sponge_band_alpha, SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_metrics, only: metrics_finalize, metrics_fill_cartesian, &
@@ -53,7 +65,10 @@ module rdb_ocean_setup
                                 parse_coriolis_scheme, ocean_metrics_t, &
                                 GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, &
                                 GRID_CONFIG_SUPERGRID, GRID_CONFIG_TRIPOLAR, &
-                                metrics_porous_alloc
+                                metrics_porous_alloc, metrics_closed_faces_alloc
+   use rdb_ocean_cavity, only: cavity_fill_p_ice_ref, &
+                               cavity_datum_impl, cavity_datum_residual
+   use rdb_ocean_cavity_melt, only: CAVITY_GAMMA_RATIO_ISOMIP
    use rdb_ocean_porous, only: parse_porous_source, parse_porous_eta_interp, &
                                porous_fill_stats_resolved, &
                                porous_stats_are_ordered, &
@@ -61,7 +76,8 @@ module rdb_ocean_setup
    use rdb_ocean_epbl, only: parse_epbl_mstar_scheme, parse_epbl_vstar_scheme, &
                              parse_epbl_combine, parse_epbl_lt_scheme
    use rdb_ocean_vmix, only: parse_kpp_sw_method, vmix_resolve_kd_min, &
-                             bkgnd_henyey_conflicts_profile
+                             bkgnd_henyey_conflicts_profile, &
+                             parse_buoyancy_coeffs, BUOY_COEFFS_INVALID
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_fold, only: fold_north_corner
    use rdb_ocean_tides, only: tides_configure_astronomy, tides_build_struct
@@ -104,6 +120,14 @@ module rdb_ocean_setup
    public :: configure_ocean_wave_drag
    public :: wave_drag_roughness_proxy
    public :: configure_ocean_porous
+   public :: configure_ocean_closed_faces
+   public :: configure_ocean_k_top
+   public :: configure_ocean_cavity
+   public :: configure_ocean_cavity_melt
+   public :: configure_ocean_top_drag
+   public :: cavity_resolve_gamma_s
+   public :: cavity_count_zero_f
+   public :: cavity_count_unloaded_p_top
    public :: configure_ocean_wetdry
    public :: bt_auto_n_inner
    public :: metrics_bt_cfl_length
@@ -629,8 +653,23 @@ contains
       ! mem:separate (same contract as `rho0`/`rho_ref` on the PGF slot).
       ! Horizontally uniform by design — see the knob's FORD docstring.
       ocean_state%eos%p_ref = cfg%ocean%eos%p_ref
+      ! Freezing-point (liquidus) coefficient set — same site, same
+      ! reasons, and one more: the ICE slot reads the god-state handle
+      ! directly (`engine%state%eos` is what `ice_frazil_accumulate`,
+      ! `ice_frazil_uptake` and `ice_compute_basal_flux` are handed), so
+      ! landing the set here puts it on the ONE handle every liquidus
+      ! consumer sees, before any copy is taken and before `enter_data`.
+      ! An unrecognised string is already fatal in `validate_config`;
+      ! `eos_apply_tfreeze_set` leaves the handle untouched for it.
+      call eos_apply_tfreeze_set(ocean_state%eos, &
+                                 parse_tfreeze_set(cfg%ocean%eos%tfreeze_set))
       if (compute_rank == 0) then
          call logger%info("EOS variant:      "//trim(cfg%ocean%eos%eos))
+         if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) /= TFREEZE_SET_SEAICE) then
+            call logger%info("Liquidus set:     "//trim(cfg%ocean%eos%tfreeze_set)// &
+                             " (ISOMIP+ / Asay-Davis et al. 2016 Table 4; the "// &
+                             "default 'seaice' SIS2 set is ~0.03 degC warmer at S=34.5)")
+         end if
       end if
 
       ocean_state%bdrag%variant = parse_bdrag_variant(cfg%ocean%bdrag%form)
@@ -1209,6 +1248,31 @@ contains
       ! kpp_sw_method).  validate_config already rejected unknown strings.
       ocean_state%vmix%kpp_sw_method = &
          parse_kpp_sw_method(trim(cfg%ocean%thermo%kpp_sw_method))
+      ! (E4) Source of the α/β pair behind the KPP `B_0` and the
+      ! double-diffusion density ratio (`&ocean_vmix_nml
+      ! buoyancy_coeffs`).  `nml_enum allowed=` already rejected an
+      ! unknown spelling at parse time; the INVALID arm here is the
+      ! belt-and-braces guard that keeps the schema list and
+      ! `parse_buoyancy_coeffs` from drifting apart silently (a wrong α is
+      ! a physics change with no symptom, so never a fallback).  Both this
+      ! and the `p_top` gate below are plain host scalars latched BEFORE
+      ! `ocean_state_enter_data`'s `copyin`, which is the same contract
+      ! `rho0` and the `pp81_*` scalars beside them rely on.
+      ocean_state%vmix%buoyancy_coeffs = &
+         parse_buoyancy_coeffs(trim(cfg%ocean%vmix%buoyancy_coeffs))
+      if (ocean_state%vmix%buoyancy_coeffs == BUOY_COEFFS_INVALID) then
+         call fail("ocean_vmix_nml: buoyancy_coeffs='"// &
+                   trim(cfg%ocean%vmix%buoyancy_coeffs)// &
+                   "' is not a known source; use 'constant' or 'eos'", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      ! Mirror of the E3 `&ocean_psurf_nml in_eos` seam gate, taken from
+      ! the SAME knob EPBL's `in_eos` takes so the two boundary-layer
+      ! schemes measure their in-situ pressures from the same origin.
+      ! NOT redundant with `p_top` being zero — a cavity fills `p_top`
+      ! with the ice load whether or not `in_eos` is set.
+      ocean_state%vmix%p_top_in_eos = cfg%ocean%psurf%in_eos
       ! MANDATORY re-derive: kv_bg/kt_bg/ks_bg and the seeded kv/kt/ks/kd_bg
       ! arrays were set from the TYPE-DEFAULT pp81_* at `init` time (before
       ! this configure call runs); without this, `vmix_assemble`'s
@@ -1480,6 +1544,17 @@ contains
          ! truth, no scalar copies that can drift).
          epbl%eos = ocean_state%eos
          epbl%rho0 = ocean_state%eos%rho0
+
+         ! (E3) Top-of-column pressure in the IN-SITU EOS arguments AND
+         ! in the PE weight.  `&ocean_psurf_nml in_eos` is the single
+         ! gate for the whole `ms%p_top` seam; assigned HERE, at
+         ! configure, so it is latched before `ocean_state_enter_data`
+         ! and the kernel reads it by value (host scalar -- no
+         ! `!$acc update device` owed).  Off (default) ⇒ the stack
+         ! starts at 0 Pa, bit-identically.  NOTE this is NOT redundant
+         ! with `p_top` being zero: a cavity fills `p_top` with the ice
+         ! load whether or not `in_eos` is set.
+         epbl%in_eos = cfg%ocean%psurf%in_eos
 
          ! |f| at cell centres, same scheme the Coriolis slot uses (D7).
          call fill_coriolis_centre(cfg, ocean_state%metrics, grid, epbl%f_centre)
@@ -2162,6 +2237,324 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
 
+   subroutine configure_ocean_k_top(cfg, ocean_state, grid, compute_rank)
+      !! Fill `ms%k_top` / `k_top_u` / `k_top_v` — the shared index of
+      !! the first LIVE layer counting down from the top, and the field
+      !! every top-side consumer reads instead of spelling `nz`.
+      !!
+      !! Under a quasi-geopotential coordinate beneath an ice shelf
+      !! (`vcoord_type = "z_fixed"` with `vcoord%z_top > 0`) the layers
+      !! whose nominal geopotential range lies INSIDE the ice are inert
+      !! fillers at `zstar_h_min`, so on an ice-covered column
+      !! `k = nz` is NOT the ice-adjacent layer.  This is the only
+      !! producer of that index.
+      !!
+      !! **Static.** The pattern is read ONCE, from
+      !! `ocean_vcoord_z_fixed_target` at `eta = 0` — the same kernel,
+      !! the same `bt_H_ref` and the same `z_top` the closed-face mask
+      !! is built from, so there is exactly ONE definition of "live" in
+      !! the tree and `test_ocean_ktop` can assert the two agree.  Under
+      !! `z_fixed` `eta` is absorbed by the first live layer (the partial
+      !! top cell) and a filler's target is `zstar_h_min` whatever `eta`
+      !! does, so the live/filler pattern does not move and there is
+      !! nothing to recompute per stage.
+      !!
+      !! **Every other coordinate is a literal no-op**: the arrays were
+      !! allocated at `source = nz_ml` in `multilayer_state_init`, which
+      !! IS the answer wherever nothing vanishes against the top, so the
+      !! whole phase is bit-identical off `z_fixed`.
+      !!
+      !! **Ordering.** Same as `configure_ocean_closed_faces` — AFTER
+      !! `configure_ocean_cavity` (`vcoord%z_top`), AFTER
+      !! `configure_ocean_bt_split` (`bt_H_ref`), AFTER the periodic-wrap
+      !! / halo pass, and BEFORE `ocean_state_enter_data` (the host fill
+      !! is what the `copyin` captures).
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+
+      integer :: nx, ny, nz, n_filler
+      real(wp) :: h_nominal, h_min
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+
+      if (.not. ocean_state%multilayer%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) return
+      if (.not. ocean_state%dyn%bt_work%is_init) return
+      if (.not. cfg%ocean%cavity_dyn%enable) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+      h_min = ocean_state%vcoord%zstar_h_min
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, h_min)
+      call ocean_vcoord_k_top_from_target(ocean_state%multilayer%k_top, &
+                                          ocean_state%multilayer%k_top_u, &
+                                          ocean_state%multilayer%k_top_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+      n_filler = count(ocean_state%multilayer%k_top < nz)
+      deallocate (tgt, eta0)
+
+      if (compute_rank == 0) then
+         call logger%info("z_fixed k_top: "//to_string(n_filler)//"/"// &
+                          to_string(nx*ny)//" columns carry top-side "// &
+                          "fillers (k_top < nz); min k_top = "// &
+                          to_string(minval(ocean_state%multilayer%k_top))// &
+                          ", nz = "//to_string(nz))
+      end if
+   end subroutine configure_ocean_k_top
+
+   subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Build the static partial-step z-level FACE-CLOSURE mask
+      !! (`&vcoord_nml zfixed_closed_faces`; Adcroft, Hill & Marshall
+      !! 1997; Losch 2008 §2.1 for the ice-shelf cavity).
+      !!
+      !! Under `vcoord_type = "z_fixed"` a layer whose nominal
+      !! geopotential range lies inside the bed — or inside the ice draft
+      !! — carries an inert FILLER of thickness `zstar_h_min`
+      !! (`<= H_VANISHED`).  A velocity face at which layer `k` is a
+      !! filler on EITHER side stays OPEN today, and the FV pressure
+      !! gradient evaluated across that staircase step drives
+      !! `a = |ρ′|·g·Δz_step/(ρ₀·dx)` out of a resting stratified state —
+      !! independent of the filler thickness, so no `h`-gate can reach
+      !! it.  A z-LEVEL model treats such a face as a WALL for that
+      !! layer: no normal velocity, no mass or tracer flux, free-slip.
+      !!
+      !! This fills `metrics%open_u/open_v` with that wall, ONCE, from
+      !! `ocean_vcoord_z_fixed_target` at `η = 0` — the same kernel the
+      !! ALE regrid and the IC seed use, so there is no second definition
+      !! of "live".  The mask is STATIC: the bed and the draft are
+      !! static, and under `z_fixed` `η` is absorbed by the first LIVE
+      !! layer (the partial cell), so the live/filler pattern does not
+      !! move.
+      !!
+      !! It also seeds the barotropic face widths `dy_cu_bt`/`dx_cv_bt`
+      !! with the OPEN-depth fraction of the face, so the barotropic
+      !! solve is not blind to the closed layers.  That seed is refreshed
+      !! from the LIVE `h` every outer step by `ocean_porous_refresh`;
+      !! this is only the `η = 0` value the first stage reads.
+      !!
+      !! **Ordering.** MUST run AFTER `configure_ocean_cavity` (which
+      !! fills `vcoord%z_top`), after `configure_ocean_bt_split` (which
+      !! lays `bt_H_ref`) and after `configure_ocean_land_mask` and the
+      !! periodic-wrap / halo pass (the target is built from GHOST-FILLED
+      !! `bt_H_ref` and `z_top`, which is what makes the mask correct at
+      !! a periodic seam — the physical seam face is an interior index).
+      !! And BEFORE `ocean_state_enter_data`: the host fill is what the
+      !! `copyin` captures, and `metrics_closed_faces_alloc` reallocs.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a configuration conflict when present; absent
+         !! behaves as today (`error stop`).
+
+      integer :: nx, ny, nz, i, j, k
+      integer :: n_closed_u, n_closed_v, n_open_u, n_open_v, n_ledge
+      real(wp) :: h_nominal, h_min, h_face, sum_all, sum_open
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (.not. cfg%zfixed_closed_faces) return
+
+      if (.not. ocean_state%multilayer%is_init) then
+         call fail("&vcoord_nml zfixed_closed_faces requires the ocean "// &
+                   "multilayer path (the mask is per-layer)", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) then
+         call fail("&vcoord_nml zfixed_closed_faces is only defined for "// &
+                   "vcoord_type='z_fixed': the live/filler staircase it "// &
+                   "closes is a z-level artefact, and on a terrain-following "// &
+                   "or z* family every layer is live on every wet face", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
+         call fail("&vcoord_nml zfixed_closed_faces needs a resolved "// &
+                   "z_fixed_h_ref (set &ocean_topo_nml max_depth): without "// &
+                   "it the z_fixed target degenerates to uniform sigma, "// &
+                   "there are no fillers, and the mask would close nothing", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%dyn%bt_work%is_init) then
+         if (maxval(ocean_state%dyn%bt_work%bt_H_ref) <= 0.0_wp) then
+            call fail("&vcoord_nml zfixed_closed_faces: bt_H_ref is empty — "// &
+                      "the barotropic datum must be built (&ocean_bt_nml "// &
+                      "n_inner >= 1) before the static face mask can be laid", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+      if (cfg%ocean%wetdry%enable) then
+         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
+                   "&ocean_wetdry_nml enable: wet/dry moves the live/filler "// &
+                   "pattern under the running state and the mask is static", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%bt%bt_halo > 0) then
+         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
+                   "&ocean_bt_nml bt_halo > 0: the wide-halo barotropic "// &
+                   "clone carries its own metrics and no face mask, so the "// &
+                   "wide BT loop would transport through closed faces "// &
+                   "(the same argument &ocean_porous_nml already makes)", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%gm%enable .or. cfg%ocean%redi%enable .or. &
+          cfg%ocean%foxkemper%enable) then
+         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
+                   "with GM / Redi / MLE: all three form their face fluxes "// &
+                   "from a 2-D `wet_u`/`wet_v` gate and fold them into "// &
+                   "mass_flux_*_layer AFTER continuity has applied the "// &
+                   "per-layer mask, so their transports would leak through "// &
+                   "a closed face.  Per-layer seams in those three kernels "// &
+                   "are the follow-up slice", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then
+         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
+                   "with the BIHARMONIC viscosity (&ocean_hvisc_nml nu_4) or "// &
+                   "with stress_tensor: the free-slip closure of a closed "// &
+                   "face is implemented for the HARMONIC velocity-Laplacian "// &
+                   "kernels only (scalar nu_h and the per-face ah_face_*), "// &
+                   "and a mirror-Neumann biharmonic pass or a wet_q-style "// &
+                   "corner factor needs its own derivation and its own "// &
+                   "test.  Use a harmonic closure, or land that slice first", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+      h_min = ocean_state%vcoord%zstar_h_min
+
+      call metrics_closed_faces_alloc(ocean_state%metrics, grid, nz)
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, h_min)
+      call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
+                                          ocean_state%metrics%open_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+
+      ! Seed the BAROTROPIC face widths with the eta = 0 open-depth
+      ! fraction.  `ocean_porous_refresh` recomputes them from the live
+      ! `h` every outer step; this is only what stage 1 of step 1 reads.
+      ! The width and the depth are the same number here: the BT
+      ! transport is `ubt * FA * dy_cu_bt` with `FA = sum_k h_face`, so
+      ! `dy_cu_bt = dy_cu * (sum_open h_face)/(sum_k h_face)` makes that
+      ! product identically `ubt * (sum_open h_face) * dy_cu`.
+      do j = 1, ny
+         do i = 2, nx
+            sum_all = 0.0_wp
+            sum_open = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(tgt(i - 1, j, k) + tgt(i, j, k))
+               sum_all = sum_all + h_face
+               if (ocean_state%metrics%open_u(i, j, k) > 0.0_wp) then
+                  sum_open = sum_open + h_face
+               end if
+            end do
+            if (sum_all > 0.0_wp) then
+               ocean_state%metrics%dy_cu_bt(i, j) = &
+                  ocean_state%metrics%dy_cu(i, j)*(sum_open/sum_all)
+            end if
+         end do
+      end do
+      do j = 2, ny
+         do i = 1, nx
+            sum_all = 0.0_wp
+            sum_open = 0.0_wp
+            do k = 1, nz
+               h_face = 0.5_wp*(tgt(i, j - 1, k) + tgt(i, j, k))
+               sum_all = sum_all + h_face
+               if (ocean_state%metrics%open_v(i, j, k) > 0.0_wp) then
+                  sum_open = sum_open + h_face
+               end if
+            end do
+            if (sum_all > 0.0_wp) then
+               ocean_state%metrics%dx_cv_bt(i, j) = &
+                  ocean_state%metrics%dx_cv(i, j)*(sum_open/sum_all)
+            end if
+         end do
+      end do
+
+      ! Cheap one-shot census for the configure line: how much of the
+      ! array the mask actually closes, and whether it isolated any
+      ! water.  Host-side, once, O(nx*ny*nz) — not a per-step diagnostic.
+      n_closed_u = 0
+      n_open_u = 0
+      do k = 1, nz
+         do j = 1, ny
+            do i = 2, nx
+               if (ocean_state%metrics%open_u(i, j, k) > 0.0_wp) then
+                  n_open_u = n_open_u + 1
+               else
+                  n_closed_u = n_closed_u + 1
+               end if
+            end do
+         end do
+      end do
+      n_closed_v = 0
+      n_open_v = 0
+      do k = 1, nz
+         do j = 2, ny
+            do i = 1, nx
+               if (ocean_state%metrics%open_v(i, j, k) > 0.0_wp) then
+                  n_open_v = n_open_v + 1
+               else
+                  n_closed_v = n_closed_v + 1
+               end if
+            end do
+         end do
+      end do
+      n_ledge = ocean_vcoord_count_ledges(ocean_state%metrics%open_u, &
+                                          ocean_state%metrics%open_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+
+      deallocate (tgt, eta0)
+
+      ! Flip the switches LAST — every consumer branches on them, and the
+      ! mask has to be in place before any of them can read a closed face.
+      ocean_state%metrics%use_closed_faces = .true.
+      ocean_state%vcoord%zfixed_closed_faces = .true.
+      ocean_state%vdiff%zlevel_faces = .true.
+
+      if (compute_rank == 0) then
+         call logger%info("z_fixed closed faces: ON (partial steps, "// &
+                          "Adcroft/Hill/Marshall 1997) — u closed "// &
+                          to_string(n_closed_u)//"/"// &
+                          to_string(n_closed_u + n_open_u)//", v closed "// &
+                          to_string(n_closed_v)//"/"// &
+                          to_string(n_closed_v + n_open_v)// &
+                          ", isolated ledge cells "//to_string(n_ledge))
+         if (n_ledge > 0) then
+            call logger%warning("z_fixed closed faces: "//to_string(n_ledge)// &
+                                " LIVE cells have all four own-layer faces "// &
+                                "closed — the mask has isolated water.  They "// &
+                                "are inert (no flux in or out, velocity zeroed "// &
+                                "every stage) but a one-cell spike in the bed "// &
+                                "or the draft is worth looking at.")
+         end if
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_closed_faces
+
    subroutine configure_ocean_porous(cfg, ocean_state, grid, compute_rank, ierr)
       !! Configure porous barriers (`&ocean_porous_nml`, Adcroft 2013).
       !! Grows the `ocean_metrics_t` porous arrays to full face size and
@@ -2645,6 +3038,20 @@ contains
       ocean_state%pressure_force%reconstruct_for_pressure = &
          cfg%ocean%pgf%reconstruct_for_pressure
       ocean_state%pressure_force%recon_scheme = cfg%ocean%pgf%recon_scheme
+      ocean_state%pressure_force%p_top_in_bc = cfg%ocean%pgf%p_top_in_bc
+      ! The top-of-column load enters the `pa` stack's surface boundary
+      ! condition, which only the FV_MOM6 family builds.  Mirrors the
+      ! `validate_config` refusal so an in-memory namelist / API caller
+      ! that bypasses validation still fails loud instead of running a
+      ! silently inert knob.
+      if (cfg%ocean%pgf%p_top_in_bc .and. &
+          ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
+         call fail("configure_ocean_pgf: p_top_in_bc=.true. requires "// &
+                   "form='fv_mom6'. Other PGF variants build no pa(nz+1) "// &
+                   "pressure-stack boundary condition for the load to enter.", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
       ! In-layer T/S reconstruction wires into the FV_MOM6 layer-integrated
       ! form only (it carries e_face / pa / intz_dpa).  Fail loud if the
       ! knob is on with any other PGF form.
@@ -2905,12 +3312,650 @@ contains
          end block
       end if
 
-      ! Mode-split contract: bt_H_ref = seeded bathymetry (Σh_layer = b).
-      ! Unsplit (n_inner = 0) doesn't read this.
+      ! Mode-split contract: bt_H_ref is the reference WATER-COLUMN
+      ! thickness.  Without an ice shelf that is the seeded bathymetry
+      ! (Σh_layer = b); under one it is `b − z_draft`, which is what makes
+      ! `bt_eta = Σh_layer − bt_H_ref` the deviation from the LOADED
+      ! equilibrium (zero at rest) rather than a permanent −z_draft.  That
+      ! is Losch (2008) §2.1's own convention, and it is why every
+      ! consumer of `D = bt_H_ref + bt_eta` — the BT continuity face
+      ! thickness, the Chapman phase speed, the ALE `remap_h_ref` — needs
+      ! no cavity branch of its own.  Knob off ⇒ `z_draft ≡ 0` ⇒ the
+      ! literal `bt_H_ref = b` this always was.
+      !
+      ! The snapshot is taken from the UNWRAPPED `b`/`z_draft`; the engine
+      ! re-wraps + halo-exchanges `bt_H_ref` right after, alongside both
+      ! of its sources.
+      !
+      ! NOTE on `auto_n_inner` above: it derives the external gravity-wave
+      ! speed from `max(b)`, the BED depth, not from `max(b − z_draft)`.
+      ! Under a shelf that OVERESTIMATES `c_ext` and so buys more
+      ! barotropic substeps than the CFL needs — conservative, never
+      ! unstable, and at a calving front (where the draft is 0) it is
+      ! exactly right.  Left as-is deliberately: tightening it would
+      ! change `n_inner` for cavity runs only, which is a separate,
+      ! answer-changing decision.
       if (cfg%ocean%bt%n_inner >= 1) then
-         ocean_state%dyn%bt_work%bt_H_ref = ocean_state%barotropic%b
+         if (ocean_state%metrics%use_cavity) then
+            ! `cavity_datum_impl`, not the raw `b - z_draft`: a GROUNDED
+            ! column has no water column, and its datum is 0 rather than
+            ! a negative thickness.  See that routine for why — in short,
+            ! it is land, nothing downstream reads its datum, and the
+            ! negative value put a phantom few-hundred-metre `bt_eta` on
+            ! it and turned the ALE land target into a cancellation.
+            call cavity_datum_impl(ocean_state%dyn%bt_work%bt_H_ref, &
+                                   ocean_state%barotropic%b, &
+                                   ocean_state%metrics%z_draft, &
+                                   cfg%ocean%cavity_dyn%h_min_cavity, &
+                                   size(ocean_state%barotropic%b, 1), &
+                                   size(ocean_state%barotropic%b, 2))
+         else
+            ocean_state%dyn%bt_work%bt_H_ref = ocean_state%barotropic%b
+         end if
       end if
    end subroutine configure_ocean_bt_split
+
+   subroutine configure_ocean_cavity(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Build the static ice-shelf cavity LOAD field
+      !! `metrics%p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa), ASSEMBLE it
+      !! into the top-of-column pressure `multilayer_state_t%p_top`, and
+      !! assert the counted-once datum invariant.
+      !!
+      !! The GEOMETRY (`z_draft`, `cover_frac`) is filled much earlier, in
+      !! `ocean_state_seed_from_cfg`, because the wet mask and the layer
+      !! split are seeded from `b − z_draft`.  What is left for configure
+      !! is the part that needs the PGF's reference density, which
+      !! `configure_ocean_pgf` / `configure_ocean_reference_density` only
+      !! settle later — hence this runs after them and before
+      !! `ocean_state_enter_data`, like every other static field the
+      !! device map has to capture.
+      !!
+      !! `rho_ref*GRAVITY` is formed as ONE product, the same one the
+      !! FV_MOM6 Pass-1 surface BC forms, so that
+      !! `pa(nz+1) = rho_ref*g*(−z_draft) + p_ice_ref` cancels to bit-zero
+      !! at rest (exactly when the toolchain rounds the product before the
+      !! add; under FMA contraction, to the rounding of `p_ice_ref`).
+      !!
+      !! ### The partition (P5.2)
+      !!
+      !! ```
+      !! ms%p_top = metrics%p_ice_ref  +  sf%p_surf
+      !!            (static ice load)     (atmospheric / anomaly load)
+      !! ```
+      !!
+      !! `p_ice_ref` goes HERE and to the datum (`bt_H_ref = b − z_draft`)
+      !! and NOWHERE else — in particular it is never added into
+      !! `sf%p_surf`, because `eta_ib = −p_surf/(ρ₀ g_bt)` is built from
+      !! the assembled total and the datum already carries exactly this
+      !! much.  Only the load ANOMALY reaches the `eta_forcing` seam, and
+      !! for the Boussinesq-isostatic default that anomaly IS `sf%p_surf`
+      !! (a cavity with no atmospheric load sends the seam nothing at
+      !! all).  See `src/core/ocean/README.md`'s `p_top` / `eta_forcing`
+      !! seam contracts.
+      !!
+      !! This seed is the FINAL value for a cavity without the psurf seam
+      !! (the draft is static, so there is nothing to refresh); with psurf
+      !! enabled, `ocean_dyn_step_split` rebuilds the same sum once per
+      !! outer step from the live `sf%p_surf`.  Host-side plain `do`
+      !! loops, before `ocean_state_enter_data` maps the result.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a cavity configuration conflict when present;
+         !! absent behaves as today (`error stop`).
+
+      integer :: nx, ny, i, j
+      real(wp) :: resid, datum_tol
+
+      if (.not. ocean_state%metrics%use_cavity) then
+         if (present(ierr)) ierr = OCEAN_STATUS_OK
+         return
+      end if
+
+      nx = size(ocean_state%metrics%z_draft, 1)
+      ny = size(ocean_state%metrics%z_draft, 2)
+
+      call cavity_fill_p_ice_ref(ocean_state%metrics%p_ice_ref, &
+                                 ocean_state%metrics%z_draft, &
+                                 ocean_state%pressure_force%rho_ref*GRAVITY, nx, ny)
+
+      ! P5.2 — THE LOAD MUST HAVE A CONSUMER WHEN IT HAS A GRADIENT.
+      !
+      ! `&ocean_pgf_nml p_top_in_bc` is the only route by which a cavity
+      ! load reaches the pressure stack, and a cavity whose draft VARIES
+      ! is not in hydrostatic balance without it: `pa(nz+1)` then carries
+      ! the uncancelled `-rho_ref*g*z_draft`, so the stack sits ~5e6 Pa
+      ! off its anomaly scale (every `h_neglect` face-divisor leak grows
+      ! by the same factor), the UNSPLIT driver — which has no
+      ! depth-mean replacement — feels a raw `g*grad(z_draft)` ~ 0.1 m/s^2,
+      ! and `&ocean_bt_nml correction_h_weighted` turns the uncancelled
+      ! depth-uniform force into a real per-layer shear.  Refused, not
+      ! auto-enabled: the namelist should say what the run does.
+      !
+      ! EXEMPTION, and it is a theorem rather than a courtesy: a draft
+      ! that is UNIFORM over the whole array has a load with no gradient,
+      ! and a gradient-free `p_top` is bit-identically inert in the top BC
+      ! (`test_ocean_pgf_p_top_bc::uniform_p_top_bit_identical`).  Such a
+      ! run — the flat-lid datum-equivalence case — is refused by nothing.
+      !
+      ! Tested on the FILLED array, not on the namelist shape: land
+      ! exclusion can zero `z_draft` under a formula that looks uniform.
+      ! `validate_config` carries the same refusal on the config-level
+      ! predicate so the user meets it before any state is built.
+      if (.not. ocean_state%pressure_force%p_top_in_bc) then
+         if (maxval(ocean_state%metrics%z_draft) /= &
+             minval(ocean_state%metrics%z_draft)) then
+            call fail("&ocean_cavity_dyn_nml enable=.true. with a NON-UNIFORM "// &
+                      "draft requires &ocean_pgf_nml p_top_in_bc=.true.  The "// &
+                      "isostatic load rho_ref*g*z_draft would otherwise never "// &
+                      "reach the FV_MOM6 pa(nz+1) surface boundary condition, "// &
+                      "leaving the pressure stack ~"// &
+                      to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                      " Pa off its anomaly scale and the column out of "// &
+                      "hydrostatic balance.  (A UNIFORM draft is exempt: a "// &
+                      "load with no gradient is provably inert in the top BC.)", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! P5.2: assemble the top-of-column load.  Rebuilt from scratch (not
+      ! `+=` onto whatever the earlier psurf seed left) so the result does
+      ! not depend on which of the two seeds ran first, and over the WHOLE
+      ! array including ghosts — `p_top` owes no halo exchange of its own
+      ! precisely because both of its sources are already ghost-valid.
+      if (.not. (size(ocean_state%multilayer%p_top, 1) == nx .and. &
+                 size(ocean_state%multilayer%p_top, 2) == ny)) then
+         call fail("configure_ocean_cavity: ms%p_top and metrics%p_ice_ref "// &
+                   "have different shapes — the top-of-column load cannot be "// &
+                   "assembled.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      do j = 1, ny
+         do i = 1, nx
+            ocean_state%multilayer%p_top(i, j) = ocean_state%metrics%p_ice_ref(i, j)
+         end do
+      end do
+      if (allocated(ocean_state%surface_flux%p_surf)) then
+         do j = 1, ny
+            do i = 1, nx
+               ocean_state%multilayer%p_top(i, j) = &
+                  ocean_state%multilayer%p_top(i, j) + &
+                  ocean_state%surface_flux%p_surf(i, j)
+            end do
+         end do
+      end if
+
+      ! ---- The vertical coordinate's rigid-top seam (P6.2) ----
+      ! `vcoord%z_top(i,j)` is the geopotential depth of the top of the
+      ! WATER column — the ice base under a shelf, `z = 0` elsewhere.
+      ! The draft is static, so this is a configure-time copy and the
+      ! vcoord slot stays self-contained at run time: the ALE remap
+      ! driver never sees `metrics` and the target builder's signature is
+      ! unchanged.  Same pattern (and the same reason) as the sponge's
+      ! `sp%z_top` in `configure_ocean_sponge`.
+      !
+      ! Consumed by the `VCOORD_Z_FIXED` branch of `compute_target_h`.
+      ! Without a cavity this routine has already returned, so `z_top`
+      ! keeps its init-time zero fill and every geometric family
+      ! reproduces its pre-cavity arithmetic bit-for-bit.  BEFORE
+      ! `ocean_state_enter_data` maps it.
+      if (allocated(ocean_state%vcoord%z_top)) then
+         if (size(ocean_state%vcoord%z_top, 1) == nx .and. &
+             size(ocean_state%vcoord%z_top, 2) == ny) then
+            do j = 1, ny
+               do i = 1, nx
+                  ocean_state%vcoord%z_top(i, j) = ocean_state%metrics%z_draft(i, j)
+               end do
+            end do
+         else
+            call fail("configure_ocean_cavity: vcoord%z_top and metrics%z_draft "// &
+                      "have different shapes — the vertical coordinate cannot see "// &
+                      "the ice base.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! The counted-once invariant (I), in metres of reference depth, over
+      ! the WET columns:
+      !     rho*g*z_draft + (bt_H_ref - b)*rho*g == 0   <=>   bt_H_ref == b - z_draft.
+      ! GROUNDED columns are excluded because they are LAND: every face
+      ! metric on them is zero, so they carry no barotropic momentum
+      ! equation and there is no load on them to count once or twice.
+      ! Their datum is deliberately 0 (`cavity_datum_impl`).
+      ! Asserted on the common positive factor divided out — scale-free,
+      ! and it does not fabricate a product the code never forms.  The
+      ! bound is a pure round-off allowance on the ONE subtraction
+      ! `b - z_draft`: both operands are O(max depth), so the result
+      ! carries at most a few ulp of it.  (It is NOT asserted as bit-zero:
+      ! the latch and this check evaluate the same difference in two
+      ! places, and an FMA-contracting build is free to round them
+      ! differently.)
+      if (cfg%ocean%bt%n_inner >= 1) then
+         datum_tol = 8.0_wp*epsilon(1.0_wp)* &
+                     max(maxval(abs(ocean_state%barotropic%b)), 1.0_wp)
+         resid = cavity_datum_residual(ocean_state%dyn%bt_work%bt_H_ref, &
+                                       ocean_state%barotropic%b, &
+                                       ocean_state%metrics%z_draft, &
+                                       cfg%ocean%cavity_dyn%h_min_cavity, nx, ny)
+         if (.not. (resid <= datum_tol)) then
+            call fail("&ocean_cavity_dyn_nml: the barotropic datum and the ice "// &
+                      "draft disagree (max |bt_H_ref - (b - z_draft)| = "// &
+                      to_string(resid)//" m > "//to_string(datum_tol)//" m).  The "// &
+                      "ice load would then be counted twice, or not at all — check "// &
+                      "that z_draft went through the same periodic/fold re-wrap and "// &
+                      "halo exchange as b.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! ---- Cover mask on the atmospheric forcing (P2c) ----
+      ! There is no atmosphere under an ice shelf.  Two static forcing
+      ! fields are masked ONCE, here, because this is the first point at
+      ! which `cover_frac` exists AND the forcing has been seeded
+      ! (`configure_ocean_forcing` runs much earlier, before the cavity
+      ! geometry):
+      !
+      !   * the wind-stress PAIR, masked on every face touching a covered
+      !     cell and followed by the `stress_mag` refresh in the same
+      !     call — see `ocean_surface_stress_apply_cover`.  Masking the
+      !     source rather than the derived views is what also silences
+      !     the implicit vdiff stress fold and the MLE front sampler,
+      !     which read `ss%tau_x` raw;
+      !   * the SCALAR `&ocean_thermo_nml q_heat` / `q_salt` fill, but
+      !     ONLY when the component set is off.  With components on those
+      !     two are assembler outputs and the mask belongs in
+      !     `ocean_surface_flux_assemble` (a second writer here would
+      !     break the fill contract); the call below no-ops itself in
+      !     that case.
+      !
+      ! Both are host-side and both run BEFORE `ocean_state_enter_data`,
+      ! so the masked values are what the device map captures.  Both are
+      ! idempotent.  The time-varying twin of the wind mask lives in
+      ! `ocean_seam_refresh_surface_stress` (per data-forcing bracket).
+      call ocean_surface_stress_apply_cover(ocean_state%surface_stress, &
+                                            ocean_state%metrics%cover_frac)
+      call ocean_surface_flux_apply_cover_const(ocean_state%surface_flux, &
+                                                ocean_state%metrics%cover_frac)
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf cavity: isostatic load p_ice_ref = "// &
+                          "rho_ref*g*z_draft, max = "// &
+                          to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                          " Pa (rho_ref = "// &
+                          to_string(ocean_state%pressure_force%rho_ref)//" kg/m^3)")
+         call logger%info("                  assembled into ms%p_top (max = "// &
+                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          " Pa = p_ice_ref + sf%p_surf); NOT into sf%p_surf, "// &
+                          "which the eta_forcing seam is built from")
+         if (ocean_state%pressure_force%p_top_in_bc) then
+            call logger%info("                  consumed by the FV_MOM6 pa(nz+1) "// &
+                             "surface BC (&ocean_pgf_nml p_top_in_bc)")
+         else
+            call logger%info("                  the draft is UNIFORM here, so the "// &
+                             "load has no gradient and the PGF top BC is provably "// &
+                             "inert; &ocean_pgf_nml p_top_in_bc is not required")
+         end if
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_cavity
+
+   subroutine configure_ocean_cavity_melt(cfg, ocean_state, grid, compute_rank, ierr)
+      !! Configure the ice-shelf basal-melt slot (`&ocean_cavity_melt_nml`,
+      !! P2b): copy the knobs onto the slot's three flat parameter
+      !! bundles, resolve the `gamma_s` sentinel, build the per-column
+      !! Coriolis array the `hj99` law needs, and CHECK that the
+      !! interface pressure the liquidus will read has actually been
+      !! loaded.
+      !!
+      !! Runs immediately after `configure_ocean_cavity` — which is the
+      !! SOLE producer of `ms%p_top` — and before
+      !! `ocean_state_enter_data`, like every other static fill the
+      !! device map has to capture.
+      !!
+      !! **`ms%p_top`: this routine is a CONSUMER, not a writer.**
+      !! `ms%p_top` is THE interface pressure
+      !! (`src/core/ocean/README.md`, the `p_top` seam contract), and the
+      !! melt liquidus is its THIRD consumer alongside the FV_MOM6
+      !! `pa(nz+1)` surface boundary condition and the in-situ EOS.  It
+      !! has exactly ONE producer, `configure_ocean_cavity`, which
+      !! assembles `ms%p_top = metrics%p_ice_ref + sf%p_surf` (P5.2) —
+      !! rebuilt per outer step in `ocean_dyn_step_split` when the psurf
+      !! seam makes `sf%p_surf` live.  A second writer here would be a
+      !! silent clobber, so there is none: what this routine does instead
+      !! is ASSERT that every ice-covered column carries at least its own
+      !! isostatic load, which catches a producer that was skipped or
+      !! reordered rather than trusting the call order.
+      use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
+                                       CAVITY_LAW_HJ99, parse_cavity_freshwater, &
+                                       parse_cavity_volume_comp, CAVITY_FW_MASS, &
+                                       CAVITY_VC_UNIFORM_OPEN
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a melt configuration conflict when present;
+         !! absent behaves as today (`error stop`).
+      integer :: nx, ny, n_zero_f, n_unloaded
+      real(wp) :: gamma_s_eff
+
+      if (.not. ocean_state%cavity_flux%enable) then
+         if (present(ierr)) ierr = OCEAN_STATUS_OK
+         return
+      end if
+
+      nx = size(ocean_state%cavity_flux%f_cor, 1)
+      ny = size(ocean_state%cavity_flux%f_cor, 2)
+
+      ! ---- knobs -> slot ----
+      ocean_state%cavity_flux%far_field_depth = cfg%ocean%cavity_melt%far_field_depth
+      ocean_state%cavity_flux%cdrag_top = cfg%ocean%cavity_melt%cdrag_top
+      ocean_state%cavity_flux%u_tide = cfg%ocean%cavity_melt%u_tide
+      ocean_state%cavity_flux%ustar_min = cfg%ocean%cavity_melt%ustar_min
+      ocean_state%cavity_flux%s_ice = cfg%ocean%cavity_melt%s_ice
+      ocean_state%cavity_flux%freshwater = &
+         parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater)
+      ocean_state%cavity_flux%volume_comp = &
+         parse_cavity_volume_comp(cfg%ocean%cavity_melt%volume_compensation)
+
+      ! THE Boussinesq reference density, taken from the surface-flux
+      ! slot rather than re-read from `cfg`, because the real-mass path's
+      ! salt correction has to be the EXACT negation of the increment
+      ! `apply_surface_src_2d_impl` stamped with `dt/sf%rho0`.  One
+      ! source, no second literal, and `configure_ocean_reference_density`
+      ! has already run (it seeds `sf%rho0` from `&ocean_ic_nml rho_0`).
+      ocean_state%cavity_flux%rho0 = ocean_state%surface_flux%rho0
+      if (ocean_state%cavity_flux%rho0 <= 0.0_wp) then
+         call fail("&ocean_cavity_melt_nml: the Boussinesq reference density "// &
+                   "reaching the melt slot is non-positive, so the mass -> volume "// &
+                   "conversion m/rho_0 has no value.  configure_ocean_reference_"// &
+                   "density must run before configure_ocean_cavity_melt.", ierr, &
+                   OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      ! `gamma_s` carries the repo's negative "unset" sentinel; resolve
+      ! it to the ISOMIP+ `gamma_t/35` exactly once, here, so the value
+      ! the kernel is handed is the value the log prints.
+      gamma_s_eff = cavity_resolve_gamma_s(cfg%ocean%cavity_melt%gamma_s, &
+                                           cfg%ocean%cavity_melt%gamma_t)
+      ocean_state%cavity_flux%par%law = &
+         parse_cavity_exchange_law(cfg%ocean%cavity_melt%exchange_law)
+      ocean_state%cavity_flux%par%gamma_t_coeff = cfg%ocean%cavity_melt%gamma_t
+      ocean_state%cavity_flux%par%gamma_s_coeff = gamma_s_eff
+      ocean_state%cavity_flux%ice%mode = &
+         parse_cavity_ice_mode(cfg%ocean%cavity_melt%ice_conduction)
+      ocean_state%cavity_flux%ice%T_ice = cfg%ocean%cavity_melt%t_ice
+
+      ! `cavity_flux%const` is deliberately LEFT at its ISOMIP+ defaults
+      ! (Asay-Davis et al. (2016) Table 4): `rho_w`, `c_w`, `alpha_T`,
+      ! `beta_S` there are the melt law's own calibrated constants, not
+      ! copies of the Boussinesq `rho_0` — the same "out of scope on
+      ! purpose" category the README's reference-density table already
+      ! lists `RHO_WATER` and `&ocean_ice_nml rho_ocean` under.
+      ! Overriding them would silently break ISOMIP+ comparability,
+      ! which is the reason this path exists.
+
+      ! ---- per-column Coriolis for the hj99 law ----
+      call fill_coriolis_centre(cfg, ocean_state%metrics, grid, ocean_state%cavity_flux%f_cor)
+      if (ocean_state%cavity_flux%par%law == CAVITY_LAW_HJ99) then
+         n_zero_f = cavity_count_zero_f(ocean_state%cavity_flux%f_cor, &
+                                        ocean_state%metrics%cover_frac, &
+                                        ocean_state%multilayer%wet_mask, nx, ny)
+         if (n_zero_f > 0) then
+            call fail("&ocean_cavity_melt_nml exchange_law='hj99': "// &
+                      to_string(n_zero_f)//" ice-covered wet column(s) sit at "// &
+                      "f = 0.  Holland & Jenkins (1999) eq. (15) takes "// &
+                      "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, so the law "// &
+                      "has no value there and the kernel would return "// &
+                      "CAVITY_MELT_NO_CORIOLIS for every one of them.  Use "// &
+                      "exchange_law='const_gamma', or move the cavity off the "// &
+                      "f = 0 line.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      ! ---- the interface pressure: ASSERT, never write (see the docstring) ----
+      ! `p_surf >= 0` by contract, so a correctly assembled `p_top` is
+      ! `>= p_ice_ref` on every cell.  A zero `p_top` under a loaded
+      ! draft means the producer never ran (or ran before the load was
+      ! built), which would melt against a surface-pressure liquidus and
+      ! silently delete the entire ice pump.
+      n_unloaded = cavity_count_unloaded_p_top(ocean_state%multilayer%p_top, &
+                                               ocean_state%metrics%p_ice_ref, nx, ny)
+      if (n_unloaded > 0) then
+         call fail("&ocean_cavity_melt_nml: "//to_string(n_unloaded)//" column(s) "// &
+                   "have ms%p_top < metrics%p_ice_ref, so the top-of-column load was "// &
+                   "never assembled.  The melt liquidus is a CONSUMER of ms%p_top; "// &
+                   "its sole producer is configure_ocean_cavity "// &
+                   "(p_top = p_ice_ref + sf%p_surf), which must run before this "// &
+                   "routine.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf basal melt: exchange_law='"// &
+                          trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
+                          "', Gamma_T = "//to_string(cfg%ocean%cavity_melt%gamma_t)// &
+                          ", Gamma_S = "//to_string(gamma_s_eff)// &
+                          ", ice='"// &
+                          trim(adjustl(cfg%ocean%cavity_melt%ice_conduction))//"'")
+         call logger%info("                      far_field_depth = "// &
+                          to_string(cfg%ocean%cavity_melt%far_field_depth)// &
+                          " m (METRES below the ice base, not 'layer nz'), "// &
+                          "C_d,top = "//to_string(cfg%ocean%cavity_melt%cdrag_top)// &
+                          ", u_tide = "//to_string(cfg%ocean%cavity_melt%u_tide)//" m/s")
+         call logger%info("                      liquidus evaluated at ms%p_top "// &
+                          "(max = "// &
+                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          " Pa), assembled by configure_ocean_cavity as "// &
+                          "p_ice_ref + sf%p_surf")
+         if (ocean_state%cavity_flux%freshwater == CAVITY_FW_MASS) then
+            call logger%info("                      freshwater = 'mass': the "// &
+                             "meltwater is a REAL Boussinesq volume on the top "// &
+                             "layer, dh = m*dt/rho_0 with rho_0 = "// &
+                             to_string(ocean_state%cavity_flux%rho0)//" kg/m3.  The "// &
+                             "virtual salt flux stays in Q_salt as the KPP/EPBL B_0 "// &
+                             "buoyancy forcing and is removed again from the tracer "// &
+                             "in the same stage.")
+            if (ocean_state%cavity_flux%volume_comp == CAVITY_VC_UNIFORM_OPEN) then
+               call logger%info("                      volume_compensation = "// &
+                                "'uniform_open_ocean': the domain-integrated melt "// &
+                                "volume is removed again each thermo step over the "// &
+                                "uncovered wet cells, carrying their own T and S, "// &
+                                "and is tracked as a sink in all three budgets.")
+            else
+               call logger%warning("Ice-shelf basal melt: freshwater='mass' with "// &
+                                   "volume_compensation='none' — a CLOSED domain "// &
+                                   "gains the melt volume and its sea level rises "// &
+                                   "(for an ISOMIP+ Ocean0 box that is metres per "// &
+                                   "year).  Correct for a short run or an open "// &
+                                   "boundary; otherwise set "// &
+                                   "volume_compensation='uniform_open_ocean'.")
+            end if
+         else
+            call logger%warning("Ice-shelf basal melt: the meltwater is a VIRTUAL SALT "// &
+                                "FLUX — it carries no mass, so it adds no volume and no "// &
+                                "direct buoyancy.  That is a first-order limitation for "// &
+                                "cavity circulation; set &ocean_cavity_melt_nml "// &
+                                "freshwater='mass' for the real volume source.")
+         end if
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_cavity_melt
+
+   subroutine configure_ocean_top_drag(cfg, ocean_state, grid, compute_rank)
+      !! Ice-shelf TOP drag (`&ocean_tdrag_nml`, Phase 4a): copy the
+      !! variant + coefficients onto the slot, project the static
+      !! cell-centred `metrics%cover_frac` onto the velocity FACES, and
+      !! enforce the ONE-`C_d` rule against the melt slot.
+      !!
+      !! Runs AFTER `configure_ocean_cavity_melt` (which is where the melt
+      !! slot's `cdrag_top` is seeded, and which this routine then
+      !! overwrites from `&ocean_tdrag_nml cd` — `validate_config` has
+      !! already refused a disagreement, so the assignment is structural,
+      !! not a silent override) and AFTER the `cover_frac` halo exchange,
+      !! and BEFORE `ocean_state_enter_data` so the host-filled face masks
+      !! reach the device with the `copyin` map.
+      !!
+      !! Disabled ⇒ nothing is written, the slot keeps its placeholder
+      !! arrays, and the run is bit-identical.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+
+      integer :: nx, ny
+
+      if (.not. cfg%ocean%tdrag%enable) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+
+      ocean_state%tdrag%variant = parse_tdrag_variant(cfg%ocean%tdrag%form)
+      ocean_state%tdrag%c_drag = cfg%ocean%tdrag%cd
+      ocean_state%tdrag%r_linear = cfg%ocean%tdrag%r
+      ocean_state%tdrag%htbl = cfg%ocean%tdrag%htbl
+      ocean_state%tdrag%drag_bg_vel = cfg%ocean%tdrag%bg_vel
+      ocean_state%tdrag%tbl_thick_min = cfg%ocean%tdrag%tbl_thick_min
+      ocean_state%tdrag%implicit = cfg%ocean%tdrag%implicit
+      ! `&ocean_vdiff_nml implicit_top_drag` is the OTHER implicit form:
+      ! the fold into the vdiff `k = nz` diagonal.  Latched on both slots
+      ! — the top-drag kernel needs it to fill `lambda_top_u/v`, and the
+      ! driver reads `td%implicit_fold` to skip the explicit apply.
+      ! `validate_config` has already refused the double-count
+      ! (`implicit_top_drag` × `&ocean_tdrag_nml implicit`) and the
+      ! distributed case (`htbl > 0`).
+      ocean_state%tdrag%implicit_fold = cfg%ocean%vdiff%implicit_top_drag
+      ocean_state%vdiff%implicit_top_drag = cfg%ocean%vdiff%implicit_top_drag
+      ! `rho0` is only ever used to scale the `stress_top` diagnostic into
+      ! N/m^2; no dynamics reads it.  The one rho0 of record is
+      ! `&ocean_ic_nml rho_0` -> `eos%rho0`, already resolved by
+      ! `configure_ocean_reference_density` well before this point.
+      ocean_state%tdrag%rho0 = ocean_state%eos%rho0
+
+      ! Static face cover, OR of the two abutting cells (see
+      ! `rdb_ocean_top_drag`'s module docstring for why OR at a calving
+      ! front), plus the cell-centred copy the `stress_top` diagnostic
+      ! reads.  `cover_frac` is `&ocean_cavity_dyn_nml` geometry: filled
+      ! in the IC seed, halo-exchanged by the engine, never touched again.
+      call top_drag_fill_face_cover_impl(ocean_state%tdrag%cover_u, &
+                                         ocean_state%tdrag%cover_v, &
+                                         ocean_state%metrics%cover_frac, nx, ny)
+      ocean_state%tdrag%cover_t(:, :) = ocean_state%metrics%cover_frac(:, :)
+
+      ! ONE drag coefficient for momentum and melt.  MOM6 carries two
+      ! independent top-drag coefficients; we deliberately do not — see
+      ! the agreement rule in `validate_config`, which has already failed
+      ! loud if the user set two different values.
+      if (cfg%ocean%cavity_melt%enable .and. &
+          ocean_state%tdrag%variant == TDRAG_QUADRATIC) then
+         ocean_state%cavity_flux%cdrag_top = cfg%ocean%tdrag%cd
+      end if
+
+      if (compute_rank == 0) then
+         call logger%info("Ice-shelf top drag: "//trim(cfg%ocean%tdrag%form)// &
+                          "  C_d="//to_string(cfg%ocean%tdrag%cd)// &
+                          "  r="//to_string(cfg%ocean%tdrag%r)//" 1/s")
+         if (cfg%ocean%tdrag%htbl > 0.0_wp) then
+            call logger%info("  top BL:         HTBL="//to_string(cfg%ocean%tdrag%htbl)// &
+                             " m  bg_vel="//to_string(cfg%ocean%tdrag%bg_vel)// &
+                             " m/s  thick_min="// &
+                             to_string(cfg%ocean%tdrag%tbl_thick_min)//" m")
+         else
+            call logger%info("  top BL:         layer-nz only (HTBL=0)")
+         end if
+         call logger%info("  covered faces:  u "// &
+                          to_string(int(sum(ocean_state%tdrag%cover_u)))//", v "// &
+                          to_string(int(sum(ocean_state%tdrag%cover_v)))// &
+                          " (OR of the two abutting cells)")
+         if (cfg%ocean%cavity_melt%enable) then
+            call logger%info("  melt u* C_d:    taken from &ocean_tdrag_nml cd "// &
+                             "(one coefficient for momentum and melt)")
+         end if
+      end if
+   end subroutine configure_ocean_top_drag
+
+   pure function cavity_resolve_gamma_s(gamma_s, gamma_t) result(gamma_s_eff)
+      !! Resolve the `&ocean_cavity_melt_nml gamma_s` "unset" sentinel to
+      !! the ISOMIP+ default `gamma_t/CAVITY_GAMMA_RATIO_ISOMIP`
+      !! (Asay-Davis et al. (2016) Table 4 p. 2483; the 35 is Jenkins,
+      !! Nicholls & Corr (2010) p. 2309).
+      !!
+      !! A NEGATIVE `gamma_s` means "not set by the user"; zero and
+      !! positive values are taken literally — zero is then refused as a
+      !! range error by `validate_config` rather than silently
+      !! re-triggering the default, because the three-equation form
+      !! divides by `gamma_s`.
+      real(wp), intent(in) :: gamma_s
+         !! The raw knob; negative = unset sentinel.
+      real(wp), intent(in) :: gamma_t
+         !! Heat-transfer coefficient the default is a fraction of.
+      real(wp) :: gamma_s_eff
+      gamma_s_eff = merge(gamma_t/CAVITY_GAMMA_RATIO_ISOMIP, gamma_s, gamma_s < 0.0_wp)
+   end function cavity_resolve_gamma_s
+
+   pure function cavity_count_zero_f(f_cor, cover_frac, wet_mask, nx, ny) result(n_zero)
+      !! Count ice-covered WET columns sitting at exactly `f = 0` — the
+      !! configure-time domain check for `exchange_law = "hj99"`.
+      !!
+      !! Exactly zero, not "small": the law's failure at `f = 0` is a
+      !! division and a logarithm, not a loss of accuracy, and a small
+      !! `|f|` is a legitimate (if strongly suppressed) answer.
+      integer, intent(in) :: nx
+         !! First dimension.
+      integer, intent(in) :: ny
+         !! Second dimension.
+      real(wp), intent(in) :: f_cor(nx, ny)
+         !! Cell-centred Coriolis parameter (1/s).
+      real(wp), intent(in) :: cover_frac(nx, ny)
+         !! Ice-cover fraction.
+      real(wp), intent(in) :: wet_mask(nx, ny)
+         !! Static wet/land mask.
+      integer :: n_zero
+      integer :: i, j
+      n_zero = 0
+      do j = 1, ny
+         do i = 1, nx
+            if (cover_frac(i, j) > 0.5_wp .and. wet_mask(i, j) > 0.5_wp) then
+               if (f_cor(i, j) == 0.0_wp) n_zero = n_zero + 1
+            end if
+         end do
+      end do
+   end function cavity_count_zero_f
+
+   pure function cavity_count_unloaded_p_top(p_top, p_ice_ref, nx, ny) result(n_unloaded)
+      !! Count cells whose top-of-column pressure does NOT carry the
+      !! isostatic ice load — the melt path's guard that
+      !! `configure_ocean_cavity` (the sole `ms%p_top` producer) ran, and
+      !! ran before this check.
+      !!
+      !! The test is `p_top < p_ice_ref`, which is exact rather than a
+      !! tolerance: `ms%p_top = p_ice_ref + sf%p_surf` with
+      !! `sf%p_surf >= 0` by contract, so a loaded column satisfies it
+      !! with no rounding argument at all, and an unloaded one misses it
+      !! by the whole 5e6 Pa.  A `pure` predicate, so the refusal can be
+      !! tested without provoking the `error stop`.
+      integer, intent(in) :: nx
+         !! First dimension.
+      integer, intent(in) :: ny
+         !! Second dimension.
+      real(wp), intent(in) :: p_top(nx, ny)
+         !! `multilayer_state_t%p_top` (Pa).
+      real(wp), intent(in) :: p_ice_ref(nx, ny)
+         !! `metrics%p_ice_ref` (Pa) = `rho_ref*GRAVITY*z_draft`.
+      integer :: n_unloaded
+      integer :: i, j
+      n_unloaded = 0
+      do j = 1, ny
+         do i = 1, nx
+            if (p_top(i, j) < p_ice_ref(i, j)) n_unloaded = n_unloaded + 1
+         end do
+      end do
+   end function cavity_count_unloaded_p_top
 
    subroutine configure_ocean_wetdry(cfg, ocean_state, grid, compute_rank)
       !! Dynamic wetting/drying (docs/ocean_wetdry_plan.md): copy the
@@ -3410,7 +4455,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
 
-      integer :: i0, i1, j0, j1, band
+      integer :: i0, i1, j0, j1, band, ramp
       real(wp) :: strength
       integer :: nonzero_h, nonzero_u, nonzero_v
 
@@ -3423,6 +4468,31 @@ contains
          sp%relax_h = s_cfg%relax_h
          sp%damp_source = s_cfg%damp_source
          sp%target_source = s_cfg%target_source
+         sp%lin_t_ref = s_cfg%lin_t_ref
+         sp%lin_dt_dz = s_cfg%lin_dt_dz
+         sp%lin_s_ref = s_cfg%lin_s_ref
+         sp%lin_ds_dz = s_cfg%lin_ds_dz
+         ramp = merge(SPONGE_RAMP_LINEAR, SPONGE_RAMP_COSINE, &
+                      trim(s_cfg%ramp) == "linear")
+
+         ! Latch the two registry indices the analytic `linear_z` refresh
+         ! needs, so the per-step kernel never walks the tracer registry
+         ! (the array-of-derived-types device-indirection rule).
+         sp%idx_t = ocean_state%multilayer%idx_temperature
+         sp%idx_s = ocean_state%multilayer%idx_salinity
+
+         ! Latch the geopotential depth of the column TOP.  The draft is
+         ! static by design, so this is a configure-time copy and the
+         ! sponge slot stays self-contained at run time.  No cavity ⇒
+         ! `z_draft` is the (1,1) placeholder and `z_top` keeps its
+         ! init-time zero (the open-ocean free-surface datum).
+         if (ocean_state%metrics%use_cavity .and. &
+             size(ocean_state%metrics%z_draft, 1) == size(sp%z_top, 1) .and. &
+             size(ocean_state%metrics%z_draft, 2) == size(sp%z_top, 2)) then
+            sp%z_top = ocean_state%metrics%z_draft
+         else
+            sp%z_top = 0.0_wp
+         end if
 
          i0 = grid%nghost + 1
          i1 = grid%nghost + grid%nx_phys
@@ -3438,7 +4508,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_x(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + 1, band=band, &
-                                         strength=strength, side=+1, j0=j0, j1=j1)
+                                         strength=strength, side=+1, j0=j0, j1=j1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- East edge ----
@@ -3449,7 +4520,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_x(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + grid%nx_phys + 1, band=band, &
-                                         strength=strength, side=-1, j0=j0, j1=j1)
+                                         strength=strength, side=-1, j0=j0, j1=j1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- South edge ----
@@ -3460,7 +4532,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_y(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + 1, band=band, &
-                                         strength=strength, side=+1, i0=i0, i1=i1)
+                                         strength=strength, side=+1, i0=i0, i1=i1, &
+                                         ramp=ramp)
                end if
             end if
             ! ---- North edge ----
@@ -3471,7 +4544,8 @@ contains
                if (band > 0) then
                   call sponge_add_band_y(sp%idamp_h, sp%idamp_u, sp%idamp_v, &
                                          wall_face=grid%nghost + grid%ny_phys + 1, band=band, &
-                                         strength=strength, side=-1, i0=i0, i1=i1)
+                                         strength=strength, side=-1, i0=i0, i1=i1, &
+                                         ramp=ramp)
                end if
             end if
          end if
@@ -3490,7 +4564,7 @@ contains
    end subroutine configure_ocean_sponge
 
    pure subroutine sponge_add_band_x(idamp_h, idamp_u, idamp_v, wall_face, band, &
-                                     strength, side, j0, j1)
+                                     strength, side, j0, j1, ramp)
       !! Add a cosine-ramp `Idamp` band for a west/east (x-normal) sponge
       !! edge into the three maps, SUMMING onto whatever is already there
       !! (§3.2 corner composition). Offsets reproduce
@@ -3502,17 +4576,20 @@ contains
       !! verbatim so `damp_source="band"` matches today's band exactly.
       real(wp), intent(inout) :: idamp_h(:, :), idamp_u(:, :), idamp_v(:, :)
       integer, intent(in) :: wall_face, band, side, j0, j1
+      integer, intent(in) :: ramp
+         !! `SPONGE_RAMP_COSINE` (default, the legacy shape, bit-identical)
+         !! or `SPONGE_RAMP_LINEAR` (ISOMIP+ Eq. 20 at cell centres).
       real(wp), intent(in) :: strength
 
       integer :: d, j, i_h, i_u
       real(wp) :: rate, alpha
-      real(wp), parameter :: PI_LOCAL = acos(-1.0_wp)
-         !! Matches the legacy kernel's own `PI = acos(-1.0_wp)` local
-         !! parameter bit-for-bit (rather than importing `rdb_constants::PI`,
-         !! a `4*atan(1)` formulation) — test 9.4 pins the band to 1e-14.
 
       do d = 0, band - 1
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         ! `sponge_band_alpha` holds both shapes; its cosine branch keeps
+         ! the legacy kernel's own `acos(-1.0_wp)` spelling of pi
+         ! bit-for-bit (rather than `rdb_constants::PI`, a `4*atan(1)`
+         ! formulation) — test 9.4 pins the band to 1e-14.
+         alpha = sponge_band_alpha(d, band, ramp)
          rate = strength*alpha
          if (side > 0) then
             i_h = wall_face + d
@@ -3538,21 +4615,22 @@ contains
    end subroutine sponge_add_band_x
 
    pure subroutine sponge_add_band_y(idamp_h, idamp_u, idamp_v, wall_face, band, &
-                                     strength, side, i0, i1)
+                                     strength, side, i0, i1, ramp)
       !! Mirror of `sponge_add_band_x` for a south/north (y-normal) sponge
       !! edge: `idamp_h`/`idamp_u` share the row offset; `idamp_v` (the
       !! y-normal face) sits one further row in for the south edge (`side =
       !! +1`) and shares the offset for the north edge (`side = -1`).
       real(wp), intent(inout) :: idamp_h(:, :), idamp_u(:, :), idamp_v(:, :)
       integer, intent(in) :: wall_face, band, side, i0, i1
+      integer, intent(in) :: ramp
+         !! See `sponge_add_band_x`.
       real(wp), intent(in) :: strength
 
       integer :: d, i, j_h, j_v
       real(wp) :: rate, alpha
-      real(wp), parameter :: PI_LOCAL = acos(-1.0_wp)
 
       do d = 0, band - 1
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         alpha = sponge_band_alpha(d, band, ramp)
          rate = strength*alpha
          if (side > 0) then
             j_h = wall_face + d

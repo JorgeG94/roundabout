@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.0% of total for procedures.">20 statements</a>
+                 title=" 0.0% of total for procedures.">15 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,12 +134,11 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-i~442">i</a>
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-j~372">j</a>
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-k~265">k</a>
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-nx~371">nx</a>
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-ny~371">ny</a>
-            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-val~18">val</a>
+            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-i~66">i</a>
+            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-j~65">j</a>
+            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-k~44">k</a>
+            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-nx~70">nx</a>
+            <a class="list-group-item" href="../proc/seed_land_tracer_hold_impl.html#variable-ny~70">ny</a>
         </div>
       </div>
     </div>
@@ -175,14 +174,46 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>private pure subroutine seed_land_tracer_hold_impl(hTr, h_layer, wet_mask, nz)  
+    <h2>private pure subroutine seed_land_tracer_hold_impl(hTr, wet_mask, nz)  
 </h2>
     
 
-    <p>On land T-cells, recover the seeded per-layer tracer value
-<code>val = hTr/h_old</code> and re-scale onto the <code>H_VANISHED</code> floor so
-<code>hTr = val*H_VANISHED</code> stays finite and <code>T/S</code> is held.  Wet cells
-untouched (bit-identical when <code>wet_mask≡1</code>).</p>
+    <p>Zero the extensive tracer content <code>hTr</code> on land T-cells
+(<code>wet_mask == 0</code>).  Wet cells untouched (bit-identical when
+<code>wet_mask ≡ 1</code>).</p>
+<h3 id="the-land-state-contract-h-h_vanished-htr-0">The land-state contract: <code>h = H_VANISHED</code>, <code>hTr = 0</code></h3>
+<p><code>seed_land_h_floor_impl</code> pins a land layer&rsquo;s thickness EXACTLY at
+<code>H_VANISHED</code>, which is the D4 <em>vanished</em> marker.  Every
+vanished-gated operator in the tree tests <code>h &gt; H_VANISHED</code>
+(strictly), so a land layer is on the VANISHED side of every one
+of those gates — in particular the ALE remap&rsquo;s concentration
+step (<code>rdb_ocean_remap::ocean_remap_tracer_field</code>, <code>c = hTr/h</code> if
+<code>h &gt; H_FLOOR</code> else <code>c = 0</code>), which therefore writes <code>hTr = 0</code> on
+every land column at the first regrid.</p>
+<p>So <code>hTr = 0</code> is not a choice made here — it is the land content
+the running solver holds.  The seed&rsquo;s job is to hand the budget
+latch the SAME land state that every later step will have, and
+any other seeded value is content the first regrid discards
+silently and un-budgeted, which shows up as a step change in the
+console <code>Error</code> residual between step 0 and step 1.</p>
+<p>This replaced a &ldquo;recover <code>val = hTr/max(h_old, H_VANISHED)</code> and
+re-scale onto the floor&rdquo; hold, which was wrong twice:</p>
+<ul>
+<li>the <code>max(...)</code> divisor makes the re-scale an exact IDENTITY
+    whenever <code>h_old &lt;= H_VANISHED</code> — including <code>h_old &lt; 0</code>, which
+    is what an ice-shelf column GROUNDED by <code>&amp;ocean_cavity_dyn_nml
+    h_min_cavity</code> has (its water column <code>b - z_draft</code> is negative
+    by hundreds of metres).  Those columns kept a FULL-COLUMN,
+    negative <code>hTr</code> next to a floored <code>h</code>, i.e. an implied
+    concentration of order <code>-1e7</code> PSU, and contributed it to the
+    budget latch: 61 % of the initial salt content on
+    <code>validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml</code>;</li>
+<li>even where the re-scale DID work (ordinary land, <code>0 &lt; h_old</code>),
+    the <code>val*H_VANISHED</code> it left is discarded by the first regrid,
+    a ~1e-8 relative step change in every land-bearing case.</li>
+</ul>
+<p>The <code>0*NaN</code> hazard the old hold existed to avoid is avoided the
+same way: <code>T = S = hTr/h = 0</code> is finite.</p>
 
 
     <h3>Arguments</h3>
@@ -198,7 +229,7 @@ untouched (bit-identical when <code>wet_mask≡1</code>).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr~44"></span>
+              <span class="anchor" id="variable-htr~7"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -213,22 +244,7 @@ untouched (bit-identical when <code>wet_mask≡1</code>).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~81"></span>
-              real(kind=wp),
-            </td>
-<td>intent(in)</td>
-              <td></td>            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>h_layer</strong>(:,:,:)</td>
-            <td>
-                
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-wet_mask~30"></span>
+              <span class="anchor" id="variable-wet_mask~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -243,7 +259,7 @@ untouched (bit-identical when <code>wet_mask≡1</code>).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~298"></span>
+              <span class="anchor" id="variable-nz~46"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -506,7 +522,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~442"></span>
+              <span class="anchor" id="variable-i~66"></span>
               integer,
             </td>
               <td>private</td>
@@ -523,7 +539,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~372"></span>
+              <span class="anchor" id="variable-j~65"></span>
               integer,
             </td>
               <td>private</td>
@@ -540,7 +556,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~265"></span>
+              <span class="anchor" id="variable-k~44"></span>
               integer,
             </td>
               <td>private</td>
@@ -557,7 +573,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~371"></span>
+              <span class="anchor" id="variable-nx~70"></span>
               integer,
             </td>
               <td>private</td>
@@ -574,7 +590,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~371"></span>
+              <span class="anchor" id="variable-ny~70"></span>
               integer,
             </td>
               <td>private</td>
@@ -583,23 +599,6 @@ large graphs.</div>
             </td>
             <td>::</td>
             <td><strong>ny</strong></td>
-                <td></td>
-                <td></td>
-            <td>
-                
-            </td>
-        </tr>
-        <tr>
-            <td>
-              <span class="anchor" id="variable-val~18"></span>
-              real(kind=wp),
-            </td>
-              <td>private</td>
-            <td>
-              
-            </td>
-            <td>::</td>
-            <td><strong>val</strong></td>
                 <td></td>
                 <td></td>
             <td>
@@ -622,27 +621,58 @@ large graphs.</div>
     
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
-    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">seed_land_tracer_hold_impl</span><span class="p">(</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
-<span class="w">      </span><span class="c">!! On land T-cells, recover the seeded per-layer tracer value</span>
-<span class="w">      </span><span class="c">!! `val = hTr/h_old` and re-scale onto the `H_VANISHED` floor so</span>
-<span class="w">      </span><span class="c">!! `hTr = val*H_VANISHED` stays finite and `T/S` is held.  Wet cells</span>
-<span class="w">      </span><span class="c">!! untouched (bit-identical when `wet_mask≡1`).</span>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">seed_land_tracer_hold_impl</span><span class="p">(</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Zero the extensive tracer content `hTr` on land T-cells</span>
+<span class="w">      </span><span class="c">!! (`wet_mask == 0`).  Wet cells untouched (bit-identical when</span>
+<span class="w">      </span><span class="c">!! `wet_mask ≡ 1`).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! ### The land-state contract: `h = H_VANISHED`, `hTr = 0`</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `seed_land_h_floor_impl` pins a land layer's thickness EXACTLY at</span>
+<span class="w">      </span><span class="c">!! `H_VANISHED`, which is the D4 *vanished* marker.  Every</span>
+<span class="w">      </span><span class="c">!! vanished-gated operator in the tree tests `h &gt; H_VANISHED`</span>
+<span class="w">      </span><span class="c">!! (strictly), so a land layer is on the VANISHED side of every one</span>
+<span class="w">      </span><span class="c">!! of those gates — in particular the ALE remap's concentration</span>
+<span class="w">      </span><span class="c">!! step (`rdb_ocean_remap::ocean_remap_tracer_field`, `c = hTr/h` if</span>
+<span class="w">      </span><span class="c">!! `h &gt; H_FLOOR` else `c = 0`), which therefore writes `hTr = 0` on</span>
+<span class="w">      </span><span class="c">!! every land column at the first regrid.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! So `hTr = 0` is not a choice made here — it is the land content</span>
+<span class="w">      </span><span class="c">!! the running solver holds.  The seed's job is to hand the budget</span>
+<span class="w">      </span><span class="c">!! latch the SAME land state that every later step will have, and</span>
+<span class="w">      </span><span class="c">!! any other seeded value is content the first regrid discards</span>
+<span class="w">      </span><span class="c">!! silently and un-budgeted, which shows up as a step change in the</span>
+<span class="w">      </span><span class="c">!! console `Error` residual between step 0 and step 1.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! This replaced a "recover `val = hTr/max(h_old, H_VANISHED)` and</span>
+<span class="w">      </span><span class="c">!! re-scale onto the floor" hold, which was wrong twice:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   * the `max(...)` divisor makes the re-scale an exact IDENTITY</span>
+<span class="w">      </span><span class="c">!!     whenever `h_old &lt;= H_VANISHED` — including `h_old &lt; 0`, which</span>
+<span class="w">      </span><span class="c">!!     is what an ice-shelf column GROUNDED by `&amp;ocean_cavity_dyn_nml</span>
+<span class="w">      </span><span class="c">!!     h_min_cavity` has (its water column `b - z_draft` is negative</span>
+<span class="w">      </span><span class="c">!!     by hundreds of metres).  Those columns kept a FULL-COLUMN,</span>
+<span class="w">      </span><span class="c">!!     negative `hTr` next to a floored `h`, i.e. an implied</span>
+<span class="w">      </span><span class="c">!!     concentration of order `-1e7` PSU, and contributed it to the</span>
+<span class="w">      </span><span class="c">!!     budget latch: 61 % of the initial salt content on</span>
+<span class="w">      </span><span class="c">!!     `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`;</span>
+<span class="w">      </span><span class="c">!!   * even where the re-scale DID work (ordinary land, `0 &lt; h_old`),</span>
+<span class="w">      </span><span class="c">!!     the `val*H_VANISHED` it left is discarded by the first regrid,</span>
+<span class="w">      </span><span class="c">!!     a ~1e-8 relative step change in every land-bearing case.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The `0*NaN` hazard the old hold existed to avoid is avoided the</span>
+<span class="w">      </span><span class="c">!! same way: `T = S = hTr/h = 0` is finite.</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
-<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
-<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">val</span>
 <span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
 <span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
 <span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
 <span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span>
-<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
-<span class="k">                  </span><span class="n">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
-<span class="w">                  </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">val</span><span class="o">*</span><span class="n">H_VANISHED</span>
-<span class="w">               </span><span class="k">end if</span>
-<span class="k">            end do</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end do</span>
 <span class="k">         end do</span>
 <span class="k">      end do</span>
 <span class="k">   end subroutine </span><span class="n">seed_land_tracer_hold_impl</span>
@@ -669,7 +699,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>

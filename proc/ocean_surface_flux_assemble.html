@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.0% of total for procedures.">18 statements</a>
+                 title=" 0.1% of total for procedures.">28 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -135,9 +135,10 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-idx_t~7">idx_T</a>
-            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-nx~358">nx</a>
-            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-ny~358">ny</a>
-            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-nz~291">nz</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-masked~3">masked</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-nx~102">nx</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-ny~102">ny</a>
+            <a class="list-group-item" href="../proc/ocean_surface_flux_assemble.html#variable-nz~71">nz</a>
         </div>
       </div>
     </div>
@@ -173,7 +174,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine ocean_surface_flux_assemble(grid, sf, ms, active)  
+    <h2>public pure subroutine ocean_surface_flux_assemble(grid, sf, ms, active, cover_frac)  
 </h2>
     
 
@@ -186,12 +187,12 @@ no-op unless <code>sf%use_components</code> — with components off, <code>Q_hea
 field-override path) left them, byte-for-byte.</p>
 <p>Net surface heat into the ocean:
   Q_heat = Q_heat_const + q_sw + q_lw + q_lat + q_sens + heat_added
-         + heat_content_massin + heat_content_massout
+         + heat_cavity + heat_content_massin + heat_content_massout
   heat_content_massin  = Σ heat_content_{lprec,fprec,vprec,
                            lrunoff,frunoff,seaice_melt}
   heat_content_massout = SEAWATER_CP * T_sst * evap
 Net surface salt flux:
-  Q_salt = Q_salt_const + salt_flux
+  Q_salt = Q_salt_const + salt_flux + salt_cavity
 All four outputs multiplied by <code>ms%wet_mask</code> (land carries
 exactly zero; interior loop bounds are NOT restricted — see
 CLAUDE.md&rsquo;s &ldquo;nghost and the assembler loop bounds&rdquo; gotcha).</p>
@@ -225,7 +226,7 @@ undefined without one).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~201"></span>
+              <span class="anchor" id="variable-grid~61"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -240,7 +241,7 @@ undefined without one).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-sf~13"></span>
+              <span class="anchor" id="variable-sf~5"></span>
               type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -255,7 +256,7 @@ undefined without one).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~87"></span>
+              <span class="anchor" id="variable-ms~28"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(in)</td>
@@ -270,7 +271,7 @@ undefined without one).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-active~13"></span>
+              <span class="anchor" id="variable-active~6"></span>
               logical,
             </td>
 <td>intent(in),</td>
@@ -283,6 +284,30 @@ undefined without one).</p>
                 <p>Optional thermo-cadence gate.  Present-and-false ⇒ early
 return; absent ⇒ kernel runs (matches
 <code>ocean_surface_flux_apply_tracers</code>&rsquo;s convention).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cover_frac~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cover_frac</strong>(:,:)</td>
+            <td>
+                <p>Optional ice-shelf cover fraction (<code>metrics%cover_frac</code>,
+v1 binary).  Present ⇒ every ATMOSPHERIC contribution
+(<code>Q_heat_const</code>, <code>q_sw</code>, <code>q_lw</code>, <code>q_lat</code>, <code>q_sens</code>,
+<code>heat_added</code>, both mass-enthalpy terms, <code>Q_salt_const</code>,
+<code>salt_flux</code>) is scaled by <code>1 - cover_frac</code>, while the
+cavity&rsquo;s OWN <code>heat_cavity</code> / <code>salt_cavity</code> pass through
+unmasked.  This is the single place those two groups are
+still distinguishable — see the module docstring for why the
+mask lives here and not at apply time.  Absent ⇒ the
+original kernel, byte-identical.</p>
             </td>
         </tr>
     </tbody>
@@ -300,43 +325,64 @@ return; absent ⇒ kernel runs (matches
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: proc~~ocean_surface_flux_assemble~~CallsGraph Pages: 1 -->
-<svg id="prococean_surface_flux_assembleCallsGraph" width="481pt" height="32pt"
- viewBox="0.00 0.00 481.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="proc~~ocean_surface_flux_assemble~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<svg id="prococean_surface_flux_assembleCallsGraph" width="517pt" height="74pt"
+ viewBox="0.00 0.00 517.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
 <title>proc~~ocean_surface_flux_assemble~~CallsGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 477,-28 477,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 513,-70 513,4 -4,4"/>
 <!-- proc~ocean_surface_flux_assemble -->
 <g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node1" class="node">
 <title>proc~ocean_surface_flux_assemble</title>
-<polygon fill="none" stroke="black" points="172,-24 0,-24 0,0 172,0 172,-24"/>
-<text text-anchor="middle" x="86" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surface_flux_assemble</text>
+<polygon fill="none" stroke="black" points="172,-45 0,-45 0,-21 172,-21 172,-45"/>
+<text text-anchor="middle" x="86" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surface_flux_assemble</text>
+</g>
+<!-- proc~ocean_surfflux_assemble_cover_impl -->
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node2" class="node">
+<title>proc~ocean_surfflux_assemble_cover_impl</title>
+<g id="a_proc~~ocean_surface_flux_assemble~~CallsGraph_node2"><a xlink:href="../proc/ocean_surfflux_assemble_cover_impl.html" xlink:title="ocean_surfflux_assemble_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="419,-66 208,-66 208,-42 419,-42 419,-66"/>
+<text text-anchor="middle" x="313.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfflux_assemble_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_cover_impl -->
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_cover_impl</title>
+<path fill="none" stroke="#ff0000" d="M172.25,-40.94C180.59,-41.72 189.14,-42.51 197.71,-43.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.48,-46.8 207.76,-44.25 198.12,-39.83 197.48,-46.8"/>
 </g>
 <!-- proc~ocean_surfflux_assemble_impl -->
-<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node2" class="node">
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node3" class="node">
 <title>proc~ocean_surfflux_assemble_impl</title>
-<g id="a_proc~~ocean_surface_flux_assemble~~CallsGraph_node2"><a xlink:href="../proc/ocean_surfflux_assemble_impl.html" xlink:title="ocean_surfflux_assemble_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="383,-24 208,-24 208,0 383,0 383,-24"/>
-<text text-anchor="middle" x="295.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfflux_assemble_impl</text>
+<g id="a_proc~~ocean_surface_flux_assemble~~CallsGraph_node3"><a xlink:href="../proc/ocean_surfflux_assemble_impl.html" xlink:title="ocean_surfflux_assemble_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="401,-24 226,-24 226,0 401,0 401,-24"/>
+<text text-anchor="middle" x="313.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfflux_assemble_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_impl -->
-<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge1" class="edge">
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge2" class="edge">
 <title>proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_impl</title>
-<path fill="none" stroke="#ff0000" d="M172.3,-12C180.64,-12 189.15,-12 197.6,-12"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="197.86,-15.5 207.86,-12 197.86,-8.5 197.86,-15.5"/>
+<path fill="none" stroke="#ff0000" d="M172.25,-25.06C186.3,-23.75 200.96,-22.39 215.28,-21.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="216,-24.5 225.63,-20.09 215.35,-17.53 216,-24.5"/>
 </g>
 <!-- local -->
-<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node3" class="node">
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_node4" class="node">
 <title>local</title>
-<polygon fill="#777777" stroke="#777777" points="473,-24 419,-24 419,0 473,0 473,-24"/>
-<text text-anchor="middle" x="446" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+<polygon fill="#777777" stroke="#777777" points="509,-45 455,-45 455,-21 509,-21 509,-45"/>
+<text text-anchor="middle" x="482" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_surfflux_assemble_cover_impl&#45;&gt;local -->
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_surfflux_assemble_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M409.91,-41.97C422.33,-40.4 434.39,-38.88 444.93,-37.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="445.45,-41.01 454.94,-36.29 444.58,-34.07 445.45,-41.01"/>
 </g>
 <!-- proc~ocean_surfflux_assemble_impl&#45;&gt;local -->
-<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge2" class="edge">
+<g id="proc~~ocean_surface_flux_assemble~~CallsGraph_edge4" class="edge">
 <title>proc~ocean_surfflux_assemble_impl&#45;&gt;local</title>
-<path fill="none" stroke="#ff0000" d="M383.31,-12C392.21,-12 400.87,-12 408.74,-12"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="408.94,-15.5 418.94,-12 408.94,-8.5 408.94,-15.5"/>
+<path fill="none" stroke="#00ffff" d="M401.16,-22.93C416.47,-24.86 431.63,-26.77 444.55,-28.4"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="444.48,-31.92 454.84,-29.7 445.36,-24.98 444.48,-31.92"/>
 </g>
 </g>
 </svg>
@@ -620,7 +666,24 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~358"></span>
+              <span class="anchor" id="variable-masked~3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>masked</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~102"></span>
               integer,
             </td>
               <td>private</td>
@@ -637,7 +700,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~358"></span>
+              <span class="anchor" id="variable-ny~102"></span>
               integer,
             </td>
               <td>private</td>
@@ -654,7 +717,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~291"></span>
+              <span class="anchor" id="variable-nz~71"></span>
               integer,
             </td>
               <td>private</td>
@@ -685,7 +748,7 @@ large graphs.</div>
     
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
-    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_surface_flux_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">)</span>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_surface_flux_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">cover_frac</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! **The single gate** that derives `Q_heat`/`Q_salt` from the</span>
 <span class="w">      </span><span class="c">!! component set (§3.1/§3.3 of the PR-12 plan) — the exact analogue</span>
 <span class="w">      </span><span class="c">!! of `vmix_assemble`: fillers contribute components, this routine</span>
@@ -696,12 +759,12 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! Net surface heat into the ocean:</span>
 <span class="w">      </span><span class="c">!!   Q_heat = Q_heat_const + q_sw + q_lw + q_lat + q_sens + heat_added</span>
-<span class="w">      </span><span class="c">!!          + heat_content_massin + heat_content_massout</span>
+<span class="w">      </span><span class="c">!!          + heat_cavity + heat_content_massin + heat_content_massout</span>
 <span class="w">      </span><span class="c">!!   heat_content_massin  = Σ heat_content_{lprec,fprec,vprec,</span>
 <span class="w">      </span><span class="c">!!                            lrunoff,frunoff,seaice_melt}</span>
 <span class="w">      </span><span class="c">!!   heat_content_massout = SEAWATER_CP * T_sst * evap</span>
 <span class="w">      </span><span class="c">!! Net surface salt flux:</span>
-<span class="w">      </span><span class="c">!!   Q_salt = Q_salt_const + salt_flux</span>
+<span class="w">      </span><span class="c">!!   Q_salt = Q_salt_const + salt_flux + salt_cavity</span>
 <span class="w">      </span><span class="c">!! All four outputs multiplied by `ms%wet_mask` (land carries</span>
 <span class="w">      </span><span class="c">!! exactly zero; interior loop bounds are NOT restricted — see</span>
 <span class="w">      </span><span class="c">!! CLAUDE.md's "nghost and the assembler loop bounds" gotcha).</span>
@@ -729,8 +792,22 @@ large graphs.</div>
 <span class="w">         </span><span class="c">!! Optional thermo-cadence gate.  Present-and-false ⇒ early</span>
 <span class="w">         </span><span class="c">!! return; absent ⇒ kernel runs (matches</span>
 <span class="w">         </span><span class="c">!! `ocean_surface_flux_apply_tracers`'s convention).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cover_frac</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Optional ice-shelf cover fraction (`metrics%cover_frac`,</span>
+<span class="w">         </span><span class="c">!! v1 binary).  Present ⇒ every ATMOSPHERIC contribution</span>
+<span class="w">         </span><span class="c">!! (`Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`,</span>
+<span class="w">         </span><span class="c">!! `heat_added`, both mass-enthalpy terms, `Q_salt_const`,</span>
+<span class="w">         </span><span class="c">!! `salt_flux`) is scaled by `1 - cover_frac`, while the</span>
+<span class="w">         </span><span class="c">!! cavity's OWN `heat_cavity` / `salt_cavity` pass through</span>
+<span class="w">         </span><span class="c">!! unmasked.  This is the single place those two groups are</span>
+<span class="w">         </span><span class="c">!! still distinguishable — see the module docstring for why the</span>
+<span class="w">         </span><span class="c">!! mask lives here and not at apply time.  Absent ⇒ the</span>
+<span class="w">         </span><span class="c">!! original kernel, byte-identical.</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: thermo-cadence shim, forwarded to an</span>
+<span class="w">      </span><span class="c">! explicit-shape `_impl` before the device loop.</span>
 
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">idx_T</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">masked</span>
 
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">use_components</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
 <span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">active</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
@@ -744,12 +821,29 @@ large graphs.</div>
 <span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
 <span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
 
-<span class="w">      </span><span class="k">call </span><span class="n">ocean_surfflux_assemble_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">      </span><span class="n">masked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">cover_frac</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">masked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">size</span><span class="p">(</span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">masked</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ocean_surfflux_assemble_cover_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_massin</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_massout</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lat</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sens</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_added</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_lprec</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_fprec</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_vprec</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_lrunoff</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_frunoff</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_seaice_melt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">evap</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">salt_flux</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat_const</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt_const</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      call </span><span class="n">ocean_surfflux_assemble_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_massin</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_massout</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lat</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sens</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_added</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lw</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_lat</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">q_sens</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_added</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_lprec</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_fprec</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_vprec</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_lrunoff</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_frunoff</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">heat_content_seaice_melt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">evap</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">salt_flux</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">evap</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">salt_flux</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_heat_const</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">Q_salt_const</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">cp</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
 <span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_surface_flux_assemble</span>
 </pre></div>
@@ -775,7 +869,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-22 12:15 +0000             </p>
+ on 2026-09-22 21:08 +0000             </p>
           </div>
         </div>
         <br>
