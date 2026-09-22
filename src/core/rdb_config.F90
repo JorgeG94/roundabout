@@ -4832,6 +4832,32 @@ contains
                               "configuration.")
             has_error = .true.
          end if
+         ! z-level closed faces need their SOLID WALLS to be walls.  With
+         ! `mask_wall_velocity = .false.` a wall face keeps a free per-layer
+         ! velocity that carries no mass (continuity zeroes the wall flux)
+         ! and whose depth mean the BT fold resets to zero every stage —
+         ! but whose BAROCLINIC part nothing restores under pred_corr: the
+         ! Coriolis reads `u_av`, which the transport renormaliser never
+         ! writes at a skipped wall face, so the wall velocity never sees
+         ! its own rotation and integrates the layer Coriolis of its
+         ! interior neighbour without bound.  The closed-face mask is what
+         ! makes that neighbour baroclinic (a closed bed layer beside open
+         ! ones).  Measured on the rotating ledge basin of
+         ! tests/test_ocean_zfixed_cor_ref.F90: KE+PE x1783 over 4000
+         ! outer steps with the physical interior at x1.24 — the whole
+         ! growth sits on the unmasked wall faces — against x0.74 with
+         ! the walls masked.  The mask is the DEFAULT; refused rather than
+         ! silently overridden.
+         if (cfg%zfixed_closed_faces .and. .not. cfg%ocean%bc%mask_wall_velocity) then
+            call logger%error("&ocean_bt_nml split_scheme='pred_corr' with "// &
+                              "&vcoord_nml zfixed_closed_faces=.true. requires "// &
+                              "&ocean_bc_nml mask_wall_velocity=.true. (the default): "// &
+                              "an unmasked solid-wall face carries a baroclinic layer "// &
+                              "velocity that pred_corr's u_av-evaluated Coriolis never "// &
+                              "rotates, so it grows without bound. Set "// &
+                              "mask_wall_velocity=.true., or split_scheme='ssp_rk2'.")
+            has_error = .true.
+         end if
       end if
       ! `accel_visc_rem` (the per-layer slow-apply attenuation) reads the
       ! same producer arrays — without the producer knob they stay ≡ 1
