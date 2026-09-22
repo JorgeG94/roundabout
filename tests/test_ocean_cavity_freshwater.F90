@@ -57,6 +57,7 @@ module test_ocean_cavity_freshwater
                                       ocean_salt_src_sum, ocean_heat_src_sum
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_cavity_flux, only: cavity_mass_apply_impl, cavity_mass_salt_mirror_impl, &
                                     cavity_mass_totals_impl, cavity_comp_apply_impl, &
                                     cavity_comp_scale_tracer_impl, &
@@ -68,6 +69,10 @@ module test_ocean_cavity_freshwater
    private
 
    public :: collect_ocean_cavity_freshwater_tests
+
+   logical, save :: comm_inited = .false.
+      !! One-shot guard for `ensure_comm` (test-drive runs every case of a
+      !! suite in ONE process, so the comm env must come up exactly once).
 
    ! ---- The single-column analytic setup --------------------------------
    real(wp), parameter :: RHO0 = 1027.51_wp
@@ -684,6 +689,22 @@ contains
    ! Engine driving + budget bookkeeping (the console's own terms)
    ! ======================================================================
 
+   subroutine ensure_comm()
+      !! Bring the MPI comm env up once per process.  Every engine case
+      !! below reaches the communicator — `engine_setup` builds the decomp
+      !! and the budget reducers in `totals` are collectives — so on an
+      !! `RDB_ENABLE_MPI=ON` build the first of them hits `MPI_Comm_f2c`
+      !! before `MPI_INIT` and OpenMPI aborts the process (CI: SEGFAULT).
+      !! No-op-equivalent on the single-rank backend.  Finalised by the
+      !! shared per-test main, so there is no teardown here.  Same pattern
+      !! as `test_ocean_console_stats_efp` / `test_driver_ocean`.
+      if (.not. comm_inited) then
+         call comm_env_init()
+         call comm_env_setup_roles(.false.)
+         comm_inited = .true.
+      end if
+   end subroutine ensure_comm
+
    subroutine start_engine(nml, engine, cfg, ok)
       character(len=*), intent(in) :: nml
       type(ocean_engine_t), intent(inout) :: engine
@@ -691,6 +712,7 @@ contains
       logical, intent(out) :: ok
       integer :: ierr
       ok = .false.
+      call ensure_comm()
       call read_config_from_string(nml, cfg, ierr=ierr)
       if (ierr /= 0) return
       call validate_config(cfg, ierr)
