@@ -281,7 +281,8 @@ contains
          call ocean_pseudo_salt_deviation(state%multilayer%h_layer, &
                                           state%multilayer%tracers(it_ps)%hTr, &
                                           state%multilayer%tracers(it_s)%hTr, buf, &
-                                          size(buf, 1), size(buf, 2), size(buf, 3))
+                                          size(buf, 1), size(buf, 2), size(buf, 3), &
+                                          ieee_value(0.0_wp, ieee_quiet_nan))
       end select
    end subroutine fill_pseudo_salt_diff
 
@@ -321,8 +322,11 @@ contains
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:min(nz, nz_h), j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
-         if (h > H_VANISHED) then
-            buf(i, j, k) = hTr(i, j, k)/h
+         ! vanished-ok: a diagnostic substitutes the NaN missing-data
+         ! sentinel on a vanished layer, not `rdb_vl_conc`'s zero (README
+         ! consumer table); the live branch IS `rdb_vl_conc`.
+         if (rdb_vl_is_live(h)) then
+            buf(i, j, k) = rdb_vl_conc(hTr(i, j, k), h)
          else
             buf(i, j, k) = qnan
          end if
@@ -526,8 +530,10 @@ contains
       !! redistributed across targets, Σ preserved when the z-grid spans H).
       !! `z_out(:)` = target INTERFACE depths (m, positive-down, shallow→deep,
       !! implicit 0 surface); output cell m spans `[z_out(m-1), z_out(m)]`.
-      !! Thicknesses clipped to column total H = Σ h_layer (exact
-      !! conservation); below-seafloor cells read 0.  k=1 bed, k=nz surface.
+      !! Thicknesses clipped to column total H = Σ h_layer over the LIVE
+      !! layers (exact conservation; a vanished layer carries zero weight —
+      !! see `remap_layer_to_vcoord_impl`); below-seafloor cells read 0.
+      !! k=1 bed, k=nz surface.
       !! Public only for the unit-test suite.
       class(*), intent(in) :: state_handle
       real(wp), intent(in) :: z_out(:)
@@ -635,6 +641,16 @@ contains
       !!     SIGMA under uniform levels; differs only with a non-uniform
       !!     (e.g. fine-near-surface) reference.
       !!
+      !! **Vanished source layers carry ZERO WEIGHT, not a value.**  A
+      !! source layer that is not live (`rdb_vl_is_live`) enters the
+      !! overlap integral with `dz = 0` and `q = 0`, and its thickness is
+      !! left out of the column total the targets are clipped to.  Its
+      !! `layer_buf` value is never read: for a concentration it is the
+      !! NaN missing-data sentinel (`fill_tracer_impl`), which the
+      !! donor-cell reconstruction would otherwise smear into every target
+      !! cell of the column; for content it is zero by I1.  A column with
+      !! no vanished layer is bit-identical.
+      !!
       !! Fixed-size `NZ_STACK_MAX` stack locals via `local(...)` — automatic
       !! arrays sized from a dummy crash NVHPC stdpar device codegen.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);
@@ -661,10 +677,16 @@ contains
       do concurrent(j=1:ny, i=1:nx) &
          local(dz_old, dz_new, q_old, q_new, k, m, col_h, zf_prev, zf, dz, lvl_scale)
          ! --- source column TOP-DOWN: work index k = state index nz-k+1 ---
+         ! A vanished layer gets zero weight (see the docstring).
          col_h = 0.0_wp
          do k = 1, nz
             dz_old(k) = h_layer(i, j, nz - k + 1)
-            q_old(k) = layer_buf(i, j, nz - k + 1)
+            if (rdb_vl_is_live(dz_old(k))) then
+               q_old(k) = layer_buf(i, j, nz - k + 1)
+            else
+               dz_old(k) = 0.0_wp
+               q_old(k) = 0.0_wp
+            end if
             col_h = col_h + dz_old(k)
          end do
          if (is_extensive) then
@@ -764,6 +786,17 @@ contains
       !! `rho_ref_p`), invert profile to interface depths
       !! (`invert_density_targets`), then donor-cell remap.  Cells outside
       !! the column density range read 0.  Intensive/extensive as the z-remap.
+      !!
+      !! **Vanished source layers** carry zero weight exactly as in
+      !! `remap_layer_to_vcoord_impl` (`dz = 0`, `q = 0`, value never read),
+      !! and take the density of the nearest LIVE layer (the one above,
+      !! else the first one below) rather than an EOS evaluation of the
+      !! zero concentration `rdb_vl_conc` reports for them: the PPM edge
+      !! between a live layer and a zero-thickness neighbour IS that
+      !! neighbour's density (`invert_density_targets`), so a fresh 0 degC
+      !! filler would kink the profile the targets are inverted against.
+      !! A column with no vanished layer is bit-identical; a column with no
+      !! live layer keeps the legacy `eos(0, 0)` fill.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);
       ! size() used to derive loop bounds from the actual buffer dimensions.
       real(wp), intent(in)    :: h_layer(:, :, :)
@@ -786,7 +819,8 @@ contains
       ! wrote and read one element past the end.
       real(wp) :: rhoc(NZ_STACK_MAX), z_iface(NZ_STACK_MAX + 2)
       real(wp) :: rho_tgt_c(NZ_STACK_MAX)
-      real(wp) :: hh, tt, ss
+      real(wp) :: hh, tt, ss, rho_live
+      logical :: seen_live
       nx = size(layer_buf, 1)
       ny = size(layer_buf, 2)
       nz = size(layer_buf, 3)
@@ -794,20 +828,37 @@ contains
       n = max(nz, n_bin)
       do concurrent(j=1:ny, i=1:nx) &
          local(dz_old, dz_new, q_old, q_new, rhoc, z_iface, rho_tgt_c, &
-               k, m, hh, tt, ss)
+               k, m, hh, tt, ss, rho_live, seen_live)
          ! --- source column TOP-DOWN + layer potential density ---
+         ! Vanished layers: zero weight, density of the nearest live layer
+         ! (see the docstring).
+         seen_live = .false.
+         rho_live = 0.0_wp
          do k = 1, nz
             hh = h_layer(i, j, nz - k + 1)
-            dz_old(k) = hh
-            q_old(k) = layer_buf(i, j, nz - k + 1)
-            if (hh > 1.0e-12_wp) then
-               tt = hT(i, j, nz - k + 1)/hh
-               ss = hS(i, j, nz - k + 1)/hh
+            if (rdb_vl_is_live(hh)) then
+               dz_old(k) = hh
+               q_old(k) = layer_buf(i, j, nz - k + 1)
+               tt = rdb_vl_conc(hT(i, j, nz - k + 1), hh)
+               ss = rdb_vl_conc(hS(i, j, nz - k + 1), hh)
+               rhoc(k) = eos_density_point(eos, tt, ss, rho_ref_p)
+               if (.not. seen_live) then
+                  ! Back-fill the vanished run above the first live layer.
+                  do m = 1, k - 1
+                     rhoc(m) = rhoc(k)
+                  end do
+               end if
+               seen_live = .true.
+               rho_live = rhoc(k)
             else
-               tt = 0.0_wp
-               ss = 0.0_wp
+               dz_old(k) = 0.0_wp
+               q_old(k) = 0.0_wp
+               if (seen_live) then
+                  rhoc(k) = rho_live
+               else
+                  rhoc(k) = eos_density_point(eos, 0.0_wp, 0.0_wp, rho_ref_p)
+               end if
             end if
-            rhoc(k) = eos_density_point(eos, tt, ss, rho_ref_p)
          end do
          if (is_extensive) then
             do k = 1, nz
@@ -1143,5 +1194,7 @@ contains
          hint = ""
       end select
    end function canonical_diag_gate_hint
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_diag_fills

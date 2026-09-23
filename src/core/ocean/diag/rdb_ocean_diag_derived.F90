@@ -8,7 +8,7 @@
 !! cycle rule: this module USES that one).
 module rdb_ocean_diag_derived
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-   use rdb_constants, only: wp, GRAVITY
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED, NZ_STACK_MAX
    use rdb_ocean_state, only: ocean_state_t
    use rdb_ocean_diag, only: ocean_diag_t, diag_fill_proc, diag_remap_proc, &
                              DIAG_OP_MEAN, DIAG_OP_INSTANT, DIAG_OP_UNSET, &
@@ -502,14 +502,47 @@ contains
 
    subroutine fill_rho_layer(state_handle, buf)
       !! In-situ density per layer — direct read of the EOS slot (driver
-      !! must have run `ocean_eos_compute` this step; not re-invoked here).
+      !! must have run `ocean_eos_compute` this step; not re-invoked here),
+      !! with the NaN missing-data sentinel on every vanished layer.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
-         call copy3_impl(state%multilayer%rho_layer, buf)
+         call fill_rho_layer_impl(state%multilayer%h_layer, &
+                                  state%multilayer%rho_layer, buf)
       end select
    end subroutine fill_rho_layer
+
+   pure subroutine fill_rho_layer_impl(h_layer, rho_layer, buf)
+      !! `buf = rho_layer` on live layers, IEEE NaN on vanished ones.
+      !!
+      !! The EOS deliberately evaluates a vanished layer at the reference
+      !! `T_ref`/`S_ref`, so `rho_layer` holds `rho_0` there (README
+      !! consumer table: a filler must not perturb the PGF's density
+      !! column).  That is a plausible-looking density, not a measurement,
+      !! so the diagnostic reports it as missing — the same convention
+      !! `fill_tracer_impl` applies to the T and S it is computed from.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: h_layer(:, :, :)
+      real(wp), intent(in)    :: rho_layer(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, k, nx, ny, nz
+      real(wp) :: qnan
+      nx = min(size(buf, 1), size(rho_layer, 1), size(h_layer, 1))
+      ny = min(size(buf, 2), size(rho_layer, 2), size(h_layer, 2))
+      nz = min(size(buf, 3), size(rho_layer, 3), size(h_layer, 3))
+      ! Sentinel computed once on the HOST (the `fill_tracer_impl` pattern).
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         ! vanished-ok: diagnostics report a vanished layer as NaN, not
+         ! the EOS's reference-density substitution.
+         if (rdb_vl_is_live(h_layer(i, j, k))) then
+            buf(i, j, k) = rho_layer(i, j, k)
+         else
+            buf(i, j, k) = qnan
+         end if
+      end do
+   end subroutine fill_rho_layer_impl
 
    pure subroutine copy3_impl(src, buf)
       !! Shared device copy `buf = src` with shape clipping — every
@@ -718,6 +751,14 @@ contains
       !! MLD_DENSITY_THRESHOLD) marks the MLD as the cumulative h-sum
       !! above it.  No crossing → MLD = full column depth.  Threshold met
       !! at the surface itself → MLD = 0.
+      !!
+      !! A vanished layer cannot mark the crossing: its `rho_layer` is the
+      !! EOS's reference-density substitution (`rho_0`), not the density
+      !! of any water, so a filler bed layer would otherwise read as a
+      !! pycnocline whenever `rho_0` happens to exceed the surface density
+      !! by the threshold.  Its (sub-`H_VANISHED`) thickness still counts
+      !! toward the depth, so a column with no crossing still reports its
+      !! full depth.
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: h_layer(:, :, :), rho_layer(:, :, :)
       integer, intent(in)    :: k_top(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
@@ -736,7 +777,8 @@ contains
          mld = 0.0_wp
          crossed = .false.
          do k = kt, 1, -1
-            if (rho_layer(i, j, k) - rho_surf >= MLD_DENSITY_THRESHOLD) then
+            if (rdb_vl_is_live(h_layer(i, j, k)) .and. &
+                rho_layer(i, j, k) - rho_surf >= MLD_DENSITY_THRESHOLD) then
                mld = d_acc
                crossed = .true.
                exit
@@ -1199,5 +1241,7 @@ contains
          buf(i, j, 1) = 0.5_wp*(v_ice(i, j) + v_ice(i, j + 1))
       end do
    end subroutine fill_ice_v_impl
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_diag_derived
