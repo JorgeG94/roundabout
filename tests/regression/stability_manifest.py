@@ -21,7 +21,11 @@ Reading an entry
     setup           optional argv run in the scratch dir first (generated
                     input files); "{python}" / "{repo}" are substituted.
     physics         the assertion block (see below)
-    tier1           full-scale spec: n_steps, timeout_s, samples
+    tier1           full-scale spec: n_steps, timeout_s, samples, and
+                    optional `overrides` (`t1_overrides`) -- the same run-time
+                    key overrides a tier-2 twin uses, for a tier-1 leg that is
+                    a documented VARIANT of a committed namelist (melt off, a
+                    viscosity twin) rather than the file as shipped.
     tier2           downscaled-twin spec: the same, plus `overrides` (namelist
                     keys the twin changes) and `dimensionless` (the inputs
                     downscale.py checks). `skip` with a `reason` marks a case
@@ -62,7 +66,11 @@ The `physics` block
                     weakened to pass, NEVER satisfied by editing the namelist:
                     when a header and the code disagree, that IS the finding.
                     Kinds: mass_rel, en_ratio, field_ratio (a [diag] field's
-                    extrema amplification from `from_day` to the end). A
+                    extrema amplification from `from_day` to the end), and
+                    the day-anchored en_at_day (En(day) < max), en_day_ratio
+                    (En(num_day)/En(den_day) < max) and en_rate_decel (the
+                    log-rate over the `late` window below the `early` one).
+                    A
                     claim that needs the full-length run names its tiers
                     (`"tiers": [1]`) and is SKIPped, not failed, elsewhere.
 
@@ -169,6 +177,8 @@ def _case(name, nml, regime, t1_steps, t2_steps, **kw):
     # with a "field") needs a dense series here -- eady reads max|v|.
     if "t1_diag_samples" in kw:
         entry["tier1"]["diag_samples"] = kw.pop("t1_diag_samples")
+    if "t1_overrides" in kw:
+        entry["tier1"]["overrides"] = kw.pop("t1_overrides")
     if kw.pop("t2_skip", False):
         entry["tier2"] = {"skip": True, "reason": kw.pop("t2_reason", "")}
     else:
@@ -924,6 +934,120 @@ STABILITY_CASES = [
                "same statement at unit scale and to 1e-12.",
           tags=["cavity", "ice_shelf", "grounded", "basal_melt", "sponge",
                 "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "conserve"]),
+
+    # ============ ISOMIP+ Ocean0 melt OFF under z_fixed: gate E6 ============
+    # The v0.1.0 stability gate for the z_fixed x cavity envelope
+    # (python_prototypes design/cavity_rest_growth_diagnosis.md section Q).
+    # The shipped `ocean0_idealised_zfixed.nml` with basal melt and top drag
+    # OFF, carried to 180 days -- the length is load-bearing: the numerical
+    # regime (a one-row calving-front partial-cell jet) does not appear until
+    # day ~105 and saturates by ~165, so a 30- or 90-day leg sees only the
+    # physical regime and gates nothing about it.  Two regimes, both bounded:
+    #   1. d0-~100, PHYSICAL: the kappa_v = 5E-05 diffusive boundary anomaly
+    #      against the insulating SLOPED boundaries (trough sidewalls, ice
+    #      base) drives an along-slope geostrophic current, En ~ t^2 -> t
+    #      (Phillips 1970 / Wunsch 1970).  Not a mode; protocol physics.
+    #   2. d~105-165, NUMERICAL: one row of 7.3 m partial top cells at the
+    #      calving front grows a one-cell jet (Re_dx ~ 7) on a 15-18-day
+    #      e-folding and SATURATES at ~3-4E-06 m2/s2 (~2 cm/s); nu_h >= 30
+    #      removes it outright.
+    # Each gate below is section Q.6 fix 1's, and each fails on nu_h = 0 and
+    # passes on the protocol.  The day-anchored claims read the TWICE-DAILY
+    # [stats] series (360 samples over 51840 steps), so they are exact days.
+    # Tier 1 only (V100, ~18 min per leg): 240x40x36 at 2 km is the COM
+    # resolution the grounding line and the calving-front cut are resolved
+    # at, and 180 days is ~50x a tier-2 budget.
+    _case("isomip_plus_ocean0_zfixed_meltoff",
+          V + "isomip_plus/ocean0_idealised_zfixed.nml",
+          "rest", 51840, 0, en_rest_max=1.0e-05, budget_tol=BUDGET_OPEN,
+          t1_timeout=3000, t1_samples=360,
+          t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
+                        "ocean_tdrag_nml": {"enable": False},
+                        # the shipped melt diagnostics refuse to register
+                        # with melt off (a plane of missing values).
+                        "ocean_diag_nml": {"diags": '""'}},
+          t2_skip=True,
+          t2_reason="the numerical regime needs ~105 days to appear and "
+                    "~150 to saturate, and 240x40x36 @ 2 km is the "
+                    "resolution the calving-front partial cells are cut at; "
+                    "coarsening moves the cut, shortening removes the "
+                    "regime. Tier 1 only.",
+          claims=[
+              {"kind": "en_at_day", "name": "en30-regime1", "day": 30.0,
+               "max": 1.0e-07,
+               "text": "section Q.6 gate (a): the 30-day energy is the "
+                       "diffusive boundary current alone (5.632E-08 measured)",
+               "meaning": "Above 1E-07 at day 30 the inviscid mode (nu_h = 0: "
+                          "1.44E-06) or a new amplifier is back.",
+               "ref": "validation_examples/ocean/isomip_plus/"
+                      "ocean0_idealised_zfixed.nml header"},
+              {"kind": "en_rate_decel", "name": "decelerates-by-d30",
+               "early": [15.0, 20.0], "late": [25.0, 30.0],
+               "text": "section Q.6 gate (a): regime 1 is a power law, so its "
+                       "5-day log-rate FALLS (0.066 -> 0.051 /day measured)",
+               "meaning": "An accelerating rate at day 30 is an exponential "
+                          "mode (nu_h = 0: 0.142 -> 0.220 /day), not the "
+                          "t^2 -> t boundary current."},
+              {"kind": "en_at_day", "name": "en180-bounded", "day": 180.0,
+               "max": 1.0e-05,
+               "text": "section Q.6 gate (c): the calving-front jet saturates "
+                       "near 3.5E-06 (3.147E-06 measured at day 180)"},
+              {"kind": "en_day_ratio", "name": "saturated-d150-180",
+               "num_day": 180.0, "den_day": 150.0, "max": 2.0,
+               "text": "section Q.6 gate (c): regime 2 SATURATES over "
+                       "d150-180 (1.39 measured; growth stops by ~d165)",
+               "meaning": "A ratio >= 2 over the last 30 days is a 17-day "
+                          "e-folding still running: the jet did not "
+                          "saturate."},
+          ],
+          # No known_failure: energy:rest-settles PASSES here (final En
+          # 3.147E-06 = 83% of the 3.804E-06 peak at d173.5, V100
+          # 2026-09-24, bebt = 0.1 defaults). Regime 2 OSCILLATES about its
+          # saturation level, so this gate reads the phase of that
+          # oscillation at day 180 -- it missed by a hair (95.3%) on the
+          # pre-bebt tree. If it trips again, localise before re-marking.
+          note="ISOMIP+ Ocean0 idealised, z_fixed + zfixed_closed_faces, melt "
+               "and top drag OFF, 180 days: gate E6 of v0.1.0 (bounded and "
+               "explained). See the namelist header and "
+               "docs/CAPABILITIES_AND_LIMITATIONS.md.",
+          tags=["isomip_plus", "cavity", "ice_shelf", "vcoord_z_fixed",
+                "closed_faces", "partial_steps", "sponge", "pgf_fv_mom6",
+                "zinit_linear", "rest", "long_run"]),
+    _case("isomip_plus_ocean0_zfixed_meltoff_nu30",
+          V + "isomip_plus/ocean0_idealised_zfixed.nml",
+          "rest", 51840, 0, en_rest_max=REST_1MM_S, budget_tol=BUDGET_OPEN,
+          t1_timeout=3000, t1_samples=360,
+          t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
+                        "ocean_tdrag_nml": {"enable": False},
+                        "ocean_hvisc_nml": {"nu_h": 30.0},
+                        "ocean_diag_nml": {"diags": '""'}},
+          t2_skip=True,
+          t2_reason="twin of isomip_plus_ocean0_zfixed_meltoff; the same "
+                    "180-day horizon and COM grid. Tier 1 only.",
+          # THE BAR is section Q.6 gate (c)'s twin: En(180 d) < 5E-07, which
+          # is REST_1MM_S exactly. At nu_h = 30 the calving-front jet never
+          # exists (viscous decay ~nu/dx^2 = 0.65 /day beats its ~0.2 /day
+          # generation) and the run stays on the regime-1 power law
+          # (2.12E-07 measured at day 180, En ~ t^0.9).
+          known_failure={
+              "tiers": [1],
+              "assertions": ["energy:rest-settles"],
+              "reason":
+                  "BY DESIGN: with the calving-front jet gone the run sits "
+                  "on the regime-1 power law to the end (En ~ t^0.9, "
+                  "1.160E-07 d90 -> 2.121E-07 d180, measured on a V100 "
+                  "2026-09-24), so its final sample IS its peak. That is "
+                  "the kappa_v boundary current (Phillips 1970 / Wunsch "
+                  "1970), protocol physics, not a mode. energy:rest at "
+                  "5E-07 is the gate this row exists for.",
+              "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
+          },
+          note="the nu_h = 30 twin of isomip_plus_ocean0_zfixed_meltoff: the "
+               "calving-front partial-cell jet is ABSENT, so peak En stays "
+               "under 1 mm/s rms for 180 days.",
+          tags=["isomip_plus", "cavity", "ice_shelf", "vcoord_z_fixed",
+                "closed_faces", "partial_steps", "sponge", "pgf_fv_mom6",
+                "zinit_linear", "rest", "long_run"]),
 
     # ===================== geometry / masking ==============================
     _case("island_at_rest", V + "island_at_rest/island_at_rest.nml",

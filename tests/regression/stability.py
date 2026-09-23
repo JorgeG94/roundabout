@@ -1175,6 +1175,71 @@ def assert_cfl(series, phys):
     return out
 
 
+def _en_at_day(series, day, tol=0.26):
+    """En of the [stats] sample nearest to `day`, or None when no sample lies
+    within `tol` days of it (a checkpoint claim must read the day it names,
+    never a neighbour a stride away)."""
+    best = None
+    for s in series["stats"]:
+        d = s["day"]
+        if not _finite(d) or abs(d - day) > tol:
+            continue
+        if best is None or abs(d - day) < abs(best["day"] - day):
+            best = s
+    return None if best is None else best["En"]
+
+
+def _en_log_rate(series, d0, d1):
+    """ln(En(d1)/En(d0)) / (d1 - d0), per day -- the 5-day log-rate the
+    growth diagnoses quote. None when either end is missing or non-positive."""
+    a, b = _en_at_day(series, d0), _en_at_day(series, d1)
+    if not (_finite(a) and _finite(b)) or a <= 0.0 or b <= 0.0:
+        return None
+    return math.log(b / a) / float(d1 - d0)
+
+
+def _assert_en_checkpoint_claim(series, claim):
+    """The DAY-ANCHORED En claims: a value at a named day, a ratio of two named
+    days, or a deceleration between two named windows.
+
+    These exist for cases whose statement of record is written at specific
+    checkpoints ("En(30 d) < 1E-07", "En(180)/En(150) < 2", "the 5-day
+    log-rate at d25-30 is below the one at d15-20") rather than as a whole-run
+    shape. A missing checkpoint is a FAIL, never a skip: a run that stopped
+    short of the day the claim names has not demonstrated it.
+    """
+    kind = claim["kind"]
+    name = "claim:" + claim["name"]
+    meaning, ref = claim.get("meaning", ""), claim.get("ref", "")
+    if kind == "en_at_day":
+        day, hi = claim["day"], claim["max"]
+        en = _en_at_day(series, day)
+        return Verdict(
+            name, _finite(en) and en < hi,
+            "{} => En(day {:g}) < {:.3g} m2/s2".format(claim["text"], day, hi),
+            "En(day {:g}) = {}".format(day, _fmt(en)), meaning, ref)
+    if kind == "en_day_ratio":
+        dn, dd, hi = claim["num_day"], claim["den_day"], claim["max"]
+        num, den = _en_at_day(series, dn), _en_at_day(series, dd)
+        ratio = (num / den) if (_finite(num) and _finite(den) and den > 0) else None
+        return Verdict(
+            name, ratio is not None and ratio < hi,
+            "{} => En(day {:g}) / En(day {:g}) < {:.3g}".format(
+                claim["text"], dn, dd, hi),
+            "{} / {} = {}".format(_fmt(num), _fmt(den), _fmt(ratio)),
+            meaning, ref)
+    # en_rate_decel
+    (e0, e1), (l0, l1) = claim["early"], claim["late"]
+    early, late = _en_log_rate(series, e0, e1), _en_log_rate(series, l0, l1)
+    return Verdict(
+        name, early is not None and late is not None and late < early,
+        "{} => 5-day log-rate of En over days {:g}-{:g} BELOW the one over "
+        "days {:g}-{:g}".format(claim["text"], l0, l1, e0, e1),
+        "rate d{:g}-{:g} = {} /day, d{:g}-{:g} = {} /day".format(
+            l0, l1, _fmt(late), e0, e1, _fmt(early)),
+        meaning, ref)
+
+
 def assert_claims(series, phys, tier=1):
     """The case's OWN stated expectation, where its header makes a testable one.
 
@@ -1232,6 +1297,8 @@ def assert_claims(series, phys, tier=1):
                     _fmt(max(abs(start[0]["min"]), abs(start[0]["max"]))) if len(start) >= 2 else "?",
                     _fmt(max(abs(start[-1]["min"]), abs(start[-1]["max"]))) if len(start) >= 2 else "?"),
                 claim.get("meaning", ""), claim.get("ref", "")))
+        elif kind in ("en_at_day", "en_day_ratio", "en_rate_decel"):
+            out.append(_assert_en_checkpoint_claim(series, claim))
         elif kind == "en_ratio":
             en = [s["En"] for s in series["stats"]]
             ref = _early_reference(en)
@@ -1802,6 +1869,42 @@ def self_test():
           "tracer:no-new-extrema; three digits FAIL it",
           one.ok and not three.ok)
 
+    # (7d) The day-anchored En claims (gate E6, Ocean0 melt off under
+    #      z_fixed). Checkpoints are the V100 measurements on the v0.1.0
+    #      defaults (bebt = 0.1, renorm_consistent_flux, I1'), read off the
+    #      [stats] series: the protocol leg (nu_h = 6, the tier-1 row) must
+    #      pass all four, the inviscid leg (nu_h = 0: 0.180 /day d15-30 and
+    #      accelerating, 1.441E-06 at day 30) must fail the two 30-day
+    #      gates, and a leg whose regime-2 e-folding (0.0574 /day, the
+    #      section-Q d120-150 rate) is still running at day 180 must fail
+    #      the saturation ratio.
+    e6 = next((c for c in manifest.STABILITY_CASES
+               if c["name"] == "isomip_plus_ocean0_zfixed_meltoff"), None)
+    e6_claims = (e6 or {}).get("physics", {}).get("claims", [])
+    protocol = [(15.0, 2.356e-08), (20.0, 3.283e-08), (25.0, 4.372e-08),
+                (30.0, 5.632e-08), (150.0, 2.264e-06), (180.0, 3.147e-06)]
+    inviscid = [(15.0, 9.665e-08), (20.0, 1.963e-07), (25.0, 4.786e-07),
+                (30.0, 1.441e-06)]
+    unsaturated = protocol[:4] + [(150.0, 2.264e-06),
+                                  (180.0, 2.264e-06 * _m.exp(0.0574 * 30))]
+    ok_names = lambda vs: {v.name for v in vs if v.ok}  # noqa: E731
+    v = assert_claims(_series(protocol), {"claims": e6_claims}, 1)
+    check("E6: the protocol leg (the tier-1 row) passes all four claims",
+          len(e6_claims) == 4 and len(v) == 4 and all(x.ok for x in v))
+    v = assert_claims(_series(inviscid), {"claims": e6_claims}, 1)
+    check("E6: the nu_h = 0 leg FAILS en30 and the deceleration gate",
+          not {"claim:en30-regime1", "claim:decelerates-by-d30"} & ok_names(v))
+    check("...and a series that stops at day 30 FAILS the day-180 claims "
+          "(missing checkpoint is a fail, not a skip)",
+          not {"claim:en180-bounded", "claim:saturated-d150-180"} & ok_names(v))
+    v = assert_claims(_series(unsaturated), {"claims": e6_claims}, 1)
+    check("E6: a 17-day e-folding still running at d180 FAILS saturation",
+          "claim:saturated-d150-180" not in ok_names(v))
+    check("...and the nu_h = 30 twin's bar is 5E-07 (REST_1MM_S)",
+          next((c["physics"]["en_rest_max"] for c in manifest.STABILITY_CASES
+                if c["name"] == "isomip_plus_ocean0_zfixed_meltoff_nu30"),
+               None) == 5.0e-07)
+
     # (8) Every manifest twin satisfies the downscaling rules.
     bad = [c["name"] for c in manifest.STABILITY_CASES
            if c.get("tier2", {}).get("dimensionless")
@@ -1814,7 +1917,8 @@ def self_test():
     twins = [c for c in manifest.STABILITY_CASES if c.get("split_scheme")]
     n2 = sum(1 for c in manifest.STABILITY_CASES
              if not c["tier2"].get("skip"))
-    # 71 shipped namelists + the generated vertical-coordinate matrix: 115
+    # 71 shipped namelists + the 2 Ocean0 E6 tier-1 variants (section Q,
+    # 73 non-matrix base cases) + the generated vertical-coordinate matrix: 115
     # INVISCID cells (every family x geometry, the refusals, the N^2 = 0
     # controls, the Wright leg) and 90 VISCOUS cells (the runnable ones).
     # The tripwire is on the TOTAL so that a matrix cell silently
@@ -1823,10 +1927,10 @@ def self_test():
     vcm = [c for c in base if c.get("matrix")]
     inv = [c for c in vcm if c["matrix"]["leg"] == "inviscid"]
     vis = [c for c in vcm if c["matrix"]["leg"] == "viscous"]
-    check("manifest covers 71 shipped namelists + the vcoord matrix "
-          "({} base cases, {} matrix cells = {} inviscid + {} viscous, {} at "
+    check("manifest covers 71 shipped namelists + 2 E6 variants + the "
+          "vcoord matrix ({} base cases, {} matrix cells = {} inviscid + {} viscous, {} at "
           "tier 2)".format(len(base), len(vcm), len(inv), len(vis), n2),
-          len(base) - len(vcm) == 71 and len(inv) == 115 and len(vis) == 90)
+          len(base) - len(vcm) == 73 and len(inv) == 115 and len(vis) == 90)
     # The two legs must differ in the dissipation and in NOTHING else: a
     # viscous namelist is its inviscid twin with the hvisc/bdrag groups
     # changed. Checked on the emitted files, which are what actually runs.

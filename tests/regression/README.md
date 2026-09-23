@@ -139,7 +139,7 @@ diagnostics (low physics value). Run
 | `coverage.py` | P2 gcov coverage mode — measures ocean-closure coverage of the corpus + emits the gap list |
 | `run_all.py` | **single entry point** for the golden suite — invokes compare (CPU/GPU) + coverage, aggregates to one pass/fail + CI-ready exit code |
 | `stability.py` | **the two-tier stability suite** (see below) — parses the model's own console time series and asserts on PHYSICS, not on a golden |
-| `stability_manifest.py` | its case list: all 68 tracked ocean namelists, with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
+| `stability_manifest.py` | its case list: every tracked ocean namelist (73 base cases), with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
 | `downscale.py` | the dimensionless-number rules a tier-2 twin must satisfy, plus the standalone checker that validates every twin |
 | `README.md` | this file |
 
@@ -1144,6 +1144,43 @@ gap. Thirteen cases are in that position:
 - the eight `bench_scaling/*` benchmarks — the problem **size** is what they
   measure, so a downscaled twin measures nothing. They still get the tier-1
   stability gate.
+
+## Gate E6 — ISOMIP+ Ocean0 melt-off under `z_fixed`, 180 days (tier 1 only)
+
+Two tier-1 rows run `isomip_plus/ocean0_idealised_zfixed.nml` with basal melt
+and top drag OFF (run-time `t1_overrides`, the committed file is untouched)
+for 180 simulated days — the horizon is load-bearing, because the numerical
+calving-front regime does not appear until day ~105:
+
+```bash
+# NVHPC GPU build, one V100 (~18 min per leg, sequential on one device)
+CUDA_VISIBLE_DEVICES=2 python3 tests/regression/stability.py --tier 1 \
+    --backend gpu --build-dir build_cc70 --gpus 2 -v \
+    --cases isomip_plus_ocean0_zfixed_meltoff,isomip_plus_ocean0_zfixed_meltoff_nu30
+```
+
+| row | gate | measured (V100, 2026-09-24) |
+|---|---|---|
+| `isomip_plus_ocean0_zfixed_meltoff` (`nu_h = 6`) | `En(30 d) < 1E-07` | `5.632E-08` |
+| | 5-day log-rate d25–30 < d15–20 | `0.0507` < `0.0664 /day` |
+| | `En(180 d) < 1E-05` (and peak, `energy:rest`) | `3.147E-06` (peak `3.804E-06`, d173.5) |
+| | `En(180)/En(150) < 2` | `1.39` |
+| `isomip_plus_ocean0_zfixed_meltoff_nu30` | peak `En < 5E-07` (`REST_1MM_S`) | `2.121E-07` |
+
+Measured on the v0.1.0 defaults (`bebt = 0.1`, `renorm_consistent_flux`, the
+I1′ vanished-layer rule); within 3 % of `cavity_rest_growth_diagnosis.md` §Q
+through day 90; regime 2 arrives on the same schedule (`~d105`) and
+saturates at the same level (peak `3.804E-06` vs `3.704E-06`), but ~15 days
+later (growth stops by `~d165`, not `~d150`). Zero `[nan-catch]`, `MaxCFL ≤ 0.0093`, budgets
+`≤ 8.8E-12` over the 180 days on both rows.
+The `nu_h = 30` row carries a scoped tier-1 XFAIL on `energy:rest-settles`
+only (regime 1 is an `En ∝ t` boundary current that never settles; its last
+sample is its peak). The `nu_h = 6` row carries NONE: regime 2 oscillates
+about its saturation level and ends at 83 % of its peak, so the settle gate
+passes — it reads the phase of that oscillation at day 180 (it missed by a
+hair, 95.3 %, before `bebt = 0.1`), which is why a trip there is a thing to
+localise, not to re-mark.
+No tier-2 twin: see the `t2_reason`s.
 
 ## Adding a case to the stability suite
 
