@@ -1309,23 +1309,25 @@ def _scheme_twin(case, scheme):
     if kf:
         twin["known_failure"] = dict(kf)
     elif case.get("matrix"):
-        # A vcoord-matrix row's marker carries to its twin, which is the
-        # OPPOSITE of the rule for every other case -- and deliberately:
+        # A vcoord-matrix row's twin follows its own rule:
         #   * a REFUSAL row asserts that `validate_config` rejects the
         #     configuration, which is a property of the CONFIGURATION and not
-        #     of the outer time-split, so both schemes must refuse it;
-        #   * a MEASURED-defect row is measuring the vertical coordinate's
-        #     pressure-gradient truncation over a geometry. The outer split
-        #     AMPLIFIES that (ssp_rk2's two-stage average manufactures
-        #     internal gravity waves) but does not create it -- substituted
-        #     and measured on the sibling cavity case, where dt 600 -> 150
-        #     reproduces the curve to 2%. A twin that dropped the marker
-        #     would report the SAME defect as a live FAIL under the other
-        #     scheme, which says nothing new and buries the rows that do.
-        # Where the two schemes genuinely DISAGREE the twin still turns red:
-        # the marker is scoped to the assertions the base case failed, so an
-        # ssp_rk2-only failure on any other assertion is uncovered and FAILs.
-        if case.get("known_failure"):
+        #     of the outer time-split, so the twin inherits the refusal;
+        #   * a RUNNABLE cell's twin is MEASURED in its own right --
+        #     `vcoord_matrix_pin.py` pins the `__ssp_rk2` runs separately
+        #     (`MEASURED_TWIN`) -- so it carries its own record, or none when
+        #     it was measured passing. The two schemes genuinely differ on
+        #     this matrix (ssp_rk2 amplifies the inviscid mode, and is the
+        #     scheme that RESTS the viscous leg's stepped cells), so
+        #     inheriting the base marker would either excuse a twin-only
+        #     failure or report a permanent XPASS.
+        tk = case["matrix"].get("twin_known_failure", "inherit")
+        if case["matrix"].get("expect") == "run" and tk != "inherit":
+            if tk:
+                twin["known_failure"] = dict(tk)
+            else:
+                twin.pop("known_failure", None)
+        elif case.get("known_failure"):
             twin["known_failure"] = dict(case["known_failure"])
         else:
             twin.pop("known_failure", None)

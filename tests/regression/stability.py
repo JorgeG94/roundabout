@@ -145,6 +145,17 @@ _NTRUNC_RE = re.compile(r"CFL truncations:\s+\d+\s+this report\s+\((\d+)\s+total
 # number the rx0 ladder is built to dial:
 #   "sigma stiffness rx0 = 0.726 at ... exceeds 0.200"
 _RX0_RE = re.compile(r"rx0\s*=\s*(" + _NUM + r")")
+# The fail-loud ALE remap guard (`&vcoord_nml remap_check_preconditions`):
+#   "ALE remap preconditions violated at outer step 1904: 3 column(s); worst
+#    relative column-total mismatch  4.42641E-16 (tolerance  1.00000E-09);
+#    most negative thickness -8.34282E+01"
+_PRECOND_RE = re.compile(
+    r"ALE remap preconditions violated at outer step\s+(\d+):\s+(\d+)\s+"
+    r"column\(s\);\s+worst relative column-total mismatch\s+(" + _NUM +
+    r").*?most negative thickness\s+(" + _NUM + r")", re.S)
+_PRECOND_FIRED_RE = re.compile(r"ALE remap preconditions? violated")
+_PRECOND_STEP_RE = re.compile(
+    r"ALE remap preconditions violated at outer step\s+(\d+)")
 # The model's authoritative end-of-run step count, independent of the [stats]
 # emission cadence (which lands on a stride and rarely on the very last step).
 _TOTAL_STEPS_RE = re.compile(r"^\s*Total steps:\s*(\d+)", re.MULTILINE)
@@ -217,8 +228,21 @@ def parse_series(text):
     mm = _RX0_RE.search(text)
     if mm:
         rx0 = _f(mm.group(1))
+    precond = None
+    mm = _PRECOND_RE.search(text)
+    if mm:
+        precond = {"step": int(mm.group(1)), "columns": int(mm.group(2)),
+                   "mismatch": _f(mm.group(3)), "h_min": _f(mm.group(4))}
+    elif _PRECOND_FIRED_RE.search(text):
+        # nvfortran interleaves the ERROR STOP on stderr into the middle of
+        # the guard's stdout line, so the full pattern can be cut in two.
+        # The guard still FIRED; record what survives rather than miss it.
+        mm = _PRECOND_STEP_RE.search(text)
+        precond = {"step": int(mm.group(1)) if mm else -1, "columns": -1,
+                   "mismatch": float("nan"), "h_min": float("nan")}
     return {"stats": stats, "budget": budget, "diag": diag, "crash": crash,
             "total_steps": mt, "ntrunc": ntrunc, "rx0": rx0,
+            "precond": precond,
             "nan_catch": len(_NAN_CATCH_RE.findall(text))}
 
 
@@ -627,8 +651,9 @@ def assert_matrix(series, res, phys, tier):
 
     # --- tracer bounds -----------------------------------------------------
     slack = phys.get("tracer_slack", 1.0e-6)
-    worst, worst_name = 0.0, None
+    worst, worst_name, worst_excess = 0.0, None, -1.0
     seen = False
+    quantum = 0.0
     for name in ("temperature", "salinity"):
         rows = [r for r in (series["diag"].get(name) or [])
                 if _finite(r["min"]) and _finite(r["max"])]
@@ -636,17 +661,28 @@ def assert_matrix(series, res, phys, tier):
             continue
         seen = True
         lo0, hi0 = rows[0]["min"], rows[0]["max"]
+        # The console `[diag]` line prints ES13.5 -- six significant
+        # digits, so a salinity of 34.67 is resolved to 1e-4 PSU. An
+        # overshoot of ONE last printed digit is the rounding of two printed
+        # numbers, not a measurement: it flipped `slope x zstar_full`
+        # between gfortran and nvfortran. The bar is therefore never finer
+        # than the resolution of the data it reads (1.5 print quanta).
+        q = diag_print_quantum(max(abs(lo0), abs(hi0)))
+        allowed = max(slack, 1.5 * q)
         for r in rows[1:]:
             d = max(lo0 - r["min"], r["max"] - hi0, 0.0)
+            if d - allowed > worst_excess:
+                worst_excess = d - allowed
             if d > worst:
-                worst, worst_name = d, name
+                worst, worst_name, quantum = d, name, q
     if seen:
         out.append(Verdict(
-            "tracer:no-new-extrema", worst <= slack,
+            "tracer:no-new-extrema", worst_excess <= 0.0,
             "at rest, with no surface flux and no mixing closure, T and S "
-            "may not leave their INITIAL range by more than {:.1g}".format(slack),
-            "worst overshoot = {} ({})".format(
-                _fmt(worst), worst_name or "none"),
+            "may not leave their INITIAL range by more than max({:.1g}, 1.5 "
+            "print quanta of the console [diag] line)".format(slack),
+            "worst overshoot = {} ({}; print quantum {})".format(
+                _fmt(worst), worst_name or "none", _fmt(quantum)),
             "A new tracer extremum in a motionless, unforced, unmixed ocean "
             "was created by the coordinate's own regrid -- an unlimited "
             "reconstruction, or a vanished layer the remap drained and "
@@ -679,6 +715,47 @@ def assert_matrix(series, res, phys, tier):
         "truncation is a clamp -- it bounds the symptom and hides the size "
         "of the error from every other assertion here."))
     return out
+
+
+def diag_print_quantum(value):
+    """Resolution of a value as the console `[diag]` line prints it.
+
+    The line is written ES13.5 (`rdb_ocean_diag.F90`) -- one leading digit
+    and five after the point, six significant digits -- so the last printed
+    digit of `value` is worth
+    `10**(floor(log10|value|) - 5)`. Zero prints as an exact zero.
+    """
+    v = abs(value)
+    if v == 0.0 or not _finite(v):
+        return 0.0
+    return 10.0 ** (math.floor(math.log10(v)) - 5)
+
+
+def assert_remap_preconditions(series):
+    """`remap:preconditions` -- the ALE remap's own fail-loud guard never fired.
+
+    The matrix runs with `&vcoord_nml remap_check_preconditions`, which
+    aborts the run the first time the overlap sweep is handed a column with a
+    negative layer or a column total that differs from its target's.  Named
+    as its own verdict so a report says WHY a run stopped, not only that it
+    did: the guard names the symptom of a blow-up (a layer driven negative by
+    a CFL violation in continuity) a step or two before it goes non-finite.
+    """
+    pc = series.get("precond")
+    return Verdict(
+        "remap:preconditions", pc is None,
+        "the ALE remap is never handed a negative layer or a column whose "
+        "total differs from its target's (remap_check_preconditions)",
+        "no violation" if pc is None else
+        "violated at outer step {}: {} column(s), most negative h {} m, "
+        "worst relative column-total mismatch {}".format(
+            pc["step"], pc["columns"], _fmt(pc["h_min"]), _fmt(pc["mismatch"])),
+        "The overlap sweep assumes non-negative thicknesses and equal column "
+        "totals; outside them it silently creates or deletes tracer mass. On "
+        "the rest matrix every firing measured so far is the LAST symptom of "
+        "a blow-up already in progress (continuity driven past layer CFL 1), "
+        "not a target-builder defect.",
+        "design/vcoord_ale_audit.md (forensics, Q1)")
 
 
 def _diag_amplitude_rate(series, field, fit_from_day=0.0):
@@ -1382,6 +1459,10 @@ def evaluate(case, tier, res, series):
     verdicts = [assert_ran(series, spec["n_steps"], res)]
     fin, artifacts = assert_finite(series)
     verdicts.append(fin)
+    if phys.get("matrix_gates"):
+        # Evaluated whether or not the run completed: the guard's whole job
+        # is to ABORT, so gating it on completion would never see it fire.
+        verdicts.append(assert_remap_preconditions(series))
     if verdicts[0].ok:
         verdicts += assert_conservation(series, phys.get("budget_tol", {}))
         verdicts += assert_energy(series, phys, tier)
@@ -1506,6 +1587,12 @@ def _status(case, verdicts, tier=None):
         return "XFAIL", failed
     if failed:
         return "FAIL", failed
+    if known and known.get("toolchain_dependent"):
+        # MEASURED failing on one toolchain and passing on another (the
+        # marker's reason quotes both). A pass here is one of the two
+        # measured outcomes, not news -- reporting it XPASS would read as
+        # "the defect is fixed, drop the marker", which it is not.
+        return "PASS", []
     if known:
         return "XPASS", []
     return "PASS", []
@@ -1695,6 +1782,24 @@ def self_test():
                                        [e for _, e in flat])
     check("a PLATEAU reads as not growing", abs(sig_f or 0.0) <= bar)
 
+    # (7c) The tracer-bound gate can only be as fine as the numbers it reads.
+    #      The measured case: `slope x zstar_full` printed salinity max
+    #      3.46700E+01 then 3.46701E+01 on nvfortran and not on gfortran --
+    #      one last printed digit. That must PASS; three digits must FAIL.
+    def _tser(smax):
+        return {"stats": [], "budget": {}, "ntrunc": 0,
+                "diag": {"salinity": [{"t": 0.0, "min": 33.8075, "max": 34.67,
+                                       "mean": 34.0},
+                                      {"t": 1.0, "min": 33.8075, "max": smax,
+                                       "mean": 34.0}]}}
+    one = named(assert_matrix(_tser(34.6701), {}, {"matrix_gates": True}, 1),
+                "tracer:no-new-extrema")
+    three = named(assert_matrix(_tser(34.6703), {}, {"matrix_gates": True}, 1),
+                  "tracer:no-new-extrema")
+    check("a ONE-print-digit salinity flip (1e-4 PSU at 34.67) PASSES "
+          "tracer:no-new-extrema; three digits FAIL it",
+          one.ok and not three.ok)
+
     # (8) Every manifest twin satisfies the downscaling rules.
     bad = [c["name"] for c in manifest.STABILITY_CASES
            if c.get("tier2", {}).get("dimensionless")
@@ -1707,15 +1812,69 @@ def self_test():
     twins = [c for c in manifest.STABILITY_CASES if c.get("split_scheme")]
     n2 = sum(1 for c in manifest.STABILITY_CASES
              if not c["tier2"].get("skip"))
-    # 71 shipped namelists + the 115 generated vertical-coordinate matrix
-    # cells. The tripwire is on the TOTAL so that a matrix cell silently
+    # 71 shipped namelists + the generated vertical-coordinate matrix: 115
+    # INVISCID cells (every family x geometry, the refusals, the N^2 = 0
+    # controls, the Wright leg) and 90 VISCOUS cells (the runnable ones).
+    # The tripwire is on the TOTAL so that a matrix cell silently
     # disappearing (a template token renamed, a family dropped from the
     # FAMILIES list) fails here rather than reporting a smaller green table.
     vcm = [c for c in base if c.get("matrix")]
+    inv = [c for c in vcm if c["matrix"]["leg"] == "inviscid"]
+    vis = [c for c in vcm if c["matrix"]["leg"] == "viscous"]
     check("manifest covers 71 shipped namelists + the vcoord matrix "
-          "({} base cases, {} of them matrix cells, {} at tier 2)"
-          .format(len(base), len(vcm), n2),
-          len(base) - len(vcm) == 71 and len(vcm) == 115)
+          "({} base cases, {} matrix cells = {} inviscid + {} viscous, {} at "
+          "tier 2)".format(len(base), len(vcm), len(inv), len(vis), n2),
+          len(base) - len(vcm) == 71 and len(inv) == 115 and len(vis) == 90)
+    # The two legs must differ in the dissipation and in NOTHING else: a
+    # viscous namelist is its inviscid twin with the hvisc/bdrag groups
+    # changed. Checked on the emitted files, which are what actually runs.
+    import vcoord_matrix as _vcm
+
+    def _groups(path, drop=("ocean_hvisc_nml", "ocean_bdrag_nml")):
+        keep, g = [], None
+        for line in open(os.path.join(REPO_ROOT, path)):
+            bare = line.split("!", 1)[0].strip()
+            if bare.startswith("&"):
+                g = bare[1:].lower()
+            if g in drop or not bare or "filename" in bare:
+                if bare.startswith("/"):
+                    g = None
+                continue
+            keep.append(bare)
+            if bare.startswith("/"):
+                g = None
+        return keep
+    pairs = [(c, next((i for i in inv if i["matrix"]["problem"] == c["matrix"]["problem"]
+                       and i["matrix"]["family"] == c["matrix"]["family"]
+                       and i["matrix"]["eos"] == c["matrix"]["eos"]
+                       and i["matrix"]["stratification"]
+                       == c["matrix"]["stratification"]), None)) for c in vis]
+    check("every viscous cell is its inviscid twin + the dissipation only",
+          all(i is not None and _groups(c["nml"]) == _groups(i["nml"])
+              for c, i in pairs))
+    check("the viscous closure is MOM6's seamount closure translated "
+          "(nu_h = KH*(dx/5 km)^2 = {:g} m2/s, r = CDRAG*DRAG_BG_VEL/HBBL = "
+          "{:g} 1/s)".format(_vcm.VISC_NU_H, _vcm.VISC_BDRAG_R),
+          abs(_vcm.VISC_NU_H - 160.0) < 1e-9
+          and abs(_vcm.VISC_BDRAG_R - 1.0e-5) < 1e-15)
+    # Every runnable cell runs the FIXED configuration v0.1.0 recommends.
+    fixed = ("reconstruct_for_pressure = .true.", "remap_boundary_extrap     = .true.",
+             "remap_nonuniform_weights  = .true.", "remap_check_preconditions = .true.")
+    check("every matrix cell runs the fixed configuration (exact FV PGF, "
+          "linear-exact remap, precondition guard, closed z_fixed faces)",
+          all(all(f in open(os.path.join(REPO_ROOT, c["nml"])).read() for f in fixed)
+              and (c["matrix"]["family"] != "z_fixed"
+                   or "zfixed_closed_faces = .true." in open(
+                       os.path.join(REPO_ROOT, c["nml"])).read())
+              for c in vcm))
+    # A viscous cell INSIDE its family's documented envelope may not carry a
+    # marker: that is the gate. Outside it, or where no envelope exists, a
+    # marker is allowed and must say why.
+    inside_marked = [c["name"] for c in vis if c["matrix"].get("envelope")
+                     and c.get("known_failure")]
+    check("no viscous cell inside its family's rx0 envelope carries a "
+          "known_failure ({} envelopes)".format(len(_vcm.ENVELOPES)),
+          not inside_marked, str(inside_marked))
     # Every matrix cell must name its coordinates in the table. Without this
     # a row whose `matrix` block lost a key would simply vanish from the
     # printed family x problem table with nothing said.
@@ -1840,6 +1999,12 @@ def main(argv=None):
                         "Composes with --cases (both must match).")
     p.add_argument("--out", default=None, help="write JSON results here.")
     p.add_argument("--keep", action="store_true", help="keep NetCDF output.")
+    p.add_argument("--scratch-root", default=None,
+                   help="run directory root (default tmp_local_artifacts/"
+                        "stability[_<scheme>]). Give two sweeps that run at "
+                        "the same time -- e.g. a CPU and a GPU toolchain -- "
+                        "different roots, or they overwrite each other's "
+                        "run.log.")
     p.add_argument("-v", "--verbose", action="store_true",
                    help="print every assertion, not only failures.")
     p.add_argument("--self-test", action="store_true",
@@ -1886,9 +2051,11 @@ def main(argv=None):
     # A forced-scheme A/B sweep gets its OWN scratch root: two sweeps sharing
     # one would have the second overwrite the run logs of the first, which is
     # exactly the comparison the sweep exists to make.
-    scratch_root = os.path.join(
+    scratch_root = args.scratch_root or os.path.join(
         REPO_ROOT, "tmp_local_artifacts",
         "stability" + ("_" + args.split_scheme if args.split_scheme else ""))
+    if not os.path.isabs(scratch_root):
+        scratch_root = os.path.join(REPO_ROOT, scratch_root)
     os.makedirs(scratch_root, exist_ok=True)
 
     print("=" * 92)
@@ -2021,6 +2188,9 @@ def _matrix_summary(results, tier):
         rows.append({
             "case": name,
             "problem": mx["problem"], "family": mx["family"],
+            "leg": mx.get("leg", "inviscid"),
+            "envelope": mx.get("envelope"),
+            "rx0_geometry": mx.get("rx0_geometry"),
             "stratification": mx["stratification"], "eos": mx["eos"],
             "scheme": case.get("split_scheme") or _DEFAULT_SPLIT_SCHEME,
             "expect": mx["expect"],
@@ -2045,6 +2215,12 @@ def _print_matrix_table(rows, tier):
     geometry. One cell per (problem, family): the verdict, and the key
     number behind it.
     """
+    for leg in sorted({r.get("leg", "inviscid") for r in rows}):
+        _print_matrix_leg([r for r in rows if r.get("leg", "inviscid") == leg],
+                          tier, leg)
+
+
+def _print_matrix_leg(rows, tier, leg):
     problems = sorted({r["problem"] for r in rows})
     families = sorted({r["family"] for r in rows})
     cell = {}
@@ -2062,7 +2238,8 @@ def _print_matrix_table(rows, tier):
             cell[key] = mark
     w = max(12, max(len(f) for f in families) + 1)
     print("\n" + "=" * 92)
-    print("VERTICAL-COORDINATE MATRIX -- tier {}   (family x problem)".format(tier))
+    print("VERTICAL-COORDINATE MATRIX -- tier {}, {} leg   (family x problem)"
+          .format(tier, leg.upper()))
     print("  ok = every assertion passed   xfail = documented defect   "
           "refused = rejected at configure, as designed")
     print("  FAIL = a live defect          XPASS/NOT-REFUSED = the envelope "

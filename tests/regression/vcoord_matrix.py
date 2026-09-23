@@ -39,6 +39,19 @@ Dozens of near-identical namelists are deliberately NOT checked in: they
 rot, a reader cannot tell which cell of the matrix a given file is, and a
 change to the shared problem then has to be applied by hand N times.
 
+Two legs, one fixed configuration
+=================================
+Every cell runs the configuration v0.1.0 recommends over sloping topography
+(exact FV PGF, linear-exact remap boundary cells + non-uniform weights, the
+fail-loud remap precondition guard, closed z_fixed staircase faces).  The
+INVISCID leg (`vcm_*`) is the hard probe; its terrain-following growth is
+documented expected behaviour shared with MOM6.  The VISCOUS leg (`vcmv_*`)
+carries MOM6's shipped seamount closure translated onto this grid (see LEGS)
+and is the PASS/FAIL gate: a viscous cell inside its family's rx0 ENVELOPE
+may not carry a marker.  The numbers -- markers and envelopes -- are pinned
+from sweeps on both toolchains by `vcoord_matrix_pin.py` into
+`vcoord_matrix_measured.py`; the reasons are policy and live here.
+
 What a row asserts
 ==================
 The problem is AT REST with no energy source of any kind (see the template
@@ -150,6 +163,76 @@ CORIOLIS_F = -1.409e-4          # f-plane at 75 S (ISOMIP+ 3.1.1)
 MAX_DEPTH = 1000.0
 CAVITY_DEPTH = 720.0            # ISOMIP+ z_b,deep
 
+# --- the two LEGS: the same problem, with and without dissipation ----------
+# INVISCID is the hard probe (nothing damps anything, so whatever grows is the
+# discretisation's own); VISCOUS is the PASS/FAIL gate, carrying the closure
+# MOM6 ships with its own seamount rest test (`ocean_only/seamount`,
+# dev/gfdl d74a11f9c, `MOM_parameter_doc.all`):
+#
+#   LAPLACIAN = True, KH = 1000 m2/s, KH_VEL_SCALE = 0.003 m/s, BOUND_KH
+#   BOTTOMDRAGLAW = LINEAR_DRAG = True, CDRAG = 0.002, DRAG_BG_VEL = 0.05 m/s,
+#   HBBL = 10 m;  BIHARMONIC = False;  on a 5 km grid at dt = 900 s.
+#
+# THE TRANSLATION, and why each number is what it is:
+#
+#   * VISCOSITY.  Both codes' Laplacian coefficient is the nu of du/dt =
+#     nu * del^2 u: MOM6's `diffu = (1/h) div(h Kh strain)` (MOM_hor_visc.F90,
+#     tension dudx-dvdy + shear dvdx+dudy) and roundabout's scalar path
+#     (`hvisc_compute_scalar_impl`, 5-point velocity Laplacian) both reduce to
+#     Kh * del^2 u on a uniform grid with uniform h -- the cross terms of the
+#     stress form cancel -- so KH maps onto `nu_h` one-for-one in DEFINITION.
+#     The OPERATORS differ where h varies between neighbours: MOM6
+#     thickness-weights and conserves momentum, the scalar path does neither.
+#     roundabout's `stress_tensor=.true.` IS MOM6's operator (tension/shear
+#     stress times h, divided by h_u + h_neglect, per-cell BOUND_KH clamp,
+#     coast-masked), so the viscous leg selects it.  It is refused under
+#     `zfixed_closed_faces`, so the z_fixed cells carry the scalar operator
+#     (with the closed-face free-slip masks).  Measured, and the reason this
+#     matters: the SCALAR operator at nu_h >= 40 m2/s goes explosively
+#     unstable on `rx0_060 x sigma` under pred_corr at dt = 600 s, where the
+#     stress-divergence operator at nu_h = 160 m2/s rests -- see the FINDING
+#     in tests/regression/README.md.
+#     The MAGNITUDE is translated, not copied: what a Laplacian does to a
+#     grid-scale mode is damp it at nu * k_grid^2 ~ nu / dx^2, and the mode
+#     this matrix exists for is 2-3 dx wide.  MOM6's shipped Kh/dx^2 =
+#     1000 / 5000^2 = 4.0e-5 1/s; the same grid-scale damping on this 2 km
+#     grid is nu_h = 4.0e-5 * 2000^2 = 160 m2/s.  Copying 1000 m2/s instead
+#     would be 6.25x MOM6's grid-scale damping -- and MOM6 itself would not
+#     run it here: its BOUND_KH ceiling 0.1 * dx^2 / dt is 667 m2/s at
+#     (2 km, 600 s).  KH_VEL_SCALE * dx = 6 m2/s is below either, so it
+#     does not bind (roundabout's `kh_vel_scale` only seeds `ah_bg` for the
+#     flow-aware closures and would be inert on this path anyway).
+#   * DRAG.  MOM6 LINEAR_DRAG is a bottom STRESS tau/rho_0 = CDRAG *
+#     DRAG_BG_VEL * u_bbl = 1.0e-4 m/s * u_bbl, grid-independent, carried over
+#     the bottom HBBL.  roundabout's distributed linear form applies
+#     du_k/dt = -r * u_k * (h_in_bbl_k / h_k), whose column integral is
+#     r * HBBL * u_bbl, so r = 1.0e-4 / HBBL = 1.0e-5 1/s with hbbl = 10 m
+#     reproduces the stress exactly.
+#   * NOT carried: MOM6's KV = 1e-4 m2/s vertical viscosity. Its damping of
+#     the first baroclinic mode, KV * (pi/H)^2 ~ 1e-9 1/s, is four decades
+#     under the growth rates this matrix measures; `use_closure=.false.`
+#     keeps KD = 0 too, which the tracer-extrema gate needs.
+MOM6_SEAMOUNT_DX = 5000.0
+MOM6_KH = 1000.0
+MOM6_KH_VEL_SCALE = 0.003
+MOM6_CDRAG = 0.002
+MOM6_DRAG_BG_VEL = 0.05
+MOM6_HBBL = 10.0
+VISC_NU_H = round(max(MOM6_KH * (DX / MOM6_SEAMOUNT_DX) ** 2,
+                      MOM6_KH_VEL_SCALE * DX), 6)
+VISC_BDRAG_R = MOM6_CDRAG * MOM6_DRAG_BG_VEL / MOM6_HBBL
+
+LEGS = {
+    "inviscid": {"prefix": "vcm", "nu_h": 0.0, "bdrag_form": "quadratic",
+                 "bdrag_r": 0.0, "bdrag_hbbl": 0.0, "stress_tensor": False},
+    "viscous": {"prefix": "vcmv", "nu_h": VISC_NU_H, "bdrag_form": "linear",
+                "bdrag_r": VISC_BDRAG_R, "bdrag_hbbl": MOM6_HBBL,
+                "stress_tensor": True},
+}
+# `stress_tensor` is refused under `&vcoord_nml zfixed_closed_faces`, so the
+# z_fixed cells of the viscous leg carry the scalar velocity Laplacian.
+SCALAR_LAPLACIAN_FAMILIES = ("z_fixed",)
+
 # --- the stratification, laid FLAT IN GEOPOTENTIAL z -----------------------
 # S falls linearly from 33.8 PSU at z = 0 to 34.55 PSU at z = -1000 m, with T
 # uniform, so the whole density signal is in S and the linear EOS makes
@@ -212,10 +295,13 @@ FAMILIES = [
      "per-column z_ref table from the local bathymetry, with a genuinely "
      "NON-UNIFORM stack (a 3 x 20 m fine surface band). The uniform default "
      "would make this row a duplicate of sigma and prove nothing."),
-    ("z_fixed", "z_fixed", "run", None, "",
+    ("z_fixed", "z_fixed", "run", None, "   zfixed_closed_faces = .true.",
      "quasi-geopotential: fixed-z interfaces with bed-side layers vanishing "
      "to the inert filler. `z_fixed_h_ref` is taken from "
-     "`&ocean_topo_nml max_depth`, so the nominal spacing is max_depth/nz."),
+     "`&ocean_topo_nml max_depth`, so the nominal spacing is max_depth/nz. "
+     "Runs with `zfixed_closed_faces` (the staircase faces closed, the "
+     "barotropic mode open), which is how v0.1.0 recommends z_fixed be "
+     "run and without which the staircase PGF residual is not bounded."),
     ("rho", "rho", "run", None,
      "   rho_target_light = 1027.20\n   rho_target_dense = 1027.90\n"
      "   rho_ref_pressure = 0.0",
@@ -286,7 +372,7 @@ PROBLEMS = {
     "seamount_steep": {
         "class": "seamount", "bar": "REST_SEAMOUNT", "de": 75.0, "hbar": 800.0,
         "topo": "seamount", "edge_depth": 300.0, "slope_scale": 15000.0,
-        "tier2": False,
+        "tier2": False, "tier2_viscous": True,
         "doc": "the same Gaussian seamount at 15 km = 7.5 cells, i.e. past "
                "the Beckmann & Haidvogel stiffness bound. Paired with the "
                "gentle twin this is a two-point de^3 check on every family "
@@ -312,7 +398,7 @@ for _r in RX0_RUNGS:
         # the mean: `z_fixed_h_ref` is taken from it, so a nominal stack cut
         # for 750 m would leave a 1350 m column unable to reach its own bed.
         "max_depth": RX0_HBAR * (1.0 + _r),
-        "tier2": (abs(_r - 0.6) < 1e-9),
+        "tier2": (abs(_r - 0.6) < 1e-9), "tier2_viscous": False,
         "rx0": _r,
         "doc": "rx0 ladder rung {:.1f}: a single wet-wet face joining a "
                "{:.0f} m column to a {:.0f} m one, so rx0 = |dH|/(H_a+H_b) "
@@ -355,279 +441,272 @@ PROBLEMS["lid_slope"] = {
 
 
 # ---------------------------------------------------------------------------
-# THE BASELINE TABLE -- measured, then pinned
+# THE BASELINE TABLE -- measured, then pinned (by a tool, never by hand)
 # ---------------------------------------------------------------------------
-# Every cell below FAILS today.  Each entry is
-#     "problem/family[/strat][/eos]": (reason-key, [assertions], measured En)
-# and is MEASURED, never chosen: the table was produced by running the whole
-# matrix at 3.33 simulated days on gfortran 15.1 Release, single rank, MPI
-# off (`tmp_local_artifacts/vcm_measure`), and the numbers below are what
-# came out.  Nothing here was tuned to pass; nothing was excused wholesale --
-# each marker names the ASSERTIONS it covers, so a cell that is XFAIL on
-# `energy:rest-settles` still gates `conserve:*`, `finite` and the level bar.
+# The NUMBERS live in `vcoord_matrix_measured.py`, generated by
+# `vcoord_matrix_pin.py` from `stability.py --out` JSONs of a tier-1 and a
+# tier-2 sweep on EACH toolchain (see that module's header for provenance).
+# What lives HERE is policy: which documented reason a failing cell carries.
+# Each record names the ASSERTIONS it covers (the union over toolchains and
+# tiers -- the tolerance band), so a cell that is XFAIL on
+# `energy:rest-growth-rate` still gates `conserve:*`, `finite` and the level
+# bar, and a cell that fails a NEW assertion on any toolchain turns FAIL.
 #
-# WHEN A CELL FLIPS.  A fix that removes one of these turns the row XPASS
-# and the suite says so.  The two dyn-core fixes that live on other branches
-# and are NOT in this tree are named in the reasons below:
-#   * `origin/fix/sigma-pgf-rest-state`      -- the exact FV pressure-gradient
-#     under `reconstruct_for_pressure`, which is what the `slope` and
-#     `seamount_*` plateaus are measuring;
-#   * `origin/fix/ale-remap-rest-amplifier`  -- `&vcoord_nml
-#     remap_boundary_extrap`, the first-order boundary cell in the remap,
-#     which is the leading suspect for the `z_fixed` budget leak.
-# Both must be re-measured against this table when they land.
+# The MOM6 evidence the inviscid reasons cite is recorded in
+# tests/regression/README.md ("The MOM6 baseline"): MOM6 dev/gfdl d74a11f9c,
+# ocean_only/seamount, sigma, at rest, f = 1e-4, every dissipation off.
+MOM6_EVIDENCE = (
+    "MOM6 SHOWS THE SAME MODE: its own seamount at rest in sigma "
+    "coordinates, inviscid, f = 1e-4 s^-1, grows kinetic energy "
+    "exponentially out of round-off with an e-folding of 0.81-0.85 days "
+    "(R^2 > 0.9998 over five decades), independent of rx0 over 0.10-0.76, "
+    "identically zero on a flat bed and absent at f = 0; nu_h = 10 m2/s does "
+    "not stop it there, and MOM6's shipped closure (KH = 1000 m2/s + "
+    "KH_VEL_SCALE + linear drag) does (MOM6 dev/gfdl d74a11f9c; "
+    "tests/regression/README.md, 'The MOM6 baseline'). It is a property of "
+    "the C-grid/ALE method on a sloping boundary, not a roundabout defect.")
+
 XFAIL_REASONS = {
-    "blowup":
-        "BLOWS UP. The run goes non-finite and aborts inside the first "
-        "simulated day, from a state at rest with no energy source and no "
-        "dissipation of any kind. This is not a tolerance question: the "
-        "terrain-following pressure-gradient truncation over a single-face "
-        "depth step of this size produces a spurious acceleration the "
-        "barotropic mode cannot absorb, and NO shipped coordinate family "
-        "survives it. Beckmann & Haidvogel (1993) bound the stiffness "
-        "rx0 = |dH|/(H_a+H_b) at 0.2 for exactly this reason; the "
-        "`rdb_ocean_stability_audit` warning fires at configure with the "
-        "number. The fix is to smooth the topography or to implement a "
-        "pressure-gradient form that is exact on a step -- not a bar.",
-    "rx0_plateau":
-        "SURVIVES, BUT DOES NOT REST. The run completes and its budgets "
-        "close at round-off, and it develops centimetres per second of "
-        "spurious current out of nothing and is still at its maximum when "
-        "the clock stops. A forced, viscous configuration would never "
-        "notice; a quiescent or long spin-up one measures this instead of "
-        "the physics. Same mechanism as the `blowup` rungs, one or two "
-        "decades weaker.",
+    "inviscid_mode":
+        "DOCUMENTED EXPECTED BEHAVIOUR (inviscid leg). With no dissipation of "
+        "any kind, a terrain-following column over a slope amplifies "
+        "round-off in the pressure difference at the steepest face (1.1e-16 "
+        "m/s^2, below one ulp of the hydrostatic pressure -- the FV PGF is "
+        "exact everywhere else) into a baroclinic, grid-scale (2-3 dx), "
+        "rotation-dependent, stratification-dependent, dt-INDEPENDENT mode "
+        "(design/vcoord_ale_audit.md, 2026-09-21 forensics Q2). It grows "
+        "exponentially for the whole run and, on the steep rungs, reaches "
+        "the CFL wall, where continuity writes a negative layer and the "
+        "remap guard stops the run. " + MOM6_EVIDENCE,
+    "unstrat_control":
+        "THE N^2 = 0 CONTROL (inviscid leg). With no stratification the "
+        "baroclinic mode is absent; what survives on the steepest rung is a "
+        "slower BAROTROPIC residual growth (measured: KE_bc/KE_bt 1.7e-05, "
+        "forensics Q2b) that still reaches the CFL wall inside 30 days at "
+        "rx0 = 0.8. Carried as a control, not as a coordinate verdict.",
     "z_fixed_leak":
-        "LEAKS SALT AND HEAT, and makes new tracer extrema, on ANY geometry "
-        "with vanishing layers -- a slope, a seamount or an ice base. The "
-        "budget residual is 1e-6 RELATIVE against a 1e-11 bar, i.e. five "
-        "decades over, and it is a step at the first regrid rather than a "
-        "drift, which points at the ALE drain of the inert filler layers "
-        "rather than at transport. `z_fixed` is the one family whose "
-        "shallow columns carry a full stack of fillers, and it is the only "
-        "family in the matrix that leaks. Suspect: the first-order boundary "
-        "cell in the remap reconstruction "
-        "(`origin/fix/ale-remap-rest-amplifier`, `&vcoord_nml "
-        "remap_boundary_extrap`), which this tree does not carry -- but "
-        "that is a hypothesis, not a measurement, and this marker must be "
-        "re-measured when that branch lands.",
+        "z_fixed LEAKS SALT AND HEAT wherever layers vanish -- a step at the "
+        "first regrid, 1e-7 relative against the 1e-11 bar, scaling with "
+        "the number of filler layers, not with the energy. "
+        "`remap_boundary_extrap` bought 71x of it and it is still four "
+        "decades over (audit 2026-09-21, Result 4). The fix is "
+        "`origin/fix/remap-vanished-layer-content` (vanished-layer contract "
+        "I1: a sub-threshold filler may not carry content), not yet on main. "
+        "MEASURED with it (viscous leg, gfortran, 30 d): the salt residual "
+        "falls 4.4e-07 -> 1.7e-13 (slope), 1.2e-06 -> 8.3e-14 "
+        "(seamount_gentle), 7.3e-07 -> 1.2e-14 (rx0_060), i.e. to round-off; "
+        "what remains is `tracer:no-new-extrema` (1-3 mPSU of salinity "
+        "overshoot from the regrid) and, under the sloping lid, the "
+        "saturated staircase residual (1.15 cm/s). Re-measure when it "
+        "lands. The flat geometries, which have no fillers, close at "
+        "round-off.",
+    "z_fixed_staircase":
+        "z_fixed's STAIRCASE PGF RESIDUAL: a forced, bounded truncation that "
+        "saturates (static in level, dt-invariant; audit forensics Q2e), "
+        "not an instability -- but it sits over the rest bar.",
     "density_coord":
-        "A DENSITY-SPACE COORDINATE ON A GEOMETRIC REST STATE. `rho` and "
-        "`hycom` place their interfaces on prescribed potential densities, "
-        "so on a linearly stratified column over a slope the regrid moves "
-        "every interface every step and the remap error it pays is three to "
-        "four decades above the geometric families on the identical "
-        "problem. `rho` is documented validation-grade for exactly this "
-        "reason; `hycom` is the production GVC coordinate and its number "
-        "here is the one to watch. Neither is refused, so this is the "
-        "envelope statement rather than a fence.",
-    "zstar_full":
-        "z*-FULL's PER-COLUMN TABLE. The family builds a separate `z_ref` "
-        "stack per column from the LOCAL bed, so two neighbouring columns "
-        "of different depth get different interface depths and the "
-        "resulting offset is larger than sigma's on the same geometry -- "
-        "measured 3.2x (slope) to 46x (seamount_gentle) above the sigma "
-        "cell. It is the only geometric family whose interface offset does "
-        "not shrink with the bathymetric gradient.",
-    "seamount_settle":
-        "DOES NOT EQUILIBRATE WITHIN THE RUN. The LEVEL is inside the "
-        "seamount bar (Beckmann & Haidvogel 1993's conventional 1 cm/s) and "
-        "the budgets close, but the spurious energy is still at its maximum "
-        "when the run ends, so nothing has bounded it yet. Scoped to the "
-        "SETTLE gate alone for that reason: the magnitude gate is live and "
-        "passes. Whether this is a slow approach to a plateau or an "
-        "instability is what the tier-1 30-day horizon and the "
-        "`energy:rest-growth-rate` fit are there to answer.",
-    "cavity_settle":
-        "THE SLOPING-LID SIGMA TRUNCATION, at matrix scale -- the same "
-        "defect `validation_examples/ocean/ice_shelf_cavity/"
-        "cavity_sloping_lid_rest.nml` carries as a scoped XFAIL, and for "
-        "the same reason: this build implements none of the "
-        "sloping-surface pressure-gradient corrections of Yung, Hallberg, "
-        "Adcroft & Morrison (2026), JAMES 18, e2025MS005645, so the "
-        "spurious energy leaves its plateau on a ~3-day e-folding and the "
-        "final sample is the peak at every horizon short of saturation. "
-        "Scoped to the SETTLE gate: the MAGNITUDE gate passes with margin "
-        "and is deliberately left live, because it is what separates the "
-        "two outer split schemes.",
-    "slope_plateau":
-        "THE TERRAIN-FOLLOWING PLATEAU, AND WHETHER IT IS ONE. Over a "
-        "constant-gradient bed or a Gaussian seamount the spurious energy "
-        "sits at the second-order pressure-gradient truncation "
-        "a_peak = N^2 de^3/(6 dx Hbar) -- which is a tolerable "
-        "discretisation error IF it equilibrates. At the tier-2 horizon "
-        "(3.33 days) several of these cells are still at their maximum when "
-        "the clock stops, and at the tier-1 horizon (30 days) the fitted "
-        "growth rate says which of them are actually still growing. That is "
-        "the whole reason the RATE gate exists: a level bar reads a "
-        "slow instability and a settled truncation identically. The fix is "
-        "a pressure-gradient form that is exact on a sloping coordinate "
-        "surface -- `origin/fix/sigma-pgf-rest-state` carries the exact FV "
-        "form under `reconstruct_for_pressure` and is NOT in this tree, so "
-        "these cells must be re-measured when it lands.",
-    "generic":
-        "Measured failing on this cell; see the baseline table in "
-        "tests/regression/README.md.",
+        "A DENSITY-SPACE COORDINATE ON A GEOMETRIC REST STATE (inviscid). "
+        "`rho`/`hycom` hand the remap a column whose layers track "
+        "isopycnals; on a slope the rest-state mode drives a layer negative "
+        "within days and the guard stops the run (the 1.00008 column-total "
+        "mismatch the density target builder then reports is downstream of "
+        "that negative layer -- audit forensics Q1.4). `rho` is "
+        "validation-grade by documentation.",
+    "eulerian_z":
+        "`eulerian_z` is a stretched sigma with the free surface dropped "
+        "(and pins ssp_rk2, which pred_corr refuses): on a slope it carries "
+        "the same rest-state mode, amplified by the ssp_rk2 two-stage "
+        "average, and six decades above sigma's level.",
+    "lagrangian":
+        "`lagrangian` inherits the sigma-shaped initial thickness and then "
+        "never regrids: over a step the layers deform until one collapses "
+        "and the run goes non-finite. Expected of a pure isopycnal "
+        "coordinate carrying a geometric rest state.",
+    "finding_visc_pred_corr":
+        "FINDING B (viscous leg) -- NOT expected, NOT hidden. With the "
+        "MOM6-comparable Laplacian viscosity (nu_h = 160 m2/s, either "
+        "operator) a terrain-following column over a step that REMAINS "
+        "FINITE without viscosity goes explosively unstable under the "
+        "default pred_corr at dt = 600 s: a round-off creep at the step "
+        "face's top layer turns, after 8-15 days, into a domain-wide "
+        "BAROTROPIC grid-scale (2 dx) mode e-folding in under an hour, and "
+        "continuity drives a layer negative. First-failure localisation "
+        "(tests/regression/README.md, 'FINDING B'): removed by ssp_rk2, by "
+        "f = 0, by N^2 = 0, by a frozen regrid, by dt <= 300 s and by "
+        "nu_h <= 10 m2/s; NOT by dt = 360/450 s, bound_kh, the energy "
+        "Coriolis form, or the drag. The frozen depth-mean viscous forcing "
+        "on the barotropic mode (the anti-damping the `bound_kh` docstring "
+        "describes) is the closest documented mechanism; it is not "
+        "localised further here. MOM6's shipped closure rests on the same "
+        "problem, so this caps the family's envelope, not the method's.",
+    "finding_stress_density":
+        "FINDING A (viscous leg) -- NOT expected, NOT hidden. The "
+        "thickness-weighted stress-divergence viscosity "
+        "(`stress_tensor=.true.`, MOM6's operator) drives a thin layer of a "
+        "density-space column negative within the first 4-8 outer steps "
+        "(mm to dm of negative h, every sloping geometry, both split "
+        "schemes); the scalar velocity Laplacian and no viscosity at all "
+        "are clean. The one MOM6 thin-layer safeguard the port lacks is "
+        "`hrat_min = min(1, h_min/h)` scaling the BOUND_KH ceiling "
+        "(MOM_hor_visc.F90) -- a hypothesis, not a measurement.",
+    "z_fixed_viscous_abort":
+        "The viscous z_fixed cell additionally ABORTS on the remap guard "
+        "(the inviscid twin completes). z_fixed carries the scalar "
+        "Laplacian (stress_tensor is refused under closed faces), so the "
+        "pred_corr x Laplacian-viscosity instability of FINDING B is the "
+        "suspect; it was not localised on z_fixed.",
+    "finding_gpu_wright_density":
+        "FINDING C (GPU only) -- NOT expected, NOT hidden. On nvfortran 26.5 "
+        "/ V100 EVERY rho or hycom run with eos = 'wright' dies at the "
+        "first regrid with CUDA_ERROR_ILLEGAL_ADDRESS inside "
+        "`ocean_vcoord_compute_target_h_rho_impl` (the column do concurrent, "
+        "rdb_ocean_vcoord.F90) -- on a FLAT bed at rest too; the linear EOS "
+        "is clean on the GPU, and gfortran with -fcheck=all finds no bounds "
+        "violation on the same run. The Wright coefficients are parameters, "
+        "so the point EOS call is not the suspect; the kernel's `associate` "
+        "over `this%` components around the do concurrent (the NVHPC "
+        "mapping hazard CLAUDE.md records) is -- a hypothesis.",
+    "outside_envelope":
+        "OUTSIDE THE FAMILY'S DOCUMENTED rx0 ENVELOPE (viscous leg). The "
+        "envelope is the largest geometry rx0 at which EVERY viscous cell "
+        "of the family passes on every toolchain measured (ENVELOPES, "
+        "docs/CAPABILITIES_AND_LIMITATIONS.md); past it the family is not "
+        "claimed to rest.",
 }
 
-MEASURED_XFAIL = {
-    "lid_slope/sigma":
-        ("cavity_settle", ['energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.988e-09 (final 1.988e-09); tier2 (3.33 d) peak En 1.02e-09 (final 1.004e-09)"),
-    "lid_slope/z_fixed":
-        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 3.478e-05 (final 2.909e-05)"),
-    "lid_slope/zstar":
-        ("cavity_settle", ['energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.988e-09 (final 1.988e-09); tier2 (3.33 d) peak En 1.02e-09 (final 1.004e-09)"),
-    "rx0_010/eulerian_z":
-        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.954e-06 (final 1.954e-06)"),
-    "rx0_010/hycom":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_010/lagrangian":
-        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0001066 (final 0.0001066)"),
-    "rx0_010/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_010/sigma":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
-    "rx0_010/z_fixed":
-        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0007616 (final 0.0007616)"),
-    "rx0_010/zstar":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
-    "rx0_010/zstar_full":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0007728 (final 0.0007728); tier2 (3.33 d) peak En 2.261e-06 (final 2.261e-06)"),
-    "rx0_010/zstar_sigma":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000902 (final 0.000902); tier2 (3.33 d) peak En 1.445e-06 (final 1.445e-06)"),
-    "rx0_020/eulerian_z":
-        ("blowup", ['completed', 'energy:rest', 'energy:rest-settles', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 0.0001767 (final 0.0001767)"),
-    "rx0_020/hycom":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_020/lagrangian":
-        ("rx0_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_020/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_020/sigma":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006354 (final 0.006222); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
-    "rx0_020/z_fixed":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_020/zstar":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006354 (final 0.006222); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
-    "rx0_020/zstar_full":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.005049 (final 0.004983); tier2 (3.33 d) peak En 0.0001344 (final 0.0001344)"),
-    "rx0_020/zstar_sigma":
-        ("rx0_plateau", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.006358 (final 0.006249); tier2 (3.33 d) peak En 0.0001335 (final 0.0001335)"),
-    "rx0_040/eulerian_z":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/hycom":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/lagrangian":
-        ("rx0_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/z_fixed":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/zstar":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/zstar_full":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_040/zstar_sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/eulerian_z":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/hycom":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/lagrangian":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/z_fixed":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/zstar":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/zstar_full":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_060/zstar_sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/eulerian_z":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/hycom":
-        ("blowup", ['completed'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/lagrangian":
-        ("blowup", ['completed'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/sigma/unstrat":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/z_fixed":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/zstar":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/zstar_full":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "rx0_080/zstar_sigma":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "seamount_gentle/eulerian_z":
-        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'tracer:no-new-extrema'], [1], "tier1 (30 d) peak En 0.0005058 (final 0.0004234); tier2 (3.33 d) peak En 9.924e-09 (final 8.983e-09)"),
-    "seamount_gentle/hycom":
-        ("density_coord", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 7.601e-05 (final 7.563e-05); tier2 (3.33 d) peak En 2.374e-05 (final 2.361e-05)"),
-    "seamount_gentle/lagrangian":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 8.143e-08 (final 8.143e-08); tier2 (3.33 d) peak En 1.025e-08 (final 8.508e-09)"),
-    "seamount_gentle/rho":
-        ("blowup", ['completed', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.808e-05 (final 1.808e-05)"),
-    "seamount_gentle/sigma":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
-    "seamount_gentle/z_fixed":
-        ("blowup", ['completed', 'conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'finite', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 7.392e-05 (final 7.255e-05)"),
-    "seamount_gentle/zstar":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
-    "seamount_gentle/zstar_full":
-        ("zstar_full", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 2.481e-05 (final 2.481e-05); tier2 (3.33 d) peak En 4.877e-07 (final 4.877e-07)"),
-    "seamount_gentle/zstar_sigma":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.911e-06 (final 4.911e-06); tier2 (3.33 d) peak En 1.048e-08 (final 1.006e-08)"),
-    "seamount_steep/eulerian_z":
-        ("blowup", ['completed', 'energy:rest-settles', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.599e-06 (final 1.599e-06)"),
-    "seamount_steep/hycom":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "seamount_steep/lagrangian":
-        ("slope_plateau", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "seamount_steep/rho":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "seamount_steep/sigma":
-        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
-    "seamount_steep/z_fixed":
-        ("blowup", ['completed', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En aborted"),
-    "seamount_steep/zstar":
-        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
-    "seamount_steep/zstar_full":
-        ("zstar_full", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.000268 (final 0.000268); tier2 (3.33 d) peak En 2.402e-06 (final 2.402e-06)"),
-    "seamount_steep/zstar_sigma":
-        ("slope_plateau", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 0.0001186 (final 0.000116); tier2 (3.33 d) peak En 1.084e-06 (final 1.084e-06)"),
-    "slope/eulerian_z":
-        ("slope_plateau", ['energy:rest', 'tracer:no-new-extrema'], [1], "tier1 (30 d) peak En 0.001131 (final 0.001028); tier2 (3.33 d) peak En 8.391e-11 (final 6.29e-11)"),
-    "slope/hycom":
-        ("density_coord", ['energy:rest', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 1.721e-05 (final 1.689e-05); tier2 (3.33 d) peak En 1.094e-05 (final 1.094e-05)"),
-    "slope/hycom/wright":
-        ("blowup", ['completed', 'energy:rest'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.49e-05 (final 1.35e-05)"),
-    "slope/rho":
-        ("blowup", ['completed', 'energy:rest', 'finite'], [1, 2], "tier1 (30 d) peak En aborted; tier2 (3.33 d) peak En 1.298e-05 (final 1.203e-05)"),
-    "slope/sigma":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
-    "slope/sigma/wright":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 3.246e-09 (final 3.246e-09); tier2 (3.33 d) peak En 8.982e-11 (final 6.652e-11)"),
-    "slope/z_fixed":
-        ("slope_plateau", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En 3.23e-05 (final 3.23e-05); tier2 (3.33 d) peak En 5.109e-06 (final 5.109e-06)"),
-    "slope/z_fixed/wright":
-        ("z_fixed_leak", ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'], [1, 2], "tier1 (30 d) peak En 2.936e-05 (final 2.936e-05); tier2 (3.33 d) peak En 4.755e-06 (final 4.755e-06)"),
-    "slope/zstar":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
-    "slope/zstar_full":
-        ("zstar_full", ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'], [1, 2], "tier1 (30 d) peak En 4.501e-06 (final 4.501e-06); tier2 (3.33 d) peak En 2.836e-07 (final 2.836e-07)"),
-    "slope/zstar_sigma":
-        ("slope_plateau", ['energy:rest-growth-rate', 'energy:rest-settles'], [1], "tier1 (30 d) peak En 2.995e-09 (final 2.995e-09); tier2 (3.33 d) peak En 8.85e-11 (final 6.584e-11)"),
+try:
+    import vcoord_matrix_measured as _measured
+    ENVELOPES = dict(_measured.ENVELOPES)
+    MEASURED = _measured.MEASURED
+    MEASURED_TWIN = _measured.MEASURED_TWIN
+    MEASURED_PROVENANCE = (_measured.__doc__ or "").split("Provenance:", 1)[-1].strip()
+except ImportError:          # bootstrapping a first measurement
+    ENVELOPES, MEASURED_PROVENANCE = {}, "(none)"
+    MEASURED = MEASURED_TWIN = {"inviscid": {}, "viscous": {}}
+
+TERRAIN_FOLLOWING = ("sigma", "zstar", "zstar_sigma", "zstar_full")
+
+
+def reason_for(leg, key, rec):
+    """Which documented reasons a measured failing cell carries (policy).
+
+    Returns a list of `XFAIL_REASONS` keys, primary first: a cell can carry
+    two independent defects (a z_fixed leak AND an abort), and its marker
+    must name both rather than let one excuse the other in prose.
+    """
+    parts = key.split("/")
+    fam = parts[1]
+    a = set(rec["assertions"])
+    out = []
+    if "unstrat" in parts:
+        return ["unstrat_control"]
+    if fam == "z_fixed":
+        out.append("z_fixed_leak" if a & {"conserve:Salt", "conserve:Heat"}
+                   else "z_fixed_staircase")
+        if "completed" in a and leg == "viscous":
+            out.append("z_fixed_viscous_abort")
+        return out
+    if leg == "inviscid":
+        if fam in TERRAIN_FOLLOWING:
+            out.append("inviscid_mode")
+        elif fam in ("rho", "hycom"):
+            out.append("density_coord")
+        else:
+            out.append(fam if fam in XFAIL_REASONS else "outside_envelope")
+    elif fam in ("rho", "hycom"):
+        out.append("finding_stress_density")
+    elif fam in TERRAIN_FOLLOWING and "completed" in a:
+        out.append("finding_visc_pred_corr")
+    elif fam == "lagrangian":
+        out.append("lagrangian")
+    else:
+        out.append("outside_envelope")
+    if fam in ("rho", "hycom") and "wright" in parts:
+        out.append("finding_gpu_wright_density")
+    return out
+
+
+def _marker(leg, key, rec):
+    rkeys = reason_for(leg, key, rec)
+    rkey = rkeys[0]
+    nums = "; ".join("{}: {}".format(k, v)
+                     for k, v in sorted(rec["measured"].items()))
+    kf = {"assertions": list(rec["assertions"]),
+          "tiers": list(rec["tiers"]),
+          "reason": "{}  MEASURED ({}): {}.{}".format(
+              "  ALSO: ".join(XFAIL_REASONS[k] for k in rkeys),
+              MEASURED_PROVENANCE, nums,
+              "  TOOLCHAIN-DEPENDENT: passes outright on at least one "
+              "toolchain, so a pass reports PASS, not XPASS."
+              if rec["toolchain_dependent"] else ""),
+          "ref": "tests/regression/README.md (the baseline table)",
+          "reason_key": rkey, "reason_keys": rkeys}
+    if rec["toolchain_dependent"]:
+        kf["toolchain_dependent"] = True
+    return kf
+
+
+def _marker_to_known_failure(leg, mkey, marker):
+    return _marker(leg, mkey, marker)
+
+
+MARKERS = MEASURED
+
+
+def geometry_rx0(prob):
+    """The worst wet-wet Beckmann-Haidvogel stiffness rx0 the geometry has.
+
+    `rx0 = |H_a - H_b| / (H_a + H_b)` over every interior face.  Exact for
+    the ladder (its whole point) and for the Gaussian seamounts (evaluated
+    from the same formula `set_bathymetry_seamount` fills); `de / (2 Hbar)`
+    for the constant-gradient slope and the lids, whose step per face is
+    uniform.  This is what places EVERY problem -- not only the ladder
+    rungs -- on the envelope axis.
+    """
+    if "rx0" in prob:
+        return prob["rx0"]
+    if prob["topo"] == "seamount":
+        hmax = prob.get("max_depth", MAX_DEPTH)
+        dep = hmax - prob["edge_depth"]
+        lw = prob["slope_scale"]
+        xc, yc = 0.5 * NX * DX, 0.5 * NY * DY
+
+        def d(i, j):
+            x = (i - 0.5) * DX
+            y = (j - 0.5) * DY
+            return hmax - dep * math.exp(-((x - xc) ** 2 + (y - yc) ** 2) / lw ** 2)
+        worst = 0.0
+        for j in range(1, NY + 1):
+            for i in range(1, NX + 1):
+                for (a, b) in ((i + 1, j), (i, j + 1)):
+                    if a > NX or b > NY:
+                        continue
+                    h1, h2 = d(i, j), d(a, b)
+                    worst = max(worst, abs(h1 - h2) / (h1 + h2))
+        return worst
+    if prob["de"] <= 0.0:
+        return 0.0
+    return prob["de"] / (2.0 * prob["hbar"])
+
+
+LEG_NOTES = {
+    "inviscid": "INVISCID leg (nu_h = 0, no drag): the hard probe. Nothing "
+                "damps anything, so whatever grows is the discretisation's "
+                "own; its sigma-family growth is documented EXPECTED "
+                "behaviour shared with MOM6.",
+    "viscous": "VISCOUS leg: MOM6's shipped seamount closure translated onto "
+               "this grid (nu_h = {:g} m2/s, linear drag r = {:g} 1/s over "
+               "hbbl = {:g} m). This leg is the PASS/FAIL gate.".format(
+                   VISC_NU_H, VISC_BDRAG_R, MOM6_HBBL),
 }
+
+def in_envelope(fam_id, prob):
+    """True/False when the family has a documented rx0 envelope; else None."""
+    lim = ENVELOPES.get(fam_id)
+    if lim is None:
+        return None
+    return geometry_rx0(prob) <= lim + 1e-12
+
 
 def problem_truncation_estimate(prob, n2):
     """Derived plateau estimate for a terrain-following family, m2/s2.
@@ -664,9 +743,10 @@ def _fmt(v):
     return str(v)
 
 
-def render(name, prob, fam, strat, eos, remap="ppm"):
+def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
     """Render one matrix cell's namelist text from the canonical template."""
     fam_id, vcoord, status, pin, extra, _note = fam
+    lg = LEGS[leg]
     dt_dz, ds_dz, _n2, _sn = STRATIFICATIONS[strat]
     max_depth = prob.get("max_depth", MAX_DEPTH)
     cav = prob.get("cavity")
@@ -693,10 +773,10 @@ def render(name, prob, fam, strat, eos, remap="ppm"):
         lines.append("/")
         cavity_block = "\n".join(lines)
 
-    # The cavity path needs the ONE pressure-gradient form with an injectable
-    # top boundary condition; everywhere else the matrix uses the default so
-    # the coordinate is the only thing that changes across a row.
-    pgf_form = "fv_mom6" if cav else "mont"
+    # Every cell runs the FIXED configuration's exact FV pressure gradient
+    # (`form="fv_mom6"` + `reconstruct_for_pressure`, set in the template);
+    # the sloping lid additionally injects the ice load as the stack's top
+    # boundary condition.
     p_top = ".true." if (cav and cav.get("draft_config") == "linear") else ".false."
 
     bt_extra = ""
@@ -711,7 +791,11 @@ def render(name, prob, fam, strat, eos, remap="ppm"):
         "EDGE_DEPTH": prob.get("edge_depth", max_depth),
         "SLOPE_SCALE": prob.get("slope_scale", 4.0e5),
         "BATHY_FILE": bathy_block, "CAVITY": cavity_block,
-        "PGF_FORM": pgf_form, "P_TOP_IN_BC": p_top, "EOS": eos,
+        "P_TOP_IN_BC": p_top, "EOS": eos, "LEG": leg.upper(),
+        "NU_H": lg["nu_h"], "BDRAG_FORM": lg["bdrag_form"],
+        "BDRAG_R": lg["bdrag_r"], "BDRAG_HBBL": lg["bdrag_hbbl"],
+        "STRESS_TENSOR": bool(lg["stress_tensor"]
+                              and fam_id not in SCALAR_LAPLACIAN_FAMILIES),
         "LIN_T_REF": LIN_T_REF, "LIN_DT_DZ": dt_dz,
         "LIN_S_REF": LIN_S_REF, "LIN_DS_DZ": ds_dz,
         "BT_EXTRA": bt_extra,
@@ -765,23 +849,39 @@ def build_matrix(_case, bars, out_dir=None):
     out = out_dir or OUT_DIR
     os.makedirs(out, exist_ok=True)
     rows = []
+    for leg in ("inviscid", "viscous"):
+        rows += _build_leg(_case, bars, out, leg)
+    return rows
+
+
+def _build_leg(_case, bars, out, leg):
+    """Every cell of ONE leg.
+
+    The VISCOUS leg carries the runnable cells only: a REFUSAL is a property
+    of the configuration, not of the dissipation, so asserting it twice says
+    nothing new; and the N^2 = 0 control exists to isolate the inviscid
+    truncation term, which is what the inviscid leg measures.
+    """
+    rows = []
     for pid in sorted(PROBLEMS):
         prob = PROBLEMS[pid]
         is_cavity = prob["class"] == "cavity"
         for fam in FAMILIES:
             fam_id, _vc, status, pin, _extra, fam_note = fam
-            for strat in ("linear",):
-                for eos in ("linear",):
-                    rows.append(_one(_case, bars, out, pid, prob, fam, strat,
-                                     eos, is_cavity, status, pin, fam_note))
+            refused = (status == "refused") or (
+                is_cavity and fam_id not in CAVITY_ACCEPTED)
+            if refused and leg != "inviscid":
+                continue
+            rows.append(_one(_case, bars, out, pid, prob, fam, "linear",
+                             "linear", is_cavity, status, pin, fam_note, leg))
         # The N^2 = 0 CONTROL, on the two geometries where it says the most:
         # the steepest ladder rung and the sloping lid.  It is a control, not
         # a coordinate test, so it runs on sigma alone -- the family whose
         # truncation term the control is isolating.
-        if pid in ("rx0_080", "lid_slope"):
+        if pid in ("rx0_080", "lid_slope") and leg == "inviscid":
             fam = [f for f in FAMILIES if f[0] == "sigma"][0]
             rows.append(_one(_case, bars, out, pid, prob, fam, "unstrat",
-                             "linear", is_cavity, "run", None, fam[5]))
+                             "linear", is_cavity, "run", None, fam[5], leg))
         # The nonlinear-EOS leg, on the clean slope geometry: Wright (1997)
         # is the production EOS and its thermobaricity is exactly what a
         # linear-EOS rest state cannot see.
@@ -790,26 +890,39 @@ def build_matrix(_case, bars, out_dir=None):
                 if fam[0] in ("sigma", "z_fixed", "hycom"):
                     rows.append(_one(_case, bars, out, pid, prob, fam,
                                      "linear", "wright", is_cavity, fam[2],
-                                     fam[3], fam[5]))
+                                     fam[3], fam[5], leg))
     return rows
 
 
-def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
-         pin, fam_note):
-    """Build one matrix cell: write its namelist, return its manifest row."""
-    fam_id = fam[0]
-    parts = ["vcm", pid, fam_id]
+def cell_key(pid, fam_id, strat="linear", eos="linear"):
+    """The marker key of one cell within a leg: `problem/family[/strat][/eos]`."""
+    return "/".join([pid, fam_id]
+                    + ([strat] if strat != "linear" else [])
+                    + ([eos] if eos != "linear" else []))
+
+
+def cell_name(leg, pid, fam_id, strat="linear", eos="linear"):
+    """The manifest / scratch-dir name of one cell."""
+    parts = [LEGS[leg]["prefix"], pid, fam_id]
     if strat != "linear":
         parts.append(strat)
     if eos != "linear":
         parts.append(eos)
-    name = "_".join(parts)
+    return "_".join(parts)
+
+
+def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
+         pin, fam_note, leg="inviscid"):
+    """Build one matrix cell: write its namelist, return its manifest row."""
+    fam_id = fam[0]
+    name = cell_name(leg, pid, fam_id, strat, eos)
 
     refused = (status == "refused") or (is_cavity and fam_id not in CAVITY_ACCEPTED)
-    text = render(name, prob, fam, strat, eos)
+    text = render(name, prob, fam, strat, eos, leg=leg)
     path = os.path.join(out, name + ".nml")
     with open(path, "w") as fh:
-        fh.write(_header(name, pid, prob, fam, strat, eos, refused, fam_note))
+        fh.write(_header(name, pid, prob, fam, strat, eos, refused, fam_note,
+                         leg))
         fh.write(text)
 
     _dt_dz, _ds_dz, n2, strat_note = STRATIFICATIONS[strat]
@@ -817,18 +930,21 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
     bar_name = prob["bar"] if n2 > 0.0 else "REST_1UM_S"
     kw = {
         "en_rest_max": getattr(bars, bar_name),
-        "tags": ["vcoord_matrix", "rest", "vcoord_" + fam_id, prob["class"]],
+        "tags": ["vcoord_matrix", "vcoord_matrix_" + leg, "rest",
+                 "vcoord_" + fam_id, prob["class"]],
         "note": _row_note(pid, prob, fam, strat, eos, a_peak, en_est,
-                          strat_note, bar_name, refused),
-        "t1_timeout": 900, "t2_timeout": 300,
+                          strat_note, bar_name, refused, leg),
+        "t1_timeout": 1800, "t2_timeout": 300,
         "t1_samples": 60, "t2_samples": 30,
         "matrix_gates": True,
-        "matrix": {"problem": pid, "family": fam_id,
+        "matrix": {"problem": pid, "family": fam_id, "leg": leg,
                    "stratification": strat, "eos": eos,
                    "expect": "refused" if refused else "run",
                    "class": prob["class"], "rx0": prob.get("rx0"),
                    "de": prob["de"], "a_peak": a_peak,
-                   "en_estimate": en_est},
+                   "rx0_geometry": geometry_rx0(prob),
+                   "en_estimate": en_est,
+                   "envelope": in_envelope(fam_id, prob)},
     }
     if prob["topo"] == "file":
         kw["setup"] = _bathy_setup(prob)
@@ -845,41 +961,27 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
         }
     # A cell that is MEASURED failing today carries its own scoped marker,
     # naming the assertions it covers and the number behind them. See
-    # MEASURED_XFAIL -- the numbers are measurements, not choices.
-    mkey = "/".join([pid, fam_id]
-                    + ([strat] if strat != "linear" else [])
-                    + ([eos] if eos != "linear" else []))
-    if not refused and mkey in MEASURED_XFAIL:
-        rkey, assertions, tiers, measured = MEASURED_XFAIL[mkey]
-        kw["known_failure"] = {
-            "assertions": list(assertions),
-            "tiers": list(tiers),
-            "reason": "{}  MEASURED on this cell -- {} (tier 1 = 30 "
-                      "simulated days on a V100/nvfortran, tier 2 = 3.33 "
-                      "days on gfortran 15.1 Release, single rank, "
-                      "pred_corr). The marker is scoped to the TIERS the "
-                      "defect is visible at as well as to the assertions it "
-                      "covers: several of these only appear at the 30-day "
-                      "horizon, and marking them known-failing at tier 2 "
-                      "would report a permanent XPASS there. Do NOT close "
-                      "this by widening en_rest_max, by shortening the run, "
-                      "or by putting viscosity into the template -- a "
-                      "viscosity that removes the spurious energy removes "
-                      "the measurement with it (nu_h = 50 m2/s does exactly "
-                      "that on the sibling cavity case).".format(
-                          XFAIL_REASONS[rkey], measured),
-            "ref": "tests/regression/README.md (the baseline table)",
-        }
+    # MARKERS -- the numbers are measurements, not choices.
+    mkey = cell_key(pid, fam_id, strat, eos)
+    marker = MARKERS[leg].get(mkey)
+    if not refused and marker:
+        kw["known_failure"] = _marker_to_known_failure(leg, mkey, marker)
+    if not refused:
+        # The `__ssp_rk2` twin carries ITS OWN measured record (or none: it
+        # was measured passing), read by stability_manifest._scheme_twin.
+        twin = MEASURED_TWIN[leg].get(mkey)
+        kw["matrix"]["twin_known_failure"] = (
+            _marker(leg, mkey, twin) if twin else None)
+    t2 = prob.get("tier2_" + leg, prob.get("tier2"))
     entry = _case(name, os.path.join(OUT_REL, name + ".nml"), "rest",
-                  T1_STEPS, T2_STEPS if prob.get("tier2") else 0, **kw)
-    if not prob.get("tier2"):
+                  T1_STEPS, T2_STEPS if t2 else 0, **kw)
+    if not t2:
         entry["tier2"] = {"skip": True, "reason":
-                          "the tier-2 slice is one problem per geometry "
-                          "class (flat / slope / rx0); the rest of the "
-                          "matrix is tier-1 nightly. See "
+                          "the tier-2 slice is a few problems per leg (see "
+                          "TIER2_SLICE in vcoord_matrix.py); the rest of the "
+                          "matrix is tier-1, local. See "
                           "tests/regression/README.md."}
     return entry
-
 
 def _refusal_reason(pid, prob, fam, is_cavity):
     fam_id = fam[0]
@@ -898,9 +1000,16 @@ def _refusal_reason(pid, prob, fam, is_cavity):
 
 
 def _row_note(pid, prob, fam, strat, eos, a_peak, en_est, strat_note,
-              bar_name, refused):
-    bits = ["{} x {} ({}, {} EOS).".format(pid, fam[0], strat, eos),
-            prob["doc"], fam[5], strat_note]
+              bar_name, refused, leg="inviscid"):
+    bits = ["{} x {} ({}, {} EOS), {} leg.".format(pid, fam[0], strat, eos,
+                                                  leg.upper()),
+            prob["doc"], fam[5], strat_note, LEG_NOTES[leg]]
+    env = in_envelope(fam[0], prob)
+    if not refused and env is not None:
+        bits.append("This cell is {} the {} family's documented rx0 envelope "
+                    "(ENVELOPES in vcoord_matrix.py; "
+                    "docs/CAPABILITIES_AND_LIMITATIONS.md).".format(
+                        "INSIDE" if env else "OUTSIDE", fam[0]))
     if refused:
         bits.append("REFUSAL ROW: the assertion is that the run does NOT "
                     "start.")
@@ -922,17 +1031,19 @@ def _row_note(pid, prob, fam, strat, eos, a_peak, en_est, strat_note,
     return " ".join(bits)
 
 
-def _header(name, pid, prob, fam, strat, eos, refused, fam_note):
+def _header(name, pid, prob, fam, strat, eos, refused, fam_note,
+            leg="inviscid"):
     return (
         "! GENERATED by tests/regression/vcoord_matrix.py -- DO NOT EDIT.\n"
-        "! Matrix cell: problem={}  family={}  stratification={}  eos={}\n"
+        "! Matrix cell: leg={}  problem={}  family={}  stratification={}  "
+        "eos={}\n"
         "! Expectation: {}\n"
         "! Geometry: {}\n"
         "! Family:   {}\n"
         "! Reproduce by hand:  ./rdb tmp_local_artifacts/vcoord_matrix/{}.nml\n"
         "! Regenerate:         python3 tests/regression/stability.py --self-test\n"
         "!\n".format(
-            pid, fam[0], strat, eos,
+            leg, pid, fam[0], strat, eos,
             "REFUSED at configure" if refused else "runs, and is gated",
             " ".join(prob["doc"].split()),
             " ".join(fam_note.split()), name))
