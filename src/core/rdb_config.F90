@@ -2311,6 +2311,22 @@ module rdb_config
          !! branches only ⇒ bit-identical.  Fail-loud composed with
          !! `&ocean_wetdry_nml enable` (that module owns its own barotropic
          !! limiter; composition deferred).
+      logical :: renorm_consistent_flux = .false.
+         !! Continuous flux model in the `uhbt`/`vhbt` Newton
+         !! renormalisation (see `continuity_t%renorm_consistent_flux`):
+         !! a layer whose upwind donor flips under the barotropic
+         !! correction carries `(u0 + du)·h_face(new donor)` instead of the
+         !! historical `flux0 + du·h_face(new donor)`, which jumps by
+         !! `u0·(h_new − h_old)` at the flip and leaves the solve with no
+         !! root when `uhbt` falls in the gap — a wrong-sign layer
+         !! transport, an O(η) mismatch between the layer and barotropic
+         !! free surfaces at every thickness jump (a sigma layer over a
+         !! bathymetric step), and an exponentially pumped barotropic
+         !! grid-scale mode under `pred_corr` (finding B of the
+         !! vertical-coordinate stability matrix).  Newton is bracketed by
+         !! bisection (MOM6 `zonal_flux_adjust`).  Default `.false.` ⇒
+         !! bit-identical; on, it is still bit-identical on every face
+         !! where no donor flips.  Ignored by the wet/dry single-step form.
    end type ocean_continuity_config_t
    type :: ocean_isopycnal_config_t
       !! `&ocean_isopycnal_nml`: grounding-stability controls for the
@@ -9990,6 +10006,12 @@ contains
       call g%add(nml_logical("positive_definite", pl, &
                              "Positive-definite split continuity (h>=h_lim, zero mass created; "// &
                              "reconstruction floor + per-donor outflux limiter)"))
+      pl => cfg%ocean%continuity%renorm_consistent_flux
+      call g%add(nml_logical("renorm_consistent_flux", pl, &
+                             "uhbt renormalisation: continuous flux for a layer whose "// &
+                             "upwind donor flips under the correction (MOM6 "// &
+                             "zonal_flux_adjust); fixes the wrong-sign transport at "// &
+                             "thickness jumps"))
       call schema%add_group(g)
    end subroutine register_ocean_continuity
 

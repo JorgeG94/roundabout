@@ -797,11 +797,20 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `f = 0`; its shipped closure kills it. Three FINDINGS, localised, not tuned
   away (details and substitution tables in
   [`tests/regression/README.md`](../tests/regression/README.md#findings--what-the-two-legs-turned-up)):
-  **B** — under the default `pred_corr` at `dt = 600 s` (2 km), a Laplacian
-  viscosity ≥ 40 m²/s (either operator) turns a stepped terrain-following
-  column that the inviscid model holds into an explosive barotropic
-  grid-scale mode after 2–28 days; `ssp_rk2`, `dt ≤ 300 s`, `nu_h ≤ 10` or
-  `f = 0` rest it. **A** — `stress_tensor = .true.` drives a density-space
+  **B** — under the default `pred_corr` a stepped terrain-following column
+  grows an explosive barotropic grid-scale mode (in the matrix: with the
+  viscous leg's closure, after 2–28 days). LOCALISED to the continuity's
+  barotropic transport renormalisation, not the viscosity: its Newton flux
+  model is discontinuous where a layer's upwind donor flips across a
+  thickness jump, has no root when `uhbt` falls in the gap, and returns a
+  wrong-sign layer transport, so the layer free surface leaves the
+  barotropic one at the step every other step. Seeded, it grows inviscid,
+  at `f = 0`, at `dt = 300 s` and on one layer; `ssp_rk2` and `&ocean_bt_nml
+  bebt ≥ 0.05` (MOM6's default is 0.1) out-damp it. **Fix:**
+  `&ocean_continuity_nml renorm_consistent_flux = .true.` (MOM6
+  `zonal_flux_adjust` parity; default off ⇒ byte-identical; recommended for
+  every run over a bathymetric step or steep slope — it is bit-identical
+  wherever no donor flips). **A** — `stress_tensor = .true.` drives a density-space
   (`rho`/`hycom`) column negative within 4–8 steps on any slope (the scalar
   operator rests it; MOM6's `hrat_min` thin-layer bound is the missing
   safeguard, a hypothesis). **C** — on the GPU only, every `rho`/`hycom` run

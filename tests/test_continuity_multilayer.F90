@@ -81,7 +81,13 @@ contains
                   new_unittest("renorm_land_face_no_divide_by_zero", &
                                test_renorm_land_face), &
                   new_unittest("renorm_land_mask_leaves_wet_faces_alone", &
-                               test_renorm_land_bit_identity) &
+                               test_renorm_land_bit_identity), &
+                  new_unittest("renorm_donor_flip_lands_on_uhbt_x", &
+                               test_renorm_donor_flip_x), &
+                  new_unittest("renorm_donor_flip_lands_on_vhbt_y", &
+                               test_renorm_donor_flip_y), &
+                  new_unittest("renorm_consistent_flux_no_flip_bit_identical", &
+                               test_renorm_consistent_no_flip) &
                   ]
    end subroutine collect_continuity_multilayer_tests
 
@@ -776,6 +782,167 @@ contains
       call ms_off%destroy(); call ms_on%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_volcfl_cfl_reduction
+
+   subroutine run_step_face_renorm(along_x, consistent, target_frac, h_deep, h_shallow, &
+                                   u0, sum_flux, target, gap)
+      !! Finding-B fixture: a two-level bathymetric STEP (every layer
+      !! `h_deep` on one side, `h_shallow` on the other — sigma layers over
+      !! a step), a uniform NEGATIVE layer velocity `u0`, and a barotropic
+      !! target transport of the OPPOSITE sign, `target = target_frac·gap`,
+      !! at the step face.  `gap` is the jump of the historical flux model
+      !! `flux0 + du·h_face(new donor)` where the correction flips every
+      !! donor: `Σ_k |u0|·(h_face_old_donor_side − h_face_new_donor_side)·w`
+      !! evaluated from the PPM edge buffers the renormaliser itself
+      !! reads (the limiter flattens both edges at the step, so the donor
+      !! thicknesses are the two cell thicknesses).  Returns the
+      !! renormalised `Σ_k flux` at the step face.
+      logical, intent(in) :: along_x, consistent
+      real(wp), intent(in) :: target_frac, h_deep, h_shallow, u0
+      real(wp), intent(out) :: sum_flux, target, gap
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      real(wp), allocatable :: tr(:, :)
+      real(wp), parameter :: DXY = 1000.0_wp, DT = 100.0_wp
+      integer :: i, j, k, nx, ny, is
+      real(wp) :: h_new, h_old
+
+      if (along_x) then
+         call make_grid(grid, 12, 4, DXY, DXY)
+      else
+         call make_grid(grid, 4, 12, DXY, DXY)
+      end if
+      call make_cartesian_metrics(metrics, grid)
+      ms%nz_ml = NZ; call ms%init(grid)
+      call ct%init(grid, nz_ml=NZ)
+      ct%renorm_consistent_flux = consistent
+      nx = grid%nx_total
+      ny = grid%ny_total
+      ! The step face: index `is` (cells < is deep, cells >= is shallow).
+      is = grid%nghost + 7
+      do j = 1, ny
+         do i = 1, nx
+            if ((along_x .and. i < is) .or. (.not. along_x .and. j < is)) then
+               ms%h_layer(i, j, :) = h_deep
+            else
+               ms%h_layer(i, j, :) = h_shallow
+            end if
+         end do
+      end do
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      if (along_x) then
+         ms%u_face_x_layer = u0
+      else
+         ms%v_face_y_layer = u0
+      end if
+      if (along_x) then
+         allocate (tr(nx + 1, ny))
+      else
+         allocate (tr(nx, ny + 1))
+      end if
+      ! Uniform target everywhere; only the step face has a gap.
+      tr = 0.0_wp
+      call map_in(ms, ct)
+      ! First pass: the unconstrained PPM edges, to size the gap.
+      if (along_x) then
+         call continuity_zonal_flux(grid, metrics, ct, ms, DT)
+         !$acc update self(ct%h_face_left_x%data, ct%h_face_right_x%data)
+      else
+         call continuity_meridional_flux(grid, metrics, ct, ms, DT)
+         !$acc update self(ct%h_face_left_y%data, ct%h_face_right_y%data)
+      end if
+      gap = 0.0_wp
+      do k = 1, NZ
+         if (along_x) then
+            h_old = ct%h_face_right_x%data(is, grid%nghost + 2, k)   ! u0 < 0: east donor
+            h_new = ct%h_face_left_x%data(is, grid%nghost + 2, k)    ! flipped: west donor
+         else
+            h_old = ct%h_face_right_y%data(grid%nghost + 2, is, k)
+            h_new = ct%h_face_left_y%data(grid%nghost + 2, is, k)
+         end if
+         gap = gap + abs(u0)*(h_new - h_old)*DXY
+      end do
+      target = target_frac*gap
+      tr = target
+      !$acc enter data copyin(tr)
+      if (along_x) then
+         call continuity_zonal_flux(grid, metrics, ct, ms, DT, uhbt=tr)
+      else
+         call continuity_meridional_flux(grid, metrics, ct, ms, DT, vhbt=tr)
+      end if
+      !$acc exit data delete(tr)
+      call map_out(ms, ct)
+      sum_flux = 0.0_wp
+      do k = 1, NZ
+         if (along_x) then
+            sum_flux = sum_flux + ms%mass_flux_x_layer(is, grid%nghost + 2, k)
+         else
+            sum_flux = sum_flux + ms%mass_flux_y_layer(grid%nghost + 2, is, k)
+         end if
+      end do
+      call ct%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine run_step_face_renorm
+
+   subroutine check_donor_flip(error, along_x)
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: along_x
+      real(wp) :: sum_flux, target, gap
+      character(len=300) :: msg
+
+      call run_step_face_renorm(along_x, .true., 0.5_wp, 275.0_wp, 225.0_wp, &
+                                -1.0e-3_wp, sum_flux, target, gap)
+      ! Fixture sanity: the PPM limiter must leave a real thickness jump,
+      ! otherwise the case does not exercise the flip at all.
+      call check(error, gap > 1.0_wp, "fixture: no flux gap at the step face")
+      if (allocated(error)) return
+      write (msg, '("renorm_consistent_flux: step-face transport ", es12.4, &
+            &" /= target ", es12.4, " inside the donor-flip gap ", es12.4, &
+            &" (the historical flux model has no root there)")') sum_flux, target, gap
+      call check(error, abs(sum_flux - target) <= 1.0e-10_wp*gap, trim(msg))
+   end subroutine check_donor_flip
+
+   subroutine test_renorm_donor_flip_x(error)
+      !! Finding B (vcoord matrix, 2026-09-22): at a thickness jump a
+      !! barotropic target of the opposite sign to the layer velocity
+      !! falls in the jump of the historical flux model, Newton cycles
+      !! without a root and the layer transport comes out with the WRONG
+      !! SIGN (measured before the knob: -3.8e-2 vs +2.9e-3 m3/s).  With
+      !! `renorm_consistent_flux` the transport lands on the target.
+      type(error_type), allocatable, intent(out) :: error
+      call check_donor_flip(error, .true.)
+   end subroutine test_renorm_donor_flip_x
+
+   subroutine test_renorm_donor_flip_y(error)
+      !! Meridional mirror of `test_renorm_donor_flip_x`.
+      type(error_type), allocatable, intent(out) :: error
+      call check_donor_flip(error, .false.)
+   end subroutine test_renorm_donor_flip_y
+
+   subroutine test_renorm_consistent_no_flip(error)
+      !! The knob only changes a layer whose donor FLIPS: with a target of
+      !! the SAME sign as the layer velocity (no flip anywhere) the knob-on
+      !! transport is bit-identical to the knob-off one, in both directions.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: s_off, s_on, target, gap
+      logical :: ax
+      integer :: idir
+      do idir = 1, 2
+         ax = idir == 1
+         call run_step_face_renorm(ax, .false., -0.5_wp, 275.0_wp, 225.0_wp, &
+                                   -1.0e-3_wp, s_off, target, gap)
+         call run_step_face_renorm(ax, .true., -0.5_wp, 275.0_wp, 225.0_wp, &
+                                   -1.0e-3_wp, s_on, target, gap)
+         call check(error, s_on == s_off, &
+                    "renorm_consistent_flux changed a face where no donor flips")
+         if (allocated(error)) return
+         call check(error, abs(s_off - target) <= 1.0e-10_wp*gap, &
+                    "no-flip control: the historical solve missed its target")
+         if (allocated(error)) return
+      end do
+   end subroutine test_renorm_consistent_no_flip
 
    subroutine setup_renorm_vr_case(grid, metrics, ms, ct, uhbt, vr, u_cor, &
                                    gamma_k, u0, h0, dt)
