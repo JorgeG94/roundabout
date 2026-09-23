@@ -89,6 +89,7 @@ module rdb_config
    public :: resolve_bt_halo
    public :: bt_halo_auto_exclusion
    public :: p_top_has_producer
+   public :: substep_drag_ignores_bdrag_form
    public :: cavity_draft_is_uniform
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
@@ -4855,6 +4856,18 @@ contains
                              "then carries no drag, so visc_rem = 1 identically and the "// &
                              "BT corrector reduces to the plain h-weighted path")
       end if
+      if (substep_drag_ignores_bdrag_form(cfg)) then
+         call logger%warning("&ocean_bt_nml substep_drag=.true. with "// &
+                             "&ocean_bdrag_nml form='"// &
+                             trim(adjustl(cfg%ocean%bdrag%form))//"': the "// &
+                             "barotropic substep damping is built from the "// &
+                             "LINEAR coefficient &ocean_bdrag_nml r (times hbbl) "// &
+                             "only, so it does NOT follow this bottom drag — "// &
+                             "with r = 0 (the default) substep_drag is a no-op, "// &
+                             "otherwise it damps the barotropic mode with a "// &
+                             "linear drag the slow step never applies.  Use "// &
+                             "form='linear', or drop substep_drag")
+      end if
 
       ! Equilibrium tide (C1) requires lat/lon — meaningless on a
       ! cartesian grid (geolatT/geolonT stay 0).  Fail loud rather than
@@ -5407,32 +5420,58 @@ contains
                ! `cavity_sloping_lid_rest_zfixed.nml` it is 47x the sigma
                ! leg's resting pressure-gradient residual at step 1 and
                ! ends in a non-finite state on day 18 (gfortran) or a
-               ! saturated En = 3.8E-04 (nvfortran GPU).
+               ! saturated En = 3.8E-04 (nvfortran GPU).  That is the
+               ! knob-OFF state.  `&vcoord_nml zfixed_closed_faces`
+               ! (Adcroft, Hill & Marshall 1997 partial steps) closes the
+               ! staircase faces, and with it the same file completes 30
+               ! days and ISOMIP+ Ocean0 runs 30 days — but the residual on
+               ! the faces left open is still ~2 decades above the sigma
+               ! leg, so the warning stays, reworded for each state.
                !
                ! WARNING, not a refusal, deliberately: those corrections
                ! are the next slices and they need this configuration to
                ! be runnable to be developed and measured against.  What
                ! the user must not do is walk into it silently.
                if (.not. cavity_draft_is_uniform(cfg)) then
-                  call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
-                                      "&ocean_cavity_dyn_nml with a draft that VARIES "// &
-                                      "(draft_config='"// &
-                                      trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
-                                      "') is NOT VALIDATED.  Only a UNIFORM draft is: "// &
-                                      "there every column vanishes the same layers and "// &
-                                      "cuts at the same depth, so the answer is "// &
-                                      "bit-zero at rest.  Where the draft crosses a "// &
-                                      "nominal level the filler count changes column "// &
-                                      "to column and the ice-base STAIRCASE drives a "// &
-                                      "spurious pressure gradient this build cannot "// &
-                                      "arrest: the top-side mass weighting (MWIPG) and "// &
-                                      "the interior reference interface — Yung, "// &
-                                      "Hallberg, Adcroft & Morrison (2026), JAMES 18, "// &
-                                      "e2025MS005645, sections 3.3.2 and 3.2 — are not "// &
-                                      "implemented.  Measured at rest: 47x the sigma "// &
-                                      "leg's step-1 residual, and the run does not "// &
-                                      "survive 30 days.  Use vcoord_type='sigma' for a "// &
-                                      "sloping lid until those land.")
+                  if (cfg%zfixed_closed_faces) then
+                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                         "(draft_config='"// &
+                                         trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                         "') is EXPERIMENTAL.  &vcoord_nml "// &
+                                         "zfixed_closed_faces=.true. closes the ice-base "// &
+                                         "STAIRCASE faces, which is what makes this "// &
+                                         "configuration runnable: the sloping-lid rest "// &
+                                         "case completes 30 days and ISOMIP+ Ocean0 runs "// &
+                                         "30 days.  It does not remove the staircase "// &
+                                         "residual on the faces that stay open — the "// &
+                                         "top-side mass weighting (MWIPG) and the interior "// &
+                                         "reference interface, Yung, Hallberg, Adcroft & "// &
+                                         "Morrison (2026), JAMES 18, e2025MS005645, "// &
+                                         "sections 3.3.2 and 3.2, are not implemented — so "// &
+                                         "the resting sloping-lid case still carries about "// &
+                                         "two decades more spurious energy than its sigma "// &
+                                         "leg.  Only a UNIFORM draft is bit-zero at rest.")
+                  else
+                     call logger%warning("&vcoord_nml vcoord_type='z_fixed' under "// &
+                                         "&ocean_cavity_dyn_nml with a draft that VARIES "// &
+                                         "(draft_config='"// &
+                                         trim(adjustl(cfg%ocean%cavity_dyn%draft_config))// &
+                                         "') and &vcoord_nml zfixed_closed_faces=.false. "// &
+                                         "is NOT VALIDATED.  Only a UNIFORM draft is: "// &
+                                         "there every column vanishes the same layers and "// &
+                                         "cuts at the same depth, so the answer is "// &
+                                         "bit-zero at rest.  Where the draft crosses a "// &
+                                         "nominal level the filler count changes column "// &
+                                         "to column and the FV pressure gradient across "// &
+                                         "the open ice-base STAIRCASE drives a spurious "// &
+                                         "flow: measured at rest, 47x the sigma leg's "// &
+                                         "step-1 residual, and the run does not survive "// &
+                                         "30 days.  Set zfixed_closed_faces=.true. (the "// &
+                                         "partial-step face closure, with which a varying "// &
+                                         "draft does survive 30 days), or use "// &
+                                         "vcoord_type='sigma' for a sloping lid.")
+                  end if
                end if
                ! ---- z_fixed × cavity, v1 envelope ----
                !
@@ -7200,6 +7239,27 @@ contains
       logical :: has
       has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
    end function p_top_has_producer
+
+   pure function substep_drag_ignores_bdrag_form(cfg) result(ignores)
+      !! Is `&ocean_bt_nml substep_drag` blind to the configured bottom
+      !! drag?
+      !!
+      !! `compute_bt_rem` builds the barotropic substep damping
+      !! `Htot/(Htot + r·hbbl·dt_inner)` from the LINEAR coefficient
+      !! `&ocean_bdrag_nml r` alone.  Under any `form` other than
+      !! `"linear"` the slow bottom drag is not that operator, so the
+      !! knob either does nothing at all (`r = 0`, the default — the
+      !! factor is identically 1) or damps the barotropic mode with a
+      !! linear drag the slow step never applies.  Neither is what the
+      !! user asked for; the configure WARNING that names both knobs
+      !! reads this predicate.  A warning, not a refusal: the knob is
+      !! harmless-if-useless in the default case, and a deliberate
+      !! BT-only linear sponge is a legitimate (if unusual) request.
+      type(config_t), intent(in) :: cfg
+      logical :: ignores
+      ignores = cfg%ocean%bt%substep_drag .and. &
+                trim(adjustl(cfg%ocean%bdrag%form)) /= "linear"
+   end function substep_drag_ignores_bdrag_form
 
    pure function cavity_draft_is_uniform(cfg) result(uniform)
       !! Is the configured ice-shelf draft UNIFORM over the whole array?
