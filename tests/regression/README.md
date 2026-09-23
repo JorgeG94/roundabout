@@ -994,12 +994,15 @@ proposed (fix item 2) would turn both into fail-loud messages.
 | measured wall | 443 s on 2 workers of a contended 4-core box (gfortran); 1081 s on one V100 | 3438 s on 3 CPU workers (gfortran); 11 910 s on one V100 (nvfortran 26.5, launch-bound on this box) |
 | the rate gate | `SKIP … TIER 1 ONLY` — the bar is a 20-day e-folding | evaluated |
 
-**The decision.** `.github/workflows/ocean-stability.yml` runs the whole
-tier-2 suite on a hosted 4-core gfortran runner under a 45-minute job budget;
-the matrix slice rides in it (the workflow header states it). The viscous
-slice is chosen to carry the gate's IN-ENVELOPE geometries — the steep
-seamount is the top of the terrain-following envelope — so a regression that
-breaks the v0.1.0 claim reddens CI. The full matrix is tier 1: it needs 30
+**The decision.** `.github/workflows/ocean-stability.yml` runs on a hosted
+4-core gfortran runner under a 45-minute job budget, at two cadences
+(maintainer decision, 2026-09-22): every pull request runs the tier-2 suite
+WITHOUT the matrix slice (`--exclude-tags vcoord_matrix`, 107 cases), and a
+NIGHTLY scheduled run ON MAIN (plus `workflow_dispatch`) runs the full
+corpus, matrix slice included (227 cases). The viscous slice is chosen to
+carry the gate's IN-ENVELOPE geometries — the steep seamount is the top of the
+terrain-following envelope — so a regression that breaks the v0.1.0 claim
+reddens the nightly run on main within a day. The full matrix is tier 1: it needs 30
 simulated days per cell to see a growth rate (the viscous leg's FINDING B
 fires between day 2 and day 28), which neither fits the budget nor runs on a
 hosted runner's hardware for the GPU half; it is re-run locally, on BOTH
