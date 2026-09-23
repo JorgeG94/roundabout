@@ -823,35 +823,14 @@ STABILITY_CASES = [
                "they are what exercises the free-slip closure in the "
                "harmonic velocity-Laplacian and the per-layer mask on the "
                "lateral tracer flux. split_scheme is not pinned, so the "
-               "ssp_rk2 twin is built from the same file.",
-          known_failure={
-              "assertions": ["conserve:Salt", "conserve:Heat"],
-              "reason":
-                  "OPEN, scoped, and NOT caused by the closed-face mask.  "
-                  "conserve:Salt/Heat sit at a FIXED "
-                  "-1.524E-06 / -2.030E-06 that appears IN FULL at the first "
-                  "report (day 0.25) and is then flat to 6 digits for the "
-                  "rest of the run -- a one-time offset, not a leak.  It is "
-                  "the IC RELAMP: without a cavity the initial h_layer is "
-                  "seeded by &vcoord_nml thickness_config, not from the "
-                  "z_fixed target, so the FIRST ALE remap relamps the whole "
-                  "column onto the target and drains the fillers' tracer "
-                  "content once.  Mass, which has no relamp-drain term, "
-                  "closes at 4.4E-14 -- that is the discriminator, and it is "
-                  "why this is the seed and not the mask.  The cavity legs, "
-                  "whose seed IS built from the target, show only round-off "
-                  "(cavity_sloping_lid_rest_zfixed: -5.9E-13 / -6.2E-13).  "
-                  "thickness_config='uniform_z' was tried and moves it by "
-                  "less than 1 %.  The fix is a z_fixed-aware initial "
-                  "thickness for the cavity-OFF path, a separate slice.  "
-                  "energy:rest AND energy:rest-settles both PASS: with the "
-                  "barotropic mode weighted by the OPEN column the run "
-                  "saturates at En = 1.006E-08 by day 2 (1.000E-08 at day "
-                  "1.75), 56000x below the knob-off leg.  Before the "
-                  "barotropic slice it sat at 2.700E-06 and was still "
-                  "climbing, and rest-settles was scoped here too.",
-              "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
-          },
+               "ssp_rk2 twin is built from the same file. conserve:Salt/Heat "
+               "were scoped XFAIL here (a one-time -1.524E-06 / -2.030E-06 "
+               "step at the first remap: the IC relamp draining the "
+               "fillers' tracer content) until the vanished-layer content "
+               "rule I1' landed; MEASURED with it (gfortran 15.1 Release, "
+               "tier 2, 0.5 d): worst |Error| Salt 1.663E-13, Heat "
+               "3.396E-13, Mass 1.804E-14 (ssp_rk2 twin 2.108E-13 / "
+               "3.836E-13 / 2.043E-14), peak En 1.025E-08.",
           tags=["isomip_plus", "vcoord_z_fixed", "closed_faces",
                 "partial_steps", "rest", "pgf_fv_mom6", "zinit_linear"]),
     _case("isomip_plus_ocean0_idealised",
@@ -1164,17 +1143,6 @@ SCHEME_AXIS_PHYSICS = {}
 # scopes the marker so one documented defect does not excuse a case from every
 # other gate it has.
 SCHEME_AXIS_KNOWN_FAILURE = {
-    "isomip_plus_ice_free_zfixed": {
-        "assertions": ["conserve:Salt", "conserve:Heat"],
-        "reason":
-            "The same scoped item as the pred_corr base case, for the same "
-            "reason: the one-time IC-relamp offset in Salt/Heat, which "
-            "appears in full at the first report and is flat thereafter "
-            "(Mass still closes at round-off, and is the discriminator).  "
-            "It does not depend on the outer split -- the twin exists to "
-            "prove the MASK does not either.",
-        "ref": "docs/CAPABILITIES_AND_LIMITATIONS.md",
-    },
 
     # `coriolis_coast` lived here as the BLOCKER entry until 2026-09-14.
     # It is gone because the defect is FIXED, not because the gate was
