@@ -23,8 +23,8 @@
 #      above includes (tag `vcoord_matrix`): the INVISCID leg on flat / slope /
 #      rx0_060 and the VISCOUS leg -- the v0.1.0 PASS/FAIL gate -- on flat /
 #      slope / seamount_steep (the top of the terrain-following envelope),
-#      every family, plus their `__ssp_rk2` twins.  120 of the sweep's cases;
-#      measured 443 s on 2 contended local workers.
+#      every family, plus their `__ssp_rk2` twins.  120 cases; NIGHTLY on
+#      main only (see the cadence note below), not on pull requests.
 #
 # Tier 1 (full scale, GPU, NVHPC) is NOT wired in here: a hosted runner has no
 # GPU.  Run it locally or on a self-hosted GPU box -- see the README.  That
@@ -34,11 +34,14 @@
 # whenever a vertical-coordinate, remap, PGF or split-step change lands.
 name: ocean stability (tier 2)
 
-# This is a real gate: it runs on every pull request (227 cases incl. the
-# vcoord-matrix slice and the ssp_rk2 twins; 907 s wall on 3 workers of a
-# contended 4-core box, 2026-09-22).  It was manual-only while it was being
-# proven out; that period is over.  `workflow_dispatch` is kept so it can still be run by
-# hand from the Actions tab against any branch.
+# Two cadences (maintainer decision, 2026-09-22):
+#   * every pull request -- the tier-2 sweep WITHOUT the vcoord rest matrix
+#     (`--exclude-tags vcoord_matrix`: 107 cases incl. the ssp_rk2 twins,
+#     the same set PRs ran before the matrix existed);
+#   * NIGHTLY ON MAIN (cron) -- the FULL tier-2 corpus, matrix included
+#     (227 cases; 907 s wall on 3 workers of a contended 4-core box,
+#     2026-09-22).  A scheduled workflow always runs on the default branch.
+# `workflow_dispatch` runs the full corpus by hand against any branch.
 #
 # NOTE: no `branches:` filter on pull_request -- deliberately, and for the same
 # reason spelled out in pre-commit.yml.  Filtering on [main] means "PRs whose
@@ -48,6 +51,8 @@ name: ocean stability (tier 2)
 on:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 14 * * *"   # nightly, full corpus incl. the vcoord rest matrix
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -143,9 +148,15 @@ jobs:
         env:
           OMP_NUM_THREADS: "1"
         run: |
+          # Per-PR: everything but the rest matrix.  Nightly (schedule) and
+          # manual (workflow_dispatch): the full corpus.
+          extra=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            extra="--exclude-tags vcoord_matrix"
+          fi
           python3 tests/regression/stability.py \
             --tier 2 --backend cpu --build-dir build_ci \
-            --jobs "$(nproc)" \
+            --jobs "$(nproc)" $extra \
             --out tmp_local_artifacts/tier2_results.json
 
       - name: Upload tier-2 results

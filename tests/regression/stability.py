@@ -1500,7 +1500,7 @@ def _force_scheme(case, scheme):
     return out
 
 
-def select_cases(tier, only=None, tags=None):
+def select_cases(tier, only=None, tags=None, exclude_tags=None):
     """Cases runnable at `tier`, optionally filtered by NAME or by TAG.
 
     The tag filter exists because the vertical-coordinate matrix is 115
@@ -1516,6 +1516,8 @@ def select_cases(tier, only=None, tags=None):
         if only and c["name"] not in only:
             continue
         if tags and not (tags & set(c.get("tags") or ())):
+            continue
+        if exclude_tags and (exclude_tags & set(c.get("tags") or ())):
             continue
         out.append(c)
     return out
@@ -1997,6 +1999,10 @@ def main(argv=None):
                    help="comma-separated TAG filter, e.g. `vcoord_matrix` to "
                         "run only the vertical-coordinate rest matrix. "
                         "Composes with --cases (both must match).")
+    p.add_argument("--exclude-tags", default=None,
+                   help="comma-separated TAG filter; drop every case carrying "
+                        "any of these tags, e.g. `vcoord_matrix` for the "
+                        "per-PR sweep (the matrix runs nightly on main).")
     p.add_argument("--out", default=None, help="write JSON results here.")
     p.add_argument("--keep", action="store_true", help="keep NetCDF output.")
     p.add_argument("--scratch-root", default=None,
@@ -2041,7 +2047,9 @@ def main(argv=None):
 
     only = {c.strip() for c in args.cases.split(",")} if args.cases else None
     tags = {t.strip() for t in args.tags.split(",")} if args.tags else None
-    cases = select_cases(args.tier, only, tags)
+    exclude_tags = ({t.strip() for t in args.exclude_tags.split(",")}
+                    if args.exclude_tags else None)
+    cases = select_cases(args.tier, only, tags, exclude_tags)
     if args.split_scheme:
         cases = [_force_scheme(c, args.split_scheme) for c in cases]
     gpus = ([g.strip() for g in args.gpus.split(",")]
