@@ -566,6 +566,12 @@ the configuration v0.1.0 recommends for any run over sloping topography**:
 `stability.py --self-test` asserts that every emitted cell carries all of
 them.
 
+Also recommended, but NOT yet in the template (adding it moves pinned
+markers, so it lands with the next two-toolchain re-pin):
+`&ocean_continuity_nml renorm_consistent_flux = .true.` — the FINDING B fix.
+Measured with it (gfortran, tier 1, 30 d): every viscous cell of `sigma`,
+`zstar`, `zstar_sigma` and `zstar_full` passes, rx0 0.1–0.8 included.
+
 ### Two legs
 
 The legs share the template and differ **only** in the dissipation (the
@@ -905,19 +911,54 @@ the walls are not the cause); `nghost = 3` bit-identical; a frozen regrid
 (`regrid_time_scale = 10 d`), `N² = 0`, `f = 0`, `ssp_rk2` and `dt = 300/450`
 clean to the probe horizon.
 
-**Reading.** A `dt`-dependent instability of the **default outer split with a
-Laplacian viscosity** — unlike the inviscid mode, which is dt-independent. It
-needs rotation, stratification and a live regrid, and it is carried by the
-barotropic mode. The closest documented mechanism is the one the `bound_kh`
-docstring records: the depth-mean viscous forcing reaches the barotropic
-solve FROZEN over the outer step (via `F_bt`), and for grid-scale gravity
-modes with `ω·dt ≫ 1` a frozen damping force arrives out of phase. Here the
-bound does not bind, so this is a hypothesis, not a localisation to a line.
-**What a user can do today:** at this resolution, `dt ≤ 300 s`, or
-`nu_h ≤ 10 m² s⁻¹`, or `ssp_rk2` (with its own documented cost) rests the
-cell. **Next measurement:** split `F_bt`'s viscous contribution from the
-layer tendency (freeze it at the stage-entry value vs. the time-mean) on this
-cell.
+**Localised (`fix/pred-corr-viscous-bt-mode`).** The table above is a
+table of SEEDS, not of stability conditions. Seeding the same cell with a
+1e-6 m s⁻¹ barotropic velocity pattern makes EVERY row of it blow up within
+2–3 days — `nu_h = 0` (no drag either), `nu_h = 10`, `f = 0`, `dt = 300`,
+`dt = 360`, `N² = 0`, ONE layer — except `ssp_rk2` and `bebt ≥ 0.05`, which
+decay it. A flat bed seeded the same way is exactly neutral. The viscosity
+is not in the mechanism, and neither is the frozen viscous forcing: under
+`pred_corr` the viscous term acts on the barotropic mode only through the
+time-mean `u_av`, so a grid-scale gravity mode is damped per step by the
+factor `1 − λ·dt·sinc²(ω·dt/2)` (`λ = ν·k²`), which can never exceed one —
+at 2 km / 600 s, `λ·dt = 0.096` but `sinc² = 1.3e-3`, i.e. the Laplacian
+barely touches that mode at all (measured on a seeded flat-bed channel:
+`KE+PE` 0.71 with `nu_h = 160` vs 0.83 with none after 1000 steps). The anti-damping
+the `bound_kh` docstring records needs the forcing on `u^n` (`ssp_rk2`,
+factor `1 − λ·dt·sin(ω·dt)/(ω·dt)`), and even there it is `≤ λ/(ω·dt) =
+0.019 λ = 3e-6 s⁻¹`, about thirty times under the measured growth.
+
+The defect is in the barotropic transport renormalisation
+(`renormalise_zonal_flux_to_uhbt`, continuity). Its Newton solve re-picks
+each layer's upwind donor at the corrected velocity but keeps the OLD
+donor's `u0·h_old` in the flux, `flux0 + du·h_new`; at a flip that model
+jumps by `u0·(h_new − h_old)·dy`. Over the step both PPM edges are
+flattened to the cell thicknesses (825 | 675 m), so when the corrector's
+layer velocity (the END-of-step barotropic velocity) and the target `uhbt`
+(the TIME-MEAN transport) have opposite signs and
+`|ū_mean| < |u_end|·Δh/h_new` (Δh/h = 0.18 at rx0 0.1, while the time mean
+of a 2Δx gravity mode is ~`sinc(ω·dt/2) ≈ 4 %` of its end value — true about
+every other step), the solve has no root, cycles for its 8 iterations and
+hands continuity a layer transport of the WRONG SIGN (measured −3.8e-2 vs
++2.9e-3 m³ s⁻¹). The layer free surface then leaves the barotropic `η_end` by
+O(η) in the two step columns — a spurious η dipole at every such step that
+pumps the undamped barotropic grid-scale mode (8 % per step in amplitude at
+rx0 = 0.1 and 21 % at 0.3 on one layer, at `f = 0`, inviscid, no remap;
+8.5e-5 s⁻¹ in the matrix cell). MOM6's `zonal_flux_adjust` recomputes each
+layer's flux at `u + du` with its own donor (continuous) and brackets Newton
+with bisection, so it cannot do this.
+
+**Fix:** `&ocean_continuity_nml renorm_consistent_flux = .true.` (default
+`.false.` ⇒ byte-identical; with it on, faces where no donor flips are
+byte-identical too). Gates: `test_continuity_multilayer`
+(`renorm_donor_flip_lands_on_uhbt_x`/`_vhbt_y`,
+`renorm_consistent_flux_no_flip_bit_identical`) and `test_ocean_step_bt_mode`
+(a 48-cell rx0 0.1 rotating channel under `pred_corr`: layer-vs-barotropic
+`η` 7.2e-4 m and `KE+PE` ×670 in 150 steps without the knob, 2.0e-13 m and
+×1.08 with it). `vcmv_rx0_010_sigma` with the knob rests 30 days (En
+1.4e-24); seeded as above it stays neutral. The matrix template does not
+carry the knob yet — adding it moves pinned markers on both toolchains, so it
+lands with the next two-toolchain re-pin.
 
 ### FINDING A — the stress-divergence viscosity drives a density-space column negative
 
