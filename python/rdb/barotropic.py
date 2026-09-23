@@ -36,7 +36,7 @@ class WaveDrag:
 
 class BarotropicSolver:
     """``BarotropicSolver(n_inner=0, auto=False, cfl_safety=0.65,
-    scheme="ssp_rk2", pc_be=0.6, bebt=0.0, halo=None, wave_drag=None,
+    scheme="ssp_rk2", pc_be=0.6, bebt=0.1, halo=None, wave_drag=None,
     substep_drag=False)``
 
     -> `n_inner`, `auto_n_inner`, `cfl_bt_safety`, `split_scheme`,
@@ -50,7 +50,7 @@ class BarotropicSolver:
     """
 
     def __init__(self, n_inner=0, auto=False, cfl_safety=0.65,
-                 scheme="ssp_rk2", pc_be=0.6, bebt=0.0, halo=None,
+                 scheme="ssp_rk2", pc_be=0.6, bebt=0.1, halo=None,
                  wave_drag=None, substep_drag=False):
         self.n_inner, self.auto, self.cfl_safety = n_inner, auto, cfl_safety
         self.scheme, self.pc_be, self.bebt = scheme, pc_be, bebt

@@ -199,6 +199,14 @@ The stability suite runs an `ssp_rk2` twin of every case whose namelist does
 not pin a scheme, so neither branch can rot. Both schemes wrap the same
 nonlinear barotropic fast loop (forward-backward Euler substeps for η +
 barotropic u/v + ζ + KE) + BT correction back into the layers.
+**MOM6-parity defaults (2026-09-22):** the fast loop damps its gravity waves
+with MOM6's `&ocean_bt_nml bebt = 0.1` (was 0 — pure, neutral forward-backward,
+under which nothing damped the barotropic grid-scale mode `pred_corr` leaves
+alone), and the continuity's `uhbt` renormalisation uses the continuous
+donor-flip flux (`&ocean_continuity_nml renorm_consistent_flux = .true.`,
+MOM6 `zonal_flux_adjust`; bit-identical wherever no donor flips) — together
+they close FINDING B of the vertical-coordinate matrix. Namelists that set
+`bebt` explicitly (mostly 0.2) keep their value.
 `auto_n_inner=.true.`
 derives `n_inner` from the gravity-wave CFL **once at configure time**
 (`configure_ocean_bt_split` in `rdb_ocean_setup.F90`), writing the

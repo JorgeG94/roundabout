@@ -207,7 +207,7 @@ module rdb_continuity
          !! its positivity via `ppm_limit_pos` + the BT limiter and ran
          !! validated on the single-step form, so it keeps it
          !! (bit-identical there).
-      logical :: renorm_consistent_flux = .false.
+      logical :: renorm_consistent_flux = .true.
          !! `&ocean_continuity_nml renorm_consistent_flux`.  When `.true.`
          !! the `uhbt`/`vhbt` renormalisation evaluates a layer whose upwind
          !! donor FLIPS under the correction as `(u0 + du)·h_face(new
@@ -224,8 +224,9 @@ module rdb_continuity
          !! transport of the wrong SIGN.  The layer `η` then departs from
          !! the barotropic `η_end` by O(η) at the step every such step —
          !! a spurious η dipole that pumps the (undamped) barotropic
-         !! grid-scale mode.  Default `.false.` ⇒ bit-identical; with it
-         !! on, faces where no donor flips are also bit-identical.
+         !! grid-scale mode.  Default `.true.` (MOM6 behaviour); faces
+         !! where no donor flips are bit-identical to the historical
+         !! model, which `.false.` restores.
       logical :: use_ppm_limit_pos = .false.
          !! MOM6 `PPM_limit_pos` analogue.  When `.true.`, the PPM
          !! face-thickness reconstruction in continuity adds a
