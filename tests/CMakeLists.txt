@@ -660,6 +660,15 @@ find_package(
   QUIET)
 if(Python3_EXECUTABLE)
   list(APPEND _rdb_python_candidates "${Python3_EXECUTABLE}")
+  # Who tests the golden compare: the regression harness's verdict is pinned
+  # against the measured silent-pass signatures (stdlib only, runs no model).
+  add_test(
+    NAME rdb_regression_compare_selftest
+    COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/regression/compare.py" --self-test
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(rdb_regression_compare_selftest
+                       PROPERTIES LABELS "ocean;python")
 endif()
 list(APPEND _rdb_python_candidates "python3")
 

@@ -132,7 +132,7 @@ diagnostics (low physics value). Run
 
 | file | purpose |
 |------|---------|
-| `manifest.py` | the curated case list — nml path, `n_steps`, `timeout_s`, `backends`, physics `tags`, optional per-case `tol` |
+| `manifest.py` | the curated case list — nml path, `n_steps`, `timeout_s`, `backends`, physics `tags`, optional per-case `tol`, optional per-field `atol` + `atol_reason` |
 | `run_regression.py` | the P0 orchestrator (CPU-serial \| GPU work-queue), the run-clean/NaN gate, the report |
 | `compare.py` | the P1 golden-summary compare (`--update-golden` \| `--compare`) |
 | `golden/<case>.json` | committed per-case final-state field summaries (tiny) |
@@ -250,21 +250,52 @@ python3 tests/regression/compare.py --compare --backend gpu --build-dir build_gp
 ```
 
 **Tolerance model** — each summary value is compared numpy-`isclose` style:
-`|golden − run| ≤ atol + rtol·scale`, where `scale` is the *field's* magnitude
-(diag field: `max|min|,|max|` over golden **and** run; stats scalar:
-`max|golden|,|run|`). This means a **physically-zero field carrying roundoff
-noise** (e.g. a quiescent seamount's velocities at ~1e-12, which differ ~6%
-*relatively* CPU↔GPU) is absorbed by `atol`, while an active field is bounded by
-`rtol·scale` and a spurious spin-up lifts the scale and **fails loudly**.
+`|golden − run| ≤ atol_field + rtol·scale`, where `scale` is the *field's*
+magnitude (diag field: `max|min|,|max|` over golden **and** run; stats scalar:
+`max|golden|,|run|`). An active field is bounded by `rtol·scale`, and a
+spurious spin-up lifts the scale and **fails loudly**.
 
-**Chosen defaults (measured, not guessed)** — `rtol = 1e-3`, `atol = 1e-7`. The
+**There is no global absolute floor.** `atol_field` is `0` unless the case's
+manifest entry names that field in an explicit `atol` map (`{"SSH": 1e-9,
+"stats:En": 1e-18, ...}`) with an `atol_reason`. Until 2026-09-23 a global
+`atol = 1e-7` applied to every value of every case, and it passed drifts it
+should have reported: on the v0.1.0 integration branch `seamount` and
+`seamount_pred_corr` printed **PASS** next to a 0.70 / 0.98 relative drift,
+because their whole fields sit at 1e-11 m / 1e-13 m/s and any change below
+1e-7 — a 10⁴-fold growth of that noise included — was inside the floor; the
+same floor hid `ideal_age_demo` SSH (8e-7 m) moving 9 %, and a
+`seamount_pred_corr` golden that `main` itself no longer reproduces. A
+**physically-zero field carrying roundoff noise** (a resting case's `u` /
+`SSH` / `KE` / `En`) therefore declares its floor in `manifest.py`
+(`RESTING_NOISE_ATOL`: ≥100× the measured noise, so a noise change passes
+but a spin-up past 1 nm / 1 nm/s fails), and the report names every value
+that passed *only* on it (`ok; N value(s) inside manifest atol only`, plus a
+`passed on its manifest atol only:` list). The report's `|d|/allow` column is
+the verdict quantity (≤ 1 on every PASS row); `rel drift` is `|d|/scale`.
+`compare.py` fails a case whose `atol` names a field its golden does not
+carry, and asserts the verdict can never be PASS while a checked value is
+outside its allowance.
+
+```bash
+python3 tests/regression/compare.py --self-test   # no model; ALL PASS expected
+```
+
+The self-test replays the measured seamount pair (it must FAIL without the
+manifest floor and PASS with it, and a 1000× spin-up must still FAIL), the
+`ideal_age_demo` drift, NaN / absent-field / exact-zero cases, the verdict
+invariant, the `atol` validation, and checks every manifest `atol` against its
+committed golden. It is registered in ctest as `rdb_regression_compare_selftest`.
+
+**Chosen defaults (measured, not guessed)** — `rtol = 1e-3`. The
 worst REAL-field (non-roundoff) CPU(gfortran)↔GPU(nvfortran) relative drift
 across the 22 well-behaved cases is **1.4e-6** (`ideal_age_demo` SSH:min);
 `rtol=1e-3` is ~700× that — loose enough to absorb FMA / reduction-order /
 transcendental-library divergence (GPU is deterministic run-to-run here) yet
 tight enough that a real physics regression fails. Goldens are generated on the
 **CPU** build; `--compare --backend gpu` then passes against the same goldens
-within these tolerances.
+within these tolerances (measured with the old global floor; the GPU leg has not
+been re-measured since the floor became per-field — a GPU FAIL on a field of a
+resting case is the cue to add it to that case's `atol`, not to widen `rtol`).
 
 **Per-case `tol`** — two early-transient baroclinic-instability cases
 (`baroclinic_2layer`, `eady`) carry a manifest `tol=0.25`: their tiny
