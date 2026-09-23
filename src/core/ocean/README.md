@@ -208,13 +208,31 @@ answering a different question:
 | `rdb_eos` (`eos_*_impl`) | reference `T_ref`/`S_ref` ⇒ `rho = rho_0` | a filler must not perturb the density column the PGF integrates |
 | `rdb_ocean_pressure_force` (T/S reconstruction) | `hS/H_VANISHED` (floored divide) | keeps the PLM/PPM edge stencil finite across a filler |
 | `rdb_ocean_sponge` (`snapshot_column_concentration`) | the nearest massive layer's concentration | the relaxation target must be a physical water mass |
-| `rdb_ocean_diag_fills` (`fill_tracer_impl`) | IEEE quiet NaN | a plot must show a gap, not a plausible zero |
+| `rdb_ocean_diag_fills` (`fill_tracer_impl` — T, S, age, pseudo-salt) | IEEE quiet NaN | a plot must show a gap, not a plausible zero |
+| `rdb_ocean_diag_derived` (`fill_rho_layer_impl`) | IEEE quiet NaN | the EOS's `rho_0` in a filler is a substitution, not a measurement |
+| `rdb_ocean_pseudo_salt` (`ocean_pseudo_salt_deviation`, the `pseudo_salt_diff` diag) | IEEE quiet NaN (passed in by the caller) | a deviation of `0` is the perfect score, so a filler must not read as one |
+| `rdb_ocean_diag_derived` (`fill_mld_density_impl`) | never marks the crossing (thickness still summed) | a filler's `rho_0` is not a pycnocline |
+| `rdb_ocean_diag_fills` output-vcoord remap (z / σ / z* / density) | **zero weight**: `dz = 0`, `q = 0`, value never read; density takes the nearest live layer's | the NaN a concentration fill reports would otherwise be smeared over every target cell of the column |
 | `rdb_ocean_cavity_flux` (far-field sampler) | `cycle` — skipped entirely | a filler carries no water to melt against |
 | `rdb_ocean_kappa_shear` | `massless_*` merge onto a coarser column | the shear solve needs a well-conditioned grid, not a substituted value |
 
 Each of those is a considered, documented choice; none of them is I1, and
 none of them should be routed through `rdb_vl_conc`. If you add another,
 say so with a `! vanished-ok: <reason>` waiver where the lint sees it.
+
+**What the diagnostics can and cannot tell you.** Every diagnostic uses
+the ONE predicate, so a layer at `h <= H_VANISHED` is missing everywhere
+(NaN in the buffer, excluded from the console `[diag]` min / max / mean
+and counted in its `missing=` suffix, zero weight in a remap). A filler
+that the continuity step has nudged a hair ABOVE the marker between two
+remaps (on a `dt_therm_ratio > 1` run the coordinate is only restored on
+thermo steps) is LIVE by that predicate and reports its concentration
+honestly — which, because I1 emptied it while it was a filler, is `0` or
+a near-zero dilution. That is the state, not a diagnostic artefact, and
+no diagnostic masks it: a second, looser threshold would be exactly the
+re-derived rule this section forbids. The console `[diag]` mean is a
+per-CELL count-based mean, so those cells move it; a thickness-weighted
+mean does not see them.
 
 ## Slot map
 

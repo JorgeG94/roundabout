@@ -35,14 +35,15 @@
 !!     guard predicates, unit-tested without booting a config.
 module test_ocean_pseudo_salt
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_tracer, only: TRACER_BUDGET_NONE
    use rdb_ocean_pseudo_salt, only: ocean_pseudo_salt_register, ocean_pseudo_salt_seed, &
                                     pseudo_salt_conflicts_restore, &
                                     pseudo_salt_conflicts_ice, &
-                                    pseudo_salt_needs_thermo_warning
+                                    pseudo_salt_needs_thermo_warning, &
+                                    ocean_pseudo_salt_deviation
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_continuity, only: continuity_t, continuity_tracer_step_split
@@ -78,7 +79,9 @@ contains
                   new_unittest("pseudo_salt_no_budget_contribution", &
                                test_no_budget_contribution), &
                   new_unittest("pseudo_salt_conflict_predicates", &
-                               test_conflict_predicates) &
+                               test_conflict_predicates), &
+                  new_unittest("pseudo_salt_deviation_vanished_layer_is_missing", &
+                               test_deviation_vanished_missing) &
                   ]
    end subroutine collect_ocean_pseudo_salt_tests
 
@@ -594,5 +597,50 @@ contains
                     "pseudo-salt off must never warn")
       end block checks
    end subroutine test_conflict_predicates
+
+   subroutine test_deviation_vanished_missing(error)
+      !! The deviation diagnostic `D = ps - S` on a vanished layer is
+      !! MISSING (the NaN the caller passes), not 0 — a zero deviation is
+      !! the perfect score this diagnostic exists to report, so a filler
+      !! used to read as "the two transport paths agree".  The vanished
+      !! predicate is the shared one (`h <= H_VANISHED`), so a layer
+      !! sitting exactly ON the marker is vanished while one just above it
+      !! is a live layer whose D is the ordinary difference.
+      use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NXL = 2, NYL = 1, NZL = 3
+      real(wp) :: h(NXL, NYL, NZL), hps(NXL, NYL, NZL), hs(NXL, NYL, NZL)
+      real(wp) :: d(NXL, NYL, NZL), h_live
+      h = 10.0_wp
+      hps = 10.0_wp*35.5_wp
+      hs = 10.0_wp*35.0_wp
+      ! Column 1: bed filler exactly ON the marker, content zero (I1).
+      h(1, 1, 1) = H_VANISHED
+      hps(1, 1, 1) = 0.0_wp
+      hs(1, 1, 1) = 0.0_wp
+      ! Column 2: bed layer a hair ABOVE the marker — live.  (Between the
+      ! old private 1e-6 m floor and H_VANISHED it was divided through;
+      ! here it must still be, because it is live by the ONE predicate.)
+      h_live = 2.0_wp*H_VANISHED
+      h(2, 1, 1) = h_live
+      hps(2, 1, 1) = h_live*36.0_wp
+      hs(2, 1, 1) = h_live*35.0_wp
+      d = 0.0_wp
+      ! mem:separate: the kernel is a `do concurrent`, so map the local
+      ! inputs/outputs explicitly (inert on host builds).
+      !$acc enter data copyin(h, hps, hs, d)
+      call ocean_pseudo_salt_deviation(h, hps, hs, d, NXL, NYL, NZL, &
+                                       ieee_value(0.0_wp, ieee_quiet_nan))
+      !$acc update self(d)
+      !$acc exit data delete(h, hps, hs, d)
+      call check(error, ieee_is_nan(d(1, 1, 1)), &
+                 "a vanished layer's pseudo-salt deviation must be missing (NaN), not 0")
+      if (allocated(error)) return
+      call check(error, abs(d(2, 1, 1) - 1.0_wp) < 1.0e-9_wp, &
+                 "a live bed layer's deviation must be ps - S")
+      if (allocated(error)) return
+      call check(error, maxval(abs(d(:, :, 2:) - 0.5_wp)) < 1.0e-9_wp, &
+                 "live interior layers must read ps - S = 0.5")
+   end subroutine test_deviation_vanished_missing
 
 end module test_ocean_pseudo_salt

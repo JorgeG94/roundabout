@@ -17,7 +17,7 @@
 !! ⇒ the surface (k=NZ) layer is the lightest, matching the lightest→surface
 !! density-bin convention.
 module test_ocean_diag_remap
-   use rdb_constants, only: wp, REMAP_PCM, REMAP_PPM
+   use rdb_constants, only: wp, REMAP_PCM, REMAP_PPM, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
    use rdb_ocean_diag, only: DIAG_OP_INSTANT, DIAG_VGRID_Z_FIXED, DIAG_VGRID_DENSITY, &
@@ -60,7 +60,10 @@ contains
                   new_unittest("diag_remap_ppm_higher_order", test_z_ppm_exact), &
                   new_unittest("diag_remap_on_device_finite", test_on_device), &
                   new_unittest("diag_dispatch_honors_is_extensive", test_dispatch_extensive), &
-                  new_unittest("diag_density_vgrid_from_namelist", test_density_vgrid_from_namelist) &
+                  new_unittest("diag_density_vgrid_from_namelist", test_density_vgrid_from_namelist), &
+                  new_unittest("diag_remap_vanished_source_zero_weight", test_vanished_zero_weight), &
+                  new_unittest("diag_remap_density_vanished_source_zero_weight", &
+                               test_density_vanished_zero_weight) &
                   ]
    end subroutine collect_ocean_diag_remap_tests
 
@@ -628,5 +631,111 @@ contains
       logical :: ok
       ok = (x == x) .and. (abs(x) < huge(1.0_wp))
    end function ieee_is_finite_buf
+
+   ! ------------------------------------------------------------------
+   ! Vanished source layers carry zero weight
+   ! ------------------------------------------------------------------
+
+   subroutine vanish_bed_layer(state)
+      !! Make the bed layer (k=1) an inert filler everywhere: thickness ON
+      !! the marker, content zero (invariant I1).
+      type(ocean_state_t), intent(inout) :: state
+      integer :: t
+      state%multilayer%h_layer(:, :, 1) = H_VANISHED
+      do t = 1, size(state%multilayer%tracers)
+         if (allocated(state%multilayer%tracers(t)%hTr)) then
+            state%multilayer%tracers(t)%hTr(:, :, 1) = 0.0_wp
+         end if
+      end do
+   end subroutine vanish_bed_layer
+
+   subroutine test_vanished_zero_weight(error)
+      !! A vanished source layer enters the output-coordinate remap with
+      !! ZERO WEIGHT, not with its (missing) value.  The temperature fill
+      !! reports it as NaN — correctly — and the donor-cell remap used to
+      !! read that NaN as data, smearing it over every target cell of the
+      !! column, so a whole water column vanished from the z / sigma / z*
+      !! output because of 1.5e-4 m of filler under it.  Source (bottom-up):
+      !! filler, T=1 (10 m), T=2 (10 m surface).  PCM onto [0,10],[10,20],
+      !! [20,30]: the live water reads exactly 2 and 1; the cell below the
+      !! live column total overlaps no water and reads the legacy 0 (mask
+      !! off).  The PPM z / sigma / z* remaps must all stay finite.
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp) :: layer_buf(NX, NY, NZ), out_buf(NX, NY, 3)
+      real(wp), parameter :: Z_IFACE(3) = [10.0_wp, 20.0_wp, 30.0_wp]
+      real(wp), parameter :: SIG(3) = [0.25_wp, 0.5_wp, 1.0_wp]
+      checks: block
+         call setup_state(grid, state)
+         call set_uniform_TS(state, [0.0_wp, 1.0_wp, 2.0_wp])
+         call vanish_bed_layer(state)
+         call fill_temperature(state, layer_buf)
+         call check(error,.not. ieee_is_finite(layer_buf(2, 2, 1)), &
+                    "precondition: the fill reports the filler as missing (NaN)")
+         if (allocated(error)) exit checks
+
+         call set_diag_remap_method(REMAP_PCM)
+         call remap_layer_to_z(state, Z_IFACE, layer_buf, out_buf, .false.)
+         call check(error, all(ieee_is_finite(out_buf)), &
+                    "z remap: a vanished source layer must not poison the column")
+         if (allocated(error)) exit checks
+         call check(error, abs(out_buf(2, 2, 1) - 2.0_wp) < TOL .and. &
+                    abs(out_buf(2, 2, 2) - 1.0_wp) < TOL, &
+                    "z remap (PCM): live water must read 2 / 1")
+         if (allocated(error)) exit checks
+         call check(error, abs(out_buf(2, 2, 3)) < TOL, &
+                    "z remap: a target below the live column reads the mask-off 0")
+         if (allocated(error)) exit checks
+
+         call set_diag_remap_method(REMAP_PPM)
+         call remap_layer_to_z(state, Z_IFACE, layer_buf, out_buf, .false.)
+         call check(error, all(ieee_is_finite(out_buf)), "z remap (PPM) must stay finite")
+         if (allocated(error)) exit checks
+         ! Column integral of the live water (2·10 + 1·10) is preserved.
+         call check(error, abs(10.0_wp*(out_buf(2, 2, 1) + out_buf(2, 2, 2)) - 30.0_wp) &
+                    < 1.0e-8_wp, "z remap (PPM) must conserve the live-water integral")
+         if (allocated(error)) exit checks
+         call remap_layer_to_sigma(state, SIG, layer_buf, out_buf, .false.)
+         call check(error, all(ieee_is_finite(out_buf)), "sigma remap must stay finite")
+         if (allocated(error)) exit checks
+         call remap_layer_to_zstar(state, Z_IFACE, layer_buf, out_buf, .false.)
+         call check(error, all(ieee_is_finite(out_buf)), "z* remap must stay finite")
+      end block checks
+      call set_diag_remap_method(REMAP_PPM)   ! restore the production default
+      call state%destroy()
+   end subroutine test_vanished_zero_weight
+
+   subroutine test_density_vanished_zero_weight(error)
+      !! Density-space twin of `test_vanished_zero_weight`.  Live water:
+      !! T=2 (rho 1023, surface) over T=1 (rho 1024); the bed filler holds
+      !! no content, so its EOS density from the zero concentration would
+      !! be 1025 — denser than anything real — and its temperature value
+      !! is NaN.  Both must be invisible: the lightest bin holds the
+      !! surface water exactly, the dense bin the T=1 water, all finite.
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp) :: layer_buf(NX, NY, NZ), out_buf(NX, NY, 2)
+      real(wp), parameter :: RHO_TGT(2) = [1023.5_wp, 1024.5_wp]
+      checks: block
+         call setup_state(grid, state)
+         call set_uniform_TS(state, [0.0_wp, 1.0_wp, 2.0_wp])
+         call vanish_bed_layer(state)
+         call fill_temperature(state, layer_buf)
+         call remap_layer_to_density(state, RHO_TGT, layer_buf, out_buf, .false.)
+         call check(error, all(ieee_is_finite(out_buf)), &
+                    "density remap: a vanished source layer must not poison the column")
+         if (allocated(error)) exit checks
+         call check(error, abs(out_buf(2, 2, 1) - 2.0_wp) < 1.0e-9_wp, &
+                    "density remap: the lightest bin holds the surface water (2.0)")
+         if (allocated(error)) exit checks
+         call check(error, abs(out_buf(2, 2, 2) - 1.0_wp) < 1.0e-9_wp, &
+                    "density remap: the dense bin holds only live T=1 water")
+      end block checks
+      call state%destroy()
+   end subroutine test_density_vanished_zero_weight
 
 end module test_ocean_diag_remap
