@@ -11,7 +11,7 @@
 !!   * SSH fill matches `h - b` on a stamped barotropic state.
 !!   * KE fill matches `0.5 * (u² + v²)` on uniform flow.
 module test_ocean_diag
-   use rdb_constants, only: wp, REMAP_PCM, REMAP_PPM
+   use rdb_constants, only: wp, REMAP_PCM, REMAP_PPM, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
    use rdb_ocean_diag, only: ocean_diag_t, DIAG_OP_INSTANT, DIAG_OP_MEAN, &
@@ -97,6 +97,8 @@ contains
                   new_unittest("derived_transport_x_uniform_flow", test_derived_transport_x), &
                   new_unittest("derived_transport_y_uniform_flow", test_derived_transport_y), &
                   new_unittest("derived_mld_density_step_profile", test_derived_mld), &
+                  new_unittest("derived_mld_density_ignores_vanished_filler", &
+                               test_derived_mld_vanished), &
                   new_unittest("mask_global_covers_full_grid", test_mask_global), &
                   new_unittest("mask_bbox_covers_only_box", test_mask_bbox), &
                   new_unittest("mask_h_section_strip", test_mask_h_section), &
@@ -1388,7 +1390,11 @@ contains
    end subroutine test_derived_h_layer
 
    subroutine test_derived_rho_layer(error)
-      !! `rho_layer` direct copy from the EOS slot.
+      !! `rho_layer` direct copy from the EOS slot on every LIVE layer, and
+      !! the NaN missing-data sentinel on a vanished one: the EOS writes
+      !! `rho_0` into a filler on purpose (so the PGF column is not
+      !! perturbed), which is a plausible density, not a measurement.
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
@@ -1396,6 +1402,7 @@ contains
       real(wp) :: diff
       checks: block
          call setup_state(grid, state)
+         state%multilayer%h_layer = 10.0_wp
          do k = 1, NZ
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
@@ -1403,15 +1410,28 @@ contains
                end do
             end do
          end do
+         ! One vanished bed filler, exactly ON the marker.
+         state%multilayer%h_layer(3, 2, 1) = H_VANISHED
          call register_derived(state, "rho_layer", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
          call ocean_state_enter_data(state)
          call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
          call ocean_state_exit_data(state)
 
-         diff = maxval(abs(state%diag%vars(1)%output_buffer &
-                           - state%multilayer%rho_layer(:grid%nx_total, :grid%ny_total, :NZ)))
+         call check(error, ieee_is_nan(state%diag%vars(1)%output_buffer(3, 2, 1)), &
+                    "rho_layer on a vanished layer must be missing (NaN), not rho_0")
+         if (allocated(error)) exit checks
+         diff = 0.0_wp
+         do k = 1, NZ
+            do j = 1, grid%ny_total
+               do i = 1, grid%nx_total
+                  if (i == 3 .and. j == 2 .and. k == 1) cycle
+                  diff = max(diff, abs(state%diag%vars(1)%output_buffer(i, j, k) &
+                                       - state%multilayer%rho_layer(i, j, k)))
+               end do
+            end do
+         end do
          call check(error, diff < 1.0e-12_wp, &
-                    "rho_layer derived diag should match rho_layer state to FP")
+                    "rho_layer derived diag should match rho_layer state to FP on live layers")
       end block checks
       call state%destroy()
    end subroutine test_derived_rho_layer
@@ -1576,6 +1596,42 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_derived_mld
+
+   subroutine test_derived_mld_vanished(error)
+      !! A vanished bed filler cannot mark the mixed-layer base.  The EOS
+      !! puts the reference density `rho_0` into a filler, which here is
+      !! denser than the (uniform, light) water above it by more than the
+      !! threshold; a scan that trusted it reported MLD = h(top) + h(mid)
+      !! — a pycnocline made of nothing.  With the filler ignored the
+      !! column has no crossing, so MLD is the full column depth,
+      !! filler thickness included.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: RHO_LIGHT = 1024.0_wp, RHO_FILLER = 1035.0_wp
+      real(wp), parameter :: H_TOP = 20.0_wp, H_MID = 30.0_wp
+      real(wp) :: expected, err
+      checks: block
+         call setup_state(grid, state)
+         state%multilayer%h_layer(:, :, 1) = H_VANISHED
+         state%multilayer%h_layer(:, :, 2) = H_MID
+         state%multilayer%h_layer(:, :, 3) = H_TOP
+         state%multilayer%rho_layer(:, :, 1) = RHO_FILLER
+         state%multilayer%rho_layer(:, :, 2) = RHO_LIGHT
+         state%multilayer%rho_layer(:, :, 3) = RHO_LIGHT
+
+         call register_derived(state, "mld_density", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         expected = H_TOP + H_MID + H_VANISHED
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 1) - expected)
+         call check(error, err < 1.0e-9_wp, &
+                    "mld_density must not cross at a vanished filler (MLD = full column)")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_mld_vanished
 
    ! ---------------------------------------------------------------------
    ! Phase C — region masks

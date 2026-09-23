@@ -1675,8 +1675,10 @@ contains
       !! Caller supplies `nk >= 2`.  The RHO regrid kernel pre-compacts
       !! vanished layers (so `nk` is the surviving count) and fast-paths
       !! `nk <= 1` upstream; the DENSITY diagnostic remap passes the full
-      !! `nz` column (it assumes a non-vanished column — vanished-layer
-      !! compaction for diagnostics is a deferred refinement).  Lightest
+      !! `nz` column, with every vanished layer given zero thickness and the
+      !! density of its nearest live neighbour, so the PPM edges it touches
+      !! are the live layer's own value (no compaction, same effect on the
+      !! inversion).  Lightest
       !! target maps to the surface (index 2), densest to the bed (the
       !! surface→bed ordering the callers FLIP into the bottom-up state).
       !$acc routine seq
