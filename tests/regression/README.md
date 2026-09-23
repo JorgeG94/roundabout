@@ -566,11 +566,12 @@ the configuration v0.1.0 recommends for any run over sloping topography**:
 `stability.py --self-test` asserts that every emitted cell carries all of
 them.
 
-Also recommended, but NOT yet in the template (adding it moves pinned
-markers, so it lands with the next two-toolchain re-pin):
-`&ocean_continuity_nml renorm_consistent_flux = .true.` — the FINDING B fix.
-Measured with it (gfortran, tier 1, 30 d): every viscous cell of `sigma`,
-`zstar`, `zstar_sigma` and `zstar_full` passes, rx0 0.1–0.8 included.
+The FINDING B fix, `&ocean_continuity_nml renorm_consistent_flux = .true.`,
+and MOM6's fast-loop damping `&ocean_bt_nml bebt = 0.1` are the model
+DEFAULTS since 2026-09-22 (MOM6 parity), so the template does not list them —
+every cell runs them. Re-pinned on both toolchains with them in: every
+viscous cell of `sigma`, `zstar`, `zstar_sigma` and `zstar_full` passes, rx0
+0.1–0.8 included.
 
 ### Two legs
 
@@ -719,9 +720,10 @@ checks it fails the first and passes the second — who tests the test.
 
 **Tier 1 — the real horizon.** 205 cells (115 inviscid + 90 viscous), 30
 simulated days each, `pred_corr`, `RDB_ENABLE_MPI=OFF`, measured on **both**
-toolchains: gfortran 15.1.0 Release on the CPU (3 workers, 57 min on a
-shared 4-core box) and nvfortran 26.5 on one V100, cc70 (3.3 h on the same
-contended box — the GPU is launch-bound at 48 × 6 × 15). `ok` = every
+toolchains with the MOM6-parity defaults of 2026-09-22 (`bebt = 0.1`,
+`renorm_consistent_flux = .true.`): gfortran 15.1.0 Release on the CPU (3
+workers, 62 min on a shared 4-core box) and nvfortran 26.5 on one V100, cc70
+(3.6 h on the same contended box — the GPU is launch-bound at 48 × 6 × 15). `ok` = every
 assertion passed (on `flat`/`lid_flat` that means `En = 0.000E+00` at every
 sample, exactly); a number is the peak `En` in m² s⁻² of a cell that
 completes but fails a gate (`leak` = the salt/heat budget left round-off);
@@ -729,25 +731,26 @@ completes but fails a gate (`leak` = the salt/heat budget left round-off);
 at configure by design, and the row asserts the refusal. `a / b` =
 gfortran / nvfortran where they differ; otherwise both.
 
-**Both toolchains agree on PASS/FAIL on every one of the 205 cells** except
-the two `slope × hycom × wright` cells (FINDING C, GPU only); where they
-differ it is in the number or the day, never the verdict.
+**Both toolchains agree on PASS/FAIL on every one of the 205 cells** (the
+two `slope × hycom × wright` cells used to differ — FINDING C, GPU only — and
+agree since its fix, e8a1ab68d); where they differ it is in the number, the
+day or the abort mode, never the verdict.
 
 ### inviscid leg
 
 | problem (rx0) | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `flat` (0) | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
-| `slope` (0.00709) | ok | 1.2e-03 | ok | ok | ok | ok | 5.6e-07 leak | 2.3e-06 / 6.8e-07 | 1.4e-06 / 7.7e-07 | refused |
+| `slope` (0.00709) | ok | 1.1e-03 | ok | ok | ok | ok | 5.6e-07 leak | 1.4e-06 / 1.3e-06 | 1.7e-06 / 1.5e-06 | refused |
 | `lid_flat` (0) | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
-| `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 7.7e-04 | refused | refused | refused |
-| `seamount_gentle` (0.03) | ok | 2.1e-04 / 1.8e-04 | ok | ok | ok | ok | 1.4e-05 leak | ✗ d11 | ✗ d8 / ✗ d16 | refused |
-| `seamount_steep` (0.078) | ✗ d4 | ✗ d20 / ✗ d16 | ok | ok | ok | ok | 1.4e-04 leak | ✗ d6 | ✗ d6 | refused |
-| `rx0_010` (0.1) | ✗ d12 / ✗ d10 | 8.0e-04 / 7.7e-04 | 1.7e-12 / 2.3e-12 | 1.7e-12 / 2.3e-12 | ok | ok | 1.2e-07 leak | ✗ d3 / ✗ d2 | ✗ d4 / ✗ d6 | refused |
-| `rx0_020` (0.2) | ✗ d7 | ✗ d22 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.3e-04 | 4.4e-05 / 6.6e-05 | 3.1e-07 leak | ✗ d1 | ✗ d1 / ✗ d0 | refused |
-| `rx0_040` (0.4) | ✗ d5 | ✗ d11 | ✗ d30 / ✗ d29 | ✗ d30 / ✗ d29 | ✗ d28 / ✗ d30 | 4.2e-04 / 4.7e-04 | 2.3e-08 leak | ✗ d0 | ✗ d0 | refused |
-| `rx0_060` (0.6) | ✗ d4 | ✗ d6 | 2.2e-05 / 2.5e-05 | 2.2e-05 / 2.5e-05 | 1.5e-05 / 1.7e-05 | 1.7e-09 / 4.4e-10 | 2.7e-07 leak | ✗ d0 | ✗ d0 | refused |
-| `rx0_080` (0.8) | ✗ d4 | ✗ d4 | ✗ d14 | ✗ d14 | ✗ d14 | ✗ d4 | 2.3e-07 leak | ✗ d0 | ✗ d0 | refused |
+| `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 8.3e-04 | refused | refused | refused |
+| `seamount_gentle` (0.03) | ok | 2.8e-04 / 2.7e-04 | ok | ok | ok | ok | 1.4e-05 leak | ✗ d10 | ✗ d10 / ✗ d26 | refused |
+| `seamount_steep` (0.078) | ✗ d4 | ✗ d18 / ✗ d15 | ok | ok | ok | ok | 1.4e-04 leak | ✗ d6 | ✗ d6 / ✗ d5 | refused |
+| `rx0_010` (0.1) | ✗ d12 | 7.5e-04 | 2.1e-12 / 1.9e-12 | 2.1e-12 / 1.9e-12 | ok | ok | 1.2e-07 leak | ✗ d4 / ✗ d3 | ✗ d6 / ✗ d3 | refused |
+| `rx0_020` (0.2) | ✗ d6 / ✗ d7 | ✗ d23 | 7.4e-04 / 7.2e-04 | 7.4e-04 / 7.2e-04 | 9.6e-04 / 9.7e-04 | 6.3e-05 / 6.8e-05 | 3.1e-07 leak | ✗ d1 | ✗ d1 | refused |
+| `rx0_040` (0.4) | ✗ d5 / ✗ d4 | ✗ d11 | 3.7e-03 / 3.4e-01 | 3.7e-03 / 3.4e-01 | 5.5e-03 / 1.7e-02 | 3.0e-04 / 3.2e-04 | 2.3e-08 leak | ✗ d0 | ✗ d1 / ✗ d0 | refused |
+| `rx0_060` (0.6) | ✗ d4 | ✗ d7 | 3.1e-07 / 1.6e-07 | 3.1e-07 / 1.6e-07 | 3.5e-07 / 5.3e-07 | 2.6e-09 / 1.8e-08 | 2.7e-07 leak | ✗ d0 | ✗ d0 | refused |
+| `rx0_080` (0.8) | ✗ d5 | ✗ d4 | ✗ d17 | ✗ d17 | ✗ d17 | ✗ d14 / ✗ d13 | 2.3e-07 leak | ✗ d0 | ✗ d0 | refused |
 
 ### viscous leg
 
@@ -758,37 +761,42 @@ differ it is in the number or the day, never the verdict.
 | `lid_flat` (0) | - | - | ok | ok | - | - | ok | - | - |
 | `lid_slope` (0.0138) | - | - | ok | ok | - | - | 6.6e-05 | - | - |
 | `seamount_gentle` (0.03) | ok | ok | ok | ok | ok | ok | 1.3e-07 leak | ✗ d0 | ✗ d0 |
-| `seamount_steep` (0.078) | ✗ d16 / ✗ d15 | ok | ok | ok | ok | ok | ✗ d18 | ✗ d0 | ✗ d0 |
-| `rx0_010` (0.1) | 1.7e-09 / 8.3e-09 | ok | ✗ d14 / ✗ d19 | ✗ d14 / ✗ d19 | ok | ok | 6.4e-12 leak | ✗ d0 | ✗ d0 |
-| `rx0_020` (0.2) | ✗ d14 | ok | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d6 | ✗ d2 | 1.5e-08 leak | ✗ d0 | ✗ d0 |
-| `rx0_040` (0.4) | ✗ d8 | ok | ✗ d2 | ✗ d2 | ✗ d2 / ✗ d6 | ✗ d1 | 2.7e-10 leak | ✗ d0 | ✗ d0 |
-| `rx0_060` (0.6) | ✗ d5 / ✗ d6 | ok | ✗ d15 / ✗ d24 | ✗ d15 / ✗ d24 | ok | ✗ d16 | 1.4e-08 leak | ✗ d0 | ✗ d0 |
-| `rx0_080` (0.8) | ✗ d6 / ✗ d7 | 1.7e-04 / 1.4e-04 | ✗ d21 / ✗ d28 | ✗ d21 / ✗ d28 | ✗ d14 / ✗ d24 | ok | 7.5e-09 leak | ✗ d0 | ✗ d0 |
+| `seamount_steep` (0.078) | ✗ d16 | ok | ok | ok | ok | ok | 8.4e-08 leak | ✗ d0 | ✗ d0 |
+| `rx0_010` (0.1) | 1.2e-09 / 4.7e-09 | ok | ok | ok | ok | ok | 6.4e-12 leak | ✗ d0 | ✗ d0 |
+| `rx0_020` (0.2) | ✗ d15 | ok | ok | ok | ok | ok | 1.5e-08 leak | ✗ d0 | ✗ d0 |
+| `rx0_040` (0.4) | ✗ d9 | ok | ok | ok | ok | ok | 2.7e-10 leak | ✗ d0 | ✗ d0 |
+| `rx0_060` (0.6) | ✗ d7 | ok | ok | ok | ok | ok | 1.4e-08 leak | ✗ d0 | ✗ d0 |
+| `rx0_080` (0.8) | ✗ d7 | ok | ok | ok | ok | ok | 7.5e-09 leak | ✗ d0 | ✗ d0 |
 
 The EOS and stratification controls (not in the grids above): `slope × sigma
-× wright` passes both legs on both toolchains (inviscid En 7.6e-23, viscous
-5.4e-24); `slope × z_fixed × wright` leaks exactly like its linear twin;
-`slope × hycom × wright` completes on gfortran (inviscid En 2.2e-06) and dies
-at step 0 on the GPU (FINDING C). The `N² = 0` controls: `lid_slope × sigma`
-holds 1.5e-20 / 3.6e-20 (machine zero, both toolchains); `rx0_080 × sigma`
-unstratified still reaches the CFL wall — day 20 on gfortran, day 1 on the
-GPU — through the slower barotropic residual the forensics measured.
+× wright` passes both legs on both toolchains (inviscid En 7.9e-23, viscous
+5.2e-24); `slope × z_fixed × wright` leaks exactly like its linear twin;
+`slope × hycom × wright` inviscid now aborts on the remap guard on both
+toolchains (gfortran day 29.5, h −2.9e-4 m; nvfortran day 24.0, h −2.2e-4 m;
+it completed on gfortran with En 2.2e-06 before the 2026-09-22 defaults, and
+died at step 0 on the GPU before the FINDING C fix). The `N² = 0` controls:
+`lid_slope × sigma` holds 6.5e-20 / 2.1e-19 (machine zero, both toolchains);
+`rx0_080 × sigma` unstratified still reaches the CFL wall (day 22 on both)
+through the slower barotropic residual the forensics measured.
 
-**Counts, tier 1** (identical on both toolchains): inviscid **32 PASS / 83
-XFAIL** (23 of them the by-design refusals) / 0 FAIL / 0 XPASS; viscous **40
-PASS / 50 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the CI slice, 3.33 days,
-120 rows with the `__ssp_rk2` twins): gfortran 86 PASS / 34 XFAIL, nvfortran
-84 PASS / 36 XFAIL (the difference is FINDING C), 0 FAIL / 0 XPASS on both.
+**Counts, tier 1** (identical on both toolchains, against the re-pinned
+markers): inviscid **32 PASS / 83 XFAIL** (23 of them the by-design refusals)
+/ 0 FAIL / 0 XPASS; viscous **57 PASS / 33 XFAIL** / 0 FAIL / 0 XPASS (was
+40 / 50: the 17 FINDING B cells now pass on both toolchains). **Tier 2** (the CI slice, 3.33 days,
+120 rows with the `__ssp_rk2` twins): **86 PASS / 34 XFAIL** / 0 FAIL / 0
+XPASS on both toolchains (nvfortran was 84 / 36 before the FINDING C fix).
 
 **How to read it.**
 
 1. **The fixed configuration works where it was aimed.** Every
    terrain-following family rests at machine zero on the slope, both
-   seamounts and the sloping ice lid in BOTH legs (`En ≤ 2.6e-21`), where the
+   seamounts and the sloping ice lid in BOTH legs (`En ≤ 9.1e-21` in the 2026-09-23 re-pin), where the
    pre-fix table carried 3e-09 … 2.7e-04 plateaus. The inviscid growth that
-   remains lives only on the single-face `rx0` ladder: sigma/zstar at rung 0.1
-   reach 1.7e-12 but still fit a growth rate over the 20-day bar, and the
-   steep rungs reach the CFL wall — the mode MOM6 shares.
+   remains lives only on the single-face `rx0` ladder of the INVISCID leg:
+   sigma/zstar at rung 0.1 reach 2e-12 but still fit a growth rate over the
+   20-day bar, rungs 0.2–0.6 now complete 30 days with it, and 0.8 reaches
+   the CFL wall — the mode MOM6 shares. The VISCOUS leg rests on every rung
+   (FINDING B, fixed by the 2026-09-22 defaults).
 2. **`sigma` ≡ `zstar`** to every printed digit, in both legs, on both
    toolchains; `zstar_sigma` now differs from them on the ladder (it is the
    only place its z* branch engages).
@@ -800,9 +808,10 @@ PASS / 50 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the CI slice, 3.33 days,
 4. **`rho` / `hycom` are clean on a flat bed only.** Inviscid they abort on
    every sloping geometry within days (the negative layer the rest-state
    mode writes); viscous they abort at step 0 (FINDING A).
-5. **`eulerian_z` (which pins `ssp_rk2`) is the viscous leg's widest
-   envelope** — it rests to `rx0 = 0.6` with the closure — while its
-   inviscid leg is the worst geometric family on a slope (1.2e-03).
+5. **`eulerian_z` (which pins `ssp_rk2`) rests to the top of the viscous
+   ladder** — `rx0 = 0.8` with the closure (0.6 before the 2026-09-22
+   defaults) — while its
+   inviscid leg is the worst geometric family on a slope (1.1e-03).
 6. **`lagrangian`** inherits the sigma-shaped initial column and never
    regrids; over a step it collapses a layer in both legs.
 
@@ -820,18 +829,23 @@ measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
 
 | family | viscous envelope (gate) | first viscous failure | inviscid: all-assertions pass up to | inviscid: completes 30 d at |
 |---|---|---|---|---|
-| `sigma`, `zstar` | **rx0 ≤ 0.078** | rx0 0.1 (FINDING B) | 0.078 | ≤ 0.2, and 0.6 |
-| `zstar_sigma` | **rx0 ≤ 0.1** | rx0 0.2 (FINDING B) | 0.1 | ≤ 0.2, and 0.6 |
-| `zstar_full` | **rx0 ≤ 0.1** | rx0 0.2 (FINDING B) | 0.1 | ≤ 0.6 |
-| `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.6** | rx0 0.8 (level + rate) | flat only | ≤ 0.03, and 0.1 |
+| `sigma`, `zstar` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.078 | ≤ 0.6 |
+| `zstar_sigma` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
+| `zstar_full` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
+| `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.8** (top of the ladder) | none measured | flat only | ≤ 0.03, and 0.1 |
 | `lagrangian` | **rx0 ≤ 0.03** | seamount_steep (collapse) | 0.03 | ≤ 0.03 |
 | `z_fixed` (closed faces) | **flat only** | slope (budget leak) | flat only | every geometry |
 | `rho`, `hycom` | **flat only** | slope (FINDING A) | flat only | ≤ 0.0071 |
 
-The classical Beckmann–Haidvogel bound is 0.2: the terrain-following
-envelopes sit at or below half of it, and the reason is FINDING B, not the
-pressure gradient — the inviscid leg of the same families completes 30 days at
-rx0 0.2 and 0.6.
+Measured 2026-09-23 with the MOM6-parity defaults (`bebt = 0.1`,
+`renorm_consistent_flux = .true.`), gfortran 15.1 CPU and nvfortran 26.5
+V100, identical viscous verdicts on both. The classical Beckmann–Haidvogel
+bound is 0.2; the terrain-following viscous envelopes now reach the top of
+the measured ladder (0.8). Before those defaults they stopped at 0.078 / 0.1,
+capped by FINDING B. The INVISCID leg is unchanged in its all-gates envelope
+(the MOM6-shared rest-state mode, not FINDING B), but now COMPLETES 30 days up
+to rx0 0.6 in every terrain-following family (0.4 used to abort); 0.8 still
+aborts on the remap guard.
 
 ## Per-toolchain tolerance
 
@@ -857,7 +871,8 @@ V100) and on this one:
   line it reads. The gate now allows 1.5 print quanta (`diag_print_quantum`
   in `stability.py`; self-tested both ways), which removes the flip and
   leaves every real overshoot (z_fixed: 7e-4 … 0.14 PSU) failing;
-* **FINDING C** — the only genuine verdict difference, GPU only.
+* **FINDING C** — the only genuine verdict difference, GPU only; FIXED
+  (e8a1ab68d), the toolchains now agree on every cell.
 
 ## FINDINGS — what the two legs turned up
 
@@ -866,8 +881,9 @@ shipped closure rests its seamount at every steepness it can reach
 (rx0 ≤ 0.76), and roundabout's own inviscid leg *completes* several of these
 cells. They were localised to a first-order term, **not** tuned away: the
 envelope table below is capped by them, and each marker carries its finding
-by name (`finding_visc_pred_corr`, `finding_stress_density`, `finding_gpu_wright_density` in
-`vcoord_matrix.py`). Nothing in the Fortran was changed by this PR.
+by name (`finding_visc_pred_corr`, `finding_stress_density` in
+`vcoord_matrix.py`; FINDING C's `finding_gpu_wright_density` was retired with
+its fix). Nothing in the Fortran was changed by this PR.
 
 ### FINDING B — `pred_corr` × Laplacian viscosity destabilises a stepped terrain-following column
 
@@ -948,17 +964,18 @@ rx0 = 0.1 and 21 % at 0.3 on one layer, at `f = 0`, inviscid, no remap;
 layer's flux at `u + du` with its own donor (continuous) and brackets Newton
 with bisection, so it cannot do this.
 
-**Fix:** `&ocean_continuity_nml renorm_consistent_flux = .true.` (default
-`.false.` ⇒ byte-identical; with it on, faces where no donor flips are
-byte-identical too). Gates: `test_continuity_multilayer`
+**Fix:** `&ocean_continuity_nml renorm_consistent_flux = .true.` — the
+DEFAULT since 2026-09-22 (MOM6 parity), together with MOM6's `&ocean_bt_nml
+bebt = 0.1`; faces where no donor flips are byte-identical to the historical
+model. Gates: `test_continuity_multilayer`
 (`renorm_donor_flip_lands_on_uhbt_x`/`_vhbt_y`,
 `renorm_consistent_flux_no_flip_bit_identical`) and `test_ocean_step_bt_mode`
 (a 48-cell rx0 0.1 rotating channel under `pred_corr`: layer-vs-barotropic
 `η` 7.2e-4 m and `KE+PE` ×670 in 150 steps without the knob, 2.0e-13 m and
 ×1.08 with it). `vcmv_rx0_010_sigma` with the knob rests 30 days (En
-1.4e-24); seeded as above it stays neutral. The matrix template does not
-carry the knob yet — adding it moves pinned markers on both toolchains, so it
-lands with the next two-toolchain re-pin.
+1.4e-24); seeded as above it stays neutral. The re-pin with both defaults on
+(2026-09-23, both toolchains) turned every FINDING B marker XPASS; none is
+left.
 
 ### FINDING A — the stress-divergence viscosity drives a density-space column negative
 
@@ -981,6 +998,14 @@ scaling the BOUND_KH ceiling (`MOM_hor_visc.F90`) — **a hypothesis**, not
 measured. **What a user can do today:** the scalar operator.
 
 ### FINDING C — GPU only: the density-space target builder faults under the Wright EOS
+
+**Status: FIXED** by e8a1ab68d (`fix(vcoord): rho/hycom x Wright illegal
+address on the GPU build`): compute-sanitizer put the fault at a HOST address
+read through an `associate` name passed to the out-of-module EOS routine, and
+the target builders no longer wrap a `do concurrent` in `associate`.
+Re-measured 2026-09-23: every `rho`/`hycom` × Wright cell now runs on the GPU
+and reaches the same verdict as on gfortran. The record below is kept as the
+history of the finding.
 
 **Where.** nvfortran 26.5 / V100 (cc70), every `rho` or `hycom` run with
 `&ocean_eos_nml eos = "wright"`: the matrix's `slope × hycom × wright` in both
@@ -1029,7 +1054,7 @@ proposed (fix item 2) would turn both into fail-loud messages.
 | | tier 2 (CPU, **the CI gate**) | tier 1 (local only) |
 |---|---|---|
 | inviscid leg | `flat`, `slope`, `rx0_060` × every family | all 115 cells |
-| viscous leg | `flat`, `slope`, `seamount_steep` (the top of the terrain-following envelope) × every family | all 90 cells |
+| viscous leg | `flat`, `slope`, `seamount_steep` (the steepest seamount; the rx0 0.1–0.8 ladder is tier-1 only) × every family | all 90 cells |
 | length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days |
 | rows | 120 (incl. the `__ssp_rk2` twins) | 205 (twins are tier-1-skipped by the curated scheme axis) |
 | measured wall | 443 s on 2 workers of a contended 4-core box (gfortran); 1081 s on one V100 | 3438 s on 3 CPU workers (gfortran); 11 910 s on one V100 (nvfortran 26.5, launch-bound on this box) |
@@ -1041,11 +1066,13 @@ proposed (fix item 2) would turn both into fail-loud messages.
 WITHOUT the matrix slice (`--exclude-tags vcoord_matrix`, 107 cases), and a
 NIGHTLY scheduled run ON MAIN (plus `workflow_dispatch`) runs the full
 corpus, matrix slice included (227 cases). The viscous slice is chosen to
-carry the gate's IN-ENVELOPE geometries — the steep seamount is the top of the
-terrain-following envelope — so a regression that breaks the v0.1.0 claim
-reddens the nightly run on main within a day. The full matrix is tier 1: it needs 30
-simulated days per cell to see a growth rate (the viscous leg's FINDING B
-fires between day 2 and day 28), which neither fits the budget nor runs on a
+carry the gate's IN-ENVELOPE geometries — the steep seamount is the steepest
+of them that fits the tier-2 budget (the rx0 0.1–0.8 ladder, in-envelope
+since the 2026-09-22 defaults, is tier 1) — so a regression that breaks the
+v0.1.0 claim reddens the nightly run on main within a day. The full matrix is
+tier 1: it needs 30 simulated days per cell to see a growth rate (the viscous
+leg's FINDING B, before its fix, fired between day 2 and day 28), which
+neither fits the budget nor runs on a
 hosted runner's hardware for the GPU half; it is re-run locally, on BOTH
 toolchains, whenever a vertical-coordinate, remap, PGF, viscosity or
 split-step change lands, and the pinned table is regenerated from it.

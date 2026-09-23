@@ -539,8 +539,9 @@ XFAIL_REASONS = {
         "wrong-sign transport, and the layer eta leaves the barotropic "
         "eta_end, pumping the (under pred_corr undamped) 2 dx barotropic "
         "mode. Fixed by &ocean_continuity_nml renorm_consistent_flux "
-        "(MOM6 zonal_flux_adjust parity), not yet in this template: adding "
-        "it moves pinned markers on both toolchains.",
+        "(MOM6 zonal_flux_adjust parity), which with MOM6's bebt = 0.1 is "
+        "the model DEFAULT since 2026-09-22; the 2026-09-23 two-toolchain "
+        "re-pin measured no cell left carrying this reason.",
     "finding_stress_density":
         "FINDING A (viscous leg) -- NOT expected, NOT hidden. The "
         "thickness-weighted stress-divergence viscosity "
@@ -557,17 +558,6 @@ XFAIL_REASONS = {
         "Laplacian (stress_tensor is refused under closed faces), so the "
         "pred_corr x Laplacian-viscosity instability of FINDING B is the "
         "suspect; it was not localised on z_fixed.",
-    "finding_gpu_wright_density":
-        "FINDING C (GPU only) -- NOT expected, NOT hidden. On nvfortran 26.5 "
-        "/ V100 EVERY rho or hycom run with eos = 'wright' dies at the "
-        "first regrid with CUDA_ERROR_ILLEGAL_ADDRESS inside "
-        "`ocean_vcoord_compute_target_h_rho_impl` (the column do concurrent, "
-        "rdb_ocean_vcoord.F90) -- on a FLAT bed at rest too; the linear EOS "
-        "is clean on the GPU, and gfortran with -fcheck=all finds no bounds "
-        "violation on the same run. The Wright coefficients are parameters, "
-        "so the point EOS call is not the suspect; the kernel's `associate` "
-        "over `this%` components around the do concurrent (the NVHPC "
-        "mapping hazard CLAUDE.md records) is -- a hypothesis.",
     "outside_envelope":
         "OUTSIDE THE FAMILY'S DOCUMENTED rx0 ENVELOPE (viscous leg). The "
         "envelope is the largest geometry rx0 at which EVERY viscous cell "
@@ -623,8 +613,6 @@ def reason_for(leg, key, rec):
         out.append("lagrangian")
     else:
         out.append("outside_envelope")
-    if fam in ("rho", "hycom") and "wright" in parts:
-        out.append("finding_gpu_wright_density")
     return out
 
 
