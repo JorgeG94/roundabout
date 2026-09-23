@@ -696,11 +696,7 @@ contains
          !! Column-total depth H(i, j) (m).
       real(wp), intent(in) :: eta(:, :)  ! assumed-shape-ok: same reason as total_h above
          !! Free-surface anomaly η(i, j) (m).
-      integer :: i, j, k, nz
-      real(wp) :: column_total, alpha, x, z_top_k, z_bot_k, dz_z, dz_sum, deficit
-      real(wp) :: z_ref_nz_inv
-      real(wp) :: h_bed_ref, eta_loc, H_eff, z_upper, z_lower, sum_dz
-      real(wp) :: h_nominal, h_min
+      real(wp) :: h_nominal
 
       if (.not. this%is_init) return
       ! Lagrangian / isopycnal: the target IS the current h_layer —
@@ -708,7 +704,6 @@ contains
       ! `ocean_apply_ale_remap_step`).  Return before touching
       ! `target_h` so the caller keeps the live `h_layer`.
       if (this%coord_type == VCOORD_LAGRANGIAN) return
-      nz = this%nz_ml
 
       ! VCOORD_LAGRANGIAN: target is whatever `h_layer` already is.  The
       ! ALE remap is a no-op for this case (see `ocean_apply_ale_remap_step`),
@@ -716,191 +711,236 @@ contains
       ! avoid burning a kernel launch.
       if (this%coord_type == VCOORD_LAGRANGIAN) return
 
-      ! Bind every derived-type component the offloaded do-concurrent loops
-      ! below touch to a plain associate-name.  ifx's do-concurrent ->
-      ! OpenMP-target lowering ICEs when a loop body references a derived-type
-      ! allocatable component directly (it can't map the parent type into the
-      ! target region); associate-names lower as plain array/scalar selectors,
-      ! so the outliner never sees a `this%` inside the kernel.  Pure alias --
-      ! no copy, device mapping of the components is unchanged.
-      associate (target_h => this%target_h, dsig => this%dsig, &
-                 z_ref_global => this%z_ref_global, z_ref => this%z_ref, &
-                 nx_total => this%nx_total, ny_total => this%ny_total, &
-                 zsigma_depth_transition => this%zsigma_depth_transition, &
-                 zsigma_blend_width => this%zsigma_blend_width, &
-                 zstar_h_min => this%zstar_h_min, &
-                 z_fixed_h_ref => this%z_fixed_h_ref)
-         select case (this%coord_type)
+      ! Every loop runs in a flat kernel on explicit-shape / scalar dummies:
+      ! no `this%` component and no `associate`-name reaches a
+      ! `do concurrent` (ifx's do-concurrent -> OpenMP-target lowering ICEs
+      ! on the former; the latter is the shape CLAUDE.md forbids — ifx
+      ! evaluates such names as zero, and nvfortran -stdpar=gpu hands a
+      ! by-reference one to a device callee as a HOST address, see
+      ! `ocean_vcoord_rho_target`).
+      if (this%coord_type == VCOORD_Z_FIXED) then
+         ! Fixed-z (quasi-geopotential) interfaces with vanishing
+         ! layers at BOTH ends: `h_min` fillers below the bed and —
+         ! under a rigid top (`z_top > 0`, an ice-shelf cavity) —
+         ! `h_min` fillers inside the ice, with a partial cell at each
+         ! live end.  See `ocean_vcoord_z_fixed_target`, which owns the
+         ! algorithm and is shared with the initial-thickness seed.
+         !
+         ! When `z_fixed_h_ref = 0` (knob unset) fall back to uniform
+         ! `(H + η) · dsig(k)` so tests that omit the knob still get
+         ! something sensible: the SIGMA branch of the geometric kernel
+         ! evaluates exactly that expression.
+         h_nominal = 0.0_wp
+         if (this%z_fixed_h_ref > 0.0_wp) then
+            h_nominal = this%z_fixed_h_ref/real(this%nz_ml, wp)
+         end if
+         if (h_nominal > 0.0_wp) then
+            call ocean_vcoord_z_fixed_target(this%target_h, total_h, eta, this%z_top, &
+                                             this%nx_total, this%ny_total, this%nz_ml, &
+                                             h_nominal, this%zstar_h_min)
+            return
+         end if
+         call ocean_vcoord_geometric_target(VCOORD_SIGMA, this%nx_total, this%ny_total, &
+                                            this%nz_ml, this%target_h, total_h, eta, &
+                                            this%dsig, this%z_ref_global, this%z_ref, &
+                                            this%zsigma_depth_transition, &
+                                            this%zsigma_blend_width, this%zstar_h_min)
+         return
+      end if
+      call ocean_vcoord_geometric_target(this%coord_type, this%nx_total, this%ny_total, &
+                                         this%nz_ml, this%target_h, total_h, eta, &
+                                         this%dsig, this%z_ref_global, this%z_ref, &
+                                         this%zsigma_depth_transition, &
+                                         this%zsigma_blend_width, this%zstar_h_min)
+   end subroutine ocean_vcoord_compute_target_h_impl
 
-         case (VCOORD_EULERIAN_Z)
-            do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
-               target_h(i, j, k) = total_h(i, j)*dsig(k)
-            end do
+   pure subroutine ocean_vcoord_geometric_target(coord_type, nx, ny, nz, target_h, &
+                                                 total_h, eta, dsig, z_ref_global, &
+                                                 z_ref, zsigma_depth_transition, &
+                                                 zsigma_blend_width, zstar_h_min)
+      !! Geometric target-grid kernels (EULERIAN_Z, SIGMA/ZSTAR, ZSIGMA,
+      !! ZSTAR_SIGMA, ZSTAR_FULL; formulae documented on
+      !! `ocean_vcoord_compute_target_h_impl`).  Flat on purpose — every
+      !! array an explicit-shape dummy, every knob a scalar dummy — so no
+      !! derived-type component and no `associate`-name reaches a
+      !! `do concurrent` (see `ocean_vcoord_rho_target` for the GPU fault
+      !! that shape caused there).
+      integer, intent(in), value :: coord_type
+         !! `VCOORD_*` family (not LAGRANGIAN / Z_FIXED: the dispatcher
+         !! owns those).
+      integer, intent(in), value :: nx
+         !! i-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: ny
+         !! j-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the surface.
+      real(wp), intent(inout) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m), bottom-up.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column-total depth H (m).
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly η (m).
+      real(wp), intent(in) :: dsig(nz)
+         !! Nominal layer fractions, bottom-up.
+      real(wp), intent(in) :: z_ref_global(0:nz)
+         !! Global reference interface depths (ZSIGMA / ZSTAR_SIGMA).
+      real(wp), intent(in) :: z_ref(nx, ny, 0:nz)
+         !! Per-column reference interface depths (ZSTAR_FULL).
+      real(wp), intent(in), value :: zsigma_depth_transition
+         !! Sigma → z* transition depth (m).
+      real(wp), intent(in), value :: zsigma_blend_width
+         !! Smoothstep blend width (m).
+      real(wp), intent(in), value :: zstar_h_min
+         !! Vanished-layer thickness (m).
+      integer :: i, j, k
+      real(wp) :: column_total, alpha, x, z_top_k, z_bot_k, dz_z, dz_sum, deficit
+      real(wp) :: z_ref_nz_inv
+      real(wp) :: h_bed_ref, eta_loc, H_eff, z_upper, z_lower, sum_dz
 
-         case (VCOORD_SIGMA, VCOORD_ZSTAR)
-            do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
-               column_total = total_h(i, j) + eta(i, j)
-               target_h(i, j, k) = column_total*dsig(k)
-            end do
+      select case (coord_type)
 
-         case (VCOORD_ZSIGMA)
-            ! Smoothstep blend: sigma in shallow, fixed z-levels in deep.
-            ! Mirrors `vcoord_target_dz_column` in `src/ALE/rdb_vcoord.F90`
-            ! but built directly on the 2D (H, η) fields.  The deep-branch
-            ! z-level intervals are clipped to the local column total so
-            ! sum_k target_h = H + η exactly even when the column is shallower
-            ! than the deepest reference interface; any residual deficit is
-            ! deposited in the bed-side layer (k=1) to preserve the sum.
-            do concurrent(j=1:ny_total, i=1:nx_total) &
-               local(column_total, alpha, x, k, z_top_k, z_bot_k, dz_z, dz_sum, deficit)
-               column_total = total_h(i, j) + eta(i, j)
-               if (column_total <= zsigma_depth_transition) then
-                  do k = 1, nz
-                     target_h(i, j, k) = dsig(k)*column_total
-                  end do
-               else
-                  if (zsigma_blend_width > 0.0_wp) then
-                     x = (column_total - zsigma_depth_transition)/zsigma_blend_width
-                     x = max(0.0_wp, min(1.0_wp, x))
-                     alpha = x*x*(3.0_wp - 2.0_wp*x)
-                  else
-                     alpha = 1.0_wp
-                  end if
-                  dz_sum = 0.0_wp
-                  do k = 1, nz
-                     z_top_k = min(z_ref_global(nz - k), column_total)
-                     z_bot_k = min(z_ref_global(nz - k + 1), column_total)
-                     dz_z = max(z_bot_k - z_top_k, 0.0_wp)
-                     target_h(i, j, k) = (1.0_wp - alpha)*dsig(k)*column_total &
-                                         + alpha*dz_z
-                     dz_sum = dz_sum + target_h(i, j, k)
-                  end do
-                  deficit = column_total - dz_sum
-                  target_h(i, j, 1) = target_h(i, j, 1) + deficit
-               end if
-            end do
+      case (VCOORD_EULERIAN_Z)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+            target_h(i, j, k) = total_h(i, j)*dsig(k)
+         end do
 
-         case (VCOORD_ZSTAR_SIGMA)
-            z_ref_nz_inv = 0.0_wp
-            if (z_ref_global(nz) > 0.0_wp) then
-               z_ref_nz_inv = 1.0_wp/z_ref_global(nz)
-            end if
-            do concurrent(j=1:ny_total, i=1:nx_total) &
-               local(column_total, alpha, x, k, dz_z)
-               column_total = total_h(i, j) + eta(i, j)
-               if (column_total <= zsigma_depth_transition .or. z_ref_nz_inv == 0.0_wp) then
-                  do k = 1, nz
-                     target_h(i, j, k) = dsig(k)*column_total
-                  end do
-               else
-                  if (zsigma_blend_width > 0.0_wp) then
-                     x = (column_total - zsigma_depth_transition)/zsigma_blend_width
-                     x = max(0.0_wp, min(1.0_wp, x))
-                     alpha = x*x*(3.0_wp - 2.0_wp*x)
-                  else
-                     alpha = 1.0_wp
-                  end if
-                  do k = 1, nz
-                     dz_z = (z_ref_global(nz - k + 1) - z_ref_global(nz - k)) &
-                            *column_total*z_ref_nz_inv
-                     target_h(i, j, k) = (1.0_wp - alpha)*dsig(k)*column_total &
-                                         + alpha*dz_z
-                  end do
-               end if
-            end do
+      case (VCOORD_SIGMA, VCOORD_ZSTAR)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+            column_total = total_h(i, j) + eta(i, j)
+            target_h(i, j, k) = column_total*dsig(k)
+         end do
 
-         case (VCOORD_ZSTAR_FULL)
-            ! Per-column z*-full: walk the cached `z_ref(i, j, 0:nz)` from
-            ! `build_zref_full`.  Surface layer absorbs η when η ≥ 0;
-            ! bed-side layers vanish to `zstar_h_min` and the surface gets
-            ! trimmed for exact conservation when η < 0.  Mirrors
-            ! `vcoord_target_dz_column_zstar_full` (coastal) but emits
-            ! ROMS order (k=1 bed, k=nz surface) directly.
-            do concurrent(j=1:ny_total, i=1:nx_total) &
-               local(k, h_bed_ref, eta_loc, H_eff, z_upper, z_lower, sum_dz, deficit)
-               h_bed_ref = z_ref(i, j, nz)
-               eta_loc = (total_h(i, j) + eta(i, j)) - h_bed_ref
-               H_eff = max(total_h(i, j) + eta(i, j), 0.0_wp)
-               if (h_bed_ref <= 0.0_wp) then
-                  ! Degenerate column: emit a single vanishing-layer stack.
-                  do k = 1, nz
-                     target_h(i, j, k) = zstar_h_min
-                  end do
-               else if (eta_loc >= 0.0_wp) then
-                  ! Column at or above reference: subsurface = z_ref intervals,
-                  ! surface (k=nz) gets the +η.
-                  do k = 1, nz
-                     ! k_top = nz - k + 1 in the top-down z_ref convention.
-                     target_h(i, j, k) = max( &
-                                         z_ref(i, j, nz - k + 1) - z_ref(i, j, nz - k), &
-                                         0.0_wp)
-                  end do
-                  target_h(i, j, nz) = target_h(i, j, nz) + eta_loc
-               else
-                  ! Column shallower than reference (η < 0).  Walk top-down,
-                  ! clip layers to H_eff, vanish below.
-                  do k = 1, nz
-                     z_upper = z_ref(i, j, nz - k)
-                     z_lower = z_ref(i, j, nz - k + 1)
-                     if (z_lower <= H_eff) then
-                        target_h(i, j, k) = z_lower - z_upper
-                     else if (z_upper < H_eff) then
-                        target_h(i, j, k) = H_eff - z_upper
-                     else
-                        target_h(i, j, k) = zstar_h_min
-                     end if
-                  end do
-                  ! Surface trim: drop the vanishing-layer overhead from the
-                  ! surface to make sum = H exactly.  If the surface would
-                  ! itself fall below h_min, leave it at h_min and let the
-                  ! downstream dry-cell guards handle the deficit.
-                  sum_dz = 0.0_wp
-                  do k = 1, nz
-                     sum_dz = sum_dz + target_h(i, j, k)
-                  end do
-                  deficit = sum_dz - H_eff
-                  if (deficit > 0.0_wp) then
-                     if (target_h(i, j, nz) - deficit >= zstar_h_min) then
-                        target_h(i, j, nz) = target_h(i, j, nz) - deficit
-                     else
-                        target_h(i, j, nz) = zstar_h_min
-                     end if
-                  end if
-               end if
-            end do
-
-         case (VCOORD_Z_FIXED)
-            ! Fixed-z (quasi-geopotential) interfaces with vanishing
-            ! layers at BOTH ends: `h_min` fillers below the bed and —
-            ! under a rigid top (`z_top > 0`, an ice-shelf cavity) —
-            ! `h_min` fillers inside the ice, with a partial cell at each
-            ! live end.  See `ocean_vcoord_z_fixed_target`, which owns the
-            ! algorithm and is shared with the initial-thickness seed.
-            !
-            ! When `z_fixed_h_ref = 0` (knob unset) fall back to uniform
-            ! `(H + η) · dsig(k)` so tests that omit the knob still get
-            ! something sensible.
-            h_nominal = 0.0_wp
-            if (z_fixed_h_ref > 0.0_wp) then
-               h_nominal = z_fixed_h_ref/real(nz, wp)
-            end if
-            h_min = zstar_h_min
-            if (h_nominal <= 0.0_wp) then
-               ! Uniform-sigma fallback — keeps the path active when
-               ! the knob isn't set (matches sigma behaviour).
-               do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
-                  target_h(i, j, k) = (total_h(i, j) + eta(i, j))*dsig(k)
+      case (VCOORD_ZSIGMA)
+         ! Smoothstep blend: sigma in shallow, fixed z-levels in deep.
+         ! Mirrors `vcoord_target_dz_column` in `src/ALE/rdb_vcoord.F90`
+         ! but built directly on the 2D (H, η) fields.  The deep-branch
+         ! z-level intervals are clipped to the local column total so
+         ! sum_k target_h = H + η exactly even when the column is shallower
+         ! than the deepest reference interface; any residual deficit is
+         ! deposited in the bed-side layer (k=1) to preserve the sum.
+         do concurrent(j=1:ny, i=1:nx) &
+            local(column_total, alpha, x, k, z_top_k, z_bot_k, dz_z, dz_sum, deficit)
+            column_total = total_h(i, j) + eta(i, j)
+            if (column_total <= zsigma_depth_transition) then
+               do k = 1, nz
+                  target_h(i, j, k) = dsig(k)*column_total
                end do
             else
-               call ocean_vcoord_z_fixed_target(target_h, total_h, eta, this%z_top, &
-                                                nx_total, ny_total, nz, h_nominal, h_min)
+               if (zsigma_blend_width > 0.0_wp) then
+                  x = (column_total - zsigma_depth_transition)/zsigma_blend_width
+                  x = max(0.0_wp, min(1.0_wp, x))
+                  alpha = x*x*(3.0_wp - 2.0_wp*x)
+               else
+                  alpha = 1.0_wp
+               end if
+               dz_sum = 0.0_wp
+               do k = 1, nz
+                  z_top_k = min(z_ref_global(nz - k), column_total)
+                  z_bot_k = min(z_ref_global(nz - k + 1), column_total)
+                  dz_z = max(z_bot_k - z_top_k, 0.0_wp)
+                  target_h(i, j, k) = (1.0_wp - alpha)*dsig(k)*column_total &
+                                      + alpha*dz_z
+                  dz_sum = dz_sum + target_h(i, j, k)
+               end do
+               deficit = column_total - dz_sum
+               target_h(i, j, 1) = target_h(i, j, 1) + deficit
             end if
+         end do
 
-         case default
-            error stop "ocean_vcoord_compute_target_h: unknown coord_type."
-         end select
-      end associate
-   end subroutine ocean_vcoord_compute_target_h_impl
+      case (VCOORD_ZSTAR_SIGMA)
+         z_ref_nz_inv = 0.0_wp
+         if (z_ref_global(nz) > 0.0_wp) then
+            z_ref_nz_inv = 1.0_wp/z_ref_global(nz)
+         end if
+         do concurrent(j=1:ny, i=1:nx) &
+            local(column_total, alpha, x, k, dz_z)
+            column_total = total_h(i, j) + eta(i, j)
+            if (column_total <= zsigma_depth_transition .or. z_ref_nz_inv == 0.0_wp) then
+               do k = 1, nz
+                  target_h(i, j, k) = dsig(k)*column_total
+               end do
+            else
+               if (zsigma_blend_width > 0.0_wp) then
+                  x = (column_total - zsigma_depth_transition)/zsigma_blend_width
+                  x = max(0.0_wp, min(1.0_wp, x))
+                  alpha = x*x*(3.0_wp - 2.0_wp*x)
+               else
+                  alpha = 1.0_wp
+               end if
+               do k = 1, nz
+                  dz_z = (z_ref_global(nz - k + 1) - z_ref_global(nz - k)) &
+                         *column_total*z_ref_nz_inv
+                  target_h(i, j, k) = (1.0_wp - alpha)*dsig(k)*column_total &
+                                      + alpha*dz_z
+               end do
+            end if
+         end do
+
+      case (VCOORD_ZSTAR_FULL)
+         ! Per-column z*-full: walk the cached `z_ref(i, j, 0:nz)` from
+         ! `build_zref_full`.  Surface layer absorbs η when η ≥ 0;
+         ! bed-side layers vanish to `zstar_h_min` and the surface gets
+         ! trimmed for exact conservation when η < 0.  Mirrors
+         ! `vcoord_target_dz_column_zstar_full` (coastal) but emits
+         ! ROMS order (k=1 bed, k=nz surface) directly.
+         do concurrent(j=1:ny, i=1:nx) &
+            local(k, h_bed_ref, eta_loc, H_eff, z_upper, z_lower, sum_dz, deficit)
+            h_bed_ref = z_ref(i, j, nz)
+            eta_loc = (total_h(i, j) + eta(i, j)) - h_bed_ref
+            H_eff = max(total_h(i, j) + eta(i, j), 0.0_wp)
+            if (h_bed_ref <= 0.0_wp) then
+               ! Degenerate column: emit a single vanishing-layer stack.
+               do k = 1, nz
+                  target_h(i, j, k) = zstar_h_min
+               end do
+            else if (eta_loc >= 0.0_wp) then
+               ! Column at or above reference: subsurface = z_ref intervals,
+               ! surface (k=nz) gets the +η.
+               do k = 1, nz
+                  ! k_top = nz - k + 1 in the top-down z_ref convention.
+                  target_h(i, j, k) = max( &
+                                      z_ref(i, j, nz - k + 1) - z_ref(i, j, nz - k), &
+                                      0.0_wp)
+               end do
+               target_h(i, j, nz) = target_h(i, j, nz) + eta_loc
+            else
+               ! Column shallower than reference (η < 0).  Walk top-down,
+               ! clip layers to H_eff, vanish below.
+               do k = 1, nz
+                  z_upper = z_ref(i, j, nz - k)
+                  z_lower = z_ref(i, j, nz - k + 1)
+                  if (z_lower <= H_eff) then
+                     target_h(i, j, k) = z_lower - z_upper
+                  else if (z_upper < H_eff) then
+                     target_h(i, j, k) = H_eff - z_upper
+                  else
+                     target_h(i, j, k) = zstar_h_min
+                  end if
+               end do
+               ! Surface trim: drop the vanishing-layer overhead from the
+               ! surface to make sum = H exactly.  If the surface would
+               ! itself fall below h_min, leave it at h_min and let the
+               ! downstream dry-cell guards handle the deficit.
+               sum_dz = 0.0_wp
+               do k = 1, nz
+                  sum_dz = sum_dz + target_h(i, j, k)
+               end do
+               deficit = sum_dz - H_eff
+               if (deficit > 0.0_wp) then
+                  if (target_h(i, j, nz) - deficit >= zstar_h_min) then
+                     target_h(i, j, nz) = target_h(i, j, nz) - deficit
+                  else
+                     target_h(i, j, nz) = zstar_h_min
+                  end if
+               end if
+            end if
+         end do
+
+      case default
+         error stop "ocean_vcoord_geometric_target: unknown coord_type."
+      end select
+
+   end subroutine ocean_vcoord_geometric_target
 
    pure subroutine ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, &
                                                nx, ny, nz, h_nominal, h_min)
@@ -1378,9 +1418,15 @@ contains
       !!        interface + uses the debit-thickest inflation instead).
       !! `hybrid = .false.` (the `VCOORD_RHO` path) skips BOTH deltas and
       !! is bit-identical to the P2 kernel.
+      !!
+      !! Host dispatcher: resolves the scalar knobs and hands every
+      !! component to the flat `ocean_vcoord_rho_target` kernel as an
+      !! explicit-shape / scalar dummy, so no `this%` reference and no
+      !! `associate`-name reaches the `do concurrent` (see that kernel's
+      !! docstring for why that is load-bearing on the GPU build).
       type(ocean_vcoord_t), intent(inout) :: this
-      ! assumed-shape-ok: cadence-bounded (once per outer ALE step); the per-
-      ! column inversion below uses fixed-size NZ_STACK_MAX locals only.
+      ! assumed-shape-ok: cadence-bounded (once per outer ALE step); forwarded
+      ! to the explicit-shape kernel below, which is where the loop runs.
       real(wp), intent(in) :: total_h(:, :)
          !! Column reference depth H(i, j) (m).  Caller passes the live
          !! column total (sum of h_layer) so the new grid spans it exactly.
@@ -1396,20 +1442,9 @@ contains
       logical, intent(in) :: hybrid
          !! `.true.` = HYCOM (apply the monotonize + z*-floor deltas);
          !! `.false.` = pure RHO (bit-identical with the P2 kernel).
-
-      integer :: i, j, nz
-      integer :: k, kk, nk, ns, idx_thick, src, ii
-      integer :: mapping(NZ_STACK_MAX)
-      real(wp) :: h_col(NZ_STACK_MAX), t_col(NZ_STACK_MAX), s_col(NZ_STACK_MAX)
-      real(wp) :: hc(NZ_STACK_MAX), rhoc(NZ_STACK_MAX), rtgt(NZ_STACK_MAX)
-      real(wp) :: z_new(NZ_STACK_MAX + 1), h_new(NZ_STACK_MAX)
-      real(wp) :: col_extent, h_floor_eff, h_min, donate
-      real(wp) :: total_need, thick_max
-      real(wp) :: nominal_z, stretching, h_ref_col
+      real(wp) :: h_floor_eff
 
       if (.not. this%is_init) return
-      nz = this%nz_ml
-      h_min = this%zstar_h_min
       ! Inflation floor must be STRICTLY above H_VANISHED: the remap drain
       ! (`ocean_remap_tracer_field`) gates on `h_old > H_FLOOR` (== H_VANISHED)
       ! with a strict `>`, so a layer sitting exactly at H_VANISHED has its
@@ -1417,172 +1452,291 @@ contains
       ! on the next regrid.  Floor at 2·H_VANISHED so inflated layers always
       ! survive the drain (closes the multi-regrid mass-loss footgun).
       h_floor_eff = max(this%zstar_h_min, 2.0_wp*H_VANISHED)
+      call ocean_vcoord_rho_target(this%nx_total, this%ny_total, this%nz_ml, &
+                                   this%target_h, this%remap_h_old, total_h, eta, &
+                                   T, S, this%dsig, this%rho_target, eos, &
+                                   this%rho_ref_pressure, this%zstar_h_min, &
+                                   h_floor_eff, hybrid)
+   end subroutine ocean_vcoord_compute_target_h_rho_impl
+
+   pure subroutine ocean_vcoord_rho_target(nx, ny, nz, target_h, remap_h_old, &
+                                           total_h, eta, t_conc, s_conc, dsig, &
+                                           rho_target, eos, p_ref, h_min, &
+                                           h_floor_eff, hybrid)
+      !! Column kernel of the RHO / HYCOM regrid (algorithm: see
+      !! `ocean_vcoord_compute_target_h_rho_impl`).  Flat on purpose:
+      !! every array is an explicit-shape dummy and every knob a scalar
+      !! dummy — no derived-type component and no `associate` reaches the
+      !! `do concurrent`.
+      !!
+      !! This is load-bearing on nvfortran `-stdpar=gpu -gpu=mem:separate`.
+      !! The kernel used to run inside `associate (rho_ref_pressure =>
+      !! this%rho_ref_pressure, ...)` and hand that name BY REFERENCE to the
+      !! out-of-module `!$acc routine seq` `eos_density_point`; the device
+      !! callee received the HOST address of the component and faulted
+      !! (`CUDA_ERROR_ILLEGAL_ADDRESS`, compute-sanitizer: invalid
+      !! `__global__` read at `rdb_eos.F90` `p_plus_p0 = p + p_0`) on the
+      !! first regrid of every RHO/HYCOM × Wright (or Roquet) run.  The
+      !! linear branch never reads `p`, which is why it hid.  Gated by
+      !! `tests/test_ocean_vcoord_wright_device.F90`.  It also retires the
+      !! `associate`-over-`do concurrent` shape CLAUDE.md forbids for ifx.
+      integer, intent(in), value :: nx
+         !! i-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: ny
+         !! j-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the surface.
+      real(wp), intent(inout) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m), bottom-up.
+      real(wp), intent(in) :: remap_h_old(nx, ny, nz)
+         !! Pre-remap layer thickness snapshot (m), bottom-up.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference depth H (m).
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly η (m).
+      real(wp), intent(in) :: t_conc(nx, ny, nz)
+         !! Layer-mean potential temperature (°C), bottom-up.
+      real(wp), intent(in) :: s_conc(nx, ny, nz)
+         !! Layer-mean salinity (PSU), bottom-up.
+      real(wp), intent(in) :: dsig(nz)
+         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface).
+      real(wp), intent(in) :: rho_target(0:nz)
+         !! Target potential densities (kg/m³), `0` = lightest = surface.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle (flat POD).
+      real(wp), intent(in), value :: p_ref
+         !! Coordinate reference pressure (Pa) — `rho_ref_pressure`.
+      real(wp), intent(in), value :: h_min
+         !! Pre-compaction strip threshold (m) — `zstar_h_min`.
+      real(wp), intent(in), value :: h_floor_eff
+         !! Min-thickness inflation floor (m), `> H_VANISHED`.
+      logical, intent(in), value :: hybrid
+         !! `.true.` = HYCOM deltas; `.false.` = pure RHO.
+
+      integer :: i, j
+
+      ! One column per thread: the whole column walk is the same-module
+      ! `!$acc routine seq` `ocean_vcoord_rho_target_column`, so its
+      ! NZ_STACK_MAX work arrays are thread-private and no inner loop is
+      ! spread across threads.  (Inlined, nvfortran 26.5 auto-collapsed the
+      ! (j,i) nest, promoted the work arrays AND `nk` to shared memory and
+      ! vectorised the inner loops with shared-memory reductions whose
+      ! scratch fell outside the kernel's shared allocation —
+      ! compute-sanitizer: invalid `__shared__` write in the `donate`
+      ! reduction, every RHO/HYCOM run, both EOS.)
+      do concurrent(j=1:ny, i=1:nx)
+         call ocean_vcoord_rho_target_column(i, j, nx, ny, nz, target_h, remap_h_old, &
+                                             total_h, eta, t_conc, s_conc, dsig, &
+                                             rho_target, eos, p_ref, h_min, &
+                                             h_floor_eff, hybrid)
+      end do
+   end subroutine ocean_vcoord_rho_target
+
+   pure subroutine ocean_vcoord_rho_target_column(i, j, nx, ny, nz, target_h, remap_h_old, &
+                                                  total_h, eta, t_conc, s_conc, dsig, &
+                                                  rho_target, eos, p_ref, h_min, &
+                                                  h_floor_eff, hybrid)
+      !! One column of the RHO / HYCOM regrid (steps 0-5 of
+      !! `ocean_vcoord_compute_target_h_rho_impl`) — the per-thread body of
+      !! `ocean_vcoord_rho_target`.  Same module as its caller (the
+      !! project rule for `!$acc routine seq` callees of a `do concurrent`).
+      !$acc routine seq
+      integer, intent(in), value :: i
+         !! Column i-index.
+      integer, intent(in), value :: j
+         !! Column j-index.
+      integer, intent(in), value :: nx
+         !! i-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: ny
+         !! j-extent of every horizontal array (total, incl. halos).
+      integer, intent(in), value :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the surface.
+      real(wp), intent(inout) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m), bottom-up.
+      real(wp), intent(in) :: remap_h_old(nx, ny, nz)
+         !! Pre-remap layer thickness snapshot (m), bottom-up.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference depth H (m).
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly η (m).
+      real(wp), intent(in) :: t_conc(nx, ny, nz)
+         !! Layer-mean potential temperature (°C), bottom-up.
+      real(wp), intent(in) :: s_conc(nx, ny, nz)
+         !! Layer-mean salinity (PSU), bottom-up.
+      real(wp), intent(in) :: dsig(nz)
+         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface).
+      real(wp), intent(in) :: rho_target(0:nz)
+         !! Target potential densities (kg/m³), `0` = lightest = surface.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle (flat POD).
+      real(wp), intent(in), value :: p_ref
+         !! Coordinate reference pressure (Pa) — `rho_ref_pressure`.
+      real(wp), intent(in), value :: h_min
+         !! Pre-compaction strip threshold (m) — `zstar_h_min`.
+      real(wp), intent(in), value :: h_floor_eff
+         !! Min-thickness inflation floor (m), `> H_VANISHED`.
+      logical, intent(in), value :: hybrid
+         !! `.true.` = HYCOM deltas; `.false.` = pure RHO.
+
+      integer :: k, kk, nk, ns, idx_thick, src, ii
+      integer :: mapping(NZ_STACK_MAX)
+      real(wp) :: h_col(NZ_STACK_MAX), t_col(NZ_STACK_MAX), s_col(NZ_STACK_MAX)
+      real(wp) :: hc(NZ_STACK_MAX), rhoc(NZ_STACK_MAX), rtgt(NZ_STACK_MAX)
+      real(wp) :: z_new(NZ_STACK_MAX + 1), h_new(NZ_STACK_MAX)
+      real(wp) :: col_extent, donate
+      real(wp) :: total_need, thick_max
+      real(wp) :: nominal_z, stretching, h_ref_col
 
       ! One column per (j,i).  NZ_STACK_MAX fixed-size locals; no name
       ! shadows a Fortran intrinsic; cross-module pure EOS helper carries
       ! its own `!$acc routine seq`.
-      ! associate the components the kernel touches to plain names — ifx's
-      ! do-concurrent -> OpenMP-target lowering ICEs on a `this%<component>`
-      ! reference inside the loop body (see compute_target_h_impl above).
-      associate (target_h => this%target_h, dsig => this%dsig, &
-                 rho_target => this%rho_target, remap_h_old => this%remap_h_old, &
-                 rho_ref_pressure => this%rho_ref_pressure, &
-                 nx_total => this%nx_total, ny_total => this%ny_total)
-      do concurrent(j=1:ny_total, i=1:nx_total) &
-         local(k, kk, ii, nk, ns, idx_thick, src, mapping, &
-               h_col, t_col, s_col, hc, rhoc, rtgt, &
-               z_new, h_new, col_extent, donate, &
-               total_need, thick_max, nominal_z, stretching, h_ref_col)
 
-         ! --- gather TOP-DOWN: working index 1 = surface = state k=nz ---
-         ! Source thicknesses come from the remap snapshot the
-         ! orchestrator placed in `remap_h_old` (the live, pre-remap
-         ! `h_layer`); T/S are the layer-mean concentrations.  Flip the
-         ! bottom-up state index (k=nz surface) into the top-down work
-         ! frame (work index 1 = surface).
-         col_extent = max(total_h(i, j) + eta(i, j), 0.0_wp)
-         do k = 1, nz
-            ii = nz - k + 1                 ! state (bottom-up) index
-            h_col(k) = remap_h_old(i, j, ii)
-            t_col(k) = T(i, j, ii)
-            s_col(k) = S(i, j, ii)
-         end do
-
-         ! --- step 0: pre-compaction (strip h <= h_min, donate) ---
-         nk = 0
-         do k = 1, nz
-            if (h_col(k) > h_min) then
-               nk = nk + 1
-               mapping(nk) = k
-               hc(nk) = h_col(k)
-            end if
-         end do
-         if (nk <= 1) then
-            ! Fast path: <= 1 finite layer.  nz == nk_state here, so
-            ! keep the source thicknesses unchanged (h_new = h_old),
-            ! flipped back into the bottom-up state.
-            do k = 1, nz
-               target_h(i, j, k) = remap_h_old(i, j, k)
-            end do
-            cycle
-         end if
-
-         ! Donate the stripped volume to the thickest survivor.
-         donate = col_extent
-         do kk = 1, nk
-            donate = donate - hc(kk)
-         end do
-         if (donate > 0.0_wp) then
-            idx_thick = 1
-            do kk = 2, nk
-               if (hc(kk) > hc(idx_thick)) idx_thick = kk
-            end do
-            hc(idx_thick) = hc(idx_thick) + donate
-         end if
-
-         ! --- step 1: layer potential densities on the compacted column ---
-         do kk = 1, nk
-            src = mapping(kk)
-            rhoc(kk) = eos_density_point(eos, t_col(src), s_col(src), &
-                                         rho_ref_pressure)
-         end do
-
-         ! --- step 1b (HYCOM only): bottom-up density monotonize ---
-         ! Work frame is top-down (index 1 = surface, nk = bed): cap each
-         ! cell by the one below it sweeping bed-up so density is
-         ! non-decreasing downward.  Pure RHO (hybrid=.false.) skips this
-         ! and stays bit-identical to the merged RHO regrid.
-         if (hybrid) then
-            do kk = nk - 1, 1, -1
-               rhoc(kk) = min(rhoc(kk), rhoc(kk + 1))
-            end do
-         end if
-
-         ! --- steps 2-4: PPM reconstruct + invert each interior target
-         !     density to an interface depth + monotone interfaces.  Shared
-         !     density-space inversion (also used by the DENSITY diagnostic
-         !     remap, `rdb_ocean_diag_fills`) — single source of truth for
-         !     the bracket + fixed-iter-Newton solve.  Copy the interior
-         !     targets into a stack array so the device call passes a whole
-         !     fixed-size local (no derived-type section descriptor in the
-         !     hot per-column kernel).  For HYCOM the rhoc fed in was
-         !     monotonized above; the z* floor below then lifts the result.
-         do kk = 1, nz - 1
-            rtgt(kk) = rho_target(kk)
-         end do
-         call invert_density_targets(nk, hc, rhoc, nz - 1, rtgt, z_new)
-
-         ! --- step 4b (HYCOM only): z* nominal-floor sweep ---
-         ! Surface-side minimum-depth floor on the isopycnal interfaces.
-         ! Walk interfaces from the surface down, accumulating the nominal
-         ! z* depth and pushing any too-shallow interface DOWN to it
-         ! (clamped to the column bottom); deep interfaces already below the
-         ! floor are untouched.  stretching = col_extent/total_h (the
-         ! SSH-following z* stretch); the accumulation is
-         ! dsig*total_h*stretching (= dsig*col_extent), and dsig sums to 1.
-         ! dsig is stored bottom-up (dsig(nz) = surface layer); the work
-         ! layer above interface kk maps to bottom-up dsig index nz-kk+2.
-         ! The floor can break monotonicity, so re-monotonize after it.
-         ! Pure RHO (hybrid=.false.) skips this and is bit-identical.
-         if (hybrid) then
-            h_ref_col = total_h(i, j)
-            if (h_ref_col > 0.0_wp) then
-               stretching = col_extent/h_ref_col
-            else
-               stretching = 1.0_wp
-            end if
-            nominal_z = 0.0_wp
-            do kk = 2, nz + 1
-               nominal_z = nominal_z + dsig(nz - kk + 2)*h_ref_col*stretching
-               if (z_new(kk) < nominal_z) z_new(kk) = nominal_z
-               if (z_new(kk) > col_extent) z_new(kk) = col_extent
-            end do
-            do kk = 2, nz + 1
-               if (z_new(kk) < z_new(kk - 1)) z_new(kk) = z_new(kk - 1)
-            end do
-         end if
-         do kk = 1, nz
-            h_new(kk) = z_new(kk + 1) - z_new(kk)
-         end do
-
-         ! --- step 5: MOM6 min-thickness inflation (floor h_floor_eff) ---
-         ns = 0
-         do kk = 1, nz
-            if (h_new(kk) > h_floor_eff) ns = ns + 1
-         end do
-         if (ns == nz) then
-            ! all OK
-         else if (ns == 0) then
-            do kk = 1, nz
-               h_new(kk) = h_floor_eff
-            end do
-         else
-            total_need = 0.0_wp
-            do kk = 1, nz
-               if (h_new(kk) <= h_floor_eff) then
-                  total_need = total_need + (h_floor_eff - h_new(kk))
-                  h_new(kk) = h_floor_eff
-               end if
-            end do
-            ! debit the single thickest layer once
-            idx_thick = 1
-            thick_max = h_new(1)
-            do kk = 2, nz
-               if (h_new(kk) > thick_max) then
-                  thick_max = h_new(kk)
-                  idx_thick = kk
-               end if
-            end do
-            h_new(idx_thick) = h_new(idx_thick) - total_need
-         end if
-
-         ! --- assignment: FLIP top-down working -> bottom-up state ---
-         do k = 1, nz
-            target_h(i, j, k) = h_new(nz - k + 1)
-         end do
+      ! --- gather TOP-DOWN: working index 1 = surface = state k=nz ---
+      ! Source thicknesses come from the remap snapshot the
+      ! orchestrator placed in `remap_h_old` (the live, pre-remap
+      ! `h_layer`); T/S are the layer-mean concentrations.  Flip the
+      ! bottom-up state index (k=nz surface) into the top-down work
+      ! frame (work index 1 = surface).
+      col_extent = max(total_h(i, j) + eta(i, j), 0.0_wp)
+      do k = 1, nz
+         ii = nz - k + 1                 ! state (bottom-up) index
+         h_col(k) = remap_h_old(i, j, ii)
+         t_col(k) = t_conc(i, j, ii)
+         s_col(k) = s_conc(i, j, ii)
       end do
-      end associate
-   end subroutine ocean_vcoord_compute_target_h_rho_impl
+
+      ! --- step 0: pre-compaction (strip h <= h_min, donate) ---
+      nk = 0
+      do k = 1, nz
+         if (h_col(k) > h_min) then
+            nk = nk + 1
+            mapping(nk) = k
+            hc(nk) = h_col(k)
+         end if
+      end do
+      if (nk <= 1) then
+         ! Fast path: <= 1 finite layer.  nz == nk_state here, so
+         ! keep the source thicknesses unchanged (h_new = h_old),
+         ! flipped back into the bottom-up state.
+         do k = 1, nz
+            target_h(i, j, k) = remap_h_old(i, j, k)
+         end do
+         return
+      end if
+
+      ! Donate the stripped volume to the thickest survivor.
+      donate = col_extent
+      do kk = 1, nk
+         donate = donate - hc(kk)
+      end do
+      if (donate > 0.0_wp) then
+         idx_thick = 1
+         do kk = 2, nk
+            if (hc(kk) > hc(idx_thick)) idx_thick = kk
+         end do
+         hc(idx_thick) = hc(idx_thick) + donate
+      end if
+
+      ! --- step 1: layer potential densities on the compacted column ---
+      do kk = 1, nk
+         src = mapping(kk)
+         rhoc(kk) = eos_density_point(eos, t_col(src), s_col(src), p_ref)
+      end do
+
+      ! --- step 1b (HYCOM only): bottom-up density monotonize ---
+      ! Work frame is top-down (index 1 = surface, nk = bed): cap each
+      ! cell by the one below it sweeping bed-up so density is
+      ! non-decreasing downward.  Pure RHO (hybrid=.false.) skips this
+      ! and stays bit-identical to the merged RHO regrid.
+      if (hybrid) then
+         do kk = nk - 1, 1, -1
+            rhoc(kk) = min(rhoc(kk), rhoc(kk + 1))
+         end do
+      end if
+
+      ! --- steps 2-4: PPM reconstruct + invert each interior target
+      !     density to an interface depth + monotone interfaces.  Shared
+      !     density-space inversion (also used by the DENSITY diagnostic
+      !     remap, `rdb_ocean_diag_fills`) — single source of truth for
+      !     the bracket + fixed-iter-Newton solve.  Copy the interior
+      !     targets into a stack array so the device call passes a whole
+      !     fixed-size local (no derived-type section descriptor in the
+      !     hot per-column kernel).  For HYCOM the rhoc fed in was
+      !     monotonized above; the z* floor below then lifts the result.
+      do kk = 1, nz - 1
+         rtgt(kk) = rho_target(kk)
+      end do
+      call invert_density_targets(nk, hc, rhoc, nz - 1, rtgt, z_new)
+
+      ! --- step 4b (HYCOM only): z* nominal-floor sweep ---
+      ! Surface-side minimum-depth floor on the isopycnal interfaces.
+      ! Walk interfaces from the surface down, accumulating the nominal
+      ! z* depth and pushing any too-shallow interface DOWN to it
+      ! (clamped to the column bottom); deep interfaces already below the
+      ! floor are untouched.  stretching = col_extent/total_h (the
+      ! SSH-following z* stretch); the accumulation is
+      ! dsig*total_h*stretching (= dsig*col_extent), and dsig sums to 1.
+      ! dsig is stored bottom-up (dsig(nz) = surface layer); the work
+      ! layer above interface kk maps to bottom-up dsig index nz-kk+2.
+      ! The floor can break monotonicity, so re-monotonize after it.
+      ! Pure RHO (hybrid=.false.) skips this and is bit-identical.
+      if (hybrid) then
+         h_ref_col = total_h(i, j)
+         if (h_ref_col > 0.0_wp) then
+            stretching = col_extent/h_ref_col
+         else
+            stretching = 1.0_wp
+         end if
+         nominal_z = 0.0_wp
+         do kk = 2, nz + 1
+            nominal_z = nominal_z + dsig(nz - kk + 2)*h_ref_col*stretching
+            if (z_new(kk) < nominal_z) z_new(kk) = nominal_z
+            if (z_new(kk) > col_extent) z_new(kk) = col_extent
+         end do
+         do kk = 2, nz + 1
+            if (z_new(kk) < z_new(kk - 1)) z_new(kk) = z_new(kk - 1)
+         end do
+      end if
+      do kk = 1, nz
+         h_new(kk) = z_new(kk + 1) - z_new(kk)
+      end do
+
+      ! --- step 5: MOM6 min-thickness inflation (floor h_floor_eff) ---
+      ns = 0
+      do kk = 1, nz
+         if (h_new(kk) > h_floor_eff) ns = ns + 1
+      end do
+      if (ns == nz) then
+         ! all OK
+      else if (ns == 0) then
+         do kk = 1, nz
+            h_new(kk) = h_floor_eff
+         end do
+      else
+         total_need = 0.0_wp
+         do kk = 1, nz
+            if (h_new(kk) <= h_floor_eff) then
+               total_need = total_need + (h_floor_eff - h_new(kk))
+               h_new(kk) = h_floor_eff
+            end if
+         end do
+         ! debit the single thickest layer once
+         idx_thick = 1
+         thick_max = h_new(1)
+         do kk = 2, nz
+            if (h_new(kk) > thick_max) then
+               thick_max = h_new(kk)
+               idx_thick = kk
+            end if
+         end do
+         h_new(idx_thick) = h_new(idx_thick) - total_need
+      end if
+
+      ! --- assignment: FLIP top-down working -> bottom-up state ---
+      do k = 1, nz
+         target_h(i, j, k) = h_new(nz - k + 1)
+      end do
+   end subroutine ocean_vcoord_rho_target_column
 
    pure function parse_ocean_vcoord_type(name) result(code)
       !! Ocean-path wrapper around the canonical `parse_vcoord_type`
