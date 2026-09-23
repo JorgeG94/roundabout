@@ -207,6 +207,25 @@ module rdb_continuity
          !! its positivity via `ppm_limit_pos` + the BT limiter and ran
          !! validated on the single-step form, so it keeps it
          !! (bit-identical there).
+      logical :: renorm_consistent_flux = .false.
+         !! `&ocean_continuity_nml renorm_consistent_flux`.  When `.true.`
+         !! the `uhbt`/`vhbt` renormalisation evaluates a layer whose upwind
+         !! donor FLIPS under the correction as `(u0 + du)·h_face(new
+         !! donor)`, i.e. as the flux of its corrected velocity, and
+         !! brackets the Newton solve with bisection (MOM6
+         !! `zonal_flux_adjust`).  The historical model
+         !! `flux0 + du·h_face(new donor)` keeps the OLD donor's `u0·h_old`
+         !! and is DISCONTINUOUS at the flip, by `u0·(h_new − h_old)·w`:
+         !! whenever `uhbt` falls in that gap (a face where the corrected
+         !! velocity must change sign across a thickness jump — a sigma
+         !! layer over a bathymetric step, where `h_old ≠ h_new` after the
+         !! PPM limiter flattens both edges), Newton has NO root, cycles
+         !! for `RENORM_MAXIT` iterations and hands continuity a layer
+         !! transport of the wrong SIGN.  The layer `η` then departs from
+         !! the barotropic `η_end` by O(η) at the step every such step —
+         !! a spurious η dipole that pumps the (undamped) barotropic
+         !! grid-scale mode.  Default `.false.` ⇒ bit-identical; with it
+         !! on, faces where no donor flips are also bit-identical.
       logical :: use_ppm_limit_pos = .false.
          !! MOM6 `PPM_limit_pos` analogue.  When `.true.`, the PPM
          !! face-thickness reconstruction in continuity adds a
@@ -444,6 +463,11 @@ module rdb_continuity
       !! sliver case here.
    real(wp), parameter :: RENORM_TOL = 1.0e-12_wp
       !! Relative convergence tolerance on `|uhbt - Sum_k uh_k|`.
+   integer, parameter :: RENORM_MAXIT_CONSISTENT = 20
+      !! Iteration cap when `renorm_consistent_flux` is on (MOM6
+      !! `zonal_flux_adjust` also allows 20).  Newton lands on a
+      !! single-kink root in <= 3 iterations; the head-room is for the
+      !! bisection fallback on a many-layer face with several donor flips.
 
 contains
 
@@ -1452,6 +1476,9 @@ contains
       real(wp) :: u, h_face, sum_flux, sum_h, du, target, w, wk
       real(wp) :: flux0(NZ_STACK_MAX), u0(NZ_STACK_MAX)
       real(wp) :: u_lim, du_hi, du_lo, vr_k, du_k
+      real(wp) :: b_lo, b_hi, du_new
+      integer :: maxit
+      logical :: consistent
       logical :: skip_w, has_w, has_e, use_vr, upd_u
 
       nx = grid%nx_total
@@ -1470,13 +1497,16 @@ contains
       ! mode `apply_bt_correction` owns the gamma-weighted Delta-u and this routine
       ! must stay the unweighted flux-only renormaliser — so both are off.
       use_vr = present(visc_rem) .and. upd_u
+      consistent = this%renorm_consistent_flux
+      maxit = RENORM_MAXIT
+      if (consistent) maxit = RENORM_MAXIT_CONSISTENT
 
       ! Skip the array-edge faces (i=1, i=nx+1) and, unless skip_walls
       ! is false (periodic) or the edge is an MPI seam (has_* false),
       ! the two physical walls.
       do concurrent(j=1:ny, i=2:nx) &
          local(k, iter, u, h_face, sum_flux, sum_h, du, target, w, wk, flux0, u0, &
-               u_lim, du_hi, du_lo, vr_k, du_k)
+               u_lim, du_hi, du_lo, vr_k, du_k, b_lo, b_hi, du_new)
          ! Bypass physical walls when requested (mass_flux already 0 there
          ! for wall BCs; for periodic, real transport is present).
          if (skip_w .and. &
@@ -1570,7 +1600,9 @@ contains
          ! FP contraction — is unchanged: bit-identical by construction.
          du = 0.0_wp
          sum_h = 0.0_wp
-         do iter = 1, RENORM_MAXIT
+         b_lo = -huge(1.0_wp)
+         b_hi = huge(1.0_wp)
+         do iter = 1, maxit
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
@@ -1584,7 +1616,17 @@ contains
                else
                   h_face = this%h_face_right_x%data(i, j, k)
                end if
-               sum_flux = sum_flux + (flux0(k) + du_k*h_face*wk)
+               ! `consistent`: a layer whose donor FLIPPED under the
+               ! correction carries the flux of its corrected velocity
+               ! through its NEW donor, `(u0+du_k)·h_face·wk` — continuous
+               ! (→ 0 from both sides) where the historical
+               ! `flux0 + du_k·h_face` jumps by `u0·(h_new − h_old)·wk`.
+               ! Unflipped layers keep the historical expression.
+               if (consistent .and. ((u0(k) + du_k >= 0.0_wp) .neqv. (u0(k) >= 0.0_wp))) then
+                  sum_flux = sum_flux + (u0(k) + du_k)*h_face*wk
+               else
+                  sum_flux = sum_flux + (flux0(k) + du_k*h_face*wk)
+               end if
                if (use_vr) then
                   sum_h = sum_h + visc_rem(i, j, k)*h_face*wk
                else
@@ -1593,7 +1635,23 @@ contains
             end do
             if (sum_h <= 0.0_wp) exit
             if (abs(target - sum_flux) <= RENORM_TOL*max(1.0_wp, abs(target))) exit
-            du = min(max(du + (target - sum_flux)/sum_h, du_lo), du_hi)
+            if (consistent) then
+               ! Monotone, continuous F(du): keep a bracket around the root
+               ! and bisect whenever the Newton step leaves it (MOM6
+               ! `zonal_flux_adjust`: Newton + bisection).
+               if (sum_flux < target) then
+                  b_lo = max(b_lo, du)
+               else
+                  b_hi = min(b_hi, du)
+               end if
+               du_new = du + (target - sum_flux)/sum_h
+               if (du_new <= b_lo .or. du_new >= b_hi) then
+                  if (b_lo > -huge(1.0_wp) .and. b_hi < huge(1.0_wp)) du_new = 0.5_wp*(b_lo + b_hi)
+               end if
+               du = min(max(du_new, du_lo), du_hi)
+            else
+               du = min(max(du + (target - sum_flux)/sum_h, du_lo), du_hi)
+            end if
          end do
          if (sum_h > 0.0_wp) then
             do k = 1, nz
@@ -1607,7 +1665,11 @@ contains
                else
                   h_face = this%h_face_right_x%data(i, j, k)
                end if
-               ms%mass_flux_x_layer(i, j, k) = flux0(k) + du_k*h_face*wk
+               if (consistent .and. ((u0(k) + du_k >= 0.0_wp) .neqv. (u0(k) >= 0.0_wp))) then
+                  ms%mass_flux_x_layer(i, j, k) = (u0(k) + du_k)*h_face*wk
+               else
+                  ms%mass_flux_x_layer(i, j, k) = flux0(k) + du_k*h_face*wk
+               end if
                ! MOM6 `u_cor(I,j,k) = u(I,j,k) + du(I)*visc_rem(I,k)`.
                ! Writing this makes the renormalisation the SOLE barotropic
                ! correction; without it the velocity and the flux carry
@@ -1890,6 +1952,9 @@ contains
       real(wp) :: v, h_face, sum_flux, sum_h, dv, target, w, wk
       real(wp) :: flux0(NZ_STACK_MAX), v0(NZ_STACK_MAX)
       real(wp) :: v_lim, dv_hi, dv_lo, vr_k, dv_k
+      real(wp) :: b_lo, b_hi, dv_new
+      integer :: maxit
+      logical :: consistent
       logical :: skip_w, has_s, has_n, use_vr, upd_v
 
       nx = grid%nx_total
@@ -1904,10 +1969,13 @@ contains
       upd_v = present(v_cor)
       ! See the zonal twin: gamma-weighting and v_cor act together.
       use_vr = present(visc_rem) .and. upd_v
+      consistent = this%renorm_consistent_flux
+      maxit = RENORM_MAXIT
+      if (consistent) maxit = RENORM_MAXIT_CONSISTENT
 
       do concurrent(j=2:ny, i=1:nx) &
          local(k, iter, v, h_face, sum_flux, sum_h, dv, target, w, wk, flux0, v0, v_lim, dv_hi, dv_lo, &
-               vr_k, dv_k)
+               vr_k, dv_k, b_lo, b_hi, dv_new)
          if (skip_w .and. &
              ((j == grid%nghost + 1 .and. has_s) .or. &
               (j == grid%nghost + grid%ny_phys + 1 .and. has_n))) cycle
@@ -1974,7 +2042,9 @@ contains
          ! RENORM_MAXIT docstring; mirror of the zonal routine).
          dv = 0.0_wp
          sum_h = 0.0_wp
-         do iter = 1, RENORM_MAXIT
+         b_lo = -huge(1.0_wp)
+         b_hi = huge(1.0_wp)
+         do iter = 1, maxit
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
@@ -1988,7 +2058,17 @@ contains
                else
                   h_face = this%h_face_right_y%data(i, j, k)
                end if
-               sum_flux = sum_flux + (flux0(k) + dv_k*h_face*wk)
+               ! `consistent`: a layer whose donor FLIPPED under the
+               ! correction carries the flux of its corrected velocity
+               ! through its NEW donor, `(v0+dv_k)·h_face·wk` — continuous
+               ! (→ 0 from both sides) where the historical
+               ! `flux0 + dv_k·h_face` jumps by `v0·(h_new − h_old)·wk`.
+               ! Unflipped layers keep the historical expression.
+               if (consistent .and. ((v0(k) + dv_k >= 0.0_wp) .neqv. (v0(k) >= 0.0_wp))) then
+                  sum_flux = sum_flux + (v0(k) + dv_k)*h_face*wk
+               else
+                  sum_flux = sum_flux + (flux0(k) + dv_k*h_face*wk)
+               end if
                if (use_vr) then
                   sum_h = sum_h + visc_rem(i, j, k)*h_face*wk
                else
@@ -1997,7 +2077,23 @@ contains
             end do
             if (sum_h <= 0.0_wp) exit
             if (abs(target - sum_flux) <= RENORM_TOL*max(1.0_wp, abs(target))) exit
-            dv = min(max(dv + (target - sum_flux)/sum_h, dv_lo), dv_hi)
+            if (consistent) then
+               ! Monotone, continuous F(dv): keep a bracket around the root
+               ! and bisect whenever the Newton step leaves it (MOM6
+               ! `zonal_flux_adjust`: Newton + bisection).
+               if (sum_flux < target) then
+                  b_lo = max(b_lo, dv)
+               else
+                  b_hi = min(b_hi, dv)
+               end if
+               dv_new = dv + (target - sum_flux)/sum_h
+               if (dv_new <= b_lo .or. dv_new >= b_hi) then
+                  if (b_lo > -huge(1.0_wp) .and. b_hi < huge(1.0_wp)) dv_new = 0.5_wp*(b_lo + b_hi)
+               end if
+               dv = min(max(dv_new, dv_lo), dv_hi)
+            else
+               dv = min(max(dv + (target - sum_flux)/sum_h, dv_lo), dv_hi)
+            end if
          end do
          if (sum_h > 0.0_wp) then
             do k = 1, nz
@@ -2011,7 +2107,11 @@ contains
                else
                   h_face = this%h_face_right_y%data(i, j, k)
                end if
-               ms%mass_flux_y_layer(i, j, k) = flux0(k) + dv_k*h_face*wk
+               if (consistent .and. ((v0(k) + dv_k >= 0.0_wp) .neqv. (v0(k) >= 0.0_wp))) then
+                  ms%mass_flux_y_layer(i, j, k) = (v0(k) + dv_k)*h_face*wk
+               else
+                  ms%mass_flux_y_layer(i, j, k) = flux0(k) + dv_k*h_face*wk
+               end if
                ! MOM6 `v_cor = v + dv·visc_rem` — see the zonal twin.
                if (upd_v) v_cor(i, j, k) = v0(k) + dv_k
             end do

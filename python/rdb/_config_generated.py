@@ -4714,6 +4714,14 @@ class OceanContinuity(Group):
         default=False,
     )
 
+    renorm_consistent_flux = Bool(
+        'renorm_consistent_flux',
+        doc='uhbt renormalisation: continuous flux for a layer whose upwind donor flips under the correction (MOM6 zonal_flux_adjust); fixes the wrong-sign transport at thickness jumps',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class OceanIsopycnal(Group):
     """`&ocean_isopycnal_nml` -- Lagrangian grounding-stability controls."""
@@ -6151,4 +6159,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 673
+N_KNOBS = 674

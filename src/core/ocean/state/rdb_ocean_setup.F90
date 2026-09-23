@@ -685,6 +685,7 @@ contains
 
       ! Continuity PPM positivity guard (MOM6 PPM_limit_pos analogue).
       ocean_state%continuity%use_ppm_limit_pos = cfg%ocean%continuity%ppm_limit_pos
+      ocean_state%continuity%renorm_consistent_flux = cfg%ocean%continuity%renorm_consistent_flux
       ! Wet/dry composition: the Newton uhbt renormalisation's donor
       ! re-pick + CFL bracket destabilise the drying front (h_layer goes
       ! negative, test_ocean_wetdry_driver) — wet/dry keeps the legacy

@@ -880,6 +880,7 @@ Continuity-PPM positivity controls.
 | `ppm_limit_pos` | `.false.` |  | Positivity-preserving PPM face limiter (MOM6 PPM_limit_pos) |
 | `vol_cfl` | `.false.` |  | Swept-volume continuity-PPM face thickness (MOM6 vol_CFL) |
 | `positive_definite` | `.false.` |  | Positive-definite split continuity (h>=h_lim, zero mass created; reconstruction floor + per-donor outflux limiter) |
+| `renorm_consistent_flux` | `.false.` |  | uhbt renormalisation: continuous flux for a layer whose upwind donor flips under the correction (MOM6 zonal_flux_adjust); fixes the wrong-sign transport at thickness jumps |
 
 ### &ocean_isopycnal_nml
 
