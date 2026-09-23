@@ -71,12 +71,16 @@ module rdb_constants
       !! (`hTr = h·c`) and the tree holds one invariant about vanished
       !! layers —
       !!
-      !!     I1:  `h <= H_VANISHED  ⇒  hTr = 0`, every registered tracer
+      !!     I1′:  `h <= H_VANISHED  ⇒  hTr = h·c_live`, every registered
+      !!           tracer, `c_live` the concentration of the filler's donor
+      !!           (nearest live layer above; topmost live layer for the
+      !!           fillers above it; `hTr = 0` with no live layer)
       !!
       !! — with ONE definition of the predicate, of "the concentration of
       !! layer k", and of the column merge that restores it:
       !! `src/shared_module_utilities/rdb_vanished_layer.inc`
-      !! (`rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_merge_content`), ONE
+      !! (`rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_column_conc`,
+      !! `rdb_vl_holds_live_conc`, `rdb_vl_merge_content`), ONE
       !! enforcement point (`multilayer_state_t%enforce_vanished_content`,
       !! at the tail of the outer step) and a fail-loud tripwire
       !! (`&vcoord_nml check_vanished_content`).  The contract, and the

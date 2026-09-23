@@ -83,7 +83,7 @@ reason the data-residency rules in CLAUDE.md are not optional.
   `RDB_SHARED_INCLUDE_DIR` in the top-level `CMakeLists.txt`.
 - **Distinctive, prefixed names.** Every procedure in a file here is prefixed
   (`rdb_vl_*` for the vanished-layer rule) and every local variable inside it
-  carries the same suffix (`k_vl`, `orphan_vl`), because the body lands in a
+  carries the same suffix (`k_vl`, `q_sum_vl`), because the body lands in a
   module that has its own names. Consumers keep the included names `private`
   — which the repo's `private`-by-default module header already does.
 - **The consuming module supplies the `use`.** An include cannot carry one;
@@ -104,4 +104,4 @@ every module that includes them.
 
 | File | Concern |
 |---|---|
-| `rdb_vanished_layer.inc` | The vanished-layer rule — `rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_merge_content`. Contract: `src/core/ocean/README.md`, "The vanished-layer content rule". |
+| `rdb_vanished_layer.inc` | The vanished-layer rule (invariant I1′, a filler carries its donor live layer's concentration) — `rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_column_conc`, `rdb_vl_holds_live_conc`, `rdb_vl_merge_content`. Contract: `src/core/ocean/README.md`, "The vanished-layer content rule". |
