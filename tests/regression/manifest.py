@@ -23,6 +23,18 @@ Each CASES entry is a dict:
                 the global bound for a well-understood, benign reason (documented
                 inline) -- per the plan's "flag it, don't hide it under the
                 global tol" rule.
+    atol        (optional, P1) per-FIELD absolute tolerance for the compare,
+                {field: value} -- `field` is a [diag] name (covers its min /
+                max / mean) or "stats:<key>" (e.g. "stats:En"). There is NO
+                global absolute floor: a field not named here is held to rtol
+                alone, so a field that is PHYSICALLY ZERO and carries roundoff
+                noise (a resting case's u / SSH / KE / En) must be named here,
+                with the floor sized to that noise (not to the tolerance you
+                would like). compare.py fails loud on a key that names no
+                golden field, and reports every value that passed ONLY on its
+                atol. Requires:
+    atol_reason non-empty string: why each named field is legitimately ~0 and
+                how its floor was sized.
 
 Every listed nml is formula-bathymetry (no bathymetry_file/topo_file/dem_file/
 input_file load) and small enough to finish O(seconds) at n_steps outer steps.
@@ -32,6 +44,21 @@ bench_scaling/* (perf benchmarks) are intentionally excluded.
 # All backends every case can currently run on. Kept as a module constant so a
 # case that must be restricted (e.g. GPU-only, or CPU-only) overrides locally.
 ALL_BACKENDS = {"cpu", "gpu"}
+
+# Explicit absolute floors for the dynamic fields of a case whose exact
+# answer is REST (see the `atol` key above). SI units: SSH m, u/v m/s, KE and
+# En m^2/s^2. Sized from the measured noise of the resting seamount cases
+# (SSH <= 1.05e-11 m, |u| <= 1.15e-11 m/s, KE <= 3.8e-22, En <= 2.1e-24):
+# >= 100x above it, so a roundoff change (a new default, FMA, CPU vs GPU)
+# passes, while a spin-up to 1 nm of SSH or 1 nm/s of current fails. KE/En
+# use the velocity floor squared. Each user names only the fields its golden
+# carries.
+RESTING_NOISE_ATOL = {"SSH": 1e-9, "u": 1e-9, "v": 1e-9, "KE": 1e-18,
+                      "stats:En": 1e-18}
+RESTING_NOISE_REASON = (
+    "exact answer is rest: SSH/u/v/KE/En are roundoff noise (SSH ~1e-11 m, "
+    "u ~1e-13..1e-11 m/s), whose relative drift is meaningless; floors are "
+    ">=100x the measured noise so a spin-up still fails")
 
 
 CASES = [
@@ -90,6 +117,15 @@ CASES = [
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
         "tags": ["seamount_topo", "eos_nonlinear", "pgf", "ale_remap"],
+        # Uniform T/S, f = 0, no forcing: the exact answer is rest, and every
+        # dynamic field is roundoff noise -- SSH ~1e-11 m, u/v ~1e-13 m/s,
+        # KE ~1e-25, En ~1e-27 (gfortran, 10 steps). Relative drift of noise is
+        # meaningless: bebt 0 -> 0.1 alone moves SSH:max 1.05e-11 -> 3.2e-12
+        # (-70 %). The floors sit >= 100x above the largest noise measured
+        # (SSH 1.05e-11, u 1.15e-11) so a noise change passes, but a spin-up
+        # past 1 nm / 1 nm/s fails. KE/En floors are the same velocity squared.
+        "atol": RESTING_NOISE_ATOL,
+        "atol_reason": RESTING_NOISE_REASON,
     },
     {
         # Barotropic geostrophic adjustment (NK=1): fast-mode / free-surface
@@ -110,6 +146,13 @@ CASES = [
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
         "tags": ["land_mask", "island", "quiescent", "wall_bc"],
+        # Rest: u/v/KE/En are exactly 0.0 on gfortran. The floor keeps a
+        # roundoff-level nonzero (another compiler, FMA) from failing a
+        # bit-exact 0 while a spin-up past 1 nm/s still fails. SSH is NOT
+        # noise here (max 6e-4 m) and stays on rtol.
+        "atol": {k: RESTING_NOISE_ATOL[k]
+                 for k in ("u", "v", "KE", "stats:En")},
+        "atol_reason": RESTING_NOISE_REASON,
     },
     {
         # Coriolis + coastline wall: rotation against a solid boundary, wall BC
@@ -303,6 +346,10 @@ CASES = [
         "backends": ALL_BACKENDS,
         "tags": ["min_thickness", "conservative_floor", "lagrangian",
                  "isopycnal", "seamount_topo"],
+        # Resting seamount again: En ~8.4e-27 is roundoff (its golden carries
+        # no [diag] fields, only En and Mass). Mass stays on rtol.
+        "atol": {"stats:En": RESTING_NOISE_ATOL["stats:En"]},
+        "atol_reason": RESTING_NOISE_REASON,
     },
     {
         # Double diffusion (salt fingering) on a stratified seamount: warm+
@@ -465,6 +512,14 @@ CASES = [
         "backends": ALL_BACKENDS,
         "tags": ["pred_corr", "predictor_corrector", "split_scheme",
                  "seamount_topo", "vcoord_zstar_sigma"],
+        # Rest, same as `seamount`. Its committed golden (u ~1.1e-11 m/s, En
+        # ~2.1e-24) is already NOT what origin/main produces (u 3.8e-13, En
+        # 3.7e-27, byte-identical to `seamount` now that pred_corr is the
+        # default): a 97 % noise move that the old global atol passed without
+        # a word. Under this floor it passes BY NAME; refreshing the golden is
+        # the maintainer's call.
+        "atol": RESTING_NOISE_ATOL,
+        "atol_reason": RESTING_NOISE_REASON,
     },
     {
         # Active wind-driven double-gyre (fv_lite PGF, NK=10, zstar) under the

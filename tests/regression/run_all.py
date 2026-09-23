@@ -132,7 +132,6 @@ def main(argv=None):
                          "sourced ONLY when RDB_ON_DEV=1 and it exists. "
                          "Otherwise the inherited environment is used.")
     ap.add_argument("--rtol", default=None, help="override compare relative tolerance.")
-    ap.add_argument("--atol", default=None, help="override compare absolute tolerance.")
     args = ap.parse_args(argv)
 
     cpu_env = dev_env_script(args.cpu_env)
@@ -154,8 +153,6 @@ def main(argv=None):
                 cargs += ["--gpus", args.gpus]
             if args.rtol:
                 cargs += ["--rtol", args.rtol]
-            if args.atol:
-                cargs += ["--atol", args.atol]
             stages["compare-" + b] = run_stage(
                 "Regression compare (" + b + ")", env, "compare.py", cargs)
 
