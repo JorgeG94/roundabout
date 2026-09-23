@@ -91,6 +91,8 @@ module rdb_config
    public :: p_top_has_producer
    public :: substep_drag_ignores_bdrag_form
    public :: cavity_draft_is_uniform
+   public :: zfixed_cavity_nu_h_below_envelope
+   public :: ZFIXED_CAVITY_NU_H_MIN
    public :: MAX_TIDAL_CONSTITUENTS
    public :: MAX_OCEAN_DIAG_Z_LEVELS
    public :: MAX_OCEAN_LAYER_RHO_INIT
@@ -107,6 +109,12 @@ module rdb_config
    integer, parameter :: BT_HALO_AUTO_WIDTH = 8
       !! Wide-halo BT march-in width chosen when `bt_halo` auto-resolves ON
       !! (the validated production width).
+
+   real(wp), parameter :: ZFIXED_CAVITY_NU_H_MIN = 2.0_wp
+      !! Lower envelope of `&ocean_hvisc_nml nu_h` (m²/s) under
+      !! `vcoord_type = "z_fixed"` x `&ocean_cavity_dyn_nml enable`.  Below
+      !! it `validate_config` WARNS (see
+      !! `zfixed_cavity_nu_h_below_envelope` for the measurement).
 
    integer, parameter :: MAX_TIDAL_CONSTITUENTS = 10
       !! Maximum number of tidal constituents
@@ -5708,6 +5716,60 @@ contains
                                     "the blend is its own change.")
                   has_error = .true.
                end if
+               ! ---- In-layer T/S reconstruction for the PGF: REFUSED ----
+               !
+               ! Measured on ISOMIP+ Ocean0 idealised (z_fixed + closed
+               ! faces, melt off), V100, on the v0.1.0 defaults (bebt =
+               ! 0.1, renorm_consistent_flux, I1'): from rest the knob
+               ! spins up En = 3.4E-04 m2/s2 in the first 3 hours
+               ! (MaxCFL 0.43) and holds ~1E-03 (MaxCFL up to 0.85) for
+               ! 30 days — ~19 000x the layer-mean-density run's 5.6E-08
+               ! and ~5x the melt-ON circulation.  (Before I1' and bebt =
+               ! 0.1 it went non-finite at outer step 118, day 0.41.)  The
+               ! PLM/PPM edge build reads the inert top-side FILLERS as
+               ! neighbouring water at the partial top cell.  The
+               ! filler-aware reconstruction that skips them is a held
+               ! slice, so until it lands this is a refusal, not a
+               ! warning: the spurious flow is there within 3 hours.
+               ! (`cavity_rest_growth_diagnosis.md` §Q.0 item 9.)
+               if (cfg%ocean%pgf%reconstruct_for_pressure) then
+                  call logger%error("&ocean_pgf_nml reconstruct_for_pressure=.true. "// &
+                                    "is refused with vcoord_type='z_fixed' under a "// &
+                                    "cavity: the in-layer PLM/PPM T/S edge build "// &
+                                    "reads the layer means of the inert top-side "// &
+                                    "FILLERS as neighbouring water at the partial top "// &
+                                    "cell — ISOMIP+ Ocean0 (melt off, from rest) spins "// &
+                                    "up a spurious En ~ 1E-03 m2/s2 within hours, "// &
+                                    "19 000x the layer-mean-density run.  Pending the "// &
+                                    "filler-aware reconstruction that skips vanished "// &
+                                    "layers; set reconstruct_for_pressure=.false. "// &
+                                    "(the layer-mean PCM density) until it lands.")
+                  has_error = .true.
+               end if
+               ! ---- Lateral viscosity lower envelope: a WARNING ----
+               !
+               ! Not a refusal: the vcoord stability matrix runs this
+               ! combination inviscid on purpose, to measure the mode.
+               ! But a user who sets nu_h below the envelope should be
+               ! told.  See `zfixed_cavity_nu_h_below_envelope`.
+               if (zfixed_cavity_nu_h_below_envelope(cfg)) then
+                  call logger%warning("&ocean_hvisc_nml nu_h = "// &
+                                      to_string(cfg%ocean%hvisc%nu_h)// &
+                                      " m2/s is below the "// &
+                                      to_string(ZFIXED_CAVITY_NU_H_MIN)// &
+                                      " m2/s lower envelope of vcoord_type='z_fixed' "// &
+                                      "under a cavity.  Measured on ISOMIP+ Ocean0 "// &
+                                      "(2 km, melt off): nu_h = 0 carries an INVISCID "// &
+                                      "mode that grows EXPONENTIALLY at 0.18 /day "// &
+                                      "(5.6-day e-folding, accelerating; En 1.4E-06 at "// &
+                                      "day 30, 26x the protocol leg) while nu_h = 2 "// &
+                                      "already decelerates.  Flow-aware closures do "// &
+                                      "not replace it at these speeds (Smagorinsky "// &
+                                      "adds ~1 m2/s).  The ISOMIP+ Table-4 value is "// &
+                                      "6; nu_h >= 30 also removes the calving-front "// &
+                                      "partial-cell jet (cavity_rest_growth_diagnosis "// &
+                                      "section Q).  Proceeding, as configured.")
+               end if
                ! ISOMIP+ (Asay-Davis et al. 2016 §3.1.5): "the minimum
                ! thickness is likely to be approximately two grid cells
                ! (~40 m if z levels are equally spaced)".  Under a
@@ -7359,6 +7421,37 @@ contains
                    abs(cfg%ocean%cavity_dyn%draft_y1) >= 1.0e29_wp
       end if
    end function cavity_draft_is_uniform
+
+   pure function zfixed_cavity_nu_h_below_envelope(cfg) result(below)
+      !! Is the constant harmonic viscosity below the `z_fixed` x cavity
+      !! lower envelope `ZFIXED_CAVITY_NU_H_MIN`?  The predicate behind
+      !! `validate_config`'s WARNING (never a refusal — the vcoord
+      !! stability matrix runs this combination inviscid on purpose).
+      !!
+      !! The envelope is measured, not derived.  ISOMIP+ Ocean0 idealised
+      !! at 2 km, `z_fixed` + `zfixed_closed_faces`, melt off, 30 days
+      !! (`cavity_rest_growth_diagnosis.md` §Q.3/§Q.0 item 7):
+      !! `nu_h = 0` grows EXPONENTIALLY at `0.180 /day` (d15-30) and
+      !! accelerating (0.142 -> 0.220 /day, d15-20 -> d25-30;
+      !! `En(30 d) = 1.44E-06`), `nu_h = 2` decelerates (0.092 -> 0.068
+      !! /day, d5-10 -> d25-30; `1.12E-07`), the protocol's 6 gives
+      !! `5.63E-08` (V100, v0.1.0 defaults: bebt = 0.1,
+      !! renorm_consistent_flux, I1').  The
+      !! inviscid mode is arrested somewhere in `0 < nu_h < 2`; the
+      !! bracket below 2 was not refined, so 2 is the bound of record.
+      !!
+      !! `.false.` whenever the cavity is off or the coordinate is not
+      !! `z_fixed`, so it cannot fire on any other configuration.
+      use rdb_vcoord, only: parse_vcoord_type
+      use rdb_constants, only: VCOORD_EULERIAN_Z, VCOORD_Z_FIXED
+      type(config_t), intent(in) :: cfg
+      logical :: below
+      below = .false.
+      if (.not. cfg%ocean%cavity_dyn%enable) return
+      if (parse_vcoord_type(cfg%vcoord_type, default_code=VCOORD_EULERIAN_Z) &
+          /= VCOORD_Z_FIXED) return
+      below = cfg%ocean%hvisc%nu_h < ZFIXED_CAVITY_NU_H_MIN
+   end function zfixed_cavity_nu_h_below_envelope
 
    subroutine warn_unknown_bc(bc_str, param_name)
       !! Warn if a BC string does not match any known type
