@@ -30,13 +30,18 @@ produces the target layer thicknesses the conservative remap maps onto. That's
 where the `select case (coord_type)` lives:
 
 - `ocean_vcoord_compute_target_h(this, total_h, eta)` →
-  `ocean_vcoord_compute_target_h_impl` in `rdb_ocean_vcoord.F90` — fills
-  `target_h(i,j,k)` directly in 2D/3D `do concurrent` loops (everything inlined;
-  no cross-module call). Its `case default` is `error stop`, so an unhandled
-  coordinate crashes rather than silently falling back.
+  `ocean_vcoord_compute_target_h_impl` in `rdb_ocean_vcoord.F90` — a host
+  dispatcher that hands the `ocean_vcoord_t` components, as explicit-shape
+  and scalar dummies, to the flat `ocean_vcoord_geometric_target` kernel
+  (`VCOORD_Z_FIXED` to `ocean_vcoord_z_fixed_target`), whose 2D/3D
+  `do concurrent` loops fill `target_h(i,j,k)` (no cross-module call). The
+  kernel's `case default` is `error stop`, so an unhandled coordinate crashes
+  rather than silently falling back.
 - Density-space coordinates (`VCOORD_RHO`, `VCOORD_HYCOM`) take a separate
   entry, `ocean_vcoord_compute_target_h_rho(..., T, S, eos, hybrid)`, because
-  they need the EOS and an interface inversion (`invert_density_targets`).
+  they need the EOS and an interface inversion (`invert_density_targets`);
+  its kernel is the flat `ocean_vcoord_rho_target`, one same-module
+  `!$acc routine seq` `ocean_vcoord_rho_target_column` call per column.
 - The per-column-reference coordinate (`VCOORD_ZSTAR_FULL`) is special-cased
   with its own builder, `ocean_vcoord_build_zref_full`, run once at setup from
   local bathymetry.
@@ -55,11 +60,18 @@ where the `select case (coord_type)` lives:
    `ocean_state_enter_data` orchestrator** or you get a 150–1500× memcpy
    explosion.
 4. **Target generator** — add `case (VCOORD_FOO)` to
-   `ocean_vcoord_compute_target_h_impl`, filling `target_h`. Bind every
-   derived-type component you touch through the existing `associate` block (ifx
-   ICEs on a `this%component` reference inside an offloaded `do concurrent`).
-   If FOO is density-space, extend `ocean_vcoord_compute_target_h_rho_impl`
-   instead and add the dispatch in `rdb_ocean_remap.F90` that routes to it.
+   `ocean_vcoord_geometric_target`, filling `target_h`. Pass every
+   `ocean_vcoord_t` component you need into that kernel as an explicit-shape
+   array or scalar dummy (scalars `intent(in), value`, like the existing
+   knobs) from the `ocean_vcoord_compute_target_h_impl`
+   dispatcher — never reference `this%component` inside the `do concurrent`
+   (ifx ICEs) and never wrap it in `associate` over the components (ifx reads
+   the names as zero; nvfortran `-stdpar=gpu` handed a by-reference scalar
+   associate-name to a device callee as a HOST address — the RHO × Wright
+   `CUDA_ERROR_ILLEGAL_ADDRESS`, gated by `test_ocean_vcoord_wright_device`).
+   If FOO is density-space, extend `ocean_vcoord_rho_target_column` (reached from
+   `ocean_vcoord_compute_target_h_rho_impl`) instead and add the dispatch in
+   `rdb_ocean_remap.F90` that routes to it.
 5. **Remap early-return** — if FOO is a no-op coordinate (like
    `VCOORD_LAGRANGIAN` / `VCOORD_EULERIAN_Z`), add it to the early-return guards
    in `src/ALE/rdb_ocean_remap.F90` (there is one per remap entry point).

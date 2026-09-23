@@ -136,6 +136,8 @@ program rdb_tests
    use test_ocean_vcoord, only: ocean_vcoord_collect => collect_ocean_vcoord_tests
    use test_ocean_vcoord_rho, only: ocean_vcoord_rho_collect => collect_ocean_vcoord_rho_tests
    use test_ocean_vcoord_hycom, only: ocean_vcoord_hycom_collect => collect_ocean_vcoord_hycom_tests
+   use test_ocean_vcoord_wright_device, only: ocean_vcoord_wright_device_collect => &
+                                              collect_ocean_vcoord_wright_device_tests
    use test_ocean_vcoord_interface_depths, only: ocean_vcoord_interface_depths_collect => &
                                                  collect_ocean_vcoord_interface_depths_tests
    use test_ocean_vcoord_hygiene, only: ocean_vcoord_hygiene_collect => &
@@ -315,6 +317,7 @@ program rdb_tests
                 new_testsuite("ocean_vcoord", ocean_vcoord_collect), &
                 new_testsuite("ocean_vcoord_rho", ocean_vcoord_rho_collect), &
                 new_testsuite("ocean_vcoord_hycom", ocean_vcoord_hycom_collect), &
+                new_testsuite("ocean_vcoord_wright_device", ocean_vcoord_wright_device_collect), &
                 new_testsuite("ocean_vcoord_interface_depths", &
                               ocean_vcoord_interface_depths_collect), &
                 new_testsuite("ocean_vcoord_hygiene", ocean_vcoord_hygiene_collect), &
