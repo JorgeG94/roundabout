@@ -514,10 +514,20 @@ disk — any cell reproduces by hand with
 python3 tests/regression/stability.py --tier 2 --build-dir build_gcc \
         --jobs 6 --tags vcoord_matrix
 
-# The full matrix, tier 1 (GPU, 30 simulated days per cell):
+# The full matrix, tier 1 (30 simulated days per cell), on EACH toolchain --
+# one leg at a time with --tags vcoord_matrix_inviscid / _viscous if wanted:
 python3 tests/regression/stability.py --tier 1 --backend gpu \
         --build-dir build_cc70 --gpus 0 --tags vcoord_matrix \
-        --out tmp_local_artifacts/vcm_t1.json
+        --scratch-root tmp_local_artifacts/st_gpu --out tmp_local_artifacts/vcm_t1_gpu.json
+python3 tests/regression/stability.py --tier 1 --backend cpu \
+        --build-dir build_gcc --jobs 4 --tags vcoord_matrix \
+        --scratch-root tmp_local_artifacts/st_gcc --out tmp_local_artifacts/vcm_t1_gcc.json
+
+# ...then pin the markers and envelopes from them (never by hand):
+python3 tests/regression/vcoord_matrix_pin.py \
+        --t1 gfortran=tmp_local_artifacts/vcm_t1_gcc.json \
+        --t1 nvfortran=tmp_local_artifacts/vcm_t1_gpu.json \
+        --t2 gfortran=… --t2 nvfortran=… --provenance "…"
 ```
 
 A run prints the family × problem table at the end and writes it next to the
@@ -528,22 +538,103 @@ terminal.
 ## The problem
 
 **One problem, at rest.** A motionless, stably stratified ocean on an f-plane
-(48 × 6 × 15 at 2 km, `dt = 600 s`, `f = −1.409e-4`), with **no forcing, no
-lateral viscosity, no bottom drag and no vertical mixing**, and with the
-isopycnals laid **flat in geopotential `z`** by `&ocean_zinit_nml
-source="linear"` — *not* by a layer-index profile, which would tilt them with
-a terrain-following coordinate and hand the run real available potential
-energy to convert. Over a slope that distinction is the whole experiment.
+(48 × 6 × 15 at 2 km, `dt = 600 s`, `f = −1.409e-4`), with **no forcing and no
+vertical mixing**, and with the isopycnals laid **flat in geopotential `z`** by
+`&ocean_zinit_nml source="linear"` — *not* by a layer-index profile, which
+would tilt them with a terrain-following coordinate and hand the run real
+available potential energy to convert. Over a slope that distinction is the
+whole experiment.
 
 Such a state is the global minimum of potential energy under rigid boundaries,
 so APE ≡ 0 and there is **no energy source of any kind**. Every joule of
 kinetic energy a cell develops was manufactured by the discretisation.
 
-The dissipation is left out on purpose and **must stay out**: `nu_h = 50 m² s⁻¹`
-removes a four-decade instability entirely on the sibling cavity case, and
-every flow-aware closure (Smagorinsky, Leith) is inert at rest because it sets
-its viscosity from the resolved deformation rate, which is zero. A viscosity
-that removes the instability removes the measurement with it.
+### The fixed configuration — what v0.1.0 recommends
+
+Every cell of both legs runs the configuration the 2026-09-21 rerun found
+necessary (`design/vcoord_ale_audit.md` in the prototypes repo), and **this is
+the configuration v0.1.0 recommends for any run over sloping topography**:
+
+| knob | why |
+|---|---|
+| `&ocean_pgf_nml form = "fv_mom6", reconstruct_for_pressure = .true.` | the exact finite-volume PGF: the sigma rest-state seed falls from 2.6e-8 to 9.6e-16 m s⁻² and the slope plateaus fall 12–17 decades to machine zero |
+| `&vcoord_nml remap_boundary_extrap = .true.` | linear-exact boundary cells in the remap (the first-order boundary cell was the rest-state amplifier: growth 0.355 → 0.047 /day) |
+| `&vcoord_nml remap_nonuniform_weights = .true.` | PLM/PPM linear-exact on a stretched column (1.5e-01 → 3e-14) |
+| `&vcoord_nml remap_check_preconditions = .true.` | fail loud the first step the remap is handed a negative layer or a mismatched column total, instead of silently creating or deleting tracer |
+| `&vcoord_nml zfixed_closed_faces = .true.` (`z_fixed` only) | closed staircase faces with an open-column barotropic mode — without it the staircase PGF residual is unbounded |
+
+`stability.py --self-test` asserts that every emitted cell carries all of
+them.
+
+### Two legs
+
+The legs share the template and differ **only** in the dissipation (the
+self-test diffs every viscous namelist against its inviscid twin with the
+`&ocean_hvisc_nml` / `&ocean_bdrag_nml` groups removed):
+
+* **INVISCID** (`vcm_*`, 115 cells) — `nu_h = 0`, no drag. **The hard probe.**
+  A viscosity that removes a spurious mode removes the measurement with it
+  (`nu_h = 10 m² s⁻¹` costs the rx0 mode twelve decades), so this leg keeps it
+  out and reports what the discretisation does on its own. Its
+  terrain-following growth is **documented expected behaviour**: MOM6 shows the
+  same mode (below). Its failures are XFAIL with that reason.
+* **VISCOUS** (`vcmv_*`, 90 cells — the runnable ones; a refusal is a property
+  of the configuration, and the `N² = 0` control belongs to the inviscid
+  question) — MOM6's shipped seamount closure, translated. **This leg is the
+  PASS/FAIL gate**: a cell inside its family's documented rx0 envelope must
+  pass every assertion; `stability.py --self-test` refuses a marker on any
+  in-envelope viscous cell.
+
+### The viscous closure: MOM6's seamount, translated
+
+MOM6's own seamount rest test (`ocean_only/seamount`, dev/gfdl `d74a11f9c`,
+resolved `MOM_parameter_doc.all`) ships `LAPLACIAN = True`, `KH = 1000 m² s⁻¹`,
+`KH_VEL_SCALE = 0.003 m s⁻¹`, `BOUND_KH = True`, `BIHARMONIC = False`,
+`BOTTOMDRAGLAW = LINEAR_DRAG = True`, `CDRAG = 0.002`, `DRAG_BG_VEL = 0.05 m s⁻¹`,
+`HBBL = 10 m`, `KV = 1e-4 m² s⁻¹`, on a 5 km grid at `dt = 900 s`.
+
+| MOM6 | roundabout (viscous leg) | the mapping, and why |
+|---|---|---|
+| `LAPLACIAN`, `KH` | `nu_h = 160 m² s⁻¹`, `stress_tensor = .true.` | **Definition:** both are the `ν` of `∂u/∂t = ν∇²u`. MOM6's `diffu = (1/h)∇·(h·Kh·S)` with tension `S_xx = u_x − v_y` and shear `S_xy = v_x + u_y` (`MOM_hor_visc.F90`) reduces to `Kh∇²u` on a uniform grid with uniform `h` — the cross terms cancel — and so does roundabout's scalar path (`hvisc_compute_scalar_impl`, 5-point velocity Laplacian). They differ where `h` varies between neighbours: MOM6 thickness-weights and conserves momentum, the scalar path does neither. roundabout's `stress_tensor = .true.` **is** MOM6's operator (thickness-weighted stress, `÷(h_u + h_neglect)`, per-cell BOUND_KH clamp, coast masks), so the leg selects it. **Magnitude:** translated, not copied. What a Laplacian does to a grid-scale mode is damp it at `ν·k²_grid ∝ ν/Δx²`, and the modes this matrix exists for are 2–3 Δx wide; MOM6's `KH/Δx² = 1000/5000² = 4.0e-5 s⁻¹`, i.e. `160 m² s⁻¹` at 2 km. Copying `1000 m² s⁻¹` would be 6.25× MOM6's grid-scale damping — and MOM6 itself would not run it here: its BOUND_KH ceiling `0.1·Δx²/dt` is 667 m² s⁻¹ at (2 km, 600 s). |
+| `KH_VEL_SCALE` | not set | `KH_VEL_SCALE·Δx` = 6 m² s⁻¹ at 2 km (15 at 5 km) is below `KH` on both grids, so it never binds. (roundabout's `kh_vel_scale` only seeds `ah_bg` for the flow-aware closures and is inert on the constant-`nu_h` path.) |
+| `LINEAR_DRAG`, `CDRAG·DRAG_BG_VEL`, `HBBL` | `form = "linear"`, `r = 1.0e-5 s⁻¹`, `hbbl = 10 m` | MOM6's linear drag is a bottom **stress** `τ/ρ₀ = CDRAG·DRAG_BG_VEL·u_bbl = 1.0e-4 m s⁻¹ · u_bbl`, grid-independent, over the bottom `HBBL`. roundabout's distributed linear form applies `∂u_k/∂t = −r·u_k·h_in_bbl,k/h_k`, whose column integral is `r·hbbl·u_bbl`; `r = 1e-4/10` reproduces the stress exactly. |
+| `KV = 1e-4` | not carried | its damping of the first baroclinic mode, `KV·(π/H)² ≈ 1e-9 s⁻¹`, is four decades under the rates measured here, and `use_closure = .false.` keeps `KD = 0`, which the tracer-extrema gate needs. |
+
+`stress_tensor` is refused under `zfixed_closed_faces`, so the `z_fixed` cells
+of the viscous leg carry the scalar operator (with the closed-face free-slip
+masks). The self-test pins `nu_h = 160` and `r = 1e-5` to their derivation.
+
+### The MOM6 baseline
+
+The inviscid leg's terrain-following growth is **not a roundabout defect**.
+MOM6 ocean_only (GNU build, dev/gfdl `d74a11f9c`, nothing modified), on its own
+seamount at rest in **sigma** coordinates with every dissipation off and
+`f = 1e-4 s⁻¹`:
+
+| rx0 | dissipation | `f` [s⁻¹] | e-folding of KE [d] | R² | `En_KE` day 30 [m² s⁻²] |
+|---|---|---|---|---|---|
+| 0.000 | inviscid | 1e-4 | *no growth* | – | **0** (exactly) |
+| 0.103 | inviscid | 1e-4 | **0.81** | 1.0000 | 2.16e-11 |
+| 0.412 | inviscid | 1e-4 | **0.85** | 1.0000 | 2.00e-12 |
+| 0.764 | inviscid | 1e-4 | **0.85** | 0.9999 | 2.90e-12 |
+| 0.412 / 0.764 | `KH = 10` | 1e-4 | 0.95 | 1.0000 | 5.6e-14 / 4.0e-14 |
+| 0.412 / 0.764 | inviscid | 0 | *no growth* | – | 5e-24 / 1e-22 |
+| any | **shipped closure** | 1e-4 | *no growth* | – | ~1e-26 |
+
+A textbook exponential out of round-off, rate independent of rx0, zero on a
+flat bed, absent without rotation — the same mode the roundabout forensics
+isolated (baroclinic, 2–3 Δx, pinned to the steepest face, dt-independent,
+seeded by a 1.1e-16 m s⁻² PGF residual that is below one ulp of the
+hydrostatic pressure). An isotropic 40 × 40 seamount (rx0 0.363) e-folds at
+0.77 d, so it is not a slice artefact. Two differences are recorded rather than
+explained away: `KH = 10` only shrinks the amplitude in MOM6 (35–500×) but
+kills the mode in roundabout; and MOM6's z* and native-layer coordinates are
+far worse on this test (O(1 m s⁻¹) within a day, which no MOM6 PGF or remap
+option rescues at rx0 0.76). **Compare rates and controls, not amplitudes** —
+an amplitude seeded by round-off is compiler-dependent, let alone
+model-dependent. Recipes, JSON series and the full table live in the
+prototypes repository (`mom6_baselines/README.md`); MOM6 is never a test
+dependency.
 
 ### Geometries
 
@@ -594,7 +685,8 @@ dependencies, no NetCDF reader.
 | spurious energy **level** | `energy:rest` | peak `En` from `[stats]`, reported as `\|u\|_rms = sqrt(2·En)` |
 | spurious energy **rate** | `energy:rest-growth-rate` | least squares of `log En` over the **tail** (last 60 %) of the run; `En ~ exp(2σt)`, so the reported amplitude rate is `slope/2`. **R² is reported, not gated** — a plateau has a near-zero slope and a meaningless R², an instability has both, and letting the reader see the pair is honest where picking an R² threshold would not be. Tier 1 only: the bar is a 20-day e-folding and a 3.3-day twin cannot fit one. |
 | **truncation estimate** | printed in the row's note | `a_peak = N²·Δe³/(6·Δx·H̄)`, derived in [`validation_examples/ocean/ice_shelf_cavity/README.md`](../../validation_examples/ocean/ice_shelf_cavity/README.md) and verified there against a four-decade slope ladder to within 33 %. A rotating run balances it geostrophically at `U = a_peak/\|f\|`, so `En_plateau ≈ ½U²`. It is an **estimate** (one dominant face step, geostrophic balance) and is labelled as one; the bar never derives from it. |
-| tracer bounds | `tracer:no-new-extrema` | `[diag]` `temperature` / `salinity` extrema may not leave the **first sample's** range by more than 1e-6. At rest, with no flux and no mixing, a new extremum is spurious diapycnal mixing from the coordinate's own regrid. |
+| tracer bounds | `tracer:no-new-extrema` | `[diag]` `temperature` / `salinity` extrema may not leave the **first sample's** range by more than max(1e-6, 1.5 print quanta). The console line is `ES13.5`, so salinity near 34 is resolved to 1e-4 PSU: a one-last-digit flip is rounding of two printed numbers, not a measurement (it was the one gfortran-vs-V100 flip on `slope × zstar_full`). At rest, with no flux and no mixing, a new extremum is spurious diapycnal mixing from the coordinate's own regrid. |
+| remap guard | `remap:preconditions` | the run never tripped `&vcoord_nml remap_check_preconditions` (a negative layer or a mismatched column total handed to the remap). Evaluated even when the run aborted — the guard's job is to abort. On nvfortran the guard's line can be split by the interleaved `ERROR STOP`; the parser records the firing either way. |
 | thickness positivity | `thickness:positive` | `min h_layer` over the run, from the `h_layer` derived diagnostic (`&ocean_diag_nml diags = "h_layer"`), strictly positive. |
 | budget residuals | `conserve:{Mass,Salt,Heat}` | the model's own closed-budget `Error`, 1e-11 relative. |
 | clamp / truncation counters | `counters:no-truncation` | the solver's `CFL truncations: N total` line. A rest case that truncates is not resting, whatever its energy says. |
@@ -619,109 +711,255 @@ checks it fails the first and passes the second — who tests the test.
 
 ## THE BASELINE TABLE
 
-**Tier 1 — the real horizon.** 115 cells, 30 simulated days each, NVHPC 26.5
-on one V100, `pred_corr`, `RDB_ENABLE_MPI=OFF`. 3989 s wall (66 min) for the
-whole matrix. The number in each cell is the **peak `En`** in m² s⁻²; `ok`
-means every assertion passed (on `flat` and `lid_flat` that means
-`En = 0.000E+00` at every sample, exactly); `NaN` means the run went
-non-finite and aborted; `refused` means `validate_config` rejected the
-configuration by design and the row asserts the refusal.
+**Tier 1 — the real horizon.** 205 cells (115 inviscid + 90 viscous), 30
+simulated days each, `pred_corr`, `RDB_ENABLE_MPI=OFF`, measured on **both**
+toolchains: gfortran 15.1.0 Release on the CPU (3 workers, 57 min on a
+shared 4-core box) and nvfortran 26.5 on one V100, cc70 (3.3 h on the same
+contended box — the GPU is launch-bound at 48 × 6 × 15). `ok` = every
+assertion passed (on `flat`/`lid_flat` that means `En = 0.000E+00` at every
+sample, exactly); a number is the peak `En` in m² s⁻² of a cell that
+completes but fails a gate (`leak` = the salt/heat budget left round-off);
+`✗ dN` = aborted on day N (remap guard or non-finite); `refused` = rejected
+at configure by design, and the row asserts the refusal. `a / b` =
+gfortran / nvfortran where they differ; otherwise both.
 
-| problem | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
+**Both toolchains agree on PASS/FAIL on every one of the 205 cells** except
+the two `slope × hycom × wright` cells (FINDING C, GPU only); where they
+differ it is in the number or the day, never the verdict.
+
+### inviscid leg
+
+| problem (rx0) | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `flat` | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
-| `slope` | ok | 1.13e-03 | 3.00e-09 | 3.00e-09 | 3.00e-09 | 4.50e-06 | 3.23e-05 | NaN | 1.72e-05 | refused |
-| `seamount_gentle` | 8.14e-08 | 5.06e-04 | 4.91e-06 | 4.91e-06 | 4.91e-06 | 2.48e-05 | NaN | NaN | 7.60e-05 | refused |
-| `seamount_steep` | NaN | NaN | 1.19e-04 | 1.19e-04 | 1.19e-04 | 2.68e-04 | NaN | NaN | NaN | refused |
-| `rx0_010` | NaN | NaN | 9.02e-04 | 9.02e-04 | 9.02e-04 | 7.73e-04 | NaN | NaN | NaN | refused |
-| `rx0_020` | NaN | NaN | 6.35e-03 | 6.35e-03 | 6.36e-03 | 5.05e-03 | NaN | NaN | NaN | refused |
-| `rx0_040` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
-| `rx0_060` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
-| `rx0_080` | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | refused |
-| `lid_flat` | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
-| `lid_slope` | refused | refused | 1.99e-09 | 1.99e-09 | refused | refused | NaN | refused | refused | refused |
+| `flat` (0) | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
+| `slope` (0.00709) | ok | 1.2e-03 | ok | ok | ok | ok | 5.6e-07 leak | 2.3e-06 / 6.8e-07 | 1.4e-06 / 7.7e-07 | refused |
+| `lid_flat` (0) | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
+| `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 7.7e-04 | refused | refused | refused |
+| `seamount_gentle` (0.03) | ok | 2.1e-04 / 1.8e-04 | ok | ok | ok | ok | 1.4e-05 leak | ✗ d11 | ✗ d8 / ✗ d16 | refused |
+| `seamount_steep` (0.078) | ✗ d4 | ✗ d20 / ✗ d16 | ok | ok | ok | ok | 1.4e-04 leak | ✗ d6 | ✗ d6 | refused |
+| `rx0_010` (0.1) | ✗ d12 / ✗ d10 | 8.0e-04 / 7.7e-04 | 1.7e-12 / 2.3e-12 | 1.7e-12 / 2.3e-12 | ok | ok | 1.2e-07 leak | ✗ d3 / ✗ d2 | ✗ d4 / ✗ d6 | refused |
+| `rx0_020` (0.2) | ✗ d7 | ✗ d22 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.3e-04 | 4.4e-05 / 6.6e-05 | 3.1e-07 leak | ✗ d1 | ✗ d1 / ✗ d0 | refused |
+| `rx0_040` (0.4) | ✗ d5 | ✗ d11 | ✗ d30 / ✗ d29 | ✗ d30 / ✗ d29 | ✗ d28 / ✗ d30 | 4.2e-04 / 4.7e-04 | 2.3e-08 leak | ✗ d0 | ✗ d0 | refused |
+| `rx0_060` (0.6) | ✗ d4 | ✗ d6 | 2.2e-05 / 2.5e-05 | 2.2e-05 / 2.5e-05 | 1.5e-05 / 1.7e-05 | 1.7e-09 / 4.4e-10 | 2.7e-07 leak | ✗ d0 | ✗ d0 | refused |
+| `rx0_080` (0.8) | ✗ d4 | ✗ d4 | ✗ d14 | ✗ d14 | ✗ d14 | ✗ d4 | 2.3e-07 leak | ✗ d0 | ✗ d0 | refused |
 
-Tier-1 totals: **13 PASS · 0 live FAIL after pinning · 65 XFAIL · 0 XPASS**
-(the first sweep reported 37 FAIL; every one of them is now a scoped,
-measured marker in `MEASURED_XFAIL`, and the tier-2 slice re-runs clean at
-28 PASS / 0 FAIL / 35 XFAIL / 0 XPASS).
+### viscous leg
 
-**The same table at the tier-2 horizon (3.33 days)** is what the CI slice
-sees, and it is systematically milder — which is the point of having two:
+| problem (rx0) | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom |
+|---|---|---|---|---|---|---|---|---|---|
+| `flat` (0) | ok | ok | ok | ok | ok | ok | ok | ok | ok |
+| `slope` (0.00709) | ok | ok | ok | ok | ok | ok | 4.7e-08 leak | ✗ d0 | ✗ d0 |
+| `lid_flat` (0) | - | - | ok | ok | - | - | ok | - | - |
+| `lid_slope` (0.0138) | - | - | ok | ok | - | - | 6.6e-05 | - | - |
+| `seamount_gentle` (0.03) | ok | ok | ok | ok | ok | ok | 1.3e-07 leak | ✗ d0 | ✗ d0 |
+| `seamount_steep` (0.078) | ✗ d16 / ✗ d15 | ok | ok | ok | ok | ok | ✗ d18 | ✗ d0 | ✗ d0 |
+| `rx0_010` (0.1) | 1.7e-09 / 8.3e-09 | ok | ✗ d14 / ✗ d19 | ✗ d14 / ✗ d19 | ok | ok | 6.4e-12 leak | ✗ d0 | ✗ d0 |
+| `rx0_020` (0.2) | ✗ d14 | ok | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d6 | ✗ d2 | 1.5e-08 leak | ✗ d0 | ✗ d0 |
+| `rx0_040` (0.4) | ✗ d8 | ok | ✗ d2 | ✗ d2 | ✗ d2 / ✗ d6 | ✗ d1 | 2.7e-10 leak | ✗ d0 | ✗ d0 |
+| `rx0_060` (0.6) | ✗ d5 / ✗ d6 | ok | ✗ d15 / ✗ d24 | ✗ d15 / ✗ d24 | ok | ✗ d16 | 1.4e-08 leak | ✗ d0 | ✗ d0 |
+| `rx0_080` (0.8) | ✗ d6 / ✗ d7 | 1.7e-04 / 1.4e-04 | ✗ d21 / ✗ d28 | ✗ d21 / ✗ d28 | ✗ d14 / ✗ d24 | ok | 7.5e-09 leak | ✗ d0 | ✗ d0 |
 
-| problem | lagrangian | eulerian_z | sigma / zstar / zstar_sigma | zstar_full | z_fixed | rho | hycom |
-|---|---|---|---|---|---|---|---|
-| `flat` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `slope` | 8.83e-11 | 8.39e-11 | 8.85e-11 | 2.84e-07 | 5.11e-06 | 1.30e-05 | 1.09e-05 |
-| `seamount_gentle` | 1.03e-08 | 9.92e-09 | 1.05e-08 | 4.88e-07 | 7.39e-05 | 1.81e-05 | 2.37e-05 |
-| `seamount_steep` | NaN | 1.60e-06 | 1.08e-06 | 2.40e-06 | NaN | NaN | NaN |
-| `rx0_010` | 1.07e-04 | 1.95e-06 | 1.44e-06 | 2.26e-06 | 7.62e-04 | NaN | NaN |
-| `rx0_020` | NaN | 1.77e-04 | 1.34e-04 | 1.34e-04 | NaN | NaN | NaN |
-| `lid_slope` | refused | refused | 1.02e-09 | refused | 3.48e-05 | refused | refused |
+The EOS and stratification controls (not in the grids above): `slope × sigma
+× wright` passes both legs on both toolchains (inviscid En 7.6e-23, viscous
+5.4e-24); `slope × z_fixed × wright` leaks exactly like its linear twin;
+`slope × hycom × wright` completes on gfortran (inviscid En 2.2e-06) and dies
+at step 0 on the GPU (FINDING C). The `N² = 0` controls: `lid_slope × sigma`
+holds 1.5e-20 / 3.6e-20 (machine zero, both toolchains); `rx0_080 × sigma`
+unstratified still reaches the CFL wall — day 20 on gfortran, day 1 on the
+GPU — through the slower barotropic residual the forensics measured.
+
+**Counts, tier 1** (identical on both toolchains): inviscid **32 PASS / 83
+XFAIL** (23 of them the by-design refusals) / 0 FAIL / 0 XPASS; viscous **40
+PASS / 50 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the CI slice, 3.33 days,
+120 rows with the `__ssp_rk2` twins): gfortran 86 PASS / 34 XFAIL, nvfortran
+84 PASS / 36 XFAIL (the difference is FINDING C), 0 FAIL / 0 XPASS on both.
 
 **How to read it.**
 
-1. **`flat` and `lid_flat` are bit-zero for every accepted family, at BOTH
-   horizons.** `En = 0.000E+00` at every sample out to 30 days. That is the
-   control: a family that moves here has a defect that has nothing to do with
-   topography, and none does.
-2. **`sigma`, `zstar` and `zstar_sigma` are identical to every printed digit
-   on every geometry.** Three names, one answer — which is the claim
-   `CLAUDE.md` makes about `zstar` (it shares the `sigma` branch) and the
-   thing the 21 shipped namelists selecting `zstar_sigma` do **not** know
-   about themselves. The matrix now pins it. (At `rx0_020` they part in the
-   fourth digit, 6.354e-03 vs 6.358e-03 — the only place in the matrix they
-   differ at all.)
-3. **The horizon matters more than anything else in this table.** `slope` ×
-   `sigma` reads 8.85e-11 at 3.33 days and 3.00e-09 at 30 days — a 34× rise,
-   which a LEVEL bar set at either horizon would call a pass. It is the
-   `energy:rest-growth-rate` gate, tier 1 only, that says whether that is a
-   truncation settling or a mode growing. Nothing in the suite could ask that
-   before.
-4. **The `N² = 0` control works.** `lid_slope` × `sigma` unstratified holds
-   `En = 3.17e-20` at 30 days — machine zero, eleven decades under its
-   stratified twin on the identical geometry. That is what says the
-   stratified answer really is the `ρ₀N²Δe³` truncation and not a
-   mis-cancelled ice load. (It creeps 4.45e-23 → 3.17e-20 over the 30 days,
-   which a log fit happily calls 0.22/day — hence the round-off floor on the
-   rate gate, the same `1e-12` floor `energy:rest-settles` already carried.)
-5. **`z_fixed` LEAKS.** It is the only family whose `Salt` and `Heat` budget
-   residuals leave round-off — **1e-6 relative against a 1e-11 bar, five
-   decades over** — on every geometry with vanishing layers, as a *step* at
-   the first regrid rather than a drift. It also makes new tracer extrema,
-   and by 30 days it has gone non-finite on `seamount_gentle` and on
-   `lid_slope` where it survived 3.33 days. Leading suspect: the first-order
-   boundary cell in the remap reconstruction, fixed on
-   `origin/fix/ale-remap-rest-amplifier` and **not** in this tree — a
-   hypothesis, not a measurement, and the marker must be re-measured when
-   that branch lands.
-6. **`eulerian_z` is far worse than sigma on a slope, not better.** 1.13e-03
-   against sigma's 3.00e-09 — six decades — despite the name. It is a
-   stretched sigma with `η` dropped, and dropping `η` is what costs it.
-7. **The density-space coordinates are three to four decades above the
-   geometric ones**, and `rho` goes non-finite on every sloping geometry by
-   30 days. `rho` is documented validation-grade; `hycom` is the *production
-   GVC coordinate* and its numbers here are the ones to watch.
-8. **`zstar_full` sits between them** — 1500× above the `sigma` cell on
-   `slope` at 30 days — because its per-column `z_ref` table gives two
-   neighbouring columns of different depth *different* interface depths. It
-   is the only geometric family whose interface offset does not shrink with
-   the bathymetric gradient.
-9. **Nothing survives the `rx0` ladder — not even at `rx0 = 0.1`, half the
-   Beckmann–Haidvogel bound.** A single 2 km face joining a 675 m column to
-   an 825 m one puts `sigma` at 9.02e-04 m² s⁻² (4.2 cm/s of current out of
-   nothing) by 30 days, and from `rx0 = 0.4` up every family goes non-finite.
-   `lagrangian` and `eulerian_z` fail too, which is worth stating plainly:
-   **there is no truly geopotential coordinate in this tree** — `eulerian_z`
-   is a stretched sigma with `η` dropped, and `lagrangian` inherits the
-   sigma-shaped initial thickness and then never regrids. `z_fixed` is the
-   closest thing to a z coordinate, and it NaNs at every rung.
-10. **A cell being `xfail` does not excuse the case.** Every marker names the
-    assertions it covers **and the tiers it applies to**, so a cell excused on
-    `energy:rest-settles` still gates `finite`, `conserve:*`, the level bar,
-    the tracer bounds and the counters — and a defect only visible at 30 days
-    is not marked known-failing at tier 2, where it would report a permanent
-    XPASS.
+1. **The fixed configuration works where it was aimed.** Every
+   terrain-following family rests at machine zero on the slope, both
+   seamounts and the sloping ice lid in BOTH legs (`En ≤ 2.6e-21`), where the
+   pre-fix table carried 3e-09 … 2.7e-04 plateaus. The inviscid growth that
+   remains lives only on the single-face `rx0` ladder: sigma/zstar at rung 0.1
+   reach 1.7e-12 but still fit a growth rate over the 20-day bar, and the
+   steep rungs reach the CFL wall — the mode MOM6 shares.
+2. **`sigma` ≡ `zstar`** to every printed digit, in both legs, on both
+   toolchains; `zstar_sigma` now differs from them on the ladder (it is the
+   only place its z* branch engages).
+3. **`z_fixed` is clean only without fillers** (`flat`, `lid_flat`). Wherever
+   layers vanish it leaks salt and heat at 1e-7 … 1e-6 relative — fixed to
+   round-off by the pending `fix/remap-vanished-layer-content` (measured,
+   above) — and under the sloping lid it carries the saturated staircase
+   residual.
+4. **`rho` / `hycom` are clean on a flat bed only.** Inviscid they abort on
+   every sloping geometry within days (the negative layer the rest-state
+   mode writes); viscous they abort at step 0 (FINDING A).
+5. **`eulerian_z` (which pins `ssp_rk2`) is the viscous leg's widest
+   envelope** — it rests to `rx0 = 0.6` with the closure — while its
+   inviscid leg is the worst geometric family on a slope (1.2e-03).
+6. **`lagrangian`** inherits the sigma-shaped initial column and never
+   regrids; over a step it collapses a layer in both legs.
+
+## The rx0 ENVELOPES — what v0.1.0 claims
+
+A family's **envelope** is the largest geometry `rx0 = max|H_a − H_b| / (H_a +
+H_b)` (over every wet-wet face; exact for the ladder, from the Gaussian formula
+for the seamounts, `Δe/(2H̄)` for the slope and the lids — `geometry_rx0` in
+`vcoord_matrix.py`) at which **every viscous cell of the family at or below it
+passes every assertion on every toolchain measured**. It is derived by
+`vcoord_matrix_pin.py`, pinned in `vcoord_matrix_measured.py`, and gated: the
+self-test refuses a marker on any viscous cell inside its envelope. The
+measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
+(gentle seamount), 0.078 (steep seamount), 0.1, 0.2, 0.4, 0.6, 0.8.
+
+| family | viscous envelope (gate) | first viscous failure | inviscid: all-assertions pass up to | inviscid: completes 30 d at |
+|---|---|---|---|---|
+| `sigma`, `zstar` | **rx0 ≤ 0.078** | rx0 0.1 (FINDING B) | 0.078 | ≤ 0.2, and 0.6 |
+| `zstar_sigma` | **rx0 ≤ 0.1** | rx0 0.2 (FINDING B) | 0.1 | ≤ 0.2, and 0.6 |
+| `zstar_full` | **rx0 ≤ 0.1** | rx0 0.2 (FINDING B) | 0.1 | ≤ 0.6 |
+| `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.6** | rx0 0.8 (level + rate) | flat only | ≤ 0.03, and 0.1 |
+| `lagrangian` | **rx0 ≤ 0.03** | seamount_steep (collapse) | 0.03 | ≤ 0.03 |
+| `z_fixed` (closed faces) | **flat only** | slope (budget leak) | flat only | every geometry |
+| `rho`, `hycom` | **flat only** | slope (FINDING A) | flat only | ≤ 0.0071 |
+
+The classical Beckmann–Haidvogel bound is 0.2: the terrain-following
+envelopes sit at or below half of it, and the reason is FINDING B, not the
+pressure gradient — the inviscid leg of the same families completes 30 days at
+rx0 0.2 and 0.6.
+
+## Per-toolchain tolerance
+
+A marker pins **which assertions** a cell fails, never a number: its assertion
+list is the UNION over gfortran and nvfortran and over both tiers (the
+tolerance band), and its reason quotes every toolchain's own number. A cell
+whose number drifts inside its band stays XFAIL on both toolchains; a cell
+that fails a NEW assertion on either turns FAIL; a cell that passes outright
+on one toolchain and not the other is marked `toolchain_dependent` and
+reports PASS (not XPASS) where it passes. The bars are physics bars and are
+never read from a run.
+
+What differed on the previous measurement (five cells between gfortran and
+V100) and on this one:
+
+* **the abort mode, not the verdict** — which of `finite` /
+  `remap:preconditions` reports a blow-up that both toolchains have
+  (`rx0_080 × {zstar_sigma, sigma/unstrat}`, `seamount_steep × lagrangian`);
+  the union covers both;
+* **`tracer:no-new-extrema` on `slope × zstar_full`** — one last printed digit
+  of salinity (3.46700E+01 vs 3.46701E+01). That was a harness artefact: the
+  gate's 1e-6 slack is below the 1e-4 resolution of the console `[diag]`
+  line it reads. The gate now allows 1.5 print quanta (`diag_print_quantum`
+  in `stability.py`; self-tested both ways), which removes the flip and
+  leaves every real overshoot (z_fixed: 7e-4 … 0.14 PSU) failing;
+* **FINDING C** — the only genuine verdict difference, GPU only.
+
+## FINDINGS — what the two legs turned up
+
+Three sets of cells FAIL where one would expect them to rest — MOM6's
+shipped closure rests its seamount at every steepness it can reach
+(rx0 ≤ 0.76), and roundabout's own inviscid leg *completes* several of these
+cells. They were localised to a first-order term, **not** tuned away: the
+envelope table below is capped by them, and each marker carries its finding
+by name (`finding_visc_pred_corr`, `finding_stress_density`, `finding_gpu_wright_density` in
+`vcoord_matrix.py`). Nothing in the Fortran was changed by this PR.
+
+### FINDING B — `pred_corr` × Laplacian viscosity destabilises a stepped terrain-following column
+
+**Where.** `sigma`/`zstar` at every ladder rung 0.1–0.8 (the inviscid leg
+completes 0.1, 0.2 and 0.6), `zstar_sigma` at 0.2/0.4/0.8, `zstar_full` at
+0.2–0.6. Smooth geometries (slope, both seamounts, the sloping lid) rest at
+round-off (`En ≤ 4.5e-23`) in every terrain-following family.
+
+**First failure** (`vcmv_rx0_010_sigma`, gfortran, field output every 3 h; the V100 aborts the same cell on day 19):
+En creeps at round-off (`|u| ~ 3e-12 m s⁻¹`, all of it in the **top layer at
+the step face**, `i = 24–25`, baroclinic: column mean 40× under the deviation)
+until ≈ day 11.5 (outer step ≈ 1660); then a **BAROTROPIC, grid-scale (2 Δx),
+domain-wide** mode takes over (column mean ≈ max|u|, deviation 40× smaller)
+and grows ×1e4 in 30 h (amplitude rate ≈ 8.5e-5 s⁻¹), until continuity writes
+a negative layer (−255 m at step 2087) and the remap guard stops the run.
+On `rx0_060` with the scalar operator the same sequence starts at day 8.5.
+
+**The term.** One knob at a time against the gate configuration
+(`vcmv_rx0_010_sigma`, 30 days, gfortran):
+
+| substitution | outcome |
+|---|---|
+| (gate: `nu_h = 160`, stress tensor, linear drag, `pred_corr`, `dt = 600`) | **aborts day 14** |
+| no viscosity and no drag (= the inviscid cell) | rests, En 1.9e-13 |
+| no drag (viscosity alone) | aborts day 15 |
+| `split_scheme = "ssp_rk2"` | **rests**, En 1.1e-24 |
+| `f = 0` | **rests**, En 2.2e-23 |
+| `dt = 300 s` | **rests**, En 5.2e-24 |
+| `dt = 360 s` (MOM6's dt/Δx) / `450 s` | aborts day 20 / 18.5 |
+| `nu_h = 10` | **rests**, En 9.3e-20 |
+| `nu_h = 40` | aborts day 17 |
+| `coriolis form = "sadourny_energy"` (MOM6's seamount form) | aborts day 14.5 |
+
+and, on `rx0_060` with the scalar operator and no drag (14.6-day probes;
+"onset" = first sample to jump ×100): `nu_h` 40/80/160 onset d6.7/d6.5/d8.8;
+`bound_kh` no effect (160 is under its 333 m² s⁻¹ ceiling);
+`remap_boundary_extrap = .false.` **earlier** (d3.8); PCM remap much earlier
+(d2.1); `pc_be = 1` earlier (d5.0); `remap_nonuniform_weights = .false.` /
+`correction_h_weighted` later (d10.8 / d10.2); y-periodic earlier (d2.3, so
+the walls are not the cause); `nghost = 3` bit-identical; a frozen regrid
+(`regrid_time_scale = 10 d`), `N² = 0`, `f = 0`, `ssp_rk2` and `dt = 300/450`
+clean to the probe horizon.
+
+**Reading.** A `dt`-dependent instability of the **default outer split with a
+Laplacian viscosity** — unlike the inviscid mode, which is dt-independent. It
+needs rotation, stratification and a live regrid, and it is carried by the
+barotropic mode. The closest documented mechanism is the one the `bound_kh`
+docstring records: the depth-mean viscous forcing reaches the barotropic
+solve FROZEN over the outer step (via `F_bt`), and for grid-scale gravity
+modes with `ω·dt ≫ 1` a frozen damping force arrives out of phase. Here the
+bound does not bind, so this is a hypothesis, not a localisation to a line.
+**What a user can do today:** at this resolution, `dt ≤ 300 s`, or
+`nu_h ≤ 10 m² s⁻¹`, or `ssp_rk2` (with its own documented cost) rests the
+cell. **Next measurement:** split `F_bt`'s viscous contribution from the
+layer tendency (freeze it at the stage-entry value vs. the time-mean) on this
+cell.
+
+### FINDING A — the stress-divergence viscosity drives a density-space column negative
+
+**Where.** `rho` and `hycom`, every non-flat geometry, both outer schemes, at
+outer steps 4–8 (−5e-5 m … −0.3 m). Flat geometries are clean.
+
+**The term.** Against `vcmv_slope_rho`:
+
+| substitution | outcome |
+|---|---|
+| gate (`stress_tensor = .true.`, drag) | remap guard, step 7 |
+| no drag | still fails (remap guard, step 7 — identical) |
+| scalar operator (`stress_tensor = .false.`), with drag, 30 d | **rests**, En 2.0e-23 (hycom: 7.0e-25) |
+| no viscosity | clean over the 0.4 d probed (the inviscid cell completes 30 d, En 2.3e-06) |
+
+So it is the thickness-weighted operator on the thin, keep-alive layers a
+density coordinate carries where its targets outcrop. The one MOM6 thin-layer
+safeguard roundabout's port lacks is `hrat_min = min(1, h_min/(h + h_neglect))`
+scaling the BOUND_KH ceiling (`MOM_hor_visc.F90`) — **a hypothesis**, not
+measured. **What a user can do today:** the scalar operator.
+
+### FINDING C — GPU only: the density-space target builder faults under the Wright EOS
+
+**Where.** nvfortran 26.5 / V100 (cc70), every `rho` or `hycom` run with
+`&ocean_eos_nml eos = "wright"`: the matrix's `slope × hycom × wright` in both
+legs, and — probed on purpose — `flat × hycom × wright` (a flat bed at rest)
+and `slope × rho × wright`. gfortran completes the same inviscid cell to day
+30 (En 2.2e-06).
+
+**First failure.** The first regrid (no `[stats]` line is ever printed):
+`CUDA_ERROR_ILLEGAL_ADDRESS` in `ocean_vcoord_compute_target_h_rho_impl`
+(`src/core/ocean/vcoord/rdb_ocean_vcoord.F90`, the column `do concurrent`).
+The linear EOS on the same cells is clean on the GPU; a gfortran
+`-fcheck=all` Debug build runs `flat × hycom × wright` with no bounds
+violation. The Wright coefficients are `parameter`s, so the point EOS call is
+not the suspect; the kernel wraps its `do concurrent` in an `associate` over
+`this%` components — the NVHPC mapping hazard CLAUDE.md records — which is a
+hypothesis, not a localisation. No `ctest` case runs `rho`/`hycom` × Wright
+on the device, which is why the V100 suite is green. Related, and the same
+kernel: when FINDING A hands it a negative layer the GPU faults there too,
+before the remap guard can report — the non-monotone-column refusal the audit
+proposed (fix item 2) would turn both into fail-loud messages.
 
 ## Adding a family or a problem
 
@@ -731,27 +969,42 @@ sees, and it is systematically milder — which is the point of having two:
   *measures*. If it is refused under a cavity, it also belongs outside
   `CAVITY_ACCEPTED`. [`docs/howto/add_vertical_coordinate.md`](../../docs/howto/add_vertical_coordinate.md)
   makes this a required step: a family that is not in the matrix has no
-  envelope statement.
+  envelope statement. Both legs pick it up automatically.
 * **A new problem** — append to `PROBLEMS` with its `class`, its `bar`
-  constant, its worst per-face `Δe` (used for the truncation estimate), its
-  `topo` configuration, and `tier2: True` only if it belongs in the CI slice.
-  A file-backed geometry adds a `bathy` entry and gets its NetCDF written by
-  the `setup` hook.
-* **Then re-measure.** The `MEASURED_XFAIL` table is *measurements*, so a new
-  cell's marker is written from a run, never chosen. Run the matrix, read the
-  numbers, write them down with the assertion list they came with.
+  constant, its worst per-face `Δe`, its `topo` configuration, and `tier2` /
+  `tier2_viscous` only if it belongs in the CI slice of that leg.
+* **Then re-measure, on both toolchains, and pin by tool.** Sweep tier 1 and
+  tier 2 on gfortran and on nvfortran (`--tags vcoord_matrix --out …`,
+  `--scratch-root` distinct per toolchain if they run at once), then
+  `python3 tests/regression/vcoord_matrix_pin.py --t1 gfortran=… --t1
+  nvfortran=… --t2 gfortran=… --t2 nvfortran=… --provenance "…"`. The
+  generated `vcoord_matrix_measured.py` is never hand-edited.
 * **Never** close a cell by widening `en_rest_max`, by shortening the run, or
-  by putting viscosity into the template.
+  by putting viscosity into the INVISCID leg — and a viscous cell that fails
+  where you expected it to rest is a FINDING to localise, not a marker.
 
-## Tiers and cost
+## Tiers, cost, and what runs in CI
 
-| | tier 2 (CPU, the CI gate) | tier 1 (GPU, nightly) |
+| | tier 2 (CPU, **the CI gate**) | tier 1 (local only) |
 |---|---|---|
-| geometries | `flat`, `slope`, `rx0_060` — one per geometry class | all eleven |
+| inviscid leg | `flat`, `slope`, `rx0_060` × every family | all 115 cells |
+| viscous leg | `flat`, `slope`, `seamount_steep` (the top of the terrain-following envelope) × every family | all 90 cells |
 | length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days |
-| rows | 63 (incl. the `__ssp_rk2` twins) | 115 (twins are tier-1-skipped by the curated scheme axis) |
-| measured | **+122 s** on 6 workers, on top of the pre-existing 163 s — 285 s for the whole tier-2 suite (matrix slice alone: 63 rows, 111 s) | **3989 s (66 min) for all 115 cells on ONE V100**, NVHPC 26.5. Nightly, not CI. |
+| rows | 120 (incl. the `__ssp_rk2` twins) | 205 (twins are tier-1-skipped by the curated scheme axis) |
+| measured wall | 443 s on 2 workers of a contended 4-core box (gfortran); 1081 s on one V100 | 3438 s on 3 CPU workers (gfortran); 11 910 s on one V100 (nvfortran 26.5, launch-bound on this box) |
 | the rate gate | `SKIP … TIER 1 ONLY` — the bar is a 20-day e-folding | evaluated |
+
+**The decision.** `.github/workflows/ocean-stability.yml` runs the whole
+tier-2 suite on a hosted 4-core gfortran runner under a 45-minute job budget;
+the matrix slice rides in it (the workflow header states it). The viscous
+slice is chosen to carry the gate's IN-ENVELOPE geometries — the steep
+seamount is the top of the terrain-following envelope — so a regression that
+breaks the v0.1.0 claim reddens CI. The full matrix is tier 1: it needs 30
+simulated days per cell to see a growth rate (the viscous leg's FINDING B
+fires between day 2 and day 28), which neither fits the budget nor runs on a
+hosted runner's hardware for the GPU half; it is re-run locally, on BOTH
+toolchains, whenever a vertical-coordinate, remap, PGF, viscosity or
+split-step change lands, and the pinned table is regenerated from it.
 
 ## Not done, and not stubbed
 
