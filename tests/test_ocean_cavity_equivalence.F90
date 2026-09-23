@@ -99,6 +99,36 @@ module test_ocean_cavity_equivalence
    !! fifteen decades of separation from the physics.  If `du` in the
    !! LOADED variant ever reaches its bound, the cancellation inside
    !! `pa(nz+1)` has stopped happening.
+   !!
+   !! ### The thickness-rounding floor (the loaded "0 (exactly)" is luck)
+   !!
+   !! The table's loaded `dh = deta = 0` is not guaranteed.  The two runs'
+   !! velocities differ by ~1e-18 m/s, so each continuity update's EXACT
+   !! results differ by `~du*DT*h/DX ~ 3e-17 m`, nearly three decades
+   !! below `spacing(h) = 1.4e-14 m`.  Almost always both round to the
+   !! same float, but a cell whose exact value sits within that 3e-17 of a
+   !! rounding boundary rounds to ADJACENT floats in the two runs.  Which
+   !! cell, if any, depends on FMA contraction, so on the compiler and the
+   !! `-march`.  Measured after `mask_time_mean_velocities` changed the
+   !! trajectory (gfortran 15.1, Release, `-march=x86-64-v3`, the CI
+   !! target): steps 1-4 bit-identical, then at step 5 ONE cell
+   !! (`i=12, j=10, k=1`, the bed layer in the corner) differs by exactly one ulp;
+   !! at step 6 `dh = 2.84e-14` (2 ulp of the 83 m layer), `deta =
+   !! 2.27e-13` (2 ulp of the 1000 m z bookkeeping) and `du = 1.33e-15`.
+   !! The same source at `-march=native` rounds every cell identically and
+   !! lands on the table above.
+   !!
+   !! That `du` is not a leak in the load cancellation: it is the
+   !! gravity-wave response `sqrt(g/H)*dh = 2.0e-15` to a one-ulp column
+   !! discrepancy, and it only shows up in the loaded variant because
+   !! that bound is four decades below it.  So the two variants now bound
+   !! what the pair can actually represent: `h` and `eta` to at least
+   !! one ulp per step (`thickness_floor`, `eta_floor`), and `u` to the
+   !! load-cancelled bound PLUS the gravity-wave response to the
+   !! MEASURED thickness discrepancy (`gw_response`).  That response is
+   !! itself capped a priori, because `dh`/`deta` are asserted under
+   !! their floors first.  When the thicknesses agree bit for bit the
+   !! term is zero and the loaded gate keeps its full 3.09e-17 tightness.
    use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -428,6 +458,50 @@ contains
       tol_u = bound_accel_from(epsilon(1.0_wp)*PA_ANOM)
    end function bound_accel_loaded
 
+   pure function thickness_floor(h_max) result(tol)
+      !! The smallest `dh` bound the pair can represent: ONE ulp of the
+      !! thickest layer per step.  Each step rounds `h` once in the
+      !! continuity update (and once in the remap), and when two runs'
+      !! exact results sit on either side of a rounding boundary they come
+      !! out one ulp apart (module header).  Neighbours cannot amplify a
+      !! flip: a one-ulp `h` difference moves the flux divergence by
+      !! `u*DT*spacing(h)/DX ~ 2e-18 m`, far below an ulp.  So the per-step
+      !! flips add up, and `N_STEPS` of them bound the window.  (Measured:
+      !! 2 ulp at step 6 under `-march=x86-64-v3`.)
+      real(wp), intent(in) :: h_max
+      real(wp) :: tol
+      tol = real(N_STEPS, wp)*spacing(h_max)
+   end function thickness_floor
+
+   pure function eta_floor() result(tol)
+      !! The `eta` twin of `thickness_floor`.  `bt_eta` is reconciled from
+      !! column totals and interface stacks whose magnitude reaches `BED`,
+      !! the deeper of the two runs' z bookkeeping, so one rounding flip
+      !! costs `spacing(BED)`, not an ulp of `eta` itself.  (Measured: 2 ulp
+      !! of 1000 m at step 6.)
+      real(wp) :: tol
+      tol = real(N_STEPS, wp)*spacing(BED)
+   end function eta_floor
+
+   pure function gw_response(d_col) result(tol_u)
+      !! Velocity the pair may acquire from a column-thickness
+      !! discrepancy `d_col` (m).  In the linear shallow-water limit a
+      !! surface-height difference `d_col` becomes a barotropic velocity
+      !! `c*d_col/H = sqrt(g/H)*d_col`.  `H` is the SHALLOW twin's water
+      !! column, `BED - DRAFT`, because a smaller `H` gives the larger
+      !! response.  One ulp of the 83 m layer predicts 2.0e-15 m/s; the
+      !! measured step-6 `du` is 1.33e-15.  `d_col` is the MEASURED
+      !! end-of-window `max(dh, deta)`.  Nothing restores bit-identity once
+      !! a flip has happened, so the final value is the largest the window
+      !! saw (24x margin on the measured case).  It is asserted
+      !! under `thickness_floor`/`eta_floor` before it is used here, so
+      !! this term is capped a priori, and it is exactly zero when the
+      !! thicknesses agree bit for bit.
+      real(wp), intent(in) :: d_col
+      real(wp) :: tol_u
+      tol_u = sqrt(GRAVITY/(BED - DRAFT))*d_col
+   end function gw_response
+
    subroutine test_seed_identical(error)
       !! At `t = 0` the two runs are BIT-for-bit identical — the datum
       !! absorption is exact arithmetic, not an approximation.
@@ -468,7 +542,7 @@ contains
       real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
       real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
       logical :: ok_a, ok_b
-      real(wp) :: du, dv, dh, deta, tol_u, tol_h, signal
+      real(wp) :: du, dv, dh, deta, tol_u, tol_h, tol_eta, signal
 
       call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
                     "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a)
@@ -486,10 +560,13 @@ contains
       dv = maxval(abs(v_a - v_b))
       dh = maxval(abs(h_a - h_b))
       deta = maxval(abs(eta_a - eta_b))
-      tol_u = bound_accel()
       ! A thickness difference is a velocity difference integrated by the
-      ! continuity divergence: `dh ~ du*(dt*N)*H/dx`.
-      tol_h = tol_u*DT*real(N_STEPS, wp)*BED/DX
+      ! continuity divergence: `dh ~ du*(dt*N)*H/dx` -- but never below
+      ! what `h`/`eta` can represent (`thickness_floor`, `eta_floor`).
+      tol_h = max(bound_accel()*DT*real(N_STEPS, wp)*BED/DX, &
+                  thickness_floor(maxval(abs(h_b))))
+      tol_eta = max(bound_accel()*DT*real(N_STEPS, wp)*BED/DX, eta_floor())
+      tol_u = bound_accel() + gw_response(max(dh, deta))
 
       ! NON-VACUITY FIRST: if the ocean never moved, everything below is
       ! 0 == 0 and the gate is worthless.
@@ -499,14 +576,16 @@ contains
                  "the equivalence gate is vacuous")
       if (allocated(error)) return
 
+      ! Thickness first: `tol_u` spends `max(dh, deta)`, so it is only a
+      ! bound once those are known to sit under their own.
+      call check(error, dh <= tol_h, "h_layer must match the shallow twin")
+      if (allocated(error)) return
+      call check(error, deta <= tol_eta, "bt_eta must match the shallow twin")
+      if (allocated(error)) return
       call check(error, du <= tol_u, "u_face_x_layer must match the shallow twin to "// &
                  "the pa-offset round-off bound")
       if (allocated(error)) return
       call check(error, dv <= tol_u, "v_face_y_layer must match the shallow twin")
-      if (allocated(error)) return
-      call check(error, dh <= tol_h, "h_layer must match the shallow twin")
-      if (allocated(error)) return
-      call check(error, deta <= tol_h, "bt_eta must match the shallow twin")
    end subroutine test_flat_lid_equivalence
 
    subroutine test_flat_lid_equivalence_loaded(error)
@@ -521,7 +600,7 @@ contains
       real(wp), allocatable :: h_a(:, :, :), u_a(:, :, :), v_a(:, :, :), eta_a(:, :)
       real(wp), allocatable :: h_b(:, :, :), u_b(:, :, :), v_b(:, :, :), eta_b(:, :)
       logical :: ok_a, ok_b
-      real(wp) :: du, dv, dh, deta, tol_u, tol_h, signal
+      real(wp) :: du, dv, dh, deta, tol_u, tol_h, tol_eta, signal
 
       call run_case(BED, "enable = .true., draft_config = 'flat', draft_depth = "// &
                     "500.0", N_STEPS, h_a, u_a, v_a, eta_a, ok_a, loaded=.true.)
@@ -539,8 +618,14 @@ contains
       dv = maxval(abs(v_a - v_b))
       dh = maxval(abs(h_a - h_b))
       deta = maxval(abs(eta_a - eta_b))
-      tol_u = bound_accel_loaded()
-      tol_h = tol_u*DT*real(N_STEPS, wp)*BED/DX
+      ! The derived `dh ~ du*(dt*N)*H/dx` is 1.39e-14 here, BELOW
+      ! `spacing(h) = 1.42e-14` for the 83 m layers, so on its own it
+      ! demanded bit-identical thickness.  That is not the claim, and it is
+      ! not something rounding can promise (module header), so floor it.
+      tol_h = max(bound_accel_loaded()*DT*real(N_STEPS, wp)*BED/DX, &
+                  thickness_floor(maxval(abs(h_b))))
+      tol_eta = max(bound_accel_loaded()*DT*real(N_STEPS, wp)*BED/DX, eta_floor())
+      tol_u = bound_accel_loaded() + gw_response(max(dh, deta))
 
       signal = maxval(abs(u_a))
       call check(error, signal > 1.0e4_wp*tol_u, &
@@ -548,14 +633,17 @@ contains
                  "the loaded equivalence gate is vacuous")
       if (allocated(error)) return
 
+      call check(error, dh <= tol_h, "h_layer must match the shallow twin to a "// &
+                 "few ulp (one rounding flip per step)")
+      if (allocated(error)) return
+      call check(error, deta <= tol_eta, "bt_eta must match the shallow twin to a "// &
+                 "few ulp of the z bookkeeping")
+      if (allocated(error)) return
       call check(error, du <= tol_u, "u_face_x_layer must match the shallow twin to "// &
-                 "the TIGHTER load-cancelled round-off bound")
+                 "the TIGHTER load-cancelled round-off bound (plus the gravity-wave "// &
+                 "response to any thickness rounding flip)")
       if (allocated(error)) return
       call check(error, dv <= tol_u, "v_face_y_layer must match the shallow twin")
-      if (allocated(error)) return
-      call check(error, dh <= tol_h, "h_layer must match the shallow twin")
-      if (allocated(error)) return
-      call check(error, deta <= tol_h, "bt_eta must match the shallow twin")
       if (allocated(error)) return
 
       ! The point of the slice: cancelling the load at the top of the
