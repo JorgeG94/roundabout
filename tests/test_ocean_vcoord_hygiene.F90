@@ -34,7 +34,9 @@ module test_ocean_vcoord_hygiene
    use rdb_constants, only: wp, VCOORD_ZSTAR_FULL
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_config, only: config_t, read_config_from_string, validate_config, &
-                         cavity_draft_is_uniform
+                         cavity_draft_is_uniform, zfixed_cavity_nu_h_below_envelope, &
+                         ZFIXED_CAVITY_NU_H_MIN
+   use pic_logger, only: global_logger
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_teardown
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
@@ -61,7 +63,11 @@ contains
                   new_unittest("h_min_above_h_vanished_is_refused", test_h_min_refused), &
                   new_unittest("h_min_on_the_marker_is_accepted", test_h_min_on_marker), &
                   new_unittest("cavity_draft_uniformity_predicate", test_draft_uniform), &
-                  new_unittest("cavity_accepts_z_fixed_and_fences_it", test_cavity_z_fixed) &
+                  new_unittest("cavity_accepts_z_fixed_and_fences_it", test_cavity_z_fixed), &
+                  new_unittest("z_fixed_cavity_refuses_pgf_reconstruct", &
+                               test_cavity_z_fixed_pgf_reconstruct), &
+                  new_unittest("z_fixed_cavity_low_nu_h_warns_not_refuses", &
+                               test_cavity_z_fixed_nu_h_envelope) &
                   ]
    end subroutine collect_ocean_vcoord_hygiene_tests
 
@@ -236,16 +242,21 @@ contains
                          "zstar_full with zstar_h_min exactly on H_VANISHED")
    end subroutine test_h_min_on_marker
 
-   function nml_cavity(vcoord_type, draft_body, vmix_body, extra) result(nml)
+   function nml_cavity(vcoord_type, draft_body, vmix_body, extra, pgf_extra) result(nml)
       !! A minimal in-envelope single-rank CAVITY namelist.  Flat 1000 m
       !! bed, 4 layers (so `h_nominal = max_depth/nz = 250 m` and the
       !! `h_min_cavity >= 2*h_nominal` rule wants 500 m), FV_MOM6 with the
       !! top BC injected.  `vmix_body` is the `&ocean_vmix_nml` body (KPP
       !! must be off inside the `z_fixed` x cavity envelope, so it is a
       !! parameter rather than a fixed line) and `extra` appends further
-      !! groups verbatim.
+      !! groups verbatim.  `pgf_extra`, when present, is appended to the
+      !! `&ocean_pgf_nml` body (a second `&ocean_pgf_nml` group in `extra`
+      !! would be a duplicate group, not an override).
       character(len=*), intent(in) :: vcoord_type, draft_body, vmix_body, extra
-      character(len=:), allocatable :: nml
+      character(len=*), intent(in), optional :: pgf_extra
+      character(len=:), allocatable :: nml, pgf_body
+      pgf_body = "form = 'fv_mom6', p_top_in_bc = .true."
+      if (present(pgf_extra)) pgf_body = pgf_body//", "//pgf_extra
       nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
             "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"// &
             new_line("a")// &
@@ -256,7 +267,7 @@ contains
             "&vcoord_nml vcoord_type = '"//vcoord_type//"' /"//new_line("a")// &
             "&ocean_cavity_dyn_nml enable = .true., h_min_cavity = 500.0, "// &
             draft_body//" /"//new_line("a")// &
-            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
+            "&ocean_pgf_nml "//pgf_body//" /"//new_line("a")// &
             "&ocean_vmix_nml "//vmix_body//" /"//new_line("a")// &
             extra// &
             "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
@@ -373,5 +384,169 @@ contains
                             .false., "z_fixed x cavity with h_min_cavity < 2*h_nominal")
       end block checks
    end subroutine test_cavity_z_fixed
+
+   subroutine test_cavity_z_fixed_pgf_reconstruct(error)
+      !! `&ocean_pgf_nml reconstruct_for_pressure` is REFUSED under
+      !! `z_fixed` x cavity, and only there.
+      !!
+      !! Measured on ISOMIP+ Ocean0 idealised (z_fixed + closed faces,
+      !! melt off, from rest) on the v0.1.0 defaults: the knob spins up
+      !! En ~ 1E-03 m2/s2 within 3 hours and holds it for 30 days,
+      !! ~19 000x the layer-mean-density run (it went non-finite at day
+      !! 0.41 before I1' and bebt = 0.1) — the in-layer PLM/PPM edge build
+      !! reads the inert top-side fillers as neighbouring water at the
+      !! partial top cell (`cavity_rest_growth_diagnosis.md` §Q.0 item
+      !! 9).  Until the
+      !! filler-aware reconstruction lands the configuration must not
+      !! start.  The ACCEPT rows pin the scope: the same knob on the SAME
+      !! cavity under `sigma` (no fillers) is legal, and the same cavity
+      !! under `z_fixed` with the knob off is legal.
+      type(error_type), allocatable, intent(out) :: error
+      checks: block
+         call expect_config(error, &
+                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
+                                       pgf_extra="reconstruct_for_pressure = .true."), &
+                            .false., "z_fixed x cavity x reconstruct_for_pressure")
+         if (allocated(error)) exit checks
+         call expect_config(error, &
+                            nml_cavity("sigma", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
+                                       pgf_extra="reconstruct_for_pressure = .true."), &
+                            .true., "sigma x cavity x reconstruct_for_pressure")
+         if (allocated(error)) exit checks
+         call expect_config(error, &
+                            nml_cavity("z_fixed", "draft_config = 'flat', "// &
+                                       "draft_depth = 200.0", "use_kpp = .false.", "", &
+                                       pgf_extra="reconstruct_for_pressure = .false."), &
+                            .true., "z_fixed x cavity with reconstruct_for_pressure off")
+      end block checks
+   end subroutine test_cavity_z_fixed_pgf_reconstruct
+
+   subroutine test_cavity_z_fixed_nu_h_envelope(error)
+      !! `nu_h < ZFIXED_CAVITY_NU_H_MIN` under `z_fixed` x cavity WARNS and
+      !! still VALIDATES.  On ISOMIP+ Ocean0 (2 km, melt off) `nu_h = 0`
+      !! carries an inviscid mode growing exponentially at 0.18 /day
+      !! (d15-30, accelerating; V100, v0.1.0 defaults) while `nu_h = 2`
+      !! decelerates (§Q.3 re-measured); the vcoord stability matrix
+      !! runs inviscid ON PURPOSE, so a refusal would be wrong.
+      !!
+      !! Three things are asserted: the predicate's truth table (it fires
+      !! below the bound on `z_fixed` x cavity and nowhere else), that the
+      !! inviscid configuration is ACCEPTED, and that `validate_config`
+      !! actually emits the WARNING — captured through the logger's file
+      !! sink, so a refactor that drops the call site is caught, not only
+      !! one that breaks the predicate.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+      character(len=*), parameter :: LOG_NAME = "test_vcoord_hygiene_nu_h_warning.log"
+      character(len=*), parameter :: MARKER = "lower envelope of vcoord_type='z_fixed'"
+      checks: block
+         call check(error, ZFIXED_CAVITY_NU_H_MIN == 2.0_wp, &
+                    "the envelope of record is nu_h = 2 m2/s (section Q)")
+         if (allocated(error)) exit checks
+
+         ! --- truth table ---
+         call parse_nu_h(cfg, "z_fixed", .true., "0.0", ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the inviscid probe must parse")
+         if (allocated(error)) exit checks
+         call check(error, zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "nu_h = 0 under z_fixed x cavity is below the envelope")
+         if (allocated(error)) exit checks
+         call parse_nu_h(cfg, "z_fixed", .true., "1.99", ierr)
+         call check(error, zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "nu_h = 1.99 under z_fixed x cavity is below the envelope")
+         if (allocated(error)) exit checks
+         call parse_nu_h(cfg, "z_fixed", .true., "2.0", ierr)
+         call check(error,.not. zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "nu_h = 2 sits ON the envelope, no warning")
+         if (allocated(error)) exit checks
+         call parse_nu_h(cfg, "z_fixed", .true., "6.0", ierr)
+         call check(error,.not. zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "the ISOMIP+ Table-4 nu_h = 6 is inside the envelope")
+         if (allocated(error)) exit checks
+         call parse_nu_h(cfg, "sigma", .true., "0.0", ierr)
+         call check(error,.not. zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "a sigma cavity is not this envelope's business")
+         if (allocated(error)) exit checks
+         call parse_nu_h(cfg, "z_fixed", .false., "0.0", ierr)
+         call check(error,.not. zfixed_cavity_nu_h_below_envelope(cfg), &
+                    "z_fixed WITHOUT a cavity is not this envelope's business")
+         if (allocated(error)) exit checks
+
+         ! --- the inviscid configuration still validates, and warns ---
+         call parse_nu_h(cfg, "z_fixed", .true., "0.0", ierr)
+         call global_logger%configure_file_output(LOG_NAME)
+         call validate_config(cfg, ierr)
+         call global_logger%close_log_file()
+         call check(error, ierr == OCEAN_STATUS_OK, &
+                    "nu_h = 0 under z_fixed x cavity must be ACCEPTED (a warning, "// &
+                    "not a refusal)")
+         if (allocated(error)) exit checks
+         call check(error, log_contains(LOG_NAME, MARKER), &
+                    "validate_config must emit the nu_h lower-envelope WARNING")
+         if (allocated(error)) exit checks
+
+         ! --- and stays silent at the protocol value ---
+         call parse_nu_h(cfg, "z_fixed", .true., "6.0", ierr)
+         call global_logger%configure_file_output(LOG_NAME)
+         call validate_config(cfg, ierr)
+         call global_logger%close_log_file()
+         call check(error, ierr == OCEAN_STATUS_OK, "nu_h = 6 must be ACCEPTED")
+         if (allocated(error)) exit checks
+         call check(error,.not. log_contains(LOG_NAME, MARKER), &
+                    "no nu_h envelope warning at the protocol value")
+      end block checks
+      call delete_file(LOG_NAME)
+   end subroutine test_cavity_z_fixed_nu_h_envelope
+
+   subroutine parse_nu_h(cfg, vcoord_type, cavity, nu_h, ierr)
+      !! Parse the cavity fixture (or its cavity-OFF twin) with
+      !! `&ocean_hvisc_nml nu_h` set.  Not `pure`: the parser logs.
+      type(config_t), intent(out) :: cfg
+      character(len=*), intent(in) :: vcoord_type, nu_h
+      logical, intent(in) :: cavity
+      integer, intent(out) :: ierr
+      character(len=:), allocatable :: nml
+      if (cavity) then
+         nml = nml_cavity(vcoord_type, "draft_config = 'flat', draft_depth = 200.0", &
+                          "use_kpp = .false.", &
+                          "&ocean_hvisc_nml nu_h = "//nu_h//" /"//new_line("a"))
+      else
+         nml = nml_with_vcoord("vcoord_type = '"//vcoord_type//"'")// &
+               "&ocean_hvisc_nml nu_h = "//nu_h//" /"//new_line("a")
+      end if
+      call read_config_from_string(nml, cfg, ierr=ierr)
+   end subroutine parse_nu_h
+
+   function log_contains(fname, marker) result(found)
+      !! Does the log file `fname` hold a line containing `marker`?
+      !! Not `pure`: file I/O.
+      character(len=*), intent(in) :: fname, marker
+      logical :: found
+      integer :: u, ios
+      character(len=8192) :: line
+      found = .false.
+      open (newunit=u, file=fname, status="old", action="read", iostat=ios)
+      if (ios /= 0) return
+      do
+         read (u, "(a)", iostat=ios) line
+         if (ios /= 0) exit
+         if (index(line, marker) > 0) then
+            found = .true.
+            exit
+         end if
+      end do
+      close (u)
+   end function log_contains
+
+   subroutine delete_file(fname)
+      !! Remove the scratch log.  Not `pure`: file I/O.
+      character(len=*), intent(in) :: fname
+      integer :: u, ios
+      open (newunit=u, file=fname, status="old", iostat=ios)
+      if (ios == 0) close (u, status="delete")
+   end subroutine delete_file
 
 end module test_ocean_vcoord_hygiene
