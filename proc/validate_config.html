@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 2.3% of total for procedures.">1217 statements</a>
+                 title=" 2.3% of total for procedures.">1221 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -179,23 +179,23 @@
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_pressure_force.html'>rdb_ocean_pressure_force</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_boundary_types.html'>rdb_ocean_boundary_types</a></li>
                   <li class="list-inline-item"><a href='../module/rdb_ocean_bottom_drag.html'>rdb_ocean_bottom_drag</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_vcoord.html'>rdb_vcoord</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_pressure_force.html'>rdb_ocean_pressure_force</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_lateral_mix.html'>rdb_ocean_lateral_mix</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_tidal_mixing.html'>rdb_ocean_tidal_mixing</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_horizontal_viscosity.html'>rdb_ocean_horizontal_viscosity</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_boundary_types.html'>rdb_ocean_boundary_types</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_constants.html'>rdb_constants</a></li>
                   <li class="list-inline-item"><a href='../module/rdb_ocean_pseudo_salt.html'>rdb_ocean_pseudo_salt</a></li>
                   <li class="list-inline-item"><a href='../module/rdb_eos.html'>rdb_eos</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_cavity.html'>rdb_ocean_cavity</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_lateral_mix.html'>rdb_ocean_lateral_mix</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></li>
                   <li class="list-inline-item"><a href='../module/rdb_recon_weno.html'>rdb_recon_weno</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_constants.html'>rdb_constants</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_tidal_mixing.html'>rdb_ocean_tidal_mixing</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></li>
                   <li class="list-inline-item"><a href='../module/rdb_coriolis_adv.html'>rdb_coriolis_adv</a></li>
-                  <li class="list-inline-item"><a href='../module/rdb_ocean_horizontal_viscosity.html'>rdb_ocean_horizontal_viscosity</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_vmix.html'>rdb_ocean_vmix</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_vcoord.html'>rdb_vcoord</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -1669,7 +1669,7 @@ unchanged); absent behaves as today.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-cfg~62"></span>
+              <span class="anchor" id="variable-cfg~61"></span>
               type(<a href='../type/config_t.html'>config_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1684,7 +1684,7 @@ unchanged); absent behaves as today.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ierr~99"></span>
+              <span class="anchor" id="variable-ierr~108"></span>
               integer,
             </td>
 <td>intent(out),</td>
@@ -3986,6 +3986,32 @@ large graphs.</div>
 <span class="w">                              </span><span class="s2">"configuration."</span><span class="p">)</span>
 <span class="w">            </span><span class="n">has_error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
 <span class="w">         </span><span class="k">end if</span>
+<span class="w">         </span><span class="c">! z-level closed faces need their SOLID WALLS to be walls.  With</span>
+<span class="w">         </span><span class="c">! `mask_wall_velocity = .false.` a wall face keeps a free per-layer</span>
+<span class="w">         </span><span class="c">! velocity that carries no mass (continuity zeroes the wall flux)</span>
+<span class="w">         </span><span class="c">! and whose depth mean the BT fold resets to zero every stage —</span>
+<span class="w">         </span><span class="c">! but whose BAROCLINIC part nothing restores under pred_corr: the</span>
+<span class="w">         </span><span class="c">! Coriolis reads `u_av`, which the transport renormaliser never</span>
+<span class="w">         </span><span class="c">! writes at a skipped wall face, so the wall velocity never sees</span>
+<span class="w">         </span><span class="c">! its own rotation and integrates the layer Coriolis of its</span>
+<span class="w">         </span><span class="c">! interior neighbour without bound.  The closed-face mask is what</span>
+<span class="w">         </span><span class="c">! makes that neighbour baroclinic (a closed bed layer beside open</span>
+<span class="w">         </span><span class="c">! ones).  Measured on the rotating ledge basin of</span>
+<span class="w">         </span><span class="c">! tests/test_ocean_zfixed_cor_ref.F90: KE+PE x1783 over 4000</span>
+<span class="w">         </span><span class="c">! outer steps with the physical interior at x1.24 — the whole</span>
+<span class="w">         </span><span class="c">! growth sits on the unmasked wall faces — against x0.74 with</span>
+<span class="w">         </span><span class="c">! the walls masked.  The mask is the DEFAULT; refused rather than</span>
+<span class="w">         </span><span class="c">! silently overridden.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">zfixed_closed_faces</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">mask_wall_velocity</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"&amp;ocean_bt_nml split_scheme='pred_corr' with "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"&amp;vcoord_nml zfixed_closed_faces=.true. requires "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"&amp;ocean_bc_nml mask_wall_velocity=.true. (the default): "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"an unmasked solid-wall face carries a baroclinic layer "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"velocity that pred_corr's u_av-evaluated Coriolis never "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"rotates, so it grows without bound. Set "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="s2">"mask_wall_velocity=.true., or split_scheme='ssp_rk2'."</span><span class="p">)</span>
+<span class="w">            </span><span class="n">has_error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">         </span><span class="k">end if</span>
 <span class="k">      end if</span>
 <span class="w">      </span><span class="c">! `accel_visc_rem` (the per-layer slow-apply attenuation) reads the</span>
 <span class="w">      </span><span class="c">! same producer arrays — without the producer knob they stay ≡ 1</span>
@@ -6163,7 +6189,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 15:00 +0000             </p>
+ on 2026-09-23 21:42 +0000             </p>
           </div>
         </div>
         <br>
