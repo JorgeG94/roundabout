@@ -1,7 +1,14 @@
 !! The vanished-layer content rule for the ALE tracer remap.
 !!
-!! Invariant **I1**: after a remap, `h <= H_VANISHED ⇒ hTr = 0` for every
-!! registered tracer, with the per-column content sum conserved to round-off.
+!! Invariant **I1′**: after a remap, `h <= H_VANISHED ⇒ hTr = h·c_live` for
+!! every registered tracer — `c_live` the concentration of the filler's DONOR,
+!! the nearest live layer above it (the topmost live layer for fillers above
+!! it; `hTr = 0` in a column with no live layer) — with the per-column content
+!! sum conserved to round-off.  (It replaced I1, `hTr = 0`, which conserved
+!! the content but not a uniform concentration; see
+!! `tests/test_ocean_vanished_constancy.F90`.)  `i1p_holds` below is an
+!! INDEPENDENT oracle for the donor map: a search up then down, not a copy of
+!! the included rule.
 !!
 !! The guard used to be ONE-SIDED — the READ side floored (`h_old <= H_VANISHED
 !! ⇒ c_old = 0`) while the WRITE side did not (`hTr_new = c_new·h_new` for
@@ -14,16 +21,20 @@
 !!   - the section-G reproducer: content parked in a 1e-4 filler plus an
 !!     advective increment, one remap, column sum conserved (this FAILS on the
 !!     one-sided guard — it loses exactly the parked content);
-!!   - I1 holds after a remap, for fillers at the bed, at the top and in the
+!!   - I1′ holds after a remap, for fillers at the bed, at the top and in the
 !!     interior;
 !!   - pseudo-random columns with filler runs in all three places: conservation
-!!     + I1 + no content ever left in a filler;
+!!     + I1′ on every target;
+!!   - a UNIFORM column stays uniform through the remap, fillers included;
+!!   - the cavity donor map: fillers inside the ice take `k_top`'s
+!!     concentration, bed fillers the bed layer's;
+!!   - the host twin of the enforcement point matches the sweep bit-for-bit;
 !!   - **bit-identity**: a column with no sub-threshold layer takes textually
 !!     the old code path — asserted as EXACT equality against the old
 !!     expression, not a tolerance;
 !!   - the degenerate column with no live layer at all (land / grounded);
-!!   - the merge helper itself: conservation, idempotence, no-op on a live
-!!     column;
+!!   - the merge helper itself: conservation, the pools and their donors,
+!!     idempotence to round-off, no-op on a live column;
 !!   - end-to-end through `ocean_apply_ale_remap_centres` with a
 !!     `VCOORD_ZSTAR_FULL` filler column: the `*_budget_remap` contributor
 !!     telescopes to zero per column, which is what makes it a valid leak
@@ -57,11 +68,52 @@ contains
                   new_unittest("merge_helper_properties", test_merge_helper), &
                   new_unittest("remap_budget_telescopes_with_fillers", test_budget_telescopes), &
                   new_unittest("state_enforcement_point_establishes_i1", test_enforcement_point), &
-                  new_unittest("state_scan_detects_and_clears", test_i1_scan) &
+                  new_unittest("state_scan_detects_and_clears", test_i1_scan), &
+                  new_unittest("uniform_column_stays_uniform_through_remap", test_remap_constancy), &
+                  new_unittest("cavity_top_fillers_take_k_top", test_top_fillers_k_top), &
+                  new_unittest("host_enforcement_matches_device_sweep", test_host_twin), &
+                  new_unittest("mismatched_column_with_fillers_conserves", test_mismatch_fold) &
                   ]
    end subroutine collect_ocean_remap_vanished_tests
 
    ! ---------------------------------------------------------------- helpers
+
+   function i1p_holds(n, h, q) result(ok)
+      !! Independent I1′ oracle for one column: every layer at or below
+      !! `H_VANISHED` must hold `h·c_d`, `c_d = q/h` of its donor — the first
+      !! live layer found searching UP from it, else the first found searching
+      !! DOWN — to `1e-12` relative; a column with no live layer must hold 0.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: h(:), q(:)
+      logical :: ok
+      integer :: k, kd, kk
+      real(wp) :: c_d
+      ok = .true.
+      do k = 1, n
+         if (h(k) > H_VANISHED) cycle
+         kd = 0
+         do kk = k + 1, n
+            if (h(kk) > H_VANISHED) then
+               kd = kk
+               exit
+            end if
+         end do
+         if (kd == 0) then
+            do kk = k - 1, 1, -1
+               if (h(kk) > H_VANISHED) then
+                  kd = kk
+                  exit
+               end if
+            end do
+         end if
+         if (kd == 0) then
+            if (q(k) /= 0.0_wp) ok = .false.
+         else
+            c_d = q(kd)/h(kd)
+            if (abs(q(k) - h(k)*c_d) > 1.0e-12_wp*abs(h(k)*c_d)) ok = .false.
+         end if
+      end do
+   end function i1p_holds
 
    pure function col_sum(n, a) result(s)
       integer, intent(in) :: n
@@ -119,9 +171,10 @@ contains
          call check(error, abs(after - before) <= 1.0e-12_wp*abs(before), &
                     "section-G column: parked content must survive the remap")
          if (allocated(error)) exit checks
-         ! And it must not be parked AGAIN: the top filler is still 1e-4.
-         call check(error, hTr(NZ) == 0.0_wp, &
-                    "section-G column: no content may be written into a filler")
+         ! The top filler (still 1e-4) must hold its donor's concentration,
+         ! not arbitrary parked content and not zero.
+         call check(error, i1p_holds(NZ, h_new, hTr), &
+                    "section-G column: the filler must hold h*c_live (I1')")
       end block checks
    end subroutine test_section_g_reproducer
 
@@ -150,11 +203,8 @@ contains
          call check(error, abs(after - before) <= 1.0e-12_wp*abs(before), &
                     "mixed-filler column: content conserved")
          if (allocated(error)) exit checks
-         ok = .true.
-         do k = 1, NZ
-            if (h_new(k) <= H_VANISHED .and. hTr(k) /= 0.0_wp) ok = .false.
-         end do
-         call check(error, ok, "I1: a vanished target layer must hold no content")
+         call check(error, i1p_holds(NZ, h_new, hTr), &
+                    "I1': a vanished target layer must hold h*c_live")
       end block checks
    end subroutine test_i1_after_remap
 
@@ -220,16 +270,14 @@ contains
          call ocean_remap_tracer_column(NZ, h_old, h_new, hTr, REMAP_PPM)
          after = col_sum(NZ, hTr)
          worst_rel = max(worst_rel, abs(after - before)/abs(before))
-         do k = 1, NZ
-            if (h_new(k) <= H_VANISHED .and. hTr(k) /= 0.0_wp) i1_ok = .false.
-         end do
+         if (.not. i1p_holds(NZ, h_new, hTr)) i1_ok = .false.
       end do
 
       checks: block
          call check(error, worst_rel <= 1.0e-12_wp, &
                     "random filler columns: content conserved to round-off")
          if (allocated(error)) exit checks
-         call check(error, i1_ok, "random filler columns: I1 holds on every target")
+         call check(error, i1_ok, "random filler columns: I1' holds on every target")
       end block checks
    end subroutine test_random_columns
 
@@ -302,13 +350,15 @@ contains
    end subroutine test_dead_column
 
    subroutine test_merge_helper(error)
-      !! `remap_merge_vanished_content` on its own: conserves the column sum,
-      !! zeroes every sub-threshold layer, is idempotent, and is a textual
-      !! no-op on a column with no filler.
+      !! `rdb_vl_merge_content` on its own (through the remap's test shim):
+      !! conserves the column sum, leaves every sub-threshold layer holding
+      !! its donor's concentration, pools each filler run with the RIGHT donor,
+      !! is idempotent to round-off, and is a textual no-op on a column with
+      !! no filler.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NZ = 6
       real(wp) :: h(NZ_STACK_MAX), q(NZ_STACK_MAX), q2(NZ_STACK_MAX)
-      real(wp) :: before, after
+      real(wp) :: before, after, c_a, c_b
       integer :: k
       logical :: ok
 
@@ -325,27 +375,33 @@ contains
          call check(error, abs(after - before) <= 1.0e-13_wp*abs(before), &
                     "merge helper conserves the column sum")
          if (allocated(error)) exit checks
-         ok = .true.
-         do k = 1, NZ
-            if (h(k) <= H_VANISHED .and. q(k) /= 0.0_wp) ok = .false.
-         end do
-         call check(error, ok, "merge helper zeroes every vanished layer")
+         call check(error, i1p_holds(NZ, h(1:NZ), q(1:NZ)), &
+                    "merge helper: every vanished layer holds h*c_live")
          if (allocated(error)) exit checks
 
-         ! Nearest live layer: 1 + 2 go UP into layer 3; 4 goes up into 5;
-         ! 6 has nothing above, so it comes back DOWN into 5.
-         call check(error, q(3) == 303.0_wp, "bed fillers merge into the layer above")
+         ! Pools: {1, 2, 3} (bed fillers + the live layer ABOVE them) and
+         ! {4, 5, 6} (interior filler 4 goes UP into 5; top filler 6 has no
+         ! live layer above, so it pools with the topmost live layer, 5).
+         c_a = 303.0_wp/(10.0_wp + 2.0e-4_wp)
+         c_b = 610.0_wp/(20.0_wp + 2.0e-4_wp)
+         call check(error, abs(q(3) - 10.0_wp*c_a) <= 1.0e-12_wp*303.0_wp, &
+                    "bed fillers pool with the live layer above")
          if (allocated(error)) exit checks
-         call check(error, q(5) == 610.0_wp, "top filler merges back into the layer below")
+         call check(error, abs(q(5) - 20.0_wp*c_b) <= 1.0e-12_wp*610.0_wp, &
+                    "interior + top fillers pool with the live layer between them")
+         if (allocated(error)) exit checks
+         call check(error, abs(q(1)/1.0e-4_wp - c_a) <= 1.0e-12_wp*c_a .and. &
+                    abs(q(6)/1.0e-4_wp - c_b) <= 1.0e-12_wp*c_b, &
+                    "a filler reads its pool's concentration")
          if (allocated(error)) exit checks
 
          q2 = q
          call ocean_remap_merge_vanished_content(NZ, h, q2)
          ok = .true.
          do k = 1, NZ
-            if (q2(k) /= q(k)) ok = .false.
+            if (abs(q2(k) - q(k)) > 1.0e-13_wp*abs(q(k))) ok = .false.
          end do
-         call check(error, ok, "merge helper is idempotent")
+         call check(error, ok, "merge helper is idempotent (to round-off)")
          if (allocated(error)) exit checks
 
          h(1:NZ) = [5.0_wp, 5.0_wp, 10.0_wp, 5.0_wp, 20.0_wp, 5.0_wp]
@@ -430,9 +486,9 @@ contains
             do k = 1, NZ
                s = s + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
                b = b + ms%salt_budget_remap(i, j, k)
-               if (ms%h_layer(i, j, k) <= H_VANISHED .and. &
-                   ms%tracers(ms%idx_salinity)%hTr(i, j, k) /= 0.0_wp) i1_ok = .false.
             end do
+            if (.not. i1p_holds(NZ, ms%h_layer(i, j, :), ms%tracers(ms%idx_salinity)%hTr(i, j, :))) &
+               i1_ok = .false.
             worst_content = max(worst_content, abs(s - col_before(i, j)))
             worst_budget = max(worst_budget, abs(b))
          end do
@@ -445,7 +501,7 @@ contains
          call check(error, worst_budget <= 1.0e-10_wp*abs(col_before(1, 1)), &
                     "remap budget contributor telescopes to zero per column")
          if (allocated(error)) exit checks
-         call check(error, i1_ok, "I1 after the orchestrator's tracer remap")
+         call check(error, i1_ok, "I1' after the orchestrator's tracer remap")
       end block checks
 
       deallocate (bt_eta, bt_H_ref, h_bed_2d, col_before)
@@ -454,12 +510,12 @@ contains
    end subroutine test_budget_telescopes
 
    subroutine test_enforcement_point(error)
-      !! `multilayer_state_t%enforce_vanished_content` — THE I1 enforcement
-      !! point.  Park content in bed and top fillers of every registered
-      !! tracer (including a passive one, to prove the registry loop carries
-      !! it), sweep, and require: I1 everywhere, the column content conserved,
-      !! and the live column with no filler left BIT-identical (the sweep is a
-      !! textual no-op there).
+      !! `multilayer_state_t%enforce_vanished_content` — THE I1′ enforcement
+      !! point.  Park inconsistent content in bed and top fillers of every
+      !! registered tracer (including a passive one, to prove the registry
+      !! loop carries it), sweep, and require: I1′ everywhere, the column
+      !! content conserved, and the live column with no filler left
+      !! BIT-identical (the sweep is a textual no-op there).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -479,7 +535,7 @@ contains
 
       ! j = 1 columns are all live (bit-identity control); every other column
       ! carries a bed filler at k = 1 and a top filler at k = NZ, both holding
-      ! parked content.
+      ! parked content far off their donor's concentration.
       do j = 1, ny_tot
          do i = 1, nx_tot
             do k = 1, NZ
@@ -513,14 +569,14 @@ contains
             s = 0.0_wp
             do k = 1, NZ
                s = s + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
-               do t = 1, size(ms%tracers)
-                  if (ms%h_layer(i, j, k) <= H_VANISHED .and. &
-                      ms%tracers(t)%hTr(i, j, k) /= 0.0_wp) i1_ok = .false.
-               end do
                if (j == 1) then
                   if (ms%tracers(ms%idx_salinity)%hTr(i, j, k) /= live_ref(i, j, k)) &
                      live_identical = .false.
                end if
+            end do
+            do t = 1, size(ms%tracers)
+               if (.not. i1p_holds(NZ, ms%h_layer(i, j, :), ms%tracers(t)%hTr(i, j, :))) &
+                  i1_ok = .false.
             end do
             worst_content = max(worst_content, abs(s - before_s(i, j)))
          end do
@@ -529,9 +585,9 @@ contains
       checks: block
          call check(error, idx_pass > 0, "the passive tracer must register")
          if (allocated(error)) exit checks
-         call check(error, i1_ok, "enforcement point: I1 over the whole registry")
+         call check(error, i1_ok, "enforcement point: I1' over the whole registry")
          if (allocated(error)) exit checks
-         call check(error, worst_content <= 1.0e-10_wp*abs(before_s(1, 1)), &
+         call check(error, worst_content <= 1.0e-12_wp*abs(before_s(1, 1)), &
                     "enforcement point: column content conserved")
          if (allocated(error)) exit checks
          call check(error, live_identical, &
@@ -544,8 +600,10 @@ contains
 
    subroutine test_i1_scan(error)
       !! `multilayer_state_t%scan_vanished_content` — the tripwire's pure
-      !! half.  It must SEE a violation (count + worst |hTr|), and report
-      !! clean once the enforcement point has run.
+      !! half.  It must SEE a violation (count + worst `|hTr − h·c_live|`) —
+      !! in particular the EMPTY filler the previous rule left behind — pass a
+      !! filler that holds its donor's concentration, and report clean once
+      !! the enforcement point has run.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -565,10 +623,10 @@ contains
                ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 345.0_wp
                ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp
             end do
-            ! One bed filler holding parked content.
+            ! One bed filler, EMPTY — the I1 state, which I1′ forbids.
             ms%h_layer(i, j, 1) = 1.0e-4_wp
-            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 3.45e-3_wp
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 1.0e-4_wp
+            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 0.0_wp
+            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 0.0_wp
          end do
       end do
 
@@ -577,10 +635,31 @@ contains
          call check(error, n_bad == 2*nx_tot*ny_tot, &
                     "the scan must count every violating (cell, tracer)")
          if (allocated(error)) exit checks
+         ! Salinity is the worse: |0 - 1e-4 * 34.5|.
          call check(error, abs(worst - 3.45e-3_wp) <= 1.0e-15_wp, &
-                    "the scan must report the worst |hTr| found in a filler")
+                    "the scan must report the worst |hTr - h*c_live| found in a filler")
          if (allocated(error)) exit checks
 
+         ! A filler holding exactly its donor's concentration is clean.
+         do j = 1, ny_tot
+            do i = 1, nx_tot
+               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 1.0e-4_wp*34.5_wp
+               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 1.0e-4_wp*1.0_wp
+            end do
+         end do
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == 0, "a filler at h*c_live must pass the scan")
+         if (allocated(error)) exit checks
+
+         ! Break it again, sweep, and require clean.
+         do j = 1, ny_tot
+            do i = 1, nx_tot
+               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 3.0e-3_wp
+            end do
+         end do
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == nx_tot*ny_tot, "a drifted filler must fail the scan")
+         if (allocated(error)) exit checks
          call ms%enforce_vanished_content(nx_tot, ny_tot)
          call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
          call check(error, n_bad == 0, "the scan must be clean after enforcement")
@@ -590,5 +669,191 @@ contains
 
       call ms%destroy()
    end subroutine test_i1_scan
+
+   subroutine test_remap_constancy(error)
+      !! THE property I1′ exists for, at the level of one remap: a UNIFORM
+      !! column stays uniform through the remap — fillers at the bed, in the
+      !! interior and at the top, a source filler set that differs from the
+      !! target's, and the source fillers already carrying `h·c` (the I1′
+      !! state).  Every target layer, filler or live, must read `c0` to
+      !! round-off.  Under the previous rule the fillers read 0 by
+      !! construction.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 8
+      real(wp), parameter :: C0 = 35.0_wp
+      real(wp) :: h_old(NZ), h_new(NZ), hTr(NZ), worst
+      integer :: k
+
+      h_old = [1.0e-4_wp, 12.0_wp, 1.0e-4_wp, 30.0_wp, 25.0_wp, 5.0e-5_wp, 18.0_wp, 1.0e-4_wp]
+      h_new = [3.0_wp, 9.0_wp, 1.0e-4_wp, 28.0_wp, 27.0_wp, 1.0e-4_wp, 18.9_wp - 5.0e-5_wp, &
+               1.0e-4_wp]
+      ! Make the two grids span the same column exactly.
+      h_new(2) = h_new(2) + (sum(h_old) - sum(h_new))
+      hTr = C0*h_old
+
+      call ocean_remap_tracer_column(NZ, h_old, h_new, hTr, REMAP_PPM)
+      worst = 0.0_wp
+      do k = 1, NZ
+         worst = max(worst, abs(hTr(k)/h_new(k)/C0 - 1.0_wp))
+      end do
+      call check(error, worst <= 1.0e-13_wp, &
+                 "a uniform column must stay uniform through the remap, fillers included")
+   end subroutine test_remap_constancy
+
+   subroutine test_top_fillers_k_top(error)
+      !! An ice-shelf column under `Z_FIXED`: fillers inside the ice ABOVE the
+      !! live column and fillers below the bed partial cell.  The top run has
+      !! no live layer above it, so its donor is the topmost live layer
+      !! (`k_top`); the bed run's donor is the lowest live layer.  Enforce,
+      !! then check the donors explicitly — the top fillers must carry the
+      !! `k_top` concentration, not the bed's.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      integer, parameter :: NX = 2, NY = 2, NZ = 7
+      real(wp), parameter :: HF = 1.0e-4_wp
+      real(wp) :: c_top, c_bot, qs(NZ)
+      integer :: nx_tot, ny_tot, i, j
+      logical :: ok
+
+      call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      nx_tot = grid%nx_total
+      ny_tot = grid%ny_total
+      !   k:   1 bed filler, 2 bed partial, 3-4 live, 5 = k_top, 6-7 in the ice
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            ms%h_layer(i, j, :) = [HF, 3.0_wp, 40.0_wp, 40.0_wp, 17.0_wp, HF, HF]
+            ! Salinity: 34.6 deep, 34.2 at k_top; fillers empty (the I1 state).
+            ms%tracers(ms%idx_salinity)%hTr(i, j, :) = [0.0_wp, 3.0_wp*34.6_wp, &
+                                                        40.0_wp*34.5_wp, 40.0_wp*34.4_wp, &
+                                                        17.0_wp*34.2_wp, 0.0_wp, 0.0_wp]
+         end do
+      end do
+
+      call ms%enforce_vanished_content(nx_tot, ny_tot)
+
+      ok = .true.
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            qs = ms%tracers(ms%idx_salinity)%hTr(i, j, :)
+            c_top = qs(5)/17.0_wp
+            c_bot = qs(2)/3.0_wp
+            if (abs(qs(6)/HF - c_top) > 1.0e-12_wp*c_top) ok = .false.
+            if (abs(qs(7)/HF - c_top) > 1.0e-12_wp*c_top) ok = .false.
+            if (abs(qs(1)/HF - c_bot) > 1.0e-12_wp*c_bot) ok = .false.
+            ! The donors moved by at most the filler share of an empty pool.
+            if (abs(c_top - 34.2_wp) > 34.2_wp*2.0_wp*HF/17.0_wp) ok = .false.
+            if (abs(c_bot - 34.6_wp) > 34.6_wp*HF/3.0_wp) ok = .false.
+            ! The interior is untouched.
+            if (qs(3) /= 40.0_wp*34.5_wp .or. qs(4) /= 40.0_wp*34.4_wp) ok = .false.
+         end do
+      end do
+      call check(error, ok, "top fillers take k_top's concentration, bed fillers the bed layer's")
+      call ms%destroy()
+   end subroutine test_top_fillers_k_top
+
+   subroutine test_host_twin(error)
+      !! `enforce_vanished_content_host` — the setup-time twin the seed calls
+      !! before `enter_data` — must produce the same content as the sweep
+      !! (both run the one included `rdb_vl_merge_content`), and I1′.  To
+      !! ROUND-OFF, not bitwise: on the offload build the sweep runs on the
+      !! device, whose FMA contraction of `h*c` / `Σq − Σh*c` differs from
+      !! the host's (measured: bitwise equal on gfortran, NOT bitwise equal
+      !! on nvfortran cc70) — the "never assert bit-zero across an
+      !! FMA-contractible expression" rule.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms_a, ms_b
+      integer, parameter :: NX = 4, NY = 3, NZ = 6
+      integer :: nx_tot, ny_tot, i, j, k, t, seed
+      real(wp) :: r
+      logical :: same, i1_ok
+
+      call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
+      ms_a%nz_ml = NZ
+      ms_b%nz_ml = NZ
+      call ms_a%init(grid)
+      call ms_b%init(grid)
+      nx_tot = grid%nx_total
+      ny_tot = grid%ny_total
+      seed = 4242
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            do k = 1, NZ
+               call lcg_next(seed, r)
+               if (r < 0.35_wp) then
+                  ms_a%h_layer(i, j, k) = 1.0e-4_wp*r
+               else
+                  ms_a%h_layer(i, j, k) = 1.0_wp + 30.0_wp*r
+               end if
+               do t = 1, size(ms_a%tracers)
+                  call lcg_next(seed, r)
+                  ms_a%tracers(t)%hTr(i, j, k) = (10.0_wp + 25.0_wp*r)*ms_a%h_layer(i, j, k)
+               end do
+            end do
+         end do
+      end do
+      ms_b%h_layer = ms_a%h_layer
+      do t = 1, size(ms_a%tracers)
+         ms_b%tracers(t)%hTr = ms_a%tracers(t)%hTr
+      end do
+
+      call ms_a%enforce_vanished_content(nx_tot, ny_tot)
+      call ms_b%enforce_vanished_content_host(nx_tot, ny_tot)
+
+      same = .true.
+      i1_ok = .true.
+      do t = 1, size(ms_a%tracers)
+         do j = 1, ny_tot
+            do i = 1, nx_tot
+               do k = 1, NZ
+                  if (abs(ms_a%tracers(t)%hTr(i, j, k) - ms_b%tracers(t)%hTr(i, j, k)) > &
+                      1.0e-13_wp*abs(ms_a%tracers(t)%hTr(i, j, k))) same = .false.
+               end do
+               if (.not. i1p_holds(NZ, ms_b%h_layer(i, j, :), ms_b%tracers(t)%hTr(i, j, :))) &
+                  i1_ok = .false.
+            end do
+         end do
+      end do
+      checks: block
+         call check(error, same, "host twin must match the sweep to round-off")
+         if (allocated(error)) exit checks
+         call check(error, i1_ok, "host twin must establish I1'")
+      end block checks
+      call ms_a%destroy()
+      call ms_b%destroy()
+   end subroutine test_host_twin
+
+   subroutine test_mismatch_fold(error)
+      !! `remap_fold_filler_defect`: the target grid a few ulp SHORTER than
+      !! the source (what the target builders hand the remap every step),
+      !! on a column whose top fillers carry `c_live`.  `remap_column` drops
+      !! the unmatched top sliver with its content; the fold must put it
+      !! back, so the column content is conserved to round-off of the
+      !! column — and I1′ still holds.  The size of the sliver is chosen
+      !! far above round-off (1e-9 relative, the precondition tolerance) so
+      !! the assertion cannot pass by accident.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 6
+      real(wp) :: h_old(NZ), h_new(NZ), hTr(NZ), before, after
+
+      !        bed      live      live      k_top     filler     filler
+      h_old = [40.0_wp, 48.0_wp, 48.0_wp, 36.0_wp, 1.0e-4_wp, 1.0e-4_wp]
+      h_new = h_old
+      h_new(1) = h_old(1) - 1.72e-7_wp       ! the bed absorbs the short fall
+      hTr = [40.0_wp*34.6_wp, 48.0_wp*34.5_wp, 48.0_wp*34.4_wp, 36.0_wp*34.2_wp, &
+             1.0e-4_wp*34.2_wp, 1.0e-4_wp*34.2_wp]
+      before = col_sum(NZ, hTr)
+      call ocean_remap_tracer_column(NZ, h_old, h_new, hTr, REMAP_PPM)
+      after = col_sum(NZ, hTr)
+      checks: block
+         call check(error, abs(after - before) <= 4.0_wp*epsilon(1.0_wp)*abs(before), &
+                    "a mismatched filler column must still conserve its content")
+         if (allocated(error)) exit checks
+         call check(error, i1p_holds(NZ, h_new, hTr), "I1' after the fold")
+      end block checks
+   end subroutine test_mismatch_fold
 
 end module test_ocean_remap_vanished

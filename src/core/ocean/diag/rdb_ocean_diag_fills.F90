@@ -323,7 +323,8 @@ contains
       do concurrent(k=1:min(nz, nz_h), j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
          ! vanished-ok: a diagnostic substitutes the NaN missing-data
-         ! sentinel on a vanished layer, not `rdb_vl_conc`'s zero (README
+         ! sentinel on a vanished layer, not `rdb_vl_conc`'s copy of the
+         ! donor's concentration (README
          ! consumer table); the live branch IS `rdb_vl_conc`.
          if (rdb_vl_is_live(h)) then
             buf(i, j, k) = rdb_vl_conc(hTr(i, j, k), h)
@@ -648,7 +649,8 @@ contains
       !! `layer_buf` value is never read: for a concentration it is the
       !! NaN missing-data sentinel (`fill_tracer_impl`), which the
       !! donor-cell reconstruction would otherwise smear into every target
-      !! cell of the column; for content it is zero by I1.  A column with
+      !! cell of the column; for content it is `h·c_live` by I1′, a copy of
+      !! the donor layer the remap already counts.  A column with
       !! no vanished layer is bit-identical.
       !!
       !! Fixed-size `NZ_STACK_MAX` stack locals via `local(...)` — automatic
@@ -791,9 +793,9 @@ contains
       !! `remap_layer_to_vcoord_impl` (`dz = 0`, `q = 0`, value never read),
       !! and take the density of the nearest LIVE layer (the one above,
       !! else the first one below) rather than an EOS evaluation of the
-      !! zero concentration `rdb_vl_conc` reports for them: the PPM edge
-      !! between a live layer and a zero-thickness neighbour IS that
-      !! neighbour's density (`invert_density_targets`), so a fresh 0 degC
+      !! filler: the EOS substitutes reference T/S on a vanished layer, and
+      !! the PPM edge between a live layer and a zero-thickness neighbour IS
+      !! that neighbour's density (`invert_density_targets`), so a `rho_0`
       !! filler would kink the profile the targets are inverted against.
       !! A column with no vanished layer is bit-identical; a column with no
       !! live layer keeps the legacy `eos(0, 0)` fill.

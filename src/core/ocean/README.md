@@ -133,24 +133,48 @@ Several vertical coordinates (`z_fixed`, `zstar_full`, wet/dry) place
 There is one rule about them, and it is an invariant of the state, not a
 convention each kernel author has to remember:
 
-> **I1.** `h_layer(i,j,k) <= H_VANISHED` ⇒ `tracers(t)%hTr(i,j,k) == 0`,
-> for **every** registered tracer.
+> **I1′.** `h_layer(i,j,k) <= H_VANISHED` ⇒
+> `tracers(t)%hTr(i,j,k) == h_layer(i,j,k)·c_live`, for **every**
+> registered tracer, where `c_live` is the concentration of the filler's
+> **donor**: the nearest live layer ABOVE it or, for a run of fillers that
+> reaches the top of the column (the fillers inside an ice shelf), the
+> topmost live layer (`k_top`). A column with no live layer at all (land,
+> fully grounded) holds `hTr = 0`.
 >
-> Restoring I1 moves content **within** the column, to the nearest live
-> layer. Nothing leaves the column, so **no budget records it** —
-> a contributor that always sums to zero is noise in the one instrument
+> Restoring I1′ moves content **within** the column, between a filler and
+> its donor. Nothing leaves the column, so **no budget records it** — a
+> contributor that always sums to zero is noise in the one instrument
 > that detects real leaks.
 
-**Why it is an invariant and not advice.** The guard used to live only in
-the ALE remap, and only on the READ side: `h_old <= H_VANISHED ⇒
-c_old = 0`, while the write side put `c_new·h_new` into *every* target
-layer, filler included. The remap therefore parked content in a filler
-and deleted it one step later with no budget contributor — the day-16
-salt/heat break on
-`validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.nml`. Every
-other tracer writer in the tree (surface flux, melt, sponge, hdiff, vdiff,
-vertical advection, the OBC ghost fills, the windowed drain) simply
-deposits into whatever layer it is handed.
+**Why the filler carries its donor's concentration, not zero.** Every
+transport kernel reads a filler's concentration as `hTr/h`, and between
+two remaps the continuity step moves thickness out of fillers into live
+layers (and nudges fillers a hair above the marker, where they read
+live). The previous rule, **I1** (`h <= H_VANISHED ⇒ hTr = 0`), kept the
+filler's MASS but zeroed its CONTENT, so that thickness arrived carrying
+zero concentration — fresh, 0 °C water. Salt was conserved, but a uniform
+tracer did not stay uniform: on `double_gyre_mom6.nml` (2-layer
+`zstar_full`, uniform S = 35, T = 15), after 10 days, 258 thin live cells
+read S = 0–34.43 and 1273 thick cells were off 35 by up to `2.1e-5`
+relative — with values ABOVE 35, i.e. the PPM limiter reacting to the
+empty fillers in its stencil. Under I1′ every one of the 3520 wet cells,
+filler or live, reads 35 / 15 to `2.2e-14`. The rule before I1 had the
+mirror problem (fillers holding stale, near-zero concentrations), and a
+one-sided guard on top of it deleted salt un-budgeted on day 16 of
+`validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.nml`.
+
+**How it is restored — the pool.** Each live layer and the fillers it is
+donor to form one contiguous POOL, which is mixed to a single
+concentration `c = Σq/Σh`: every filler gets `h·c`, and the live layer
+gives up exactly what the fillers gained, in one subtraction. The pool —
+hence the column — keeps its content to round-off, and afterwards filler
+and donor read the same concentration to round-off (a pool that already
+satisfies I1′ leaves its donor bit-for-bit untouched). A pool that already satisfies I1′ mixes back to
+the same concentration to round-off, which is the tracer-constancy
+property. "Copy the donor's concentration" instead would leave the
+filler's excess (a remap target, a deposit) unaccounted for; handing it
+to the donor moves the donor's concentration, and the pool is the one
+assignment after which the two agree.
 
 **Three pieces hold it up.**
 
@@ -159,56 +183,91 @@ deposits into whatever layer it is handed.
    the `contains` of each consuming module so NVHPC gets a local copy it
    can inline into a `do concurrent` kernel:
    `rdb_vl_is_live(h)` (the predicate — a STRICT `>`, so a layer sitting
-   exactly ON the marker is vanished), `rdb_vl_conc(hTr, h)` (**the**
-   concentration of layer `k`: `hTr/h` live, `0` vanished), and
-   `rdb_vl_merge_content(nz, h_col, q_col)` (establish I1 on a column,
-   column sum preserved). See that directory's README.
+   exactly ON the marker is vanished); `rdb_vl_conc(hTr, h)` (the
+   concentration of ONE layer from that layer alone, `hTr/h` — on a
+   filler that is `c_live` by I1′; `0` at zero thickness);
+   `rdb_vl_column_conc(nz, h_col, q_col, c_col)` (every layer's
+   concentration, fillers read off their DONOR — never recovered from a
+   near-zero divisor; the remap's read side uses it);
+   `rdb_vl_holds_live_conc(hTr, h, c_live)` (THE I1′ test, `1e-12`
+   relative); and `rdb_vl_merge_content(nz, h_col, q_col)` (the pool —
+   establish I1′ on a column, column sum preserved). See that directory's
+   README.
 2. **One enforcement point** —
    `multilayer_state_t%enforce_vanished_content(nx, ny)`, called once per
    outer step at the tail of `ocean_dyn_step_split`, after every tracer
    update and after the ALE remap. It walks the tracer registry
-   (outer-shim + flat-impl) and restores I1. A column with no
+   (outer-shim + flat-impl) and restores I1′. A column with no
    sub-threshold layer is a textual no-op, so every sigma / z*-lite /
-   `eulerian_z` configuration is bit-identical.
+   `eulerian_z` configuration is bit-identical. Its host twin,
+   `enforce_vanished_content_host`, establishes I1′ on the seeded state
+   (`ocean_state_seed_land_cells`, `z_fixed` × cavity) before
+   `enter_data`.
 
-   **It is unconditional, and it costs.** Measured on
+   **It is unconditional.** Measured on
    `benchmarks/bench_ocean` with
    `validation_examples/ocean/bench_scaling/double_gyre_big.nml`
    (600×600×50, 288 steps, two tracers), nvfortran 26.5 `-stdpar=gpu`
-   cc70, one V100: **67.06 / 67.08 s with the sweep, 65.84 / 65.71 s with
-   the call NOPed — +1.9 %.** That is the price of the invariant and it
-   is deliberately not bought back by a "does this coordinate vanish
+   cc70, one V100: **67.06 / 67.08 s with the I1 sweep, 65.84 / 65.71 s
+   with the call NOPed — +1.9 %.** The I1′ pool, re-measured on the same
+   case (nvfortran 26.5 cc70, one V100, two runs each): **66.06 / 66.07 s
+   with the sweep, 66.05 / 66.11 s NOPed — within run-to-run noise** —
+   while the I1 base built on the same box ran 67.15 / 67.18 s. Whatever
+   it costs on a given compiler, it is deliberately not bought back by a
+   "does this coordinate vanish
    layers?" gate: land columns are seeded at exactly `H_VANISHED` on
    EVERY family (`seed_land_h_floor_impl`), so no family is exempt and a
    family gate would be wrong as well as conditional. The honest
-   optimisation, when someone wants the 1.9 % back, is to FUSE the merge
+   optimisation, when someone wants the cost back, is to FUSE the pool
    into the last per-column tracer kernel of the step — which already
    reads `h` and `hTr` — rather than to make the guarantee optional.
    The ALE remap additionally applies the rule on **both** sides of its
-   own `c = hTr/h` ↔ `hTr = c·h` round trip, because the reconstruction
-   between them must never see a concentration recovered from a near-zero
-   divisor.
+   own `c = hTr/h` ↔ `hTr = c·h` round trip: the READ side pools the
+   source fillers and hands the reconstruction the donor's concentration
+   for them, the WRITE side pools the target fillers, so a filler target
+   layer receives `h_new·c_live`, taken from its donor. On a column with
+   a filler it also folds the content `remap_column` failed to place back
+   into the topmost live target layer (`remap_fold_filler_defect`):
+   `remap_column` conserves only on a matched column, the target builders
+   miss `Σ h_old` by a few ulp every step, and the unmatched sliver is at
+   the top — a filler, which under I1′ carries `c_live`. On a quasi-steady
+   column that sliver has one sign every step:
+   `cavity_flat_lid_rest_zfixed.nml`, AT REST, drifted salt `-3.2e-12`
+   and heat `-3.3e-12` by day 30 without the fold (`-1.4e-13` /
+   `-2.3e-13` under I1, whose empty top filler hid the same loss), and
+   `≤ 2.3e-16` / `1.3e-16` with it. A column with no filler on either grid
+   is untouched, so the no-filler families stay bit-identical.
 3. **Two gates** — `&vcoord_nml check_vanished_content` (default off) is a
    fail-loud tripwire: a pure device scan
-   (`multilayer_state_t%scan_vanished_content`) immediately after the
-   enforcement point, so a hit means the rule itself failed, or an array
-   is not device-present under `mem:separate`. It is ON in every shipped
+   (`multilayer_state_t%scan_vanished_content`, `rdb_vl_holds_live_conc`
+   on every filler against its donor) immediately after the enforcement
+   point, so a hit means the rule itself failed, or an array is not
+   device-present under `mem:separate`. It is ON in every shipped
    namelist whose coordinate vanishes layers. And the `vanished-layer`
    pre-commit hook (`tools/vanished_layer_lint.py`, diff-aware like
    `dc-assumed-shape`) flags a NEW raw `hTr/h` divide or a NEW comparison
    against `H_VANISHED` outside the sanctioned modules.
 
-**Substituting something other than zero is legal, and must be declared.**
-A vanished layer holds no content, so `0` is its honest concentration —
-but several consumers deliberately want something else, because they are
-answering a different question:
+**Gates.** `tests/test_ocean_vanished_constancy.F90` runs the full split
+solver (continuity + remap + enforcement, 60 outer steps, forced flow)
+on a `zstar_full` double gyre (vanishing bed layer; T, S and a passive
+pseudo-salt) and on a `z_fixed` cavity with fillers inside the ice AND
+below the bed, and asserts every wet cell still holds its uniform initial
+concentration to `1e-12` relative — it fails on I1.
+`tests/test_ocean_remap_vanished.F90` covers the rule itself (pools,
+donors, conservation, bit-identity without fillers, the remap's two
+sides, the tripwire).
+
+**Substituting something other than `c_live` is legal, and must be
+declared.** Several consumers deliberately want something else on a
+vanished layer, because they are answering a different question:
 
 | consumer | substitution on a vanished layer | why |
 |---|---|---|
 | `rdb_eos` (`eos_*_impl`) | reference `T_ref`/`S_ref` ⇒ `rho = rho_0` | a filler must not perturb the density column the PGF integrates |
 | `rdb_ocean_pressure_force` (T/S reconstruction) | `hS/H_VANISHED` (floored divide) | keeps the PLM/PPM edge stencil finite across a filler |
 | `rdb_ocean_sponge` (`snapshot_column_concentration`) | the nearest massive layer's concentration | the relaxation target must be a physical water mass |
-| `rdb_ocean_diag_fills` (`fill_tracer_impl` — T, S, age, pseudo-salt) | IEEE quiet NaN | a plot must show a gap, not a plausible zero |
+| `rdb_ocean_diag_fills` (`fill_tracer_impl` — T, S, age, pseudo-salt) | IEEE quiet NaN | a plot must show a gap, not a copy of the layer above |
 | `rdb_ocean_diag_derived` (`fill_rho_layer_impl`) | IEEE quiet NaN | the EOS's `rho_0` in a filler is a substitution, not a measurement |
 | `rdb_ocean_pseudo_salt` (`ocean_pseudo_salt_deviation`, the `pseudo_salt_diff` diag) | IEEE quiet NaN (passed in by the caller) | a deviation of `0` is the perfect score, so a filler must not read as one |
 | `rdb_ocean_diag_derived` (`fill_mld_density_impl`) | never marks the crossing (thickness still summed) | a filler's `rho_0` is not a pycnocline |
@@ -216,9 +275,10 @@ answering a different question:
 | `rdb_ocean_cavity_flux` (far-field sampler) | `cycle` — skipped entirely | a filler carries no water to melt against |
 | `rdb_ocean_kappa_shear` | `massless_*` merge onto a coarser column | the shear solve needs a well-conditioned grid, not a substituted value |
 
-Each of those is a considered, documented choice; none of them is I1, and
-none of them should be routed through `rdb_vl_conc`. If you add another,
-say so with a `! vanished-ok: <reason>` waiver where the lint sees it.
+Each of those is a considered, documented choice; none of them is I1′,
+and none of them should be routed through `rdb_vl_conc`. If you add
+another, say so with a `! vanished-ok: <reason>` waiver where the lint
+sees it.
 
 **What the diagnostics can and cannot tell you.** Every diagnostic uses
 the ONE predicate, so a layer at `h <= H_VANISHED` is missing everywhere
@@ -226,13 +286,9 @@ the ONE predicate, so a layer at `h <= H_VANISHED` is missing everywhere
 and counted in its `missing=` suffix, zero weight in a remap). A filler
 that the continuity step has nudged a hair ABOVE the marker between two
 remaps (on a `dt_therm_ratio > 1` run the coordinate is only restored on
-thermo steps) is LIVE by that predicate and reports its concentration
-honestly — which, because I1 emptied it while it was a filler, is `0` or
-a near-zero dilution. That is the state, not a diagnostic artefact, and
-no diagnostic masks it: a second, looser threshold would be exactly the
-re-derived rule this section forbids. The console `[diag]` mean is a
-per-CELL count-based mean, so those cells move it; a thickness-weighted
-mean does not see them.
+thermo steps) is LIVE by that predicate and reports its concentration —
+which, under I1′, is its donor's, so it no longer shows up as a `0` or
+near-zero dilution in the console `[diag]` min / mean.
 
 ## Slot map
 

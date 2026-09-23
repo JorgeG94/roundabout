@@ -3375,12 +3375,13 @@ module rdb_config
          !! silently CREATES or DELETES tracer mass.  Diagnostic knob —
          !! .false. (default) = the check never runs = bit-identical.
       logical :: check_vanished_content = .false.
-         !! **I1 tripwire** — assert `h_layer <= H_VANISHED ⇒ hTr = 0` for
-         !! every registered tracer, once per outer step, immediately after
-         !! the enforcement point that establishes it
-         !! (`multilayer_state_t%enforce_vanished_content`).  A violation
-         !! logs the offending cell count and the worst `|hTr|` and
-         !! `error stop`s.
+         !! **I1′ tripwire** — assert `h_layer <= H_VANISHED ⇒ hTr =
+         !! h_layer·c_live` (the donor live layer's concentration; `hTr = 0`
+         !! in a column with no live layer) for every registered tracer, once
+         !! per outer step, immediately after the enforcement point that
+         !! establishes it (`multilayer_state_t%enforce_vanished_content`).
+         !! A violation logs the offending cell count and the worst
+         !! `|hTr − h·c_live|` and `error stop`s.
          !!
          !! HEAVY only in the sense that it adds two device reductions per
          !! tracer per step; the healthy path does no H←D copy.  Default
@@ -7737,8 +7738,9 @@ contains
                              "matching column totals)"))
       pl => cfg%check_vanished_content
       call g%add(nml_logical("check_vanished_content", pl, &
-                             "I1 tripwire: fail loud if any layer at or below "// &
-                             "H_VANISHED holds tracer content (debug/validation)"))
+                             "I1' tripwire: fail loud if any layer at or below "// &
+                             "H_VANISHED does not hold its donor live layer's "// &
+                             "concentration (debug/validation)"))
       pl => cfg%zfixed_closed_faces
       call g%add(nml_logical("zfixed_closed_faces", pl, &
                              "z_fixed partial steps: close every face whose layer is "// &
