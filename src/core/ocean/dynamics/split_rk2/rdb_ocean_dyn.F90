@@ -2429,6 +2429,41 @@ contains
       end if
    end subroutine mask_layer_velocities
 
+   pure subroutine mask_time_mean_velocities(metrics, ms)
+      !! Apply the land contract of `mask_layer_velocities` — static
+      !! `wet_u`/`wet_v`, times the z-level `open_u`/`open_v` when
+      !! `zfixed_closed_faces` is on — to the `pred_corr` time-mean
+      !! velocities `u_av`/`v_av`.  Called once, on the step-0 seed: the
+      !! renormaliser's `u_cor`, their only other writer, never writes a
+      !! masked face, so what the seed leaves there is what every later
+      !! step reads.  (Wet/dry is refused under `pred_corr`, so its
+      !! dynamic mask has no branch here.)  All-wet, knob off ⇒ products
+      !! with exactly 1, i.e. byte-identical.
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(multilayer_state_t), intent(inout) :: ms
+      integer :: i, j, k, nz, nx_face, ny_uface, nx_vface, ny_face
+
+      nz = ms%nz_ml
+      nx_face = size(ms%u_av_layer, 1)
+      ny_uface = size(ms%u_av_layer, 2)
+      nx_vface = size(ms%v_av_layer, 1)
+      ny_face = size(ms%v_av_layer, 2)
+      do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
+         ms%u_av_layer(i, j, k) = metrics%wet_u(i, j)*ms%u_av_layer(i, j, k)
+      end do
+      do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
+         ms%v_av_layer(i, j, k) = metrics%wet_v(i, j)*ms%v_av_layer(i, j, k)
+      end do
+      if (metrics%use_closed_faces) then
+         do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
+            ms%u_av_layer(i, j, k) = metrics%open_u(i, j, k)*ms%u_av_layer(i, j, k)
+         end do
+         do concurrent(k=1:nz, j=1:ny_face, i=1:nx_vface)
+            ms%v_av_layer(i, j, k) = metrics%open_v(i, j, k)*ms%v_av_layer(i, j, k)
+         end do
+      end if
+   end subroutine mask_time_mean_velocities
+
    pure subroutine reset_vanished_layer_velocities(ms, vanish_tol)
       !! Zero the per-layer face velocity at any face where BOTH adjacent
       !! centre-cell thicknesses are at or below `vanish_tol`
@@ -2976,6 +3011,26 @@ contains
       ! family must hold the initial state — the first predictor's
       ! CorAd/hvisc read u_av/h_av, and the allocation default (0) would
       ! hand them a zero-thickness field.
+      !
+      ! The seed MUST obey the land contract (`mask_time_mean_velocities`;
+      ! the prognostic itself is left to the stage-end
+      ! `mask_layer_velocities`, as before).  Nothing ever rewrites `u_av`
+      ! at a masked face afterwards:
+      ! its only writer is the transport renormaliser's `u_cor`, which
+      ! skips the physical walls and has `Σ h·dy_cu = 0` (no write) on
+      ! every land face.  A non-zero initial velocity there therefore
+      ! lived in `u_av` for the whole run — and the three Coriolis forms
+      ! read it differently: the enstrophy form's `v_at_u` sees it, the
+      ! energy / HK transport forms do not (their `vh` rides the masked
+      ! `dx_cv = 0`), and the fast-loop reference (`set_cor_ref_velocity`
+      ! → `subtract_fast_cor_ref`) does.  Under `sadourny_energy` /
+      ! `sadourny_hk` the reference then removed a Coriolis term the slow
+      ! forcing never contained, a constant `−(f/4)·(v̄_av(i−1)+v̄_av(i))`
+      ! on every barotropic substep of the wall-adjacent rows — measured
+      ! ×126 in KE+PE over 4.2 d on `test_ocean_cor_ref_seiche`'s basin,
+      ! its time-integrated work matching the gain to 0.1 %.  A masked IC
+      ! (every configured run: `ocean_state_seed_land_cells`) makes the
+      ! mask idempotent, i.e. byte-identical.
       if (dyn%split_scheme == SPLIT_SCHEME_PRED_CORR .and. dyn%outer_step_count == 0) then
          call copy_field_3d(ms%u_face_x_layer, ms%u_av_layer, &
                             size(ms%u_face_x_layer, 1), size(ms%u_face_x_layer, 2), &
@@ -2983,6 +3038,7 @@ contains
          call copy_field_3d(ms%v_face_y_layer, ms%v_av_layer, &
                             size(ms%v_face_y_layer, 1), size(ms%v_face_y_layer, 2), &
                             size(ms%v_face_y_layer, 3))
+         call mask_time_mean_velocities(metrics, ms)
          call copy_field_3d(ms%h_layer, ms%h_av_layer, &
                             size(ms%h_layer, 1), size(ms%h_layer, 2), &
                             size(ms%h_layer, 3))
