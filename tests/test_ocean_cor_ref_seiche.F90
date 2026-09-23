@@ -40,6 +40,26 @@
 !! It has never had this defect (both sides sit on `u^n`, so they
 !! cancel exactly), and requiring it to clear the same bar proves the
 !! bar is achievable on this case rather than merely tight.
+!!
+!! ## The energy / HK transport forms on masked walls
+!!
+!! `energy_form_masked_walls_no_growth` runs the same basin with the
+!! PRODUCTION wall convention (`mask_wall_velocity`, `wet_u = wet_v = 0`
+!! on the four wall faces) under `&ocean_coriolis_nml form =
+!! "sadourny_energy"` and `"sadourny_hk"`, from a jet that is NOT
+!! masked at the wall faces.  `u_av` used to be seeded from that
+!! unmasked state and was never rewritten at a masked face (the
+!! renormaliser's `u_cor` is its only writer, and it skips walls and
+!! land), so the wall value lived for the whole run.  The fast-loop
+!! reference (`set_cor_ref_velocity` → `subtract_fast_cor_ref`) read it;
+!! the transport forms did not (their `vh` rides `dx_cv = 0`); the
+!! difference `a = −(f/4)·(v̄_av(i−1) + v̄_av(i))` forced every substep
+!! of the two wall-adjacent u-rows.  Measured before the fix (gfortran,
+!! 1200 steps): KE+PE ×126 (energy), ×129 (HK), with the time-integrated
+!! work of `a` accounting for the gain to 0.1 %; the enstrophy form
+!! read the stale value on BOTH sides, cancelled, and stayed at 0.89.
+!! After (`mask_time_mean_velocities` on the `pred_corr` step-0 seed):
+!! 0.892 for all three forms.
 module test_ocean_cor_ref_seiche
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
@@ -48,7 +68,8 @@ module test_ocean_cor_ref_seiche
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_continuity, only: continuity_t
-   use rdb_coriolis_adv, only: coriolis_adv_t
+   use rdb_coriolis_adv, only: coriolis_adv_t, PV_VARIANT_SADOURNY_ENERGY, &
+                               PV_VARIANT_SADOURNY_HK
    use rdb_eos, only: eos_t
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, OPGF_VARIANT_FV_LITE
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
@@ -105,16 +126,36 @@ module test_ocean_cor_ref_seiche
       !! widened to make this pass: a ratio creeping up means the
       !! residual is back.
 
+   real(wp), parameter :: OMEGA_SEICHE = PI_L*44.2865_wp/(real(NXP, wp)*DX)
+      !! Gravest seiche frequency `π·c/L` (1/s), `c = √(g·H0) = 44.29 m/s`
+      !! written as a literal (an intrinsic `sqrt` in a constant
+      !! expression is F2008 but not every toolchain here folds it).
+   real(wp), parameter :: ENERGY_NONINCREASE_BAR = &
+                          1.0_wp + 0.5_wp*OMEGA_SEICHE*DT/real(N_INNER, wp)
+      !! DERIVED bar `1 + ω·dt_inner/2 = 1.027` for the masked-wall
+      !! transport-form gate — the derivation of
+      !! `test_ocean_zfixed_cor_ref`'s bar on this basin: closed,
+      !! unforced, inviscid, uniform density, so the only discrete energy
+      !! sources are the time schemes.  `pred_corr` at `pc_be = 0.6`
+      !! gives `|G|² = 1 − 0.2·θ² + 0.36·θ⁴ < 1` for every slow linear
+      !! mode (`θ = f·dt = 0.06`); the forward-backward substep is
+      !! neutral (`c·dt_inner·√2/dx = 0.78 < 2`) but conserves a MODIFIED
+      !! energy, from which the sampled `KE+PE` of a wave at `ω` departs
+      !! by at most `ω·dt_inner/2`, the gravest seiche being the largest
+      !! `ω` that holds a finite share of this seed.  The seed is linear
+      !! (`V0/(f·L) = 1.6e-4`), so no nonlinear allowance is owed.
+
 contains
 
    subroutine collect_ocean_cor_ref_seiche_tests(testsuite)
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
-                  new_unittest("cor_ref_rotating_basin_no_growth", test_rotating_basin_no_growth) &
+                  new_unittest("cor_ref_rotating_basin_no_growth", test_rotating_basin_no_growth), &
+                  new_unittest("energy_form_masked_walls_no_growth", test_energy_form_masked_walls) &
                   ]
    end subroutine collect_ocean_cor_ref_seiche_tests
 
-   subroutine run_basin(split_scheme, finite, energy_ratio)
+   subroutine run_basin(split_scheme, finite, energy_ratio, pv_variant, solid_walls, stale_av)
       !! Integrate `N_STEPS` outer steps of the closed f-plane basin
       !! under `split_scheme` and report `(KE+PE)_end / (KE+PE)_0`.
       !!
@@ -129,6 +170,16 @@ contains
       integer, intent(in) :: split_scheme
       logical, intent(out) :: finite
       real(wp), intent(out) :: energy_ratio
+      integer, intent(in), optional :: pv_variant
+         !! Coriolis form (`PV_VARIANT_*`).  Absent ⇒ the `coriolis_adv_t`
+         !! default (enstrophy), as the original case runs.
+      logical, intent(in), optional :: solid_walls
+         !! `.true.` ⇒ the production wall convention (`wet_u = wet_v = 0`
+         !! on the wall faces).  Absent ⇒ the legacy unmasked walls, as
+         !! the original case runs.
+      real(wp), intent(out), optional :: stale_av
+         !! max `|u_av|`, `|v_av|` over the faces with `wet = 0` after the
+         !! run — the land contract says exactly zero.
 
       type(hgrid_t) :: grid
       type(ocean_metrics_t) :: metrics
@@ -149,6 +200,7 @@ contains
 
       integer :: i, j, k, ig, i0, i1, j0, j1, step
       real(wp) :: x_f, vjet, energy0, energy1
+      logical :: walls
 
       ig = NGHOST
       call grid%init(NXP, NYP, NGHOST, DX, DX)
@@ -157,6 +209,9 @@ contains
       call ct%init(grid, nz_ml=NZ)
       cor%f_0 = F0
       call cor%init(grid, nz_ml=NZ)
+      if (present(pv_variant)) cor%pv_variant = pv_variant
+      walls = .false.
+      if (present(solid_walls)) walls = solid_walls
       call pgf%init(grid, nz_ml=NZ)
       pgf%variant = OPGF_VARIANT_FV_LITE
       call hv%init(grid, nz_ml=NZ)
@@ -213,7 +268,10 @@ contains
 
       energy0 = basin_energy(ms, i0, i1, j0, j1)
 
-      call make_cartesian_metrics(metrics, grid)
+      ! The seed above is deliberately NOT masked: with `solid_walls` the
+      ! wall faces carry the jet at step 0, which is what the transport-
+      ! form gate needs (see the module docstring).
+      call make_cartesian_metrics(metrics, grid, solid_walls=walls)
       !$acc enter data copyin(ms)
       call ms%enter_data()
       !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
@@ -239,6 +297,15 @@ contains
             end do
          end do
       end do
+
+      if (present(stale_av)) then
+         !$acc update self(ms%u_av_layer, ms%v_av_layer)
+         stale_av = 0.0_wp
+         do k = 1, NZ
+            stale_av = max(stale_av, maxval(abs(ms%u_av_layer(:, :, k))*(1.0_wp - metrics%wet_u)))
+            stale_av = max(stale_av, maxval(abs(ms%v_av_layer(:, :, k))*(1.0_wp - metrics%wet_v)))
+         end do
+      end if
 
       energy1 = basin_energy(ms, i0, i1, j0, j1)
       if (finite .and. energy0 > 0.0_wp .and. ieee_is_finite(energy1)) then
@@ -314,5 +381,45 @@ contains
          ratio_pc, ratio_rk2
       call check(error, ratio_pc < ENERGY_GROWTH_BAR, trim(msg))
    end subroutine test_rotating_basin_no_growth
+
+   subroutine test_energy_form_masked_walls(error)
+      !! `pred_corr` + the TRANSPORT Coriolis forms (`sadourny_energy`,
+      !! `sadourny_hk`) on the production masked walls, from a seed that
+      !! is not masked at the wall faces: `KE+PE` must stay under the
+      !! derived `ENERGY_NONINCREASE_BAR`, and `u_av` must be exactly
+      !! zero on every masked face (a product with `wet = 0`, not a
+      !! cancellation, so exact zero is the right assertion).
+      !!
+      !! Fails before / passes after, measured (gfortran 15.1 Release,
+      !! 1200 steps): energy 1.262E+02 → 0.892, HK 1.287E+02 → 0.892;
+      !! wall `v_av` 1.0E-03 (the seed amplitude, for the whole run) → 0.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: forms(2) = [PV_VARIANT_SADOURNY_ENERGY, PV_VARIANT_SADOURNY_HK]
+      character(len=15), parameter :: names(2) = ["sadourny_energy", "sadourny_hk    "]
+      logical :: fin
+      real(wp) :: ratio, stale
+      integer :: n
+      character(len=640) :: msg
+
+      do n = 1, size(forms)
+         call run_basin(SPLIT_SCHEME_PRED_CORR, fin, ratio, pv_variant=forms(n), &
+                        solid_walls=.true., stale_av=stale)
+         call check(error, fin, "pred_corr + "//trim(names(n))//" masked-wall basin went non-finite")
+         if (allocated(error)) return
+         write (msg, '("pred_corr + ",a," on masked walls: KE+PE ratio = ",es11.3, &
+               &" over ",I0," steps; derived bar ",f6.4,". Unforced + inviscid: growth is ", &
+               &"manufactured. Suspect a reference/slow-Coriolis mismatch at the walls ", &
+               &"(u_av vs the metric-masked transports). Do NOT widen this bar.")') &
+            trim(names(n)), ratio, N_STEPS, ENERGY_NONINCREASE_BAR
+         call check(error, ratio <= ENERGY_NONINCREASE_BAR, trim(msg))
+         if (allocated(error)) return
+         write (msg, '("pred_corr + ",a,": u_av on a masked face = ",es11.3, &
+               &" after the run; the land contract says exactly 0. A non-zero value is ", &
+               &"read by the fast-loop Coriolis reference but not by the transport forms.")') &
+            trim(names(n)), stale
+         call check(error, stale == 0.0_wp, trim(msg))
+         if (allocated(error)) return
+      end do
+   end subroutine test_energy_form_masked_walls
 
 end module test_ocean_cor_ref_seiche
