@@ -270,6 +270,12 @@ contains
          call make_cartesian_metrics(metrics, grid)
          call dyn%init(grid)
          call cor%init(grid)
+         ! Pure forward-backward fast loop (the pre-2026-09-22 default).
+         ! This gate measures the wet/dry front against the INVISCID
+         ! Thacker solution; MOM6's default BEBT = 0.1 damps the basin
+         ! oscillation itself (by design) and moves the shoreline off the
+         ! analytic curve, which is not what this test is about.
+         dyn%bt_work%bebt = 0.0_wp
          nx = grid%nx_total
          ny = grid%ny_total
          omega = sqrt(2.0_wp*GRAVITY*D0)/L_BASIN

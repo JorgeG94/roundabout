@@ -149,6 +149,11 @@ contains
       call vmix%init(grid, nz_ml=NZ)
       call eos%init(grid)
       call dyn%init(grid, nz_ml=NZ)
+      ! bebt = 0 (pure forward-backward, the pre-2026-09-22 default): the
+      ! guard must see the renormaliser alone.  MOM6's default BEBT = 0.1
+      ! damps the pumped 2Δx mode by itself and would let the historical
+      ! discontinuous flux model pass this gate.
+      dyn%bt_work%bebt = 0.0_wp
       call vc%init(grid, nz_ml=NZ)
       vc%coord_type = VCOORD_LAGRANGIAN
       dyn%split_scheme = SPLIT_SCHEME_PRED_CORR
