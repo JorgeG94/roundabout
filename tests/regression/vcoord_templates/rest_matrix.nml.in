@@ -14,7 +14,8 @@
 !
 !   * NO forcing            -- no wind, no surface flux, no tides
 !   * NO lateral viscosity  -- nu_h = nu_4 = 0, no flow-aware closure
-!   * NO bottom drag        -- cd = 0
+!                              (INVISCID leg; see TWO LEGS below)
+!   * NO bottom drag        -- (INVISCID leg)
 !   * NO vertical mixing    -- use_closure = use_kpp = .false.
 !   * isopycnals FLAT IN GEOPOTENTIAL z, laid by
 !     `&ocean_zinit_nml source="linear"` -- NOT by a layer-index
@@ -29,13 +30,24 @@
 ! entirely, by the vertical coordinate's pressure-gradient truncation
 ! over the geometry.  That is what the matrix measures.
 !
-! The dissipation is left OUT on purpose and must stay out.  Measured
-! on the sibling cavity case (validation_examples/ocean/
-! ice_shelf_cavity/README.md): nu_h = 50 m2/s removes a four-decade
-! instability entirely, and every flow-aware closure (Smagorinsky,
-! Leith) is inert at rest because it sets its viscosity from the
-! resolved deformation rate, which is zero.  A viscosity that removes
-! the instability removes the measurement with it.
+! TWO LEGS share this template and differ ONLY in the dissipation:
+!
+!   * INVISCID (nu_h = 0, no drag) -- the hard probe.  A viscosity
+!     that removes a spurious mode removes the measurement with it
+!     (nu_h = 10 m2/s costs the rx0 mode twelve decades), so this leg
+!     keeps it out and reports what the discretisation does on its own.
+!     Its sigma-family growth is DOCUMENTED EXPECTED behaviour: MOM6
+!     shows the same mode (see tests/regression/README.md).
+!   * VISCOUS -- MOM6's shipped seamount closure (KH = 1000 m2/s +
+!     KH_VEL_SCALE = 0.003 m/s + LINEAR_DRAG) translated onto this
+!     grid.  This is the PASS/FAIL gate: a cell inside its family's
+!     documented rx0 envelope must rest.
+!
+! Both legs run the FIXED CONFIGURATION v0.1.0 recommends: the exact
+! finite-volume PGF (`form="fv_mom6"` + `reconstruct_for_pressure`),
+! the linear-exact remap boundary cells and non-uniform weights, the
+! fail-loud remap precondition guard, and closed staircase faces on
+! z_fixed.  The generator fills the double-brace fields per leg.
 ! ===================================================================
 
 &sim_nml
@@ -70,6 +82,11 @@
    vcoord_type = "{{VCOORD}}"
    zstar_h_min = 1.0e-4
    remap_method = "{{REMAP}}"
+   ! the fixed configuration (v0.1.0): linear-exact boundary cells,
+   ! non-uniform-grid weights, and the fail-loud precondition guard
+   remap_boundary_extrap     = .true.
+   remap_nonuniform_weights  = .true.
+   remap_check_preconditions = .true.
 {{VCOORD_EXTRA}}
 /
 
@@ -87,8 +104,10 @@
 {{CAVITY}}
 
 &ocean_pgf_nml
-   form        = "{{PGF_FORM}}"
-   p_top_in_bc = {{P_TOP_IN_BC}}
+   ! the fixed configuration (v0.1.0): the exact finite-volume PGF
+   form                     = "fv_mom6"
+   reconstruct_for_pressure = .true.
+   p_top_in_bc              = {{P_TOP_IN_BC}}
    maxvel      = 2.0
 /
 
@@ -127,14 +146,22 @@
 /
 
 &ocean_hvisc_nml
-   ! ZERO, and it must stay zero -- see the header.
-   nu_h = 0.0
-   nu_4 = 0.0
+   ! {{LEG}} leg -- see the header.  Laplacian only (MOM6's seamount
+   ! turns BIHARMONIC off).  `stress_tensor` selects MOM6's own operator,
+   ! (1/h) div(h Kh strain); it is refused under zfixed_closed_faces, so
+   ! the z_fixed cells carry the scalar velocity Laplacian instead.
+   nu_h          = {{NU_H}}
+   nu_4          = 0.0
+   stress_tensor = {{STRESS_TENSOR}}
 /
 
 &ocean_bdrag_nml
-   form = "quadratic"
+   ! {{LEG}} leg.  Viscous: MOM6 LINEAR_DRAG, tau/rho_0 = CDRAG *
+   ! DRAG_BG_VEL * u_bbl = 1e-4 m/s * u_bbl, spread over HBBL = 10 m.
+   form = "{{BDRAG_FORM}}"
    cd   = 0.0
+   r    = {{BDRAG_R}}
+   hbbl = {{BDRAG_HBBL}}
 /
 
 &ocean_vmix_nml
