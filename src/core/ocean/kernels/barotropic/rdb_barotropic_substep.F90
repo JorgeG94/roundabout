@@ -914,7 +914,7 @@ contains
             !   `ubt_trans = (1 + bebt)·ubt^n − bebt·ubt^{n-1}`
             ! — a forward-time extrapolation that lets the η evolution
             ! anticipate the velocity update later in the substep.  At
-            ! `bebt = 0` (the seeded default) the formula collapses to
+            ! `bebt = 0` (pure FB; the default is MOM6's 0.1) the formula collapses to
             ! `ubt^n` and Pass 1 is bit-identical to the pre-knob FBE
             ! scheme.  See `bt_work%bebt` doc for rationale.
             do concurrent(j=1:ny, i=1:nx) &

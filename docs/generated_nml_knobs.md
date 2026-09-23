@@ -660,7 +660,7 @@ Split-explicit barotropic substep controls.
 | `n_inner` | `0` |  | Barotropic substeps per outer step (0 = unsplit) |
 | `auto_n_inner` | `.false.` |  | Derive n_inner from the gravity-wave CFL at setup |
 | `cfl_bt_safety` | `0.6500000000E+00` |  | Safety fraction on the BT CFL when auto_n_inner |
-| `bebt` | `0.0000000000E+00` |  | Forward-velocity-projection weight (MOM6 BEBT) |
+| `bebt` | `0.1000000000E+00` |  | Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6) |
 | `use_cont_type` | `.false.` |  | Use the BT_cont flux-bounded closure (MOM6 USE_BT_CONT_TYPE) |
 | `cont_corr_bounds` | `.false.` |  | Use BT_cont flux limits for the eta-correction bound |
 | `upstream_h_face` | `.false.` |  | Use per-face upstream-PPM column-sum thickness in the BT chain |
@@ -880,7 +880,7 @@ Continuity-PPM positivity controls.
 | `ppm_limit_pos` | `.false.` |  | Positivity-preserving PPM face limiter (MOM6 PPM_limit_pos) |
 | `vol_cfl` | `.false.` |  | Swept-volume continuity-PPM face thickness (MOM6 vol_CFL) |
 | `positive_definite` | `.false.` |  | Positive-definite split continuity (h>=h_lim, zero mass created; reconstruction floor + per-donor outflux limiter) |
-| `renorm_consistent_flux` | `.false.` |  | uhbt renormalisation: continuous flux for a layer whose upwind donor flips under the correction (MOM6 zonal_flux_adjust); fixes the wrong-sign transport at thickness jumps |
+| `renorm_consistent_flux` | `.true.` |  | uhbt renormalisation: continuous flux for a layer whose upwind donor flips under the correction (MOM6 zonal_flux_adjust); fixes the wrong-sign transport at thickness jumps |
 
 ### &ocean_isopycnal_nml
 

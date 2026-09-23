@@ -3477,10 +3477,10 @@ class OceanBt(Group):
 
     bebt = Real(
         'bebt',
-        doc='Forward-velocity-projection weight (MOM6 BEBT)',
+        doc='Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6)',
         units='',
         required=False,
-        default=0.0,
+        default=0.1,
     )
 
     use_cont_type = Bool(
@@ -4719,7 +4719,7 @@ class OceanContinuity(Group):
         doc='uhbt renormalisation: continuous flux for a layer whose upwind donor flips under the correction (MOM6 zonal_flux_adjust); fixes the wrong-sign transport at thickness jumps',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
 

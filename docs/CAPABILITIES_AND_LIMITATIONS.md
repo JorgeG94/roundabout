@@ -808,9 +808,9 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   at `f = 0`, at `dt = 300 s` and on one layer; `ssp_rk2` and `&ocean_bt_nml
   bebt ≥ 0.05` (MOM6's default is 0.1) out-damp it. **Fix:**
   `&ocean_continuity_nml renorm_consistent_flux = .true.` (MOM6
-  `zonal_flux_adjust` parity; default off ⇒ byte-identical; recommended for
-  every run over a bathymetric step or steep slope — it is bit-identical
-  wherever no donor flips). **A** — `stress_tensor = .true.` drives a density-space
+  `zonal_flux_adjust` parity; **the default since 2026-09-22**, together with
+  MOM6's `&ocean_bt_nml bebt = 0.1` fast-loop damping — it is bit-identical
+  wherever no donor flips; `.false.` restores the historical model). **A** — `stress_tensor = .true.` drives a density-space
   (`rho`/`hycom`) column negative within 4–8 steps on any slope (the scalar
   operator rests it; MOM6's `hrat_min` thin-layer bound is the missing
   safeguard, a hypothesis). **C** — on the GPU only, every `rho`/`hycom` run
