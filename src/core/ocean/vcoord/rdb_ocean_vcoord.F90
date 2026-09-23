@@ -374,7 +374,7 @@ module rdb_ocean_vcoord
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
       logical :: check_vanished_content = .false.
-         !! `&vcoord_nml check_vanished_content` — the I1 tripwire.  Carried
+         !! `&vcoord_nml check_vanished_content` — the I1′ tripwire.  Carried
          !! on this slot (rather than on `ocean_dyn_t`) because the vertical
          !! coordinate is what MAKES vanished layers, so the knob that
          !! polices them belongs beside `zstar_h_min` and the filler

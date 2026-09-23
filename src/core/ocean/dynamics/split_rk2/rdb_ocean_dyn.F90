@@ -3228,16 +3228,18 @@ contains
       ! reads them.  No-op for WALL/PERIODIC edges (bit-identical).
       if (present(bc)) call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
-      ! ---- Invariant I1: `h <= H_VANISHED ⇒ hTr = 0` ----------------------
+      ! ---- Invariant I1′: `h <= H_VANISHED ⇒ hTr = h·c_live` ---------------
       ! THE enforcement point.  Every tracer writer above (surface flux, melt,
       ! sponge, hdiff, vdiff, vertical advection, the OBC ghost fills, the
       ! windowed drain) deposits content into whatever layer it was handed;
       ! only the ALE remap checked `h` on the way in.  Rather than ask forty
       ! kernel authors to remember the rule, establish it ONCE here, at the end
-      ! of the outer step, over the whole tracer registry.
+      ! of the outer step, over the whole tracer registry: every filler is
+      ! pooled with its donor live layer and the pool mixed to one
+      ! concentration, so the filler carries its donor's `c_live`.
       !
-      ! Content is moved WITHIN the column (to the nearest live layer), so the
-      ! column integral is unchanged and NOTHING is recorded in any budget — a
+      ! Content is moved WITHIN the column (filler ↔ donor), so the column
+      ! integral is unchanged and NOTHING is recorded in any budget — a
       ! contributor that always sums to zero is noise in the one instrument
       ! that detects real leaks.
       !
@@ -3253,8 +3255,9 @@ contains
    end subroutine ocean_dyn_step_split
 
    subroutine check_vanished_invariant_or_die(grid, vcoord, ms, outer_step)
-      !! Fail-loud TRIPWIRE for invariant I1 — `h_layer <= H_VANISHED ⇒
-      !! hTr = 0` for every registered tracer.  Gated on
+      !! Fail-loud TRIPWIRE for invariant I1′ — `h_layer <= H_VANISHED ⇒
+      !! hTr = h_layer·c_live` (the donor live layer's concentration; `hTr = 0`
+      !! in a column with no live layer) for every registered tracer.  Gated on
       !! `&vcoord_nml check_vanished_content` (default `.false.`), which is
       !! the knob the stability suite turns on for the cases that actually
       !! have vanishing layers.
@@ -3282,15 +3285,16 @@ contains
       call ms%scan_vanished_content(grid%nx_total, grid%ny_total, n_bad, worst)
       if (n_bad <= 0) return
       write (msg, "(a,i0,a,i0,a,es12.5)") &
-         "[I1] vanished-layer invariant violated at outer step ", outer_step, &
-         ": ", n_bad, " cell(s) hold content in a layer at or below H_VANISHED; worst |hTr| = ", worst
+         "[I1'] vanished-layer invariant violated at outer step ", outer_step, &
+         ": ", n_bad, " filler cell(s) do not hold their donor's concentration; "// &
+         "worst |hTr - h*c_live| = ", worst
       call logger%error(trim(msg))
       call logger%error( &
-         "[I1] `h <= H_VANISHED ⇒ hTr = 0`. The enforcement point "// &
+         "[I1'] `h <= H_VANISHED ⇒ hTr = h*c_live`. The enforcement point "// &
          "(multilayer_state_t%enforce_vanished_content) runs immediately before this "// &
          "check, so a hit is a bug in the rule or an off-device array, not a stray "// &
          "kernel write. See src/core/ocean/README.md, 'The vanished-layer content rule'.")
-      error stop "I1 violated (&vcoord_nml check_vanished_content)"
+      error stop "I1' violated (&vcoord_nml check_vanished_content)"
    end subroutine check_vanished_invariant_or_die
 
    subroutine run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &

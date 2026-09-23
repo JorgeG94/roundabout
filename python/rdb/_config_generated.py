@@ -326,7 +326,7 @@ class Vcoord(Group):
 
     check_vanished_content = Bool(
         'check_vanished_content',
-        doc='I1 tripwire: fail loud if any layer at or below H_VANISHED holds tracer content (debug/validation)',
+        doc="I1' tripwire: fail loud if any layer at or below H_VANISHED does not hold its donor live layer's concentration (debug/validation)",
         units='',
         required=False,
         default=False,

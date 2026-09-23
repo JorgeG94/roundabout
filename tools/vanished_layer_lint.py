@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Lint: the vanished-layer rule must not be re-invented per kernel.
 
-Invariant I1 — `h <= H_VANISHED  =>  hTr = 0` — and its companion "the
-concentration of layer k" have exactly ONE definition in this tree:
+Invariant I1' — `h <= H_VANISHED  =>  hTr = h*c_live`, the donor live
+layer's concentration — and its companion "the concentration of layer k"
+have exactly ONE definition in this tree:
 `src/shared_module_utilities/rdb_vanished_layer.inc` (`rdb_vl_is_live`,
-`rdb_vl_conc`, `rdb_vl_merge_content`).  Every hand-rolled copy of that
+`rdb_vl_conc`, `rdb_vl_column_conc`, `rdb_vl_holds_live_conc`,
+`rdb_vl_merge_content`).  Every hand-rolled copy of that
 rule is a place it can drift, and the drift is silent: the day-16 z_fixed
 salt/heat break was a guard that was right on the read side and absent on
 the write side of the SAME routine.
@@ -74,7 +76,7 @@ SANCTIONED = {
     # the remap: the rule's first consumer, and the k_top / closed-face
     # producers that translate "vanished" into an index or a mask
     "src/ALE/rdb_ocean_remap.F90",
-    # the state type that owns the enforcement point + the I1 scan
+    # the state type that owns the enforcement point + the I1' scan
     "src/core/rdb_multilayer_state.F90",
 }
 
@@ -144,7 +146,7 @@ def strip_comment(line: str) -> str:
     CONTENTS of every string literal blanked out.
 
     Blanking the literals matters: a fail-loud message that quotes the rule
-    ("h <= H_VANISHED => hTr = 0") is documentation, not a second spelling of
+    ("h <= H_VANISHED => hTr = h*c_live") is documentation, not a second spelling of
     the test, and must not trip the lint."""
     out = []
     quote = ""
