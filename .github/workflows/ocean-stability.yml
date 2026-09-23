@@ -19,14 +19,25 @@
 #   2. the tier-2 stability sweep -- every shipped ocean namelist run as a
 #      dimensionless-number-preserving downscaled twin, asserting no NaN,
 #      closed budgets, no energy growth in an unforced case, and bounded CFL.
+#   3. the vertical-coordinate rest matrix's tier-2 slice, which the sweep
+#      above includes (tag `vcoord_matrix`): the INVISCID leg on flat / slope /
+#      rx0_060 and the VISCOUS leg -- the v0.1.0 PASS/FAIL gate -- on flat /
+#      slope / seamount_steep (the top of the terrain-following envelope),
+#      every family, plus their `__ssp_rk2` twins.  120 of the sweep's cases;
+#      measured 443 s on 2 contended local workers.
 #
 # Tier 1 (full scale, GPU, NVHPC) is NOT wired in here: a hosted runner has no
-# GPU.  Run it locally or on a self-hosted GPU box -- see the README.
+# GPU.  Run it locally or on a self-hosted GPU box -- see the README.  That
+# includes the FULL rest matrix (both legs, 205 cells x 30 simulated days),
+# which is what pins `tests/regression/vcoord_matrix_measured.py` and the
+# per-family rx0 envelopes; it is local-only, re-run on both toolchains
+# whenever a vertical-coordinate, remap, PGF or split-step change lands.
 name: ocean stability (tier 2)
 
-# This is a real gate: it runs on every pull request (49 cases, ~2.5 min wall
-# on 4 workers locally).  It was manual-only while it was being proven out;
-# that period is over.  `workflow_dispatch` is kept so it can still be run by
+# This is a real gate: it runs on every pull request (227 cases incl. the
+# vcoord-matrix slice and the ssp_rk2 twins; 907 s wall on 3 workers of a
+# contended 4-core box, 2026-09-22).  It was manual-only while it was being
+# proven out; that period is over.  `workflow_dispatch` is kept so it can still be run by
 # hand from the Actions tab against any branch.
 #
 # NOTE: no `branches:` filter on pull_request -- deliberately, and for the same

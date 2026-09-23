@@ -249,12 +249,20 @@ So, in the same PR:
 3. **State the expected row in your PR description**, before you run it. "I
    expect `FOO` to match `SIGMA` on `flat` and to beat it on `slope`" is a
    prediction the matrix can falsify; "it should be fine" is not.
-4. **Run it and write down what happened.**
-   `python3 tests/regression/stability.py --tier 2 --build-dir build_gcc
-   --jobs 6 --tags vcoord_matrix`, then the tier-1 sweep on a GPU. Cells that
-   fail go into `MEASURED_XFAIL` **with the measured number and the assertion
-   list they came with** — never a widened bar, never a shortened run, never
-   viscosity added to the template.
+4. **Run it and write down what happened — by tool, on both toolchains.**
+   The matrix has two legs (INVISCID, the probe; VISCOUS, the gate) and both
+   run automatically for a new family. Sweep tier 1 and tier 2 on gfortran
+   (CPU) and on nvfortran (GPU), each with `--tags vcoord_matrix --out
+   <json>`, then regenerate the pinned table with
+   `python3 tests/regression/vcoord_matrix_pin.py --t1 gfortran=… --t1
+   nvfortran=… --t2 gfortran=… --t2 nvfortran=…`. It writes
+   `vcoord_matrix_measured.py` — each failing cell's assertion list (the
+   union over toolchains) with every toolchain's number, and the family's
+   viscous-leg rx0 **envelope**. The reason a cell carries is policy
+   (`reason_for` in `vcoord_matrix.py`); a viscous cell that fails where you
+   expected it to rest is a FINDING to localise, not a marker to write —
+   never a widened bar, never a shortened run, never viscosity added to the
+   inviscid leg.
 5. **Update the baseline table** in
    [`tests/regression/README.md`](../../tests/regression/README.md). That table
    is the product: it is what a user reads to decide whether to trust `FOO`.

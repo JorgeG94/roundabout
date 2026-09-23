@@ -752,39 +752,64 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   The `documents_*` rows assert the CURRENT placement on purpose: the suite is
   green and the defect is pinned. The rigid-top slice must flip them.
 - **Which coordinate is trustworthy on which GEOMETRY — the rest-state
-  baseline table.** The per-family placement table above says where a family
-  puts its interfaces; it does not say what the resulting run *does*. The
-  vertical-coordinate **rest matrix** runs ONE problem — a motionless,
-  stably stratified, completely undamped f-plane ocean with the isopycnals
-  flat in geopotential `z` — under **every** family on **eleven** geometries
-  (flat; a constant-gradient slope; a Gaussian seamount at two steepnesses;
-  a stiffness ladder walking `rx0 = |dH|/(H_a+H_b)` through
-  0.1/0.2/0.4/0.6/0.8 past the Beckmann & Haidvogel (1993) bound of 0.2; and
-  a flat and a sloping ice lid), and gates the spurious energy's LEVEL, its
-  fitted exponential GROWTH RATE, the tracer bounds, the layer-thickness
-  positivity, the closed budgets and the solver's own truncation counters.
-  **The measured table is the envelope statement for each family** and lives
-  in [`tests/regression/README.md`](../tests/regression/README.md#the-baseline-table).
-  Headlines as measured on this branch (115 cells, 30 simulated days each,
-  one V100, NVHPC 26.5, `pred_corr`, 66 min wall): every accepted family is
-  bit-zero on a FLAT bed and under a FLAT ice lid (`En = 0.000E+00` at every
-  sample to day 30); `sigma`/`zstar`/`zstar_sigma` agree to every printed
-  digit on every geometry; `eulerian_z` is SIX decades worse than sigma on a
-  slope (1.13e-03 vs 3.00e-09 m2/s2) because it drops the free surface;
-  `zstar_full` is 1500x worse (4.50e-06); `z_fixed` is the only family that
-  LEAKS salt and heat (1e-6 relative against a 1e-11 bar) wherever layers
-  vanish, and goes non-finite by day 30 on a seamount and under a sloping
-  lid; `rho`/`hycom` sit three to four decades above the geometric families
-  and `rho` NaNs on every sloping geometry; and **no family survives the
-  stiffness ladder, not even at `rx0 = 0.1`, half the classical bound** --
-  `sigma` reaches 9.02e-04 m2/s2 (4.2 cm/s out of nothing) there, and from
-  `rx0 = 0.4` up every family goes non-finite. There is no truly
-  geopotential coordinate in this tree to escape to: `eulerian_z` is a
-  stretched sigma with the free surface dropped, and `lagrangian` inherits
-  the sigma-shaped initial thickness and then never regrids. Generated from
-  one template by
-  `tests/regression/vcoord_matrix.py`; each failing cell is pinned as a
-  scoped XFAIL carrying its measured number.
+  matrix and the v0.1.0 rx0 ENVELOPES.** The per-family placement table above
+  says where a family puts its interfaces; it does not say what the resulting
+  run *does*. The vertical-coordinate **rest matrix**
+  (`tests/regression/vcoord_matrix.py`) runs ONE problem — a motionless,
+  stably stratified f-plane ocean with the isopycnals flat in geopotential
+  `z` — under **every** family on **eleven** geometries (flat; a slope; a
+  Gaussian seamount at two steepnesses; a single-face stiffness ladder at
+  `rx0 = |dH|/(H_a+H_b)` = 0.1/0.2/0.4/0.6/0.8; a flat and a sloping ice lid),
+  in **two legs**: INVISCID (the hard probe) and VISCOUS (MOM6's shipped
+  seamount closure translated: `&ocean_hvisc_nml nu_h = 160, stress_tensor =
+  .true.` — the same `KH/Δx²` as MOM6's `KH = 1000` at 5 km — and `&ocean_bdrag_nml
+  form = "linear", r = 1e-5, hbbl = 10`, i.e. MOM6's `CDRAG·DRAG_BG_VEL =
+  1e-4 m/s` stress). It gates the spurious energy's level and fitted growth
+  rate, the budgets at round-off, the tracer bounds, positivity and the
+  remap precondition guard. Both legs run **the configuration v0.1.0
+  recommends over sloping topography**: `&ocean_pgf_nml form = "fv_mom6",
+  reconstruct_for_pressure = .true.`; `&vcoord_nml remap_boundary_extrap,
+  remap_nonuniform_weights, remap_check_preconditions = .true.`; and
+  `zfixed_closed_faces = .true.` for `z_fixed`. Measured 2026-09-22 on
+  gfortran 15.1 (CPU) and nvfortran 26.5 (V100), 30 simulated days per cell;
+  **both toolchains agree on every verdict** except FINDING C below.
+
+  **The envelope** — the largest measured geometry `rx0` at which every
+  viscous cell of the family passes every gate on both toolchains (the
+  measured rungs are 0, 0.0071, 0.0138, 0.030, 0.078, 0.1, 0.2, …):
+
+  | family | v0.1.0 envelope (viscous) | inviscid, every gate passes to | what caps it |
+  |---|---|---|---|
+  | `sigma`, `zstar` | **rx0 ≤ 0.078** | 0.078 | FINDING B at the 0.1 rung |
+  | `zstar_sigma`, `zstar_full` | **rx0 ≤ 0.1** | 0.1 | FINDING B at 0.2 |
+  | `eulerian_z` (pins `ssp_rk2`) | **rx0 ≤ 0.6** | flat only | level + rate at 0.8 |
+  | `lagrangian` | **rx0 ≤ 0.03** | 0.03 | layer collapse (never regrids) |
+  | `z_fixed` (closed faces) | **flat only** | flat only | salt/heat leak where layers vanish (closed to round-off by the pending `fix/remap-vanished-layer-content`, measured) |
+  | `rho`, `hycom` | **flat only** | flat only | FINDING A (viscous), the rest-state mode (inviscid) |
+
+  Outside its envelope a family is not claimed to rest. Every terrain-following
+  family rests at machine zero (`En ≤ 2.6e-21`) on the slope, both seamounts
+  and the sloping ice lid in both legs — the 3e-09 … 2.7e-04 plateaus of the
+  pre-fix table are gone. The INVISCID leg's growth on the ladder is
+  **documented expected behaviour**: MOM6 (dev/gfdl `d74a11f9c`) grows the
+  same mode out of round-off on its own sigma seamount at rest, e-folding
+  0.81–0.85 d independent of rx0 0.10–0.76, zero on a flat bed, absent at
+  `f = 0`; its shipped closure kills it. Three FINDINGS, localised, not tuned
+  away (details and substitution tables in
+  [`tests/regression/README.md`](../tests/regression/README.md#findings--what-the-two-legs-turned-up)):
+  **B** — under the default `pred_corr` at `dt = 600 s` (2 km), a Laplacian
+  viscosity ≥ 40 m²/s (either operator) turns a stepped terrain-following
+  column that the inviscid model holds into an explosive barotropic
+  grid-scale mode after 2–28 days; `ssp_rk2`, `dt ≤ 300 s`, `nu_h ≤ 10` or
+  `f = 0` rest it. **A** — `stress_tensor = .true.` drives a density-space
+  (`rho`/`hycom`) column negative within 4–8 steps on any slope (the scalar
+  operator rests it; MOM6's `hrat_min` thin-layer bound is the missing
+  safeguard, a hypothesis). **C** — on the GPU only, every `rho`/`hycom` run
+  with `eos = "wright"` faults (`CUDA_ERROR_ILLEGAL_ADDRESS`) in
+  `ocean_vcoord_compute_target_h_rho_impl` at the first regrid, flat bed
+  included. Markers and envelopes are pinned by `vcoord_matrix_pin.py` from
+  both toolchains' runs into `vcoord_matrix_measured.py`, never by hand; the
+  CI (tier 2) carries the viscous leg on the in-envelope geometries.
 - **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =
   'zsigma'`), on the ocean path, with or without a cavity. Its deep branch reads
   `z_ref_global` as a table of absolute reference depths **in metres**
