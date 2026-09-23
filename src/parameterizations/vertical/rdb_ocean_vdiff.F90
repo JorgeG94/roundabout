@@ -409,8 +409,9 @@ contains
       ! Declaring the shape removes the decision at its source: an
       ! explicit-shape dummy is contiguous by definition, so there is no
       ! flag, no temporary, no free, nothing to read — and, unlike the
-      ! CONTIGUOUS attribute (reverted in 852802b7f), it keeps working on
-      ! nvfortran.  CONTIGUOUS on an assumed-shape OPTIONAL makes nvfortran
+      ! CONTIGUOUS attribute (tried and reverted during the cavity stack), it
+      ! keeps working on nvfortran.  CONTIGUOUS on an assumed-shape OPTIONAL
+      ! makes nvfortran
       ! 26.5 hand the callee an offset-adjusted, NON-NULL address for an
       ! ABSENT actual; the implicit present-or-copyin the compiler emits for
       ! the impl's explicit-shape dummy then loses its null short-circuit
