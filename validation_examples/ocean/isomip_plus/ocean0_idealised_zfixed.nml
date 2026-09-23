@@ -13,78 +13,94 @@
 ! the vdiff decoupling gate, then deleted by the ALE remap drain, with
 ! the console budget still counting it.
 !
-! The melt-OFF twin of this configuration is measured in
-! `cavity_rest_growth_diagnosis.md` section Y.1 and carries a spurious
-! growing mode (En 6.9E-09 at day 1 -> 1.3E-06 at day 30, exponential
-! after day 15 on a ~4.2-day e-folding, seeded at the partial cells by
-! the partial-step PGF quadrature error).  That mode is NOT a melt
-! problem and is owned elsewhere; read this case's energy against that
-! baseline, not against zero.
+! ================ THE MELT-OFF BASELINE (180 days) ===============
+!
+! The melt-OFF twin (this file with `&ocean_cavity_melt_nml enable` and
+! `&ocean_tdrag_nml enable` off) is NOT at rest, and it carries no
+! unbounded mode.  Diagnosed in `cavity_rest_growth_diagnosis.md`
+! section Q; the numbers below are the tier-1 stability rows
+! `isomip_plus_ocean0_zfixed_meltoff*` on one V100, on the v0.1.0
+! defaults (`bebt = 0.1`, `renorm_consistent_flux`, the I1' vanished-layer
+! rule), 180 days each:
+!
+!  * REGIME 1, day 0 to ~100, PHYSICAL.  ISOMIP+ prescribes
+!    kappa_v = 5E-05 m2/s against INSULATING boundaries (bed, ice base
+!    with melt off, open surface).  A linear rho(z) is not a steady state
+!    there: the boundary cell accumulates the flux it cannot pass on,
+!    rho' ~ kappa (drho/dz) t / h, then ~ sqrt(kappa t).  Where the
+!    boundary is SLOPED (trough sidewalls, tilted ice base) that anomaly
+!    sits at different z in neighbouring columns and drives an
+!    along-slope geostrophic current of a few mm/s (Phillips 1970;
+!    Wunsch 1970).  En ~ t^2 -> t: 6.8E-09 (d1), 5.6E-08 (d30), 2.2E-07
+!    (d90), with the 5-day log-rate FALLING the whole way (0.073 /day at
+!    d5-10, 0.012 /day at d85-90).  Protocol physics, present in any
+!    model that runs Ocean0 with kappa_v /= 0 from a linear profile.
+!  * REGIME 2, day ~105 to ~165, NUMERICAL.  One row of 7.3 m partial top
+!    cells at the calving front (x_calve, column i = 160; the western
+!    neighbour's cut was merged, so the pocket's west face is closed)
+!    accumulates a tracer error and grows a ONE-CELL jet along the front
+!    (grid Reynolds number ~7) on a 15-18-day e-folding, which SATURATES
+!    by day ~165: En 2.3E-06 (d150), peak 3.8E-06 (d173.5), 3.1E-06
+!    (d180); max|u| ~ 2 cm/s, MaxCFL < 0.01, budgets <= 9E-12 over the
+!    180 days, zero `[nan-catch]`.  Read the melt-ON energy below against
+!    THAT level, not against zero: it sits ~60x above it.
+!
+! The viscosity envelope on this 2 km grid: nu_h >= 2 m2/s is REQUIRED
+! (nu_h = 0 carries an inviscid mode growing exponentially at 0.18 /day
+! and accelerating, 1.4E-06 at day 30; validate_config WARNS below 2);
+! nu_h >= 30 removes the calving-front jet outright (En stays on the
+! regime-1 power law, 2.1E-07 at day 180); the ISOMIP+ Table-4 value 6,
+! shipped here, keeps it, saturated.
 !
 !
 ! ================ MEASURED, 30 days, melt ON =====================
 !
-! nvfortran 26.5 `-stdpar=gpu` cc70, one V100: 30 days in 168 s
-! (5.6 s / simulated day).
-! Zero `[nan-catch]` lines, zero CFL truncations, `MaxCFL <= 0.0685`.
+! nvfortran 26.5 `-stdpar=gpu` cc70, one V100, on the v0.1.0 defaults
+! (`bebt = 0.1`, `renorm_consistent_flux`, I1'): 30 days in 185 s
+! (6.2 s / simulated day).
+! Zero `[nan-catch]` lines, zero CFL truncations, `MaxCFL <= 0.061`.
 ! `melt` columns: 2584 covered, the same count `configure_ocean_k_top`
 ! reports as carrying top-side fillers.
 !
 !  day | En (m2/s2) | MaxCFL | max|u| | melt mean / max / min (m/yr) | Mass Err | Salt Err | Heat Err
 !  ----|------------|--------|--------|------------------------------|----------|----------|---------
-!    1 |  7.442E-08 | 0.0016 | 2.2e-3 |   3.77 /   8.66 /  +1.01     | -2.0E-14 |  4.6E-14 |  4.9E-14
-!    5 |  2.999E-06 | 0.0115 | 5.6e-2 |   4.99 /  27.61 /  +0.84     | -9.7E-14 |  2.3E-13 |  2.5E-13
-!   10 |  2.628E-05 | 0.0285 | 1.7e-1 |   5.67 /  29.72 /  +0.69     | -1.9E-13 |  4.6E-13 |  4.9E-13
-!   20 |  1.432E-04 | 0.0512 | 2.9e-1 |   6.09 /  34.48 /  -1.04     | -3.9E-13 |  9.1E-13 |  9.9E-13
-!   30 |  2.592E-04 | 0.0533 | 2.4e-1 |   6.24 /  36.57 /  -0.89     | -5.8E-13 |  1.4E-12 |  1.5E-12
+!    1 |  7.755E-08 | 0.0014 | 2.2e-3 |   3.78 /   8.54 /  +1.01     | -1.9E-14 |  4.6E-14 |  4.9E-14
+!    5 |  3.430E-06 | 0.0137 | 6.6e-2 |   5.18 /  25.13 /  +0.84     | -9.7E-14 |  2.3E-13 |  2.4E-13
+!   10 |  3.104E-05 | 0.0389 | 2.1e-1 |   5.70 /  23.85 /  +0.69     | -1.9E-13 |  4.5E-13 |  4.9E-13
+!   20 |  1.329E-04 | 0.0449 | 2.3e-1 |   5.42 /  25.36 /  +0.28     | -3.9E-13 |  9.1E-13 |  9.8E-13
+!   30 |  2.304E-04 | 0.0520 | 2.5e-1 |   5.62 /  29.10 /  +0.12     | -5.8E-13 |  1.4E-12 |  1.5E-12
 !
 ! (melt statistics are over the COVERED columns only — every cavity
-! diagnostic is NaN outside the cover — and are sampled at the half-day
-! the daily diagnostic fires.  A NEGATIVE melt rate is refreezing; it
-! first appears on day 13.)
+! diagnostic is NaN outside the cover — and are sampled when the daily
+! diagnostic fires; max|u| is the zonal face velocity at the half-day
+! before.  A NEGATIVE melt rate is refreezing; it first appears on day
+! 18, down to -0.21 m/yr by day 21.)
 !
-! THE BUDGETS ARE CLOSED, and this table is the re-measurement that made
-! them so.  The table this replaces showed all three residuals growing
-! linearly at ~2E-14/day through day 15 and then the salt and heat
-! residuals JUMPING four decades and changing sign, to -5.5E-08 /
-! +8.0E-08 by day 30.  That jump was localised to the ALE tracer remap's
-! ONE-SIDED vanishing-layer guard: the read side floored
-! (`h_old <= H_VANISHED ⇒ c_old = 0`) while the write side did not, so
-! the remap parked content in an inert filler and deleted it one step
-! later with no budget contributor.  Five columns whose bed partial cell
-! sat in the band `(zstar_h_min, H_VANISHED]` — coordinate-live and
-! remap-vanished — crossed it 165 times in five days.  With the guard
-! two-sided and invariant I1 (`h <= H_VANISHED ⇒ hTr = 0`) enforced once
-! per outer step, the residuals stay LINEAR at ~4.6E-14/day all the way
-! to day 30: no jump, 40 000x smaller than what they replace.  The
-! doubled round-off slope (2E-14 -> 4.6E-14/day) is the honest cost —
-! the merge fires sub-threshold from day 0, so the old "round-off" line
-! was itself a continuous version of the same leak, now converted into
-! ordinary FP accumulation.
-!
-! RE-MEASURED under invariant I1′ (`h <= H_VANISHED ⇒ hTr = h·c_live`: a
-! filler carries its donor live layer's concentration instead of zero, so
-! a uniform tracer stays uniform), same build / GPU, 30 days in 172 s:
-! Mass / Salt / Heat Err = -1.9E-14 / 4.6E-14 / 4.9E-14 at day 1,
-! -1.9E-13 / 4.5E-13 / 4.9E-13 at day 10, -3.9E-13 / 9.1E-13 / 9.8E-13 at
-! day 20, -5.8E-13 / 1.36E-12 / 1.48E-12 at day 30 — the table above to
-! its printed digits, still LINEAR, no day-16 jump; En 2.275E-04 at day
-! 30, zero `[nan-catch]` lines.
+! THE BUDGETS ARE CLOSED.  All three residuals grow LINEARLY at
+! 2-5E-14/day, round-off accumulation and nothing else, all the way to
+! day 30.  They were not always: an earlier table showed the salt and heat
+! residuals JUMPING by orders of magnitude mid-run.  That jump was
+! localised to the ALE tracer remap's ONE-SIDED vanishing-layer guard: the
+! read side floored (`h_old <= H_VANISHED ⇒ c_old = 0`) while the write
+! side did not, so the remap parked content in an inert filler and deleted
+! it one step later with no budget contributor, in columns whose bed
+! partial cell sat in the band `(zstar_h_min, H_VANISHED]`.  The guard is two-sided now, and invariant I1′
+! (`h <= H_VANISHED ⇒ hTr = h·c_live`: a filler carries its donor live
+! layer's concentration, so a uniform tracer stays uniform) is enforced
+! once per outer step (`check_vanished_content` below is its tripwire).
 !
 ! The ENERGY is the melt-driven circulation, not a spurious mode: the
-! melt-OFF twin of this configuration sits at En = 1.3E-06 at day 30
-! (`cavity_rest_growth_diagnosis.md` section Y.1) and this run is 200x
-! that, with max|u| ~ 24 cm/s plume velocities in the right places.
-! (En moved 3.302E-04 -> 2.592E-04 when the leak was fixed.  This case
-! carries a known exponentially growing spurious mode from the
-! partial-step PGF quadrature error, ~4.2-day e-folding (section Y.1),
-! so a perturbation introduced at day 15 is amplified ~36x by day 30:
-! a 1.3x change in En is what chaos does to a 2E-04 PSU perturbation
-! here, not evidence that the fix is dynamically large.)
+! melt-OFF twin of this configuration sits at En = 5.6E-08 at day 30 and
+! saturates near 3.5E-06 by day ~165 (the baseline above); this run is
+! ~4100x the first and ~60x the second, with max|u| ~ 25 cm/s plume
+! velocities in the right places.
+!
 ! The sigma twin of THIS case (same namelist, `vcoord_type = "sigma"`,
+! `zfixed_closed_faces` off -- it is refused on sigma -- and
 ! `h_min_cavity = 20`) does not survive: it blows the barotropic loop up
-! on day 3 and `validate_config`'s melt solver fails loud on 1413
-! non-finite columns.  That contrast is the point of the coordinate.
+! on day 15.9 (outer step 4591, 5358 non-finite BT-correction faces),
+! with En already 5.1E-04 and climbing.  That contrast is the point of
+! the coordinate.
 !
 ! The IDEALISED draft (analytic, no external data) is the same one
 ! `ocean0_idealised_draft.nml` uses; its derivation follows.
@@ -336,17 +352,23 @@
 /
 
 &ocean_hvisc_nml
-   nu_h = 6.0                  ! Table 4 nu_H (harmonic, constant)
+   nu_h = 6.0                  ! Table 4 nu_H (harmonic, constant).  The
+                               ! z_fixed x cavity envelope on this grid is
+                               ! nu_h >= 2 (validate_config warns below);
+                               ! nu_h >= 30 removes the calving-front jet
+                               ! of the melt-OFF baseline (see header).
    nu_4 = 0.0
 /
 
 &ocean_hdiff_nml
    ! Table 4 kappa_H is 1.0, and with zfixed_closed_faces on it is legal
    ! here.  It is set to ZERO anyway so this run is directly comparable
-   ! with the melt-OFF z_fixed twin measured in
-   ! cavity_rest_growth_diagnosis.md section Y.1, which had to run at 0
-   ! because kappa_h was refused outright.  Restore 1.0 to run the
-   ! protocol.
+   ! with the melt-OFF z_fixed baseline (sections Y.1 and Q of
+   ! cavity_rest_growth_diagnosis.md), which ran at 0 because kappa_h was
+   ! once refused outright.  Restore 1.0 to run the protocol: the
+   ! kappa_h = 1 melt-off twin carries the same two regimes to within 15 %
+   ! (V100, v0.1.0 defaults: 4.8E-08 at day 30, peak 3.7E-06 at day 162.5,
+   ! 2.8E-06 at day 180).
    kappa_h = 0.0
 /
 
