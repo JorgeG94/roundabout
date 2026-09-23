@@ -550,8 +550,9 @@ XFAIL_REASONS = {
         "wrong-sign transport, and the layer eta leaves the barotropic "
         "eta_end, pumping the (under pred_corr undamped) 2 dx barotropic "
         "mode. Fixed by &ocean_continuity_nml renorm_consistent_flux "
-        "(MOM6 zonal_flux_adjust parity), not yet in this template: adding "
-        "it moves pinned markers on both toolchains.",
+        "(MOM6 zonal_flux_adjust parity), which with MOM6's bebt = 0.1 is "
+        "the model DEFAULT since 2026-09-22; the 2026-09-23 two-toolchain "
+        "re-pin measured no cell left carrying this reason.",
     "finding_stress_density":
         "FINDING A (viscous leg) -- NOT expected, NOT hidden. The "
         "thickness-weighted stress-divergence viscosity "

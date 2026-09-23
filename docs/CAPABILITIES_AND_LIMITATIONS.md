@@ -770,11 +770,12 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   recommends over sloping topography**: `&ocean_pgf_nml form = "fv_mom6",
   reconstruct_for_pressure = .true.`; `&vcoord_nml remap_boundary_extrap,
   remap_nonuniform_weights, remap_check_preconditions = .true.`; and
-  `zfixed_closed_faces = .true.` for `z_fixed`. Measured 2026-09-22 on
-  gfortran 15.1 (CPU) and nvfortran 26.5 (V100), 30 simulated days per cell;
-  re-pinned 2026-09-23 with the vanished-layer content rule I1′ in, which
-  changed only the `z_fixed` column. **Both toolchains agree on every
-  verdict** (FINDING C below is fixed).
+  `zfixed_closed_faces = .true.` for `z_fixed`. Re-measured 2026-09-23 with
+  the MOM6-parity defaults (`&ocean_bt_nml bebt = 0.1`, `&ocean_continuity_nml
+  renorm_consistent_flux = .true.`) together with the vanished-layer content
+  rule I1′, on gfortran 15.1 (CPU) and nvfortran 26.5 (V100), 30 simulated
+  days per cell; **both toolchains agree on every verdict** (FINDING C below, the one GPU-only
+  difference, is fixed).
 
   **The envelope** — the largest measured geometry `rx0` at which every
   viscous cell of the family passes every gate on both toolchains (the
@@ -782,16 +783,16 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 
   | family | v0.1.0 envelope (viscous) | inviscid, every gate passes to | what caps it |
   |---|---|---|---|
-  | `sigma`, `zstar` | **rx0 ≤ 0.078** | 0.078 | FINDING B at the 0.1 rung |
-  | `zstar_sigma`, `zstar_full` | **rx0 ≤ 0.1** | 0.1 | FINDING B at 0.2 |
-  | `eulerian_z` (pins `ssp_rk2`) | **rx0 ≤ 0.6** | flat only | level + rate at 0.8 |
+  | `sigma`, `zstar` | **rx0 ≤ 0.8** (top of the measured ladder) | 0.078 | nothing measured (FINDING B, which capped it at 0.078, is fixed by the default) |
+  | `zstar_sigma`, `zstar_full` | **rx0 ≤ 0.8** (top of the measured ladder) | 0.1 | nothing measured (was 0.1, FINDING B) |
+  | `eulerian_z` (pins `ssp_rk2`) | **rx0 ≤ 0.8** (top of the measured ladder) | flat only | nothing measured (was 0.6) |
   | `lagrangian` | **rx0 ≤ 0.03** | 0.03 | layer collapse (never regrids) |
   | `z_fixed` (closed faces) | **flat only** | flat only | salinity overshoot at the regrid (`tracer:no-new-extrema`) wherever layers vanish; the salt/heat leak is fixed (I1′, budgets at round-off in every cell) |
   | `rho`, `hycom` | **flat only** | flat only | FINDING A (viscous), the rest-state mode (inviscid) |
 
   Outside its envelope a family is not claimed to rest. Every terrain-following
-  family rests at machine zero (`En ≤ 2.6e-21`) on the slope, both seamounts
-  and the sloping ice lid in both legs — the 3e-09 … 2.7e-04 plateaus of the
+  family rests at machine zero (`En ≤ 9.1e-21`) on the slope, both seamounts
+  and the sloping ice lid in both legs, and the viscous leg on every ladder rung — the 3e-09 … 2.7e-04 plateaus of the
   pre-fix table are gone. The INVISCID leg's growth on the ladder is
   **documented expected behaviour**: MOM6 (dev/gfdl `d74a11f9c`) grows the
   same mode out of round-off on its own sigma seamount at rest, e-folding
@@ -799,8 +800,8 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `f = 0`; its shipped closure kills it. Three FINDINGS, localised, not tuned
   away (details and substitution tables in
   [`tests/regression/README.md`](../tests/regression/README.md#findings--what-the-two-legs-turned-up)):
-  **B** — under the default `pred_corr` a stepped terrain-following column
-  grows an explosive barotropic grid-scale mode (in the matrix: with the
+  **B** (FIXED by the 2026-09-22 defaults) — under `pred_corr` a stepped
+  terrain-following column grew an explosive barotropic grid-scale mode (in the matrix: with the
   viscous leg's closure, after 2–28 days). LOCALISED to the continuity's
   barotropic transport renormalisation, not the viscosity: its Newton flux
   model is discontinuous where a layer's upwind donor flips across a
@@ -815,11 +816,11 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   wherever no donor flips; `.false.` restores the historical model). **A** — `stress_tensor = .true.` drives a density-space
   (`rho`/`hycom`) column negative within 4–8 steps on any slope (the scalar
   operator rests it; MOM6's `hrat_min` thin-layer bound is the missing
-  safeguard, a hypothesis). **C** — FIXED (`e8a1ab68d`): on the GPU only,
-  every `rho`/`hycom` run with `eos = "wright"` faulted
-  (`CUDA_ERROR_ILLEGAL_ADDRESS`) in `ocean_vcoord_compute_target_h_rho_impl`
-  at the first regrid; the 2026-09-23 re-pin measures the same verdict on
-  both toolchains. Markers and envelopes are pinned by `vcoord_matrix_pin.py` from
+  safeguard, a hypothesis). **C** (FIXED, e8a1ab68d) — on the GPU only, every
+  `rho`/`hycom` run with `eos = "wright"` faulted (`CUDA_ERROR_ILLEGAL_ADDRESS`)
+  in `ocean_vcoord_compute_target_h_rho_impl` at the first regrid, flat bed
+  included; an `associate` name passed to the device EOS routine carried a
+  host address. Markers and envelopes are pinned by `vcoord_matrix_pin.py` from
   both toolchains' runs into `vcoord_matrix_measured.py`, never by hand; the
   CI (tier 2) carries the viscous leg on the in-envelope geometries.
 - **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =
