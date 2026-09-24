@@ -649,7 +649,13 @@ contains
       ! family was exactly this (bound_coef=0.15 capped the effective nu
       ! at ~177 m²/s against nu_h=10000).  Warning, not error: flow-aware
       ! closures legitimately over-provision constant floors/ceilings.
+      ! CARTESIAN only: `grid%dx`/`grid%dy` are the cell size there, but a
+      ! placeholder on a curvilinear grid (1 m on a supergrid, degrees on a
+      ! spherical sector) — which made the estimate ~1e-5 m2/s and the
+      ! warning fire, falsely, on every global run.  Curvilinear grids are
+      ! covered per wet cell by the viscous-CFL stability audit.
       if (cfg%ocean%hvisc%bound_kh .and. cfg%dt_fixed > 0.0_wp &
+          .and. parse_grid_config(cfg%ocean%grid%grid_config) == GRID_CONFIG_CARTESIAN &
           .and. grid%dx > 0.0_wp .and. grid%dy > 0.0_wp) then
          block
             real(wp) :: kh_max_est
