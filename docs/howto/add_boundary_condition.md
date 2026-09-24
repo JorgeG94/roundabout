@@ -116,7 +116,12 @@ without your BC is byte-for-byte unchanged.
   `ocean_sponge_apply_tracers`) run after the BC pass; its ghost treatment falls
   through to wall. Same shape for `OBC_PERIODIC` (ghost wrap) and
   `OBC_TRIPOLAR_FOLD` (the fold exchange, which reverses i and sign-flips vector
-  normals).
+  normals). The fold line — v / corner storage row `nghost+ny_phys+1`, the
+  north-edge "wall face" of every other tag — is a SEAM: any north-edge wall
+  closure you add that exempts `OBC_PERIODIC` must exempt `OBC_TRIPOLAR_FOLD`
+  too (the BT fast loop's `vbt` dispatch and corner-ζ closures do), or the
+  fold silently becomes a closed wall for that operator while still
+  conserving mass.
 - **`has_west/east/south/north`** gate every edge block: under MPI only the ranks
   that own a physical domain edge apply the BC. Never dispatch on the tag alone.
 - **Per-edge tracer arrays are sized at `ocean_bc_state_init`** from

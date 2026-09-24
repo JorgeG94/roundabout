@@ -348,7 +348,7 @@ contains
       integer :: i, j, k, nx, ny, nz, nghost, nx_phys, ny_phys
       real(wp) :: ce_l, f_floor_l, rho0_l, g_over_rho0
       real(wp) :: cr_l, mstar_l, nstar_l, minw2_l
-      logical :: use_mr_l, use_bodner_l, has_ustar, do_limit, do_filter
+      logical :: use_mr_l, use_bodner_l, has_ustar, do_limit, do_filter, n_seam
       real(wp) :: h_remain, w, htot, rho_int
       real(wp) :: db, h_vel, f_abs, ustar, ts, uDml, vDml, i4dt, h_av
       real(wp) :: a_stack(NZ_STACK_MAX), hf_stack(NZ_STACK_MAX)
@@ -567,9 +567,13 @@ contains
             end do
          end if
          if (.not. bc%periodic_y) then
+            ! A tripolar north fold is a seam too: its fold-line face keeps
+            ! the FK transport (projected antisymmetric with the resolved
+            ! mass flux in `continuity_tracer_step_split`).
+            n_seam = bc%north_fold   ! host scalar: never deref bc on device
             do concurrent(k=1:nz, i=1:nx)
                this%vhml(i, nghost + 1, k) = 0.0_wp
-               this%vhml(i, nghost + ny_phys + 1, k) = 0.0_wp
+               if (.not. n_seam) this%vhml(i, nghost + ny_phys + 1, k) = 0.0_wp
             end do
          end if
       end if

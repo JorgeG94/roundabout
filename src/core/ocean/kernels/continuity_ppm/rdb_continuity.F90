@@ -2756,6 +2756,19 @@ contains
                                        this%pd_theta%data, this%n_limited_step, &
                                        v_cor=v_cor)
       end if
+      ! Tripolar fold-line flux projection.  The fold-line row (north face
+      ! of the last T-row, `rdb_ocean_fold` header) stores ONE physical face
+      ! twice; its two flux slots were computed independently (PPM
+      ! reconstruction, vhbt renormalisation, GM/MLE bolus, limiter) and
+      ! agree only up to rounding.  Project the FINAL flux antisymmetric
+      ! (and refill the rows above it) before it touches h / hTr / the
+      ! accumulated transport, so the cross-fold exchange telescopes: what
+      ! leaves cell (i,nj) through its north face is exactly what enters
+      ! cell (ni+1-i,nj).  No-op when not folding.
+      if (present(bc)) then
+         if (bc%north_fold) call fold_north_v_face(ms%mass_flux_y_layer, nx, ny + 1, nz, &
+                                                   nx_phys, ny_phys, nghost)
+      end if
       if (mode == TR_MODE_ACCUMULATE) then
          call accumulate_flux_y(nx, ny + 1, nz, dt, ms%mass_flux_y_layer, this%vhtr)
       else if (mode /= TR_MODE_NONE .and. present(bc)) then

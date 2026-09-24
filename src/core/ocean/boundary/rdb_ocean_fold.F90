@@ -4,27 +4,74 @@ module rdb_ocean_fold
    !! seam operators only (state orchestration lives in `rdb_ocean_fold_apply`).
    !! Free procedures, explicit-shape dummies, j-outer / i-inner `do concurrent`.
    !!
-   !! Seam geometry: the fold line is the Cv/Bu line at the top of T-row
-   !! `nj` (= ny_phys). T and u(Cu) images are pure halo (rows `j > nj`);
-   !! v(Cv) and corner(Bu) at `j = nj` lie ON the self-conjugate line. So an
-   !! exchange is two operations: (1) halo-fill rows `j > nj` for T (copy)
-   !! and u (copy + sign flip); (2) on-row antisymmetric projection for v
-   !! and corners at `j = nj`.
+   !! ## Roundabout staggering (the load-bearing input to every map below)
    !!
-   !! Index maps — physical `i ∈ 1..ni`, last T-row `j = nj`:
-   !! | Stagger | i-map (phys)  | j-map (phys) | on-line |
-   !! |---------|---------------|--------------|---------|
-   !! | T       | i' = ni+1-i   | j' = 2nj-j+1 | no      |
-   !! | u (Cu)  | i' = ni+2-f   | j' = 2nj-j+1 | no      |
-   !! | v (Cv)  | i' = ni+1-i   | j' = 2nj-j   | YES j=nj|
-   !! | corner  | i' = ni+2-c   | j' = 2nj-j   | YES j=nj|
-   !! u/corner use `ni+2-f` (not `ni-i`) because face storage is symmetric:
-   !! extent `nx_total+1`, `u_face_x(f)` is the WEST face of T-cell `f`.
+   !! Continuous grid coordinates: T-cell (i,j), physical i ∈ 1..ni,
+   !! j ∈ 1..nj, occupies [i-1,i]×[j-1,j]; storage index = nghost + physical.
+   !!   * T  `h(i,j)`         centre      (i-1/2, j-1/2)
+   !!   * Cu `u(i,j)`         WEST face   (i-1,   j-1/2)   extent nx+1
+   !!   * Cv `v(i,j)`         SOUTH face  (i-1/2, j-1)     extent ny+1
+   !!   * Bu `q(i,j)`         SW corner   (i-1,   j-1)     extent (nx+1,ny+1)
+   !! (`rdb_multilayer_state` `u_face_x_layer`/`v_face_y_layer` docstrings;
+   !! `coriolis_adv` "zeta_corner(i,j) sits at (i-1/2,j-1/2)" relative to
+   !! T(i,j); `metrics%wet_q` "SW corner of T-cell (i,j)".)
    !!
-   !! On-line projection (v, corners): the two i-halves at `j = nj` duplicate
-   !! the same physical points; enforce `v(i,nj) = -v(i',nj)`, i' = ni+1-i,
-   !! by overwriting the west half from the negated east mirror. The
-   !! self-fixed column (odd ni only) is set to 0.
+   !! ## The fold
+   !!
+   !! The fold line is y = nj, the NORTH edge of T-row nj.  A point (x, y)
+   !! north of it is the point (ni - x, 2nj - y) (i-periodic, period ni),
+   !! reached through a 180° rotation of the local frame: both unit vectors
+   !! reverse, so a true-vector component (u, v, a face flux) NEGATES and a
+   !! scalar — and the pseudoscalar vorticity / PV (rotation preserves
+   !! orientation) — COPIES.
+   !!
+   !! Solving x' = ni - x, y' = 2nj - y for each stagger's storage index:
+   !! | Stagger | x(i)  | y(j)  | i-map (storage)       | j-map (storage)       | fold-line row |
+   !! |---------|-------|-------|-----------------------|-----------------------|---------------|
+   !! | T       | i-½   | j-½   | i' = 2ng+ni+1 - i     | j' = 2ng+2nj+1 - j    | none          |
+   !! | u (Cu)  | i-1   | j-½   | i' = 2ng+ni+2 - i     | j' = 2ng+2nj+1 - j    | none          |
+   !! | v (Cv)  | i-½   | j-1   | i' = 2ng+ni+1 - i     | j' = 2ng+2nj+2 - j    | ng+nj+1       |
+   !! | corner  | i-1   | j-1   | i' = 2ng+ni+2 - i     | j' = 2ng+2nj+2 - j    | ng+nj+1       |
+   !!
+   !! T and u points never lie on y = nj, so their exchange is a pure
+   !! halo fill of rows j > ng+nj.  v and corners have a row ON the fold
+   !! line: storage row `ng+nj+1` — the south face of the first ghost row,
+   !! i.e. the NORTH face of the last physical T-row.  (The pre-2026-09
+   !! code used `jsum = 2ng+2nj`, `j_fold = ng+nj`: MOM6's NORTH-face /
+   !! NE-corner rule applied to roundabout's SOUTH-face / SW-corner
+   !! storage.  It antisymmetrised the south face of the last T-row — an
+   !! ordinary interior face — and filled the true fold-line face from
+   !! `-v(i', ng+nj-1)`, so every cell of the last row took an unrelated
+   !! flux through its north face: the global-tripolar B1 mass leak.)
+   !!
+   !! Cross-check against MOM6 (symmetric memory, `pass_vector` /
+   !! FMS `mpp_update_domains` with a folded north edge, CGRID_NE):
+   !! MOM6 `v(i,J)` is the north face of cell j = roundabout `v(i,J+1)`,
+   !! MOM6 `q(I,J)` NE corner = roundabout `q(I+1,J+1)`, MOM6 `u(I,j)` east
+   !! face = roundabout `u(I+1,j)`.  MOM6's fold maps v(i, nj+d) ←
+   !! -v(ni+1-i, nj-d), q(I, nj+d) ← q(ni-I, nj-d), u(I, nj+d) ←
+   !! -u(ni-I, nj+1-d); shifting by the index offsets gives exactly the
+   !! table above (MOM6's fold-line row J = nj ↔ roundabout row nj+1).
+   !!
+   !! ## The duplicated-DOF fold-line row (v and corners)
+   !!
+   !! On row ng+nj+1 the storage slots i and i' (v: i' = 2ng+ni+1-i;
+   !! corner: i' = 2ng+ni+2-i) are the SAME physical face / vertex seen from
+   !! the two sides of the fold, with opposite orientation.  So a single
+   !! DOF is stored twice and must satisfy v(i) = -v(i') (a true normal
+   !! velocity / normal flux through one edge, which leaves cell (i,nj)
+   !! northward and ENTERS cell (i',nj) from its north) and q(i) = q(i')
+   !! for scalars/vorticity.  The dynamics updates both slots
+   !! independently; the projection overwrites the WEST half from the
+   !! (negated) east mirror so the row is exactly (anti)symmetric.  This is
+   !! what makes the cross-fold mass flux telescope: Σ_i F(i, ng+nj+1)
+   !! pairs off to zero.  Self-conjugate slots (i = i'):
+   !!   * v: only when ni is odd (column (ni+1)/2) → 0 (a normal velocity
+   !!     equal to minus itself).  ni even (every real tripolar grid) has
+   !!     none.
+   !!   * corner: c = ni/2+1 and c = 1 ≡ ni+1 (periodic images) — the two
+   !!     bipoles.  Vector corner components → 0; scalars copy.
+   !! Rows above the fold line (j > ng+nj+1) are pure mirrored images.
    !!
    !! Caller ordering (MANDATORY): periodic-x wrap FIRST, then the fold, so
    !! the fold reads already cyclically-wrapped ghost columns at the corners.
@@ -147,13 +194,14 @@ contains
    end subroutine fold_north_u_face_3d
 
    ! ================================================================
-   ! v-stagger (Cv, y-face): TWO operations.
+   ! v-stagger (Cv, SOUTH y-face): TWO operations.
    !   (1) halo-fill rows j > j_fold (reflected + negated):
-   !         i' = ni+1-i, j' = 2nj-j  (storage j' = 2*nghost+2*nj - j)
-   !   (2) ON-LINE projection at j = j_fold (= nghost+nj):
+   !         i' = ni+1-i, j' = 2nj+2-j  (storage j' = 2*nghost+2*nj+2 - j)
+   !   (2) ON-LINE projection at j = j_fold (= nghost+nj+1, the north face
+   !       of the last physical T-row):
    !         v(i,j_fold) = -v(i', j_fold), i' = ni+1-i
-   !       overwrite the WEST half from the negated east-mirror; self-fixed
-   !       column (odd ni) → 0.
+   !       overwrite the WEST half (and its periodic ghost images) from the
+   !       negated east-mirror; self-fixed column (odd ni) → 0.
    ! ================================================================
 
    pure subroutine fold_north_v_face_2d(v, nx_total, ny_face, &
@@ -165,11 +213,11 @@ contains
       real(wp), intent(inout) :: v(nx_total, ny_face)
          !! y-face 2D field, shape (nx_total, ny_total+1).
 
-      integer :: i, j, isum, jsum, j_fold, i_lo, i_mid, ip
+      integer :: i, j, isum, jsum, j_fold, i_lo, p, pm
 
       isum = 2*nghost + nx_phys + 1
-      jsum = 2*nghost + 2*ny_phys
-      j_fold = nghost + ny_phys
+      jsum = 2*nghost + 2*ny_phys + 2   ! v is SOUTH-face: y = j-1
+      j_fold = nghost + ny_phys + 1     ! north face of the last T-row
       i_lo = nghost + 1
 
       ! (1) Halo rows strictly beyond the fold row.
@@ -177,14 +225,18 @@ contains
          v(i, j) = -v(isum - i, jsum - j)
       end do
 
-      ! (2) On-line antisymmetric projection at j = j_fold.
-      i_mid = nghost + (nx_phys + 1)/2
-      do concurrent(i=i_lo:i_mid)
-         ip = isum - i
-         if (ip == i) then
+      ! (2) On-line antisymmetric projection at j = j_fold, over EVERY
+      !     storage column (periodic ghosts included, so the row stays
+      !     periodic-consistent without a second wrap): a column whose
+      !     physical index p lies in the west half takes -v of the east
+      !     mirror p' = ni+1-p; the east half is the (read-only) source.
+      do concurrent(i=1:nx_total) local(p, pm)
+         p = modulo(i - i_lo, nx_phys) + 1
+         pm = nx_phys + 1 - p
+         if (p < pm) then
+            v(i, j_fold) = -v(nghost + pm, j_fold)
+         else if (p == pm) then
             v(i, j_fold) = 0.0_wp
-         else
-            v(i, j_fold) = -v(ip, j_fold)
          end if
       end do
    end subroutine fold_north_v_face_2d
@@ -197,11 +249,11 @@ contains
       real(wp), intent(inout) :: v(nx_total, ny_face, nz)
          !! y-face 3D field, shape (nx_total, ny_total+1, nz).
 
-      integer :: i, j, k, isum, jsum, j_fold, i_lo, i_mid, ip
+      integer :: i, j, k, isum, jsum, j_fold, i_lo, p, pm
 
       isum = 2*nghost + nx_phys + 1
-      jsum = 2*nghost + 2*ny_phys
-      j_fold = nghost + ny_phys          ! the self-conjugate fold row
+      jsum = 2*nghost + 2*ny_phys + 2    ! v is SOUTH-face: y = j-1
+      j_fold = nghost + ny_phys + 1      ! the self-conjugate fold row
       i_lo = nghost + 1                  ! first physical column
 
       ! (1) Halo rows strictly beyond the fold row.
@@ -209,26 +261,26 @@ contains
          v(i, j, k) = -v(isum - i, jsum - j, k)
       end do
 
-      ! (2) On-line antisymmetric projection at j = j_fold.
-      !     West half (i in i_lo .. i_mid) overwritten from negated mirror.
-      !     i_mid is the middle physical column; for even ni it is the last
-      !     west-half column (no fixed point), for odd ni it is the fixed
-      !     column which is forced to 0.
-      i_mid = nghost + (nx_phys + 1)/2
-      do concurrent(k=1:nz, i=i_lo:i_mid)
-         ip = isum - i
-         if (ip == i) then
+      ! (2) On-line antisymmetric projection at j = j_fold (see the 2D
+      !     twin): every storage column whose physical index p is in the
+      !     west half takes -v of its east mirror p' = ni+1-p; the
+      !     self-conjugate column (odd ni only) is zeroed; the east half is
+      !     the read-only source, so the kernel is race-free.
+      do concurrent(k=1:nz, i=1:nx_total) local(p, pm)
+         p = modulo(i - i_lo, nx_phys) + 1
+         pm = nx_phys + 1 - p
+         if (p < pm) then
+            v(i, j_fold, k) = -v(nghost + pm, j_fold, k)
+         else if (p == pm) then
             v(i, j_fold, k) = 0.0_wp
-         else
-            v(i, j_fold, k) = -v(ip, j_fold, k)
          end if
       end do
    end subroutine fold_north_v_face_3d
 
    ! ================================================================
-   ! corner-stagger (Bu, vorticity / PV diag): on-line self-conjugate row
-   ! + north halos.  Symmetric storage (extent nx_total+1):
-   !   c' = ni+2-c, j' = 2nj-j (halo) / fold row at j = nghost+nj.
+   ! corner-stagger (Bu, SW corner; vorticity / PV / f): on-line
+   ! self-conjugate row + north halos.  Symmetric storage (extent nx_total+1):
+   !   c' = ni+2-c, j' = 2nj+2-j (halo) / fold row at j = nghost+nj+1.
    ! negate=.true. for true-vector corner components; negate=.false. for
    ! scalars (vorticity is a pseudoscalar — invariant here, so it copies).
    ! ================================================================
@@ -243,12 +295,12 @@ contains
          !! .true. → negate (true-vector component); .false. → copy (scalar
          !! / pseudoscalar vorticity).
 
-      integer :: i, j, fsum, jsum, j_fold, i_lo, i_mid, ip
+      integer :: i, j, fsum, jsum, j_fold, i_lo, p, pm
       real(wp) :: sgn
 
       fsum = 2*nghost + nx_phys + 2
-      jsum = 2*nghost + 2*ny_phys
-      j_fold = nghost + ny_phys
+      jsum = 2*nghost + 2*ny_phys + 2   ! corner is SW: y = j-1
+      j_fold = nghost + ny_phys + 1
       i_lo = nghost + 1
       sgn = merge(-1.0_wp, 1.0_wp, negate)
 
@@ -257,14 +309,20 @@ contains
          fld(i, j) = sgn*fld(fsum - i, jsum - j)
       end do
 
-      ! On-line projection at j = j_fold (west half from mirror).
-      i_mid = nghost + (nx_phys + 2)/2
-      do concurrent(i=i_lo:i_mid)
-         ip = fsum - i
-         if (negate .and. ip == i) then
+      ! On-line projection at j = j_fold over EVERY storage column
+      ! (periodic ghosts included).  Physical corner index p ∈ 1..ni
+      ! (c = ni+1 is the periodic image of c = 1); mirror p' = ni+2-p
+      ! modulo ni.  The two self-conjugate corners p = 1 and p = ni/2+1 are
+      ! the bipoles: a vector component is zeroed there, a scalar is left
+      ! as is.  West-half columns take sgn*mirror; the east half is the
+      ! read-only source.
+      do concurrent(i=1:nx_face) local(p, pm)
+         p = modulo(i - i_lo, nx_phys) + 1
+         pm = modulo(nx_phys + 1 - p, nx_phys) + 1
+         if (p < pm) then
+            fld(i, j_fold) = sgn*fld(nghost + pm, j_fold)
+         else if (p == pm .and. negate) then
             fld(i, j_fold) = 0.0_wp
-         else
-            fld(i, j_fold) = sgn*fld(ip, j_fold)
          end if
       end do
    end subroutine fold_north_corner_2d

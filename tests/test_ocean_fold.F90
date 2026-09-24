@@ -7,8 +7,19 @@
 !! Index conventions (ng=nghost): storage index = ng + physical index.
 !!   T:      i'=ni+1-i  -> storage isum=2ng+ni+1 ; j halo jsum=2ng+2nj+1
 !!   u (Cu): f'=ni+2-f  -> storage fsum=2ng+ni+2 ; (sym storage, nx+1)
-!!   v (Cv): i'=ni+1-i  ; fold row j_fold=ng+nj ; halo jsum=2ng+2nj
-!!   corner: c'=ni+2-c  ; fold row j_fold=ng+nj
+!!   v (Cv): i'=ni+1-i  ; fold row j_fold=ng+nj+1 ; halo jsum=2ng+2nj+2
+!!   corner: c'=ni+2-c  ; fold row j_fold=ng+nj+1 ; halo jsum=2ng+2nj+2
+!! v is the SOUTH face and the corner the SW corner of T(i,j) (see the
+!! `rdb_ocean_fold` header), so the fold line -- the north edge of T-row
+!! nj -- is storage row ng+nj+1 for both.  Until 2026-09 these tests
+!! asserted j_fold = ng+nj / jsum = 2ng+2nj: MOM6's NORTH-face / NE-corner
+!! rule.  Under roundabout storage that row is the SOUTH face of the last
+!! T-row -- an ordinary interior face -- so the old expectation certified
+!! antisymmetrising a face that is not on the fold, and filling the real
+!! fold-line face from -v(i', ng+nj-1) (global-tripolar finding B1: mass
+!! leak through the seam).  `fold_geometric_maps` now derives every
+!! expectation from the grid COORDINATES of each stagger, not from the
+!! index algebra under test.
 module test_ocean_fold
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
@@ -36,7 +47,9 @@ contains
                   new_unittest("fold_centre_3d_levels", test_centre_3d_levels), &
                   new_unittest("fold_cyclic_corner", test_cyclic_corner), &
                   new_unittest("fold_corner_scalar_vs_vector", test_corner_modes), &
-                  new_unittest("fold_centre_gpu", test_centre_gpu) &
+                  new_unittest("fold_centre_gpu", test_centre_gpu), &
+                  new_unittest("fold_geometric_maps", test_geometric_maps), &
+                  new_unittest("fold_line_row_periodic_ghosts", test_fold_row_ghosts) &
                   ]
    end subroutine collect_ocean_fold_tests
 
@@ -141,14 +154,34 @@ contains
          end do
          deallocate (u)
 
-         ! v halo rows strictly beyond the fold row -> -1.
+         ! v halo rows strictly beyond the fold row -> -1.  The fold row is
+         ! ng+nj+1 (north face of the last T-row); the halo starts one row
+         ! higher.  (The old expectation started the halo AT ng+nj+1 -- the
+         ! fold-line face itself -- because it placed the fold on ng+nj.)
          allocate (v(nxt, nyf, 1), source=1.0_wp)
          call fold_north_v_face(v, nxt, nyf, 1, NI, NJ, NGHOST)
-         do j = NGHOST + NJ + 1, nyf
+         do j = NGHOST + NJ + 2, nyf
             do i = 1, nxt
                call check(error, v(i, j, 1) == -1.0_wp, "v-fold halo != -1")
                if (allocated(error)) exit checks
             end do
+         end do
+         ! Uniform v = 1 is NOT fold-consistent on the fold line: the
+         ! projection keeps the east half (+1) and overwrites the west half
+         ! with its negated mirror (-1).  The last physical T-row's SOUTH
+         ! face (ng+nj) is an ordinary interior face and must be untouched.
+         do i = NGHOST + 1, NGHOST + NI/2
+            call check(error, v(i, NGHOST + NJ + 1, 1) == -1.0_wp, &
+                       "v fold line: west half must be the negated mirror")
+            if (allocated(error)) exit checks
+            call check(error, v(i + NI/2, NGHOST + NJ + 1, 1) == 1.0_wp, &
+                       "v fold line: east half is the source, must be untouched")
+            if (allocated(error)) exit checks
+         end do
+         do i = 1, nxt
+            call check(error, v(i, NGHOST + NJ, 1) == 1.0_wp, &
+                       "v row ng+nj is an interior face: fold must not touch it")
+            if (allocated(error)) exit checks
          end do
          deallocate (v)
       end block checks
@@ -176,7 +209,10 @@ contains
          call wrapx_centre(v(:, :, 1), nxt, nyf)
          call fold_north_v_face(v, nxt, nyf, 1, NI, NJ, NGHOST)
 
-         jf = NGHOST + NJ
+         ! Fold line = north face of the last T-row = storage row ng+nj+1
+         ! (was ng+nj: the south face of that row, under the MOM6 north-face
+         ! convention that roundabout's south-face storage does not use).
+         jf = NGHOST + NJ + 1
          do ip = 1, NI
             s = v(NGHOST + ip, jf, 1) + v(NGHOST + (NI + 1 - ip), jf, 1)
             call check(error, abs(s) < 1.0e-13_wp, &
@@ -377,14 +413,17 @@ contains
          call make_grid(grid)
          nxt = grid%nx_total; nyt = grid%ny_total
          nxf = nxt + 1; nyf = nyt + 1
-         jf = NGHOST + NJ
+         ! SW-corner storage: the fold-line corner row is ng+nj+1 (the old
+         ! ng+nj is the SOUTH corner row of the last T-row, off the fold).
+         jf = NGHOST + NJ + 1
 
          ! Scalar (vorticity diag) — on-line copy, no sign flip.
+         ! Periodic-consistent seed (corner c = ni+1 IS corner c = 1), set
+         ! straight from the physical index so no wrap helper is involved.
          allocate (s(nxf, nyf), source=0.0_wp)
-         do c = 1, NI + 1
-            s(NGHOST + c, jf) = real(c, wp)
+         do c = 1, nxf
+            s(c, jf) = real(modulo(c - NGHOST - 1, NI) + 1, wp)
          end do
-         call wrapx_face(s(:, jf:jf), nxf, 1)
          call fold_north_corner(s, nxf, nyf, NI, NJ, NGHOST, negate=.false.)
          ! c' = ni+2-c; scalar copies (sign +): s(c)=s(c') after projection.
          do c = 1, (NI + 2)/2
@@ -397,13 +436,16 @@ contains
 
          ! Vector corner — negate + zero self-fixed column (c=5 for ni=8).
          allocate (w(nxf, nyf), source=0.0_wp)
-         do c = 1, NI + 1
-            w(NGHOST + c, jf) = real(c, wp)
+         do c = 1, nxf
+            w(c, jf) = real(modulo(c - NGHOST - 1, NI) + 1, wp)
          end do
-         call wrapx_face(w(:, jf:jf), nxf, 1)
          call fold_north_corner(w, nxf, nyf, NI, NJ, NGHOST, negate=.true.)
+         ! Both bipoles are self-conjugate: c = ni/2+1 = 5 and c = 1 (≡ ni+1).
          call check(error, w(NGHOST + 5, jf) == 0.0_wp, &
                     "corner vector self-fixed column (c=5) not zeroed")
+         if (allocated(error)) exit checks
+         call check(error, w(NGHOST + 1, jf) == 0.0_wp .and. w(NGHOST + NI + 1, jf) == 0.0_wp, &
+                    "corner vector bipole c=1 (and its periodic image c=ni+1) not zeroed")
          if (allocated(error)) exit checks
          ! Antisymmetry on-line: w(c) + w(ni+2-c) = 0.
          do c = 1, (NI + 2)/2
@@ -458,5 +500,154 @@ contains
          deallocate (fld)
       end block checks
    end subroutine test_centre_gpu
+
+   ! -----------------------------------------------------------------
+   ! Test 10: geometric maps.  Every stagger's expectation is derived from
+   ! its grid COORDINATES -- x, y in T-cell units with T(i,j) covering
+   ! [i-1,i]x[j-1,j] (physical) -- not from the index algebra under test:
+   !   T (i-1/2, j-1/2), u WEST face (i-1, j-1/2), v SOUTH face (i-1/2, j-1),
+   !   corner SW (i-1, j-1).  The fold maps (x, y) -> (ni-x, 2nj-y) (x mod
+   !   ni); vectors negate, scalars copy.  Every storage point is seeded
+   !   with g(x mod ni, y); the fold then overwrites the north part.
+   ! -----------------------------------------------------------------
+   pure function g(x, y) result(r)
+      real(wp), intent(in) :: x, y
+      real(wp) :: r
+      r = 1.0_wp + x + 100.0_wp*y + 0.001_wp*x*y
+   end function g
+
+   pure function xw(x) result(r)
+      !! Wrap an x coordinate into [0, NI).
+      real(wp), intent(in) :: x
+      real(wp) :: r
+      r = modulo(x, real(NI, wp))
+   end function xw
+
+   subroutine test_geometric_maps(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      integer :: nxt, nyt, nxf, nyf, i, j
+      real(wp) :: x, y, want
+      real(wp), allocatable :: t(:, :), u(:, :), v(:, :), q(:, :), qv(:, :)
+      real(wp), parameter :: FNJ = real(NJ, wp), FNI = real(NI, wp)
+
+      checks: block
+         call make_grid(grid)
+         nxt = grid%nx_total; nyt = grid%ny_total
+         nxf = nxt + 1; nyf = nyt + 1
+         allocate (t(nxt, nyt), u(nxf, nyt), v(nxt, nyf), q(nxf, nyf), qv(nxf, nyf))
+         ! Ghost columns are seeded from the wrapped coordinate, so the
+         ! periodic-first contract holds without a separate wrap.
+         do j = 1, nyt
+            do i = 1, nxt
+               t(i, j) = g(xw(real(i - NGHOST, wp) - 0.5_wp), real(j - NGHOST, wp) - 0.5_wp)
+            end do
+            do i = 1, nxf
+               u(i, j) = g(xw(real(i - NGHOST - 1, wp)), real(j - NGHOST, wp) - 0.5_wp)
+            end do
+         end do
+         do j = 1, nyf
+            do i = 1, nxt
+               v(i, j) = g(xw(real(i - NGHOST, wp) - 0.5_wp), real(j - NGHOST - 1, wp))
+            end do
+            do i = 1, nxf
+               q(i, j) = g(xw(real(i - NGHOST - 1, wp)), real(j - NGHOST - 1, wp))
+            end do
+         end do
+         qv = q
+         call fold_north_centre(t, nxt, nyt, NI, NJ, NGHOST)
+         call fold_north_u_face(u, nxf, nyt, NI, NJ, NGHOST)
+         call fold_north_v_face(v, nxt, nyf, NI, NJ, NGHOST)
+         call fold_north_corner(q, nxf, nyf, NI, NJ, NGHOST, negate=.false.)
+         call fold_north_corner(qv, nxf, nyf, NI, NJ, NGHOST, negate=.true.)
+
+         ! T and u: every point with y > nj holds the (negated for u) value
+         ! of its image (ni-x, 2nj-y); nothing below moves.
+         do j = 1, nyt
+            y = real(j - NGHOST, wp) - 0.5_wp
+            do i = 1, nxt
+               x = xw(real(i - NGHOST, wp) - 0.5_wp)
+               want = g(x, y)
+               if (y > FNJ) want = g(xw(FNI - x), 2.0_wp*FNJ - y)
+               call check(error, abs(t(i, j) - want) < 1.0e-12_wp, "T geometric fold map")
+               if (allocated(error)) exit checks
+            end do
+            do i = 1, nxf
+               x = xw(real(i - NGHOST - 1, wp))
+               want = g(x, y)
+               if (y > FNJ) want = -g(xw(FNI - x), 2.0_wp*FNJ - y)
+               call check(error, abs(u(i, j) - want) < 1.0e-12_wp, "u geometric fold map")
+               if (allocated(error)) exit checks
+            end do
+         end do
+         ! v and corners: y > nj is a pure image; y == nj is the fold line,
+         ! where the west half takes the image of the (seeded) east half.
+         do j = 1, nyf
+            y = real(j - NGHOST - 1, wp)
+            do i = 1, nxt
+               x = xw(real(i - NGHOST, wp) - 0.5_wp)
+               want = g(x, y)
+               if (y > FNJ .or. (y == FNJ .and. x < FNI - x)) &
+                  want = -g(xw(FNI - x), 2.0_wp*FNJ - y)
+               call check(error, abs(v(i, j) - want) < 1.0e-12_wp, "v geometric fold map")
+               if (allocated(error)) exit checks
+            end do
+            do i = 1, nxf
+               x = xw(real(i - NGHOST - 1, wp))
+               ! Scalar corner: halo copies; fold-line west half copies the
+               ! east mirror; the two bipoles (x = 0, ni/2) keep their value.
+               want = g(x, y)
+               if (y > FNJ .or. (y == FNJ .and. x < xw(FNI - x))) &
+                  want = g(xw(FNI - x), 2.0_wp*FNJ - y)
+               call check(error, abs(q(i, j) - want) < 1.0e-12_wp, "corner scalar geometric fold map")
+               if (allocated(error)) exit checks
+               ! Vector corner: negated image; bipoles zeroed.
+               want = g(x, y)
+               if (y > FNJ .or. (y == FNJ .and. x < xw(FNI - x))) &
+                  want = -g(xw(FNI - x), 2.0_wp*FNJ - y)
+               if (y == FNJ .and. x == xw(FNI - x)) want = 0.0_wp
+               call check(error, abs(qv(i, j) - want) < 1.0e-12_wp, "corner vector geometric fold map")
+               if (allocated(error)) exit checks
+            end do
+         end do
+         deallocate (t, u, v, q, qv)
+      end block checks
+   end subroutine test_geometric_maps
+
+   ! -----------------------------------------------------------------
+   ! Test 11: the fold-line row's periodic ghost columns carry the
+   ! projected values (no second wrap needed): every storage column of
+   ! row ng+nj+1 equals its periodic interior image after the fold.
+   ! -----------------------------------------------------------------
+   subroutine test_fold_row_ghosts(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      integer :: nxt, nyt, nyf, i, j, jf, ip, p
+      real(wp), allocatable :: v(:, :, :)
+
+      checks: block
+         call make_grid(grid)
+         nxt = grid%nx_total; nyt = grid%ny_total; nyf = nyt + 1
+         allocate (v(nxt, nyf, 2))
+         ! Periodic-consistent seed straight from the physical column index
+         ! (ghost columns included), so no separate wrap is involved.
+         do j = 1, nyf
+            do i = 1, nxt
+               p = modulo(i - NGHOST - 1, NI) + 1
+               v(i, j, 1) = cos(0.7_wp*real(p, wp)) + 0.1_wp*real(j, wp)
+               v(i, j, 2) = 2.0_wp*v(i, j, 1)
+            end do
+         end do
+         call fold_north_v_face(v, nxt, nyf, 2, NI, NJ, NGHOST)
+         jf = NGHOST + NJ + 1
+         do i = 1, nxt
+            ip = NGHOST + modulo(i - NGHOST - 1, NI) + 1
+            call check(error, v(i, jf, 1) == v(ip, jf, 1) .and. v(i, jf, 2) == v(ip, jf, 2), &
+                       "fold-line ghost column /= its periodic image")
+            if (allocated(error)) exit checks
+         end do
+         deallocate (v)
+      end block checks
+   end subroutine test_fold_row_ghosts
 
 end module test_ocean_fold
