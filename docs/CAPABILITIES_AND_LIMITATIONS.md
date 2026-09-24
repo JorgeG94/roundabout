@@ -772,7 +772,9 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   remap_nonuniform_weights, remap_check_preconditions = .true.`; and
   `zfixed_closed_faces = .true.` for `z_fixed`. Measured 2026-09-22 on
   gfortran 15.1 (CPU) and nvfortran 26.5 (V100), 30 simulated days per cell;
-  **both toolchains agree on every verdict** except FINDING C below.
+  re-pinned 2026-09-23 with the vanished-layer content rule I1′ in, which
+  changed only the `z_fixed` column. **Both toolchains agree on every
+  verdict** (FINDING C below is fixed).
 
   **The envelope** — the largest measured geometry `rx0` at which every
   viscous cell of the family passes every gate on both toolchains (the
@@ -784,7 +786,7 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   | `zstar_sigma`, `zstar_full` | **rx0 ≤ 0.1** | 0.1 | FINDING B at 0.2 |
   | `eulerian_z` (pins `ssp_rk2`) | **rx0 ≤ 0.6** | flat only | level + rate at 0.8 |
   | `lagrangian` | **rx0 ≤ 0.03** | 0.03 | layer collapse (never regrids) |
-  | `z_fixed` (closed faces) | **flat only** | flat only | salt/heat leak where layers vanish (closed to round-off by the pending `fix/remap-vanished-layer-content`, measured) |
+  | `z_fixed` (closed faces) | **flat only** | flat only | salinity overshoot at the regrid (`tracer:no-new-extrema`) wherever layers vanish; the salt/heat leak is fixed (I1′, budgets at round-off in every cell) |
   | `rho`, `hycom` | **flat only** | flat only | FINDING A (viscous), the rest-state mode (inviscid) |
 
   Outside its envelope a family is not claimed to rest. Every terrain-following
@@ -813,10 +815,11 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   wherever no donor flips). **A** — `stress_tensor = .true.` drives a density-space
   (`rho`/`hycom`) column negative within 4–8 steps on any slope (the scalar
   operator rests it; MOM6's `hrat_min` thin-layer bound is the missing
-  safeguard, a hypothesis). **C** — on the GPU only, every `rho`/`hycom` run
-  with `eos = "wright"` faults (`CUDA_ERROR_ILLEGAL_ADDRESS`) in
-  `ocean_vcoord_compute_target_h_rho_impl` at the first regrid, flat bed
-  included. Markers and envelopes are pinned by `vcoord_matrix_pin.py` from
+  safeguard, a hypothesis). **C** — FIXED (`e8a1ab68d`): on the GPU only,
+  every `rho`/`hycom` run with `eos = "wright"` faulted
+  (`CUDA_ERROR_ILLEGAL_ADDRESS`) in `ocean_vcoord_compute_target_h_rho_impl`
+  at the first regrid; the 2026-09-23 re-pin measures the same verdict on
+  both toolchains. Markers and envelopes are pinned by `vcoord_matrix_pin.py` from
   both toolchains' runs into `vcoord_matrix_measured.py`, never by hand; the
   CI (tier 2) carries the viscous leg on the in-envelope geometries.
 - **`VCOORD_ZSIGMA` is REFUSED at configure** (`&vcoord_nml vcoord_type =

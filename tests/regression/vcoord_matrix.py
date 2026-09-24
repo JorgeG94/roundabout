@@ -488,22 +488,33 @@ XFAIL_REASONS = {
         "z_fixed LEAKS SALT AND HEAT wherever layers vanish -- a step at the "
         "first regrid, 1e-7 relative against the 1e-11 bar, scaling with "
         "the number of filler layers, not with the energy. "
-        "`remap_boundary_extrap` bought 71x of it and it is still four "
-        "decades over (audit 2026-09-21, Result 4). The fix is "
-        "`origin/fix/remap-vanished-layer-content` (vanished-layer contract "
-        "I1: a sub-threshold filler may not carry content), not yet on main. "
-        "MEASURED with it (viscous leg, gfortran, 30 d): the salt residual "
-        "falls 4.4e-07 -> 1.7e-13 (slope), 1.2e-06 -> 8.3e-14 "
-        "(seamount_gentle), 7.3e-07 -> 1.2e-14 (rx0_060), i.e. to round-off; "
-        "what remains is `tracer:no-new-extrema` (1-3 mPSU of salinity "
-        "overshoot from the regrid) and, under the sloping lid, the "
-        "saturated staircase residual (1.15 cm/s). Re-measure when it "
-        "lands. The flat geometries, which have no fillers, close at "
-        "round-off.",
+        "`remap_boundary_extrap` bought 71x of it and it stayed four "
+        "decades over (audit 2026-09-21, Result 4). FIXED by the "
+        "vanished-layer content rule I1' (a filler carries its donor's "
+        "concentration; src/core/ocean/README.md) and the two-sided remap "
+        "guard, which landed together (PR #50): the salt residual falls "
+        "4.4e-07 -> 1.7e-13 (slope), 1.2e-06 -> 8.3e-14 "
+        "(seamount_gentle), 7.3e-07 -> 1.2e-14 (rx0_060), i.e. to "
+        "round-off, on both toolchains. A cell that still carries this key "
+        "fails conserve:* for a NEW reason and must be localised, not "
+        "re-pinned.",
     "z_fixed_staircase":
         "z_fixed's STAIRCASE PGF RESIDUAL: a forced, bounded truncation that "
         "saturates (static in level, dt-invariant; audit forensics Q2e), "
         "not an instability -- but it sits over the rest bar.",
+    "z_fixed_lid_staircase":
+        "z_fixed's STAIRCASE PGF RESIDUAL under a SLOPING LID: the draft "
+        "crosses nominal levels, so the filler count changes column to "
+        "column and the FV-MOM6 PGF integrates across a staircase step "
+        "(the Yung et al. 2026 corrections are not in this build). Under "
+        "I1' the residual is 5-12x lower than under I1 (tier 1, peak En "
+        "7.7e-04 -> 1.5e-04 inviscid, 6.6e-05 -> 5.3e-06 viscous) but no "
+        "longer overshoots and settles: it approaches a bounded ceiling "
+        "slowly and MONOTONICALLY, so `energy:rest-settles` (final below "
+        "95% of peak) cannot pass at 30 days. MEASURED, viscous leg, "
+        "gfortran, extended run: En 5.24e-06 (d30) -> 5.86e-06 (d60) -> "
+        "6.19e-06 (d90), increments shrinking, MaxCFL <= 0.0092 -- "
+        "bounded, not a runaway. Not an instability, but over the rest bar.",
     "density_coord":
         "A DENSITY-SPACE COORDINATE ON A GEOMETRIC REST STATE (inviscid). "
         "`rho`/`hycom` hand the remap a column whose layers track "
@@ -558,16 +569,15 @@ XFAIL_REASONS = {
         "pred_corr x Laplacian-viscosity instability of FINDING B is the "
         "suspect; it was not localised on z_fixed.",
     "finding_gpu_wright_density":
-        "FINDING C (GPU only) -- NOT expected, NOT hidden. On nvfortran 26.5 "
-        "/ V100 EVERY rho or hycom run with eos = 'wright' dies at the "
-        "first regrid with CUDA_ERROR_ILLEGAL_ADDRESS inside "
-        "`ocean_vcoord_compute_target_h_rho_impl` (the column do concurrent, "
-        "rdb_ocean_vcoord.F90) -- on a FLAT bed at rest too; the linear EOS "
-        "is clean on the GPU, and gfortran with -fcheck=all finds no bounds "
-        "violation on the same run. The Wright coefficients are parameters, "
-        "so the point EOS call is not the suspect; the kernel's `associate` "
-        "over `this%` components around the do concurrent (the NVHPC "
-        "mapping hazard CLAUDE.md records) is -- a hypothesis.",
+        "FINDING C (GPU only). On nvfortran 26.5 / V100 every rho or hycom "
+        "run with eos = 'wright' used to die at the first regrid with "
+        "CUDA_ERROR_ILLEGAL_ADDRESS inside "
+        "`ocean_vcoord_compute_target_h_rho_impl`. FIXED on main "
+        "(e8a1ab68d, 'rho/hycom x Wright illegal address on the GPU "
+        "build'): the 2026-09-23 re-pin measures the same outcome on both "
+        "toolchains, so this key is attached only to a record that is "
+        "still TOOLCHAIN-DEPENDENT -- which would be a regression of that "
+        "fix.",
     "outside_envelope":
         "OUTSIDE THE FAMILY'S DOCUMENTED rx0 ENVELOPE (viscous leg). The "
         "envelope is the largest geometry rx0 at which EVERY viscous cell "
@@ -603,8 +613,12 @@ def reason_for(leg, key, rec):
     if "unstrat" in parts:
         return ["unstrat_control"]
     if fam == "z_fixed":
-        out.append("z_fixed_leak" if a & {"conserve:Salt", "conserve:Heat"}
-                   else "z_fixed_staircase")
+        if a & {"conserve:Salt", "conserve:Heat"}:
+            out.append("z_fixed_leak")
+        elif "lid_slope" in parts:
+            out.append("z_fixed_lid_staircase")
+        else:
+            out.append("z_fixed_staircase")
         if "completed" in a and leg == "viscous":
             out.append("z_fixed_viscous_abort")
         return out
@@ -623,7 +637,8 @@ def reason_for(leg, key, rec):
         out.append("lagrangian")
     else:
         out.append("outside_envelope")
-    if fam in ("rho", "hycom") and "wright" in parts:
+    if (fam in ("rho", "hycom") and "wright" in parts
+            and rec.get("toolchain_dependent")):
         out.append("finding_gpu_wright_density")
     return out
 
