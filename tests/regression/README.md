@@ -729,56 +729,68 @@ completes but fails a gate (`leak` = the salt/heat budget left round-off);
 at configure by design, and the row asserts the refusal. `a / b` =
 gfortran / nvfortran where they differ; otherwise both.
 
-**Both toolchains agree on PASS/FAIL on every one of the 205 cells** except
-the two `slope × hycom × wright` cells (FINDING C, GPU only); where they
-differ it is in the number or the day, never the verdict.
+**Both toolchains agree on PASS/FAIL on every one of the 205 cells**; where
+they differ it is in the number or the day, never the verdict.
+
+**Re-pinned 2026-09-23** (both toolchains, both tiers) with the vanished-layer
+content rule I1′ in (`fix/remap-vanished-layer-content`). Only the `z_fixed`
+column moved, and it is shown re-measured below: the salt/heat leak is gone
+from every cell (budgets at round-off), `seamount_steep × z_fixed` no longer
+aborts in the viscous leg, and `rx0_080` (inviscid) and `rx0_010` (viscous)
+now pass. The re-pin also picked up `e8a1ab68d` on the GPU, which fixed
+FINDING C: `slope × hycom × wright` now fails the same gates on both
+toolchains. The other `rho` / `hycom` GPU numbers and abort days in the grids
+are the 2026-09-22 measurement; the re-pin moved some of them (never a
+verdict), and `vcoord_matrix_measured.py` quotes the current ones.
 
 ### inviscid leg
 
 | problem (rx0) | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom | zsigma |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `flat` (0) | ok | ok | ok | ok | ok | ok | ok | ok | ok | refused |
-| `slope` (0.00709) | ok | 1.2e-03 | ok | ok | ok | ok | 5.6e-07 leak | 2.3e-06 / 6.8e-07 | 1.4e-06 / 7.7e-07 | refused |
+| `slope` (0.00709) | ok | 1.2e-03 | ok | ok | ok | ok | 4.9e-07 | 2.3e-06 / 6.8e-07 | 1.4e-06 / 7.7e-07 | refused |
 | `lid_flat` (0) | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
-| `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 7.7e-04 | refused | refused | refused |
-| `seamount_gentle` (0.03) | ok | 2.1e-04 / 1.8e-04 | ok | ok | ok | ok | 1.4e-05 leak | ✗ d11 | ✗ d8 / ✗ d16 | refused |
-| `seamount_steep` (0.078) | ✗ d4 | ✗ d20 / ✗ d16 | ok | ok | ok | ok | 1.4e-04 leak | ✗ d6 | ✗ d6 | refused |
-| `rx0_010` (0.1) | ✗ d12 / ✗ d10 | 8.0e-04 / 7.7e-04 | 1.7e-12 / 2.3e-12 | 1.7e-12 / 2.3e-12 | ok | ok | 1.2e-07 leak | ✗ d3 / ✗ d2 | ✗ d4 / ✗ d6 | refused |
-| `rx0_020` (0.2) | ✗ d7 | ✗ d22 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.3e-04 | 4.4e-05 / 6.6e-05 | 3.1e-07 leak | ✗ d1 | ✗ d1 / ✗ d0 | refused |
-| `rx0_040` (0.4) | ✗ d5 | ✗ d11 | ✗ d30 / ✗ d29 | ✗ d30 / ✗ d29 | ✗ d28 / ✗ d30 | 4.2e-04 / 4.7e-04 | 2.3e-08 leak | ✗ d0 | ✗ d0 | refused |
-| `rx0_060` (0.6) | ✗ d4 | ✗ d6 | 2.2e-05 / 2.5e-05 | 2.2e-05 / 2.5e-05 | 1.5e-05 / 1.7e-05 | 1.7e-09 / 4.4e-10 | 2.7e-07 leak | ✗ d0 | ✗ d0 | refused |
-| `rx0_080` (0.8) | ✗ d4 | ✗ d4 | ✗ d14 | ✗ d14 | ✗ d14 | ✗ d4 | 2.3e-07 leak | ✗ d0 | ✗ d0 | refused |
+| `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 1.5e-04 | refused | refused | refused |
+| `seamount_gentle` (0.03) | ok | 2.1e-04 / 1.8e-04 | ok | ok | ok | ok | 1.2e-05 | ✗ d11 | ✗ d8 / ✗ d16 | refused |
+| `seamount_steep` (0.078) | ✗ d4 | ✗ d20 / ✗ d16 | ok | ok | ok | ok | 1.2e-04 | ✗ d6 | ✗ d6 | refused |
+| `rx0_010` (0.1) | ✗ d12 / ✗ d10 | 8.0e-04 / 7.7e-04 | 1.7e-12 / 2.3e-12 | 1.7e-12 / 2.3e-12 | ok | ok | 8.1e-08 | ✗ d3 / ✗ d2 | ✗ d4 / ✗ d6 | refused |
+| `rx0_020` (0.2) | ✗ d7 | ✗ d22 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.4e-04 | 7.0e-04 / 7.3e-04 | 4.4e-05 / 6.6e-05 | 3.0e-07 | ✗ d1 | ✗ d1 / ✗ d0 | refused |
+| `rx0_040` (0.4) | ✗ d5 | ✗ d11 | ✗ d30 / ✗ d29 | ✗ d30 / ✗ d29 | ✗ d28 / ✗ d30 | 4.2e-04 / 4.7e-04 | 1.8e-08 | ✗ d0 | ✗ d0 | refused |
+| `rx0_060` (0.6) | ✗ d4 | ✗ d6 | 2.2e-05 / 2.5e-05 | 2.2e-05 / 2.5e-05 | 1.5e-05 / 1.7e-05 | 1.7e-09 / 4.4e-10 | 2.3e-07 | ✗ d0 | ✗ d0 | refused |
+| `rx0_080` (0.8) | ✗ d4 | ✗ d4 | ✗ d14 | ✗ d14 | ✗ d14 | ✗ d4 | ok | ✗ d0 | ✗ d0 | refused |
 
 ### viscous leg
 
 | problem (rx0) | lagrangian | eulerian_z | sigma | zstar | zstar_sigma | zstar_full | z_fixed | rho | hycom |
 |---|---|---|---|---|---|---|---|---|---|
 | `flat` (0) | ok | ok | ok | ok | ok | ok | ok | ok | ok |
-| `slope` (0.00709) | ok | ok | ok | ok | ok | ok | 4.7e-08 leak | ✗ d0 | ✗ d0 |
+| `slope` (0.00709) | ok | ok | ok | ok | ok | ok | 4.4e-08 | ✗ d0 | ✗ d0 |
 | `lid_flat` (0) | - | - | ok | ok | - | - | ok | - | - |
-| `lid_slope` (0.0138) | - | - | ok | ok | - | - | 6.6e-05 | - | - |
-| `seamount_gentle` (0.03) | ok | ok | ok | ok | ok | ok | 1.3e-07 leak | ✗ d0 | ✗ d0 |
-| `seamount_steep` (0.078) | ✗ d16 / ✗ d15 | ok | ok | ok | ok | ok | ✗ d18 | ✗ d0 | ✗ d0 |
-| `rx0_010` (0.1) | 1.7e-09 / 8.3e-09 | ok | ✗ d14 / ✗ d19 | ✗ d14 / ✗ d19 | ok | ok | 6.4e-12 leak | ✗ d0 | ✗ d0 |
-| `rx0_020` (0.2) | ✗ d14 | ok | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d6 | ✗ d2 | 1.5e-08 leak | ✗ d0 | ✗ d0 |
-| `rx0_040` (0.4) | ✗ d8 | ok | ✗ d2 | ✗ d2 | ✗ d2 / ✗ d6 | ✗ d1 | 2.7e-10 leak | ✗ d0 | ✗ d0 |
-| `rx0_060` (0.6) | ✗ d5 / ✗ d6 | ok | ✗ d15 / ✗ d24 | ✗ d15 / ✗ d24 | ok | ✗ d16 | 1.4e-08 leak | ✗ d0 | ✗ d0 |
-| `rx0_080` (0.8) | ✗ d6 / ✗ d7 | 1.7e-04 / 1.4e-04 | ✗ d21 / ✗ d28 | ✗ d21 / ✗ d28 | ✗ d14 / ✗ d24 | ok | 7.5e-09 leak | ✗ d0 | ✗ d0 |
+| `lid_slope` (0.0138) | - | - | ok | ok | - | - | 5.3e-06 | - | - |
+| `seamount_gentle` (0.03) | ok | ok | ok | ok | ok | ok | 1.2e-07 | ✗ d0 | ✗ d0 |
+| `seamount_steep` (0.078) | ✗ d16 / ✗ d15 | ok | ok | ok | ok | ok | 8.0e-08 | ✗ d0 | ✗ d0 |
+| `rx0_010` (0.1) | 1.7e-09 / 8.3e-09 | ok | ✗ d14 / ✗ d19 | ✗ d14 / ✗ d19 | ok | ok | ok | ✗ d0 | ✗ d0 |
+| `rx0_020` (0.2) | ✗ d14 | ok | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d4 | ✗ d5 / ✗ d6 | ✗ d2 | 1.4e-08 | ✗ d0 | ✗ d0 |
+| `rx0_040` (0.4) | ✗ d8 | ok | ✗ d2 | ✗ d2 | ✗ d2 / ✗ d6 | ✗ d1 | 2.4e-10 | ✗ d0 | ✗ d0 |
+| `rx0_060` (0.6) | ✗ d5 / ✗ d6 | ok | ✗ d15 / ✗ d24 | ✗ d15 / ✗ d24 | ok | ✗ d16 | 1.2e-08 | ✗ d0 | ✗ d0 |
+| `rx0_080` (0.8) | ✗ d6 / ✗ d7 | 1.7e-04 / 1.4e-04 | ✗ d21 / ✗ d28 | ✗ d21 / ✗ d28 | ✗ d14 / ✗ d24 | ok | 7.5e-09 | ✗ d0 | ✗ d0 |
 
 The EOS and stratification controls (not in the grids above): `slope × sigma
 × wright` passes both legs on both toolchains (inviscid En 7.6e-23, viscous
-5.4e-24); `slope × z_fixed × wright` leaks exactly like its linear twin;
-`slope × hycom × wright` completes on gfortran (inviscid En 2.2e-06) and dies
-at step 0 on the GPU (FINDING C). The `N² = 0` controls: `lid_slope × sigma`
+5.4e-24); `slope × z_fixed × wright` behaves exactly like its linear twin (4.9e-07 /
+4.4e-08, salinity overshoot only); `slope × hycom × wright` completes the
+inviscid leg on both toolchains (En 2.2e-06 / 1.7e-06) and aborts at step 0
+in the viscous leg (FINDING A), like its linear twin. The `N² = 0` controls: `lid_slope × sigma`
 holds 1.5e-20 / 3.6e-20 (machine zero, both toolchains); `rx0_080 × sigma`
 unstratified still reaches the CFL wall — day 20 on gfortran, day 1 on the
 GPU — through the slower barotropic residual the forensics measured.
 
-**Counts, tier 1** (identical on both toolchains): inviscid **32 PASS / 83
-XFAIL** (23 of them the by-design refusals) / 0 FAIL / 0 XPASS; viscous **40
-PASS / 50 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the CI slice, 3.33 days,
-120 rows with the `__ssp_rk2` twins): gfortran 86 PASS / 34 XFAIL, nvfortran
-84 PASS / 36 XFAIL (the difference is FINDING C), 0 FAIL / 0 XPASS on both.
+**Counts, tier 1** (identical on both toolchains, re-pinned 2026-09-23):
+inviscid **33 PASS / 82 XFAIL** (23 of them the by-design refusals) / 0 FAIL
+/ 0 XPASS; viscous **41 PASS / 49 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the
+CI slice, 3.33 days, 120 rows with the `__ssp_rk2` twins): 90 PASS / 30
+XFAIL on both toolchains, 0
+FAIL / 0 XPASS on both.
 
 **How to read it.**
 
@@ -793,10 +805,13 @@ PASS / 50 XFAIL** / 0 FAIL / 0 XPASS. **Tier 2** (the CI slice, 3.33 days,
    toolchains; `zstar_sigma` now differs from them on the ladder (it is the
    only place its z* branch engages).
 3. **`z_fixed` is clean only without fillers** (`flat`, `lid_flat`). Wherever
-   layers vanish it leaks salt and heat at 1e-7 … 1e-6 relative — fixed to
-   round-off by the pending `fix/remap-vanished-layer-content` (measured,
-   above) — and under the sloping lid it carries the saturated staircase
-   residual.
+   layers vanish it used to leak salt and heat at 1e-7 … 1e-6 relative; the
+   vanished-layer content rule I1′ closed that to round-off in every cell.
+   What remains is `tracer:no-new-extrema` (salinity overshoot from the
+   regrid) and, under the sloping lid, the staircase residual — which under
+   I1′ is 5–12× lower but approaches its bounded ceiling slowly and
+   monotonically, so it also fails `energy:rest-settles` at 30 days
+   (viscous: 5.24e-06 d30 → 5.86e-06 d60 → 6.19e-06 d90).
 4. **`rho` / `hycom` are clean on a flat bed only.** Inviscid they abort on
    every sloping geometry within days (the negative layer the rest-state
    mode writes); viscous they abort at step 0 (FINDING A).
@@ -825,7 +840,7 @@ measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
 | `zstar_full` | **rx0 ≤ 0.1** | rx0 0.2 (FINDING B) | 0.1 | ≤ 0.6 |
 | `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.6** | rx0 0.8 (level + rate) | flat only | ≤ 0.03, and 0.1 |
 | `lagrangian` | **rx0 ≤ 0.03** | seamount_steep (collapse) | 0.03 | ≤ 0.03 |
-| `z_fixed` (closed faces) | **flat only** | slope (budget leak) | flat only | every geometry |
+| `z_fixed` (closed faces) | **flat only** | slope (salinity overshoot) | flat only | every geometry |
 | `rho`, `hycom` | **flat only** | slope (FINDING A) | flat only | ≤ 0.0071 |
 
 The classical Beckmann–Haidvogel bound is 0.2: the terrain-following
@@ -857,7 +872,8 @@ V100) and on this one:
   line it reads. The gate now allows 1.5 print quanta (`diag_print_quantum`
   in `stability.py`; self-tested both ways), which removes the flip and
   leaves every real overshoot (z_fixed: 7e-4 … 0.14 PSU) failing;
-* **FINDING C** — the only genuine verdict difference, GPU only.
+* **FINDING C** — the only genuine verdict difference, GPU only; fixed by
+  `e8a1ab68d`, and absent from the 2026-09-23 re-pin.
 
 ## FINDINGS — what the two legs turned up
 
@@ -980,7 +996,7 @@ safeguard roundabout's port lacks is `hrat_min = min(1, h_min/(h + h_neglect))`
 scaling the BOUND_KH ceiling (`MOM_hor_visc.F90`) — **a hypothesis**, not
 measured. **What a user can do today:** the scalar operator.
 
-### FINDING C — GPU only: the density-space target builder faults under the Wright EOS
+### FINDING C — GPU only: the density-space target builder faults under the Wright EOS (FIXED, `e8a1ab68d`)
 
 **Where.** nvfortran 26.5 / V100 (cc70), every `rho` or `hycom` run with
 `&ocean_eos_nml eos = "wright"`: the matrix's `slope × hycom × wright` in both

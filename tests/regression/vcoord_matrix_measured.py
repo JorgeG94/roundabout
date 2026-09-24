@@ -5,7 +5,7 @@ ENVELOPES and one record per failing cell (union of failing
 assertions over toolchains and tiers, every toolchain's number
 quoted).  Re-measure and regenerate; never hand-edit a number.
 
-Provenance: tier 1 = 30 simulated days, tier 2 = 3.33 days; gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, one V100); RDB_ENABLE_MPI=OFF, single rank; origin/main 6cf0e317e + this branch; 2026-09-22
+Provenance: tier 1 = 30 simulated days, tier 2 = 3.33 days; gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, one V100); RDB_ENABLE_MPI=OFF, single rank; origin/main 3ee75d3b1 + fix/remap-vanished-layer-content (I1'); 2026-09-23
 """
 
 ENVELOPES = {
@@ -24,12 +24,12 @@ ENVELOPES = {
 MEASURED = {
     'inviscid': {
         'lid_slope/z_fixed': {
-            "assertions": ['energy:rest', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 0.0007684',
-                'nvfortran': 'tier 1: peak En 0.0007684',
+                'gfortran': 'tier 1: peak En 0.0001464',
+                'nvfortran': 'tier 1: peak En 0.0001464',
             },
         },
         'rx0_010/eulerian_z': {
@@ -46,8 +46,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 4.0 on the remap guard (h -626.7 m)',
-                'nvfortran': 'tier 1: aborts day 6.0 on the remap guard (h -0.0002015 m)',
+                'gfortran': 'tier 1: aborts day 5.0 on the remap guard (h -0.02907 m)',
+                'nvfortran': 'tier 1: aborts day 4.5 on the remap guard (h -12.41 m)',
             },
         },
         'rx0_010/lagrangian': {
@@ -64,8 +64,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 3.0 on the remap guard (h -0.0002749 m)',
-                'nvfortran': 'tier 1: aborts day 2.5 on the remap guard (h NaN m)',
+                'gfortran': 'tier 1: aborts day 3.0 on the remap guard (h -2.86e-07 m)',
+                'nvfortran': 'tier 1: aborts day 9.5 on the remap guard (h -3.086 m)',
             },
         },
         'rx0_010/sigma': {
@@ -78,12 +78,12 @@ MEASURED = {
             },
         },
         'rx0_010/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest-growth-rate', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest-growth-rate', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 1.198e-07, En e-folding 3.22 d, salt residual 1.342e-07',
-                'nvfortran': 'tier 1: peak En 1.198e-07, En e-folding 3.22 d, salt residual 1.342e-07',
+                'gfortran': 'tier 1: peak En 8.068e-08, En e-folding 3.47 d',
+                'nvfortran': 'tier 1: peak En 8.068e-08, En e-folding 3.47 d',
             },
         },
         'rx0_010/zstar': {
@@ -109,8 +109,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -9.362e-05 m)',
-                'nvfortran': 'tier 1: aborts day 0.5 on the remap guard (h -1.309e-05 m)',
+                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -1.838e-06 m)',
+                'nvfortran': 'tier 1: aborts day 0.5 on the remap guard (h -1.571e-05 m)',
             },
         },
         'rx0_020/lagrangian': {
@@ -127,8 +127,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -0.0001074 m)',
-                'nvfortran': 'tier 1: aborts day 1.0 on the remap guard (h -9.037e-05 m)',
+                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -65.83 m)',
+                'nvfortran': 'tier 1: aborts day 1.0 on the remap guard (h -45.09 m)',
             },
         },
         'rx0_020/sigma': {
@@ -141,12 +141,12 @@ MEASURED = {
             },
         },
         'rx0_020/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 3.128e-07, salt residual 3.349e-07',
-                'nvfortran': 'tier 1: peak En 3.128e-07, salt residual 3.349e-07',
+                'gfortran': 'tier 1: peak En 3.035e-07',
+                'nvfortran': 'tier 1: peak En 3.035e-07',
             },
         },
         'rx0_020/zstar': {
@@ -190,8 +190,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.1342 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -4.093 m)',
+                'gfortran': 'tier 1: aborts day 0.5 on the remap guard (h -0.05264 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -1.118 m)',
             },
         },
         'rx0_040/lagrangian': {
@@ -208,8 +208,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -1.129 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -2.798 m)',
+                'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.3944 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -1.046 m)',
             },
         },
         'rx0_040/sigma': {
@@ -222,12 +222,12 @@ MEASURED = {
             },
         },
         'rx0_040/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest-settles'],
+            "assertions": ['energy:rest-settles'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 2.295e-08, salt residual 5.335e-07',
-                'nvfortran': 'tier 1: peak En 2.295e-08, salt residual 5.335e-07',
+                'gfortran': 'tier 1: peak En 1.828e-08',
+                'nvfortran': 'tier 1: peak En 1.828e-08',
             },
         },
         'rx0_040/zstar': {
@@ -272,7 +272,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.5 on the remap guard (h -0.1423 m); tier 2: aborts day 0.4 on the remap guard (h -0.1423 m)',
-                'nvfortran': 'tier 1: aborts day 0.5 on the remap guard (h -5.238e-05 m); tier 2: aborts day 0.6 on the remap guard (h NaN m)',
+                'nvfortran': 'tier 1: aborts day 0.5 on the remap guard (h -9.052e-05 m); tier 2: aborts day 0.4 on the remap guard (h -9.052e-05 m)',
             },
         },
         'rx0_060/lagrangian': {
@@ -289,8 +289,8 @@ MEASURED = {
             "tiers": [1, 2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -79.43 m); tier 2: aborts day 0.2 on the remap guard (h -79.43 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.002034 m); tier 2: aborts day 0.4 on the remap guard (h -0.002034 m)',
+                'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.2622 m); tier 2: aborts day 0.2 on the remap guard (h -0.2622 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -1.838e-05 m); tier 2: aborts day 0.0 on the remap guard (h -1.838e-05 m)',
             },
         },
         'rx0_060/sigma': {
@@ -303,12 +303,12 @@ MEASURED = {
             },
         },
         'rx0_060/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1, 2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 2.654e-07, salt residual 7.3e-07; tier 2: peak En 1.424e-07, salt residual 7.3e-07',
-                'nvfortran': 'tier 1: peak En 2.654e-07, salt residual 7.3e-07; tier 2: peak En 1.424e-07, salt residual 7.3e-07',
+                'gfortran': 'tier 1: peak En 2.347e-07; tier 2: peak En 1.268e-07',
+                'nvfortran': 'tier 1: peak En 2.347e-07; tier 2: peak En 1.268e-07',
             },
         },
         'rx0_060/zstar': {
@@ -353,7 +353,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -11.35 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -135.8 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.09616 m)',
             },
         },
         'rx0_080/lagrangian': {
@@ -371,7 +371,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -4.682 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -67.04 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -4.685 m)',
             },
         },
         'rx0_080/sigma': {
@@ -392,15 +392,6 @@ MEASURED = {
                 'nvfortran': 'tier 1: aborts day 1.0 on the remap guard (h -159.1 m)',
             },
         },
-        'rx0_080/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt'],
-            "tiers": [1],
-            "toolchain_dependent": False,
-            "measured": {
-                'gfortran': 'tier 1: peak En 2.295e-07, salt residual 8.578e-07',
-                'nvfortran': 'tier 1: peak En 2.295e-07, salt residual 8.578e-07',
-            },
-        },
         'rx0_080/zstar': {
             "assertions": ['completed', 'remap:preconditions'],
             "tiers": [1],
@@ -416,7 +407,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 3.5 on the remap guard (h -153.9 m)',
-                'nvfortran': 'tier 1: aborts day 3.5 on the remap guard (h -26.9 m)',
+                'nvfortran': 'tier 1: aborts day 3.5 on the remap guard (h -27 m)',
             },
         },
         'rx0_080/zstar_sigma': {
@@ -442,8 +433,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 7.5 on the remap guard (h -27.82 m)',
-                'nvfortran': 'tier 1: aborts day 16.0 on the remap guard (h -10.08 m)',
+                'gfortran': 'tier 1: aborts day 7.5 on the remap guard (h -8.037 m)',
+                'nvfortran': 'tier 1: aborts day 28.0 on the remap guard (h -40.68 m)',
             },
         },
         'seamount_gentle/rho': {
@@ -452,16 +443,16 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 11.0 on the remap guard (h -41.6 m)',
-                'nvfortran': 'tier 1: aborts day 11.0 on the remap guard (h -0.06733 m)',
+                'nvfortran': 'tier 1: aborts day 11.5 on the remap guard (h -19.07 m)',
             },
         },
         'seamount_gentle/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest-growth-rate', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 1.37e-05, En e-folding 13.01 d, salt residual 1.225e-06',
-                'nvfortran': 'tier 1: peak En 1.37e-05, En e-folding 13.01 d, salt residual 1.225e-06',
+                'gfortran': 'tier 1: peak En 1.219e-05',
+                'nvfortran': 'tier 1: peak En 1.219e-05',
             },
         },
         'seamount_steep/eulerian_z': {
@@ -478,8 +469,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 6.0 on the remap guard (h -3.472e-05 m)',
-                'nvfortran': 'tier 1: aborts day 5.5 on the remap guard (h -2.426 m)',
+                'gfortran': 'tier 1: aborts day 6.0 on the remap guard (h -19.39 m)',
+                'nvfortran': 'tier 1: aborts day 6.0 on the remap guard (h -1.457e-06 m)',
             },
         },
         'seamount_steep/lagrangian': {
@@ -496,17 +487,17 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 6.5 on the remap guard (h -187.9 m)',
-                'nvfortran': 'tier 1: aborts day 6.0 on the remap guard (h -1.08e-05 m)',
+                'gfortran': 'tier 1: aborts day 7.0 on the remap guard (h -34.52 m)',
+                'nvfortran': 'tier 1: aborts day 6.0 on the remap guard (h NaN m)',
             },
         },
         'seamount_steep/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 0.0001418, salt residual 3.017e-07',
-                'nvfortran': 'tier 1: peak En 0.0001418, salt residual 3.017e-07',
+                'gfortran': 'tier 1: peak En 0.0001204',
+                'nvfortran': 'tier 1: peak En 0.0001204',
             },
         },
         'slope/eulerian_z': {
@@ -524,16 +515,16 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 1.386e-06, En e-folding 0.82 d; tier 2: passes',
-                'nvfortran': 'tier 1: peak En 7.733e-07, En e-folding 0.87 d; tier 2: passes',
+                'nvfortran': 'tier 1: peak En 1.601e-06, En e-folding 0.83 d; tier 2: passes',
             },
         },
         'slope/hycom/wright': {
-            "assertions": ['completed', 'energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'],
-            "tiers": [1, 2],
-            "toolchain_dependent": True,
+            "assertions": ['energy:rest', 'energy:rest-growth-rate', 'energy:rest-settles'],
+            "tiers": [1],
+            "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.233e-06, En e-folding 1.08 d; tier 2: passes',
-                'nvfortran': 'tier 1: aborts; tier 2: aborts',
+                'nvfortran': 'tier 1: peak En 1.675e-06, En e-folding 1.09 d; tier 2: passes',
             },
         },
         'slope/rho': {
@@ -542,36 +533,36 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.297e-06, En e-folding 0.75 d; tier 2: passes',
-                'nvfortran': 'tier 1: peak En 6.802e-07, En e-folding 0.90 d; tier 2: passes',
+                'nvfortran': 'tier 1: peak En 1.16e-06, En e-folding 0.86 d; tier 2: passes',
             },
         },
         'slope/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1, 2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 5.643e-07, salt residual 4.386e-07; tier 2: peak En 6.095e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 1: peak En 5.643e-07, salt residual 4.386e-07; tier 2: peak En 6.095e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 1: peak En 4.945e-07; tier 2: peak En 5.188e-07',
+                'nvfortran': 'tier 1: peak En 4.945e-07; tier 2: peak En 5.188e-07',
             },
         },
         'slope/z_fixed/wright': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1, 2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 5.658e-07, salt residual 4.386e-07; tier 2: peak En 6.111e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 1: peak En 5.658e-07, salt residual 4.386e-07; tier 2: peak En 6.111e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 1: peak En 4.934e-07; tier 2: peak En 5.201e-07',
+                'nvfortran': 'tier 1: peak En 4.934e-07; tier 2: peak En 5.201e-07',
             },
         },
     },
     'viscous': {
         'lid_slope/z_fixed': {
-            "assertions": ['energy:rest', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 6.633e-05',
-                'nvfortran': 'tier 1: peak En 6.633e-05',
+                'gfortran': 'tier 1: peak En 5.335e-06',
+                'nvfortran': 'tier 1: peak En 5.335e-06',
             },
         },
         'rx0_010/hycom': {
@@ -580,7 +571,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.06797 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.2377 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.2425 m)',
             },
         },
         'rx0_010/lagrangian': {
@@ -598,7 +589,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.3005 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.2463 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.2194 m)',
             },
         },
         'rx0_010/sigma': {
@@ -608,15 +599,6 @@ MEASURED = {
             "measured": {
                 'gfortran': 'tier 1: aborts day 14.0 on the remap guard (h -254.8 m)',
                 'nvfortran': 'tier 1: aborts day 19.0 on the remap guard (h -115.1 m)',
-            },
-        },
-        'rx0_010/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt'],
-            "tiers": [1],
-            "toolchain_dependent": False,
-            "measured": {
-                'gfortran': 'tier 1: peak En 6.429e-12, salt residual 1.342e-07',
-                'nvfortran': 'tier 1: peak En 6.429e-12, salt residual 1.342e-07',
             },
         },
         'rx0_010/zstar': {
@@ -634,7 +616,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0001127 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.9349 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.4079 m)',
             },
         },
         'rx0_020/lagrangian': {
@@ -652,7 +634,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -5.41e-05 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -77.72 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -1.266 m)',
             },
         },
         'rx0_020/sigma': {
@@ -665,12 +647,12 @@ MEASURED = {
             },
         },
         'rx0_020/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 1.518e-08, salt residual 3.349e-07',
-                'nvfortran': 'tier 1: peak En 1.518e-08, salt residual 3.349e-07',
+                'gfortran': 'tier 1: peak En 1.421e-08',
+                'nvfortran': 'tier 1: peak En 1.421e-08',
             },
         },
         'rx0_020/zstar': {
@@ -687,8 +669,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 2.5 on the remap guard (h -20.25 m)',
-                'nvfortran': 'tier 1: aborts day 2.5 on the remap guard (h -1.386e+04 m)',
+                'gfortran': 'tier 1: aborts day 2.5 on the remap guard (h -20.17 m)',
+                'nvfortran': 'tier 1: aborts day 3.0 on the remap guard (h -1.424e+04 m)',
             },
         },
         'rx0_020/zstar_sigma': {
@@ -724,7 +706,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0002749 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0008599 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0008658 m)',
             },
         },
         'rx0_040/sigma': {
@@ -737,12 +719,12 @@ MEASURED = {
             },
         },
         'rx0_040/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 2.681e-10, salt residual 5.335e-07',
-                'nvfortran': 'tier 1: peak En 2.681e-10, salt residual 5.335e-07',
+                'gfortran': 'tier 1: peak En 2.447e-10',
+                'nvfortran': 'tier 1: peak En 2.447e-10',
             },
         },
         'rx0_040/zstar': {
@@ -751,7 +733,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 2.0 on the remap guard (h -427.4 m)',
-                'nvfortran': 'tier 1: aborts day 1.5 on the remap guard (h NaN m)',
+                'nvfortran': 'tier 1: aborts day 1.5 on the remap guard (h -0.4468 m)',
             },
         },
         'rx0_040/zstar_full': {
@@ -759,8 +741,8 @@ MEASURED = {
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -161 m)',
-                'nvfortran': 'tier 1: aborts day 1.0 on the remap guard (h -31.48 m)',
+                'gfortran': 'tier 1: aborts day 1.0 on the remap guard (h -161.3 m)',
+                'nvfortran': 'tier 1: aborts day 1.0 on the remap guard (h -31.51 m)',
             },
         },
         'rx0_040/zstar_sigma': {
@@ -778,7 +760,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001994 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0006033 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0006034 m)',
             },
         },
         'rx0_060/lagrangian': {
@@ -796,7 +778,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.01105 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.004902 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.002309 m)',
             },
         },
         'rx0_060/sigma': {
@@ -809,12 +791,12 @@ MEASURED = {
             },
         },
         'rx0_060/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 1.385e-08, salt residual 7.3e-07',
-                'nvfortran': 'tier 1: peak En 1.385e-08, salt residual 7.3e-07',
+                'gfortran': 'tier 1: peak En 1.206e-08',
+                'nvfortran': 'tier 1: peak En 1.206e-08',
             },
         },
         'rx0_060/zstar': {
@@ -832,7 +814,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 16.5 on the remap guard (h -7.965 m)',
-                'nvfortran': 'tier 1: aborts day 15.5 on the remap guard (h -5.042e-05 m)',
+                'nvfortran': 'tier 1: aborts day 15.5 on the remap guard (h -5.029e-05 m)',
             },
         },
         'rx0_080/eulerian_z': {
@@ -850,7 +832,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.005227 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.005431 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.00543 m)',
             },
         },
         'rx0_080/lagrangian': {
@@ -881,12 +863,12 @@ MEASURED = {
             },
         },
         'rx0_080/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 7.483e-09, salt residual 8.578e-07',
-                'nvfortran': 'tier 1: peak En 7.483e-09, salt residual 8.578e-07',
+                'gfortran': 'tier 1: peak En 7.485e-09',
+                'nvfortran': 'tier 1: peak En 7.485e-09',
             },
         },
         'rx0_080/zstar': {
@@ -913,7 +895,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.007839 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.006947 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.009221 m)',
             },
         },
         'seamount_gentle/rho': {
@@ -922,16 +904,16 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.006286 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.007812 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.009596 m)',
             },
         },
         'seamount_gentle/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 1.295e-07, salt residual 1.225e-06',
-                'nvfortran': 'tier 1: peak En 1.295e-07, salt residual 1.225e-06',
+                'gfortran': 'tier 1: peak En 1.172e-07',
+                'nvfortran': 'tier 1: peak En 1.172e-07',
             },
         },
         'seamount_steep/hycom': {
@@ -940,7 +922,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.1006 m); tier 2: aborts day 0.0 on the remap guard (h -0.1006 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.04033 m); tier 2: aborts day 0.0 on the remap guard (h -0.04033 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.07357 m); tier 2: aborts day 0.0 on the remap guard (h -0.07357 m)',
             },
         },
         'seamount_steep/lagrangian': {
@@ -958,16 +940,16 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.08773 m); tier 2: aborts day 0.0 on the remap guard (h -0.08773 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.04755 m); tier 2: aborts day 0.0 on the remap guard (h -0.04755 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.07165 m); tier 2: aborts day 0.0 on the remap guard (h -0.07165 m)',
             },
         },
         'seamount_steep/z_fixed': {
-            "assertions": ['completed', 'conserve:Heat', 'conserve:Salt', 'remap:preconditions', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [1, 2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 18.5 on the remap guard (h -0.3664 m); tier 2: peak En 1.187e-07, salt residual 3.017e-07',
-                'nvfortran': 'tier 1: aborts day 18.5 on the remap guard (h -0.3663 m); tier 2: peak En 1.187e-07, salt residual 3.017e-07',
+                'gfortran': 'tier 1: peak En 8.015e-08; tier 2: peak En 1.188e-07',
+                'nvfortran': 'tier 1: peak En 8.015e-08; tier 2: peak En 1.188e-07',
             },
         },
         'slope/hycom': {
@@ -976,7 +958,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.0005016 m); tier 2: aborts day 0.0 on the remap guard (h -0.0005016 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001585 m); tier 2: aborts day 0.0 on the remap guard (h -0.001585 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001666 m); tier 2: aborts day 0.0 on the remap guard (h -0.001666 m)',
             },
         },
         'slope/hycom/wright': {
@@ -985,7 +967,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.03477 m); tier 2: aborts day 0.0 on the remap guard (h -0.03477 m)',
-                'nvfortran': 'tier 1: aborts; tier 2: aborts',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.03036 m); tier 2: aborts day 0.0 on the remap guard (h -0.03036 m)',
             },
         },
         'slope/rho': {
@@ -994,25 +976,25 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001495 m); tier 2: aborts day 0.0 on the remap guard (h -0.001495 m)',
-                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001687 m); tier 2: aborts day 0.0 on the remap guard (h -0.001687 m)',
+                'nvfortran': 'tier 1: aborts day 0.0 on the remap guard (h -0.001581 m); tier 2: aborts day 0.0 on the remap guard (h -0.001581 m)',
             },
         },
         'slope/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
-            "tiers": [1, 2],
+            "assertions": ['tracer:no-new-extrema'],
+            "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 4.727e-08, salt residual 4.386e-07; tier 2: peak En 1.355e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 1: peak En 4.727e-08, salt residual 4.386e-07; tier 2: peak En 1.355e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 1: peak En 4.402e-08; tier 2: passes',
+                'nvfortran': 'tier 1: peak En 4.402e-08; tier 2: passes',
             },
         },
         'slope/z_fixed/wright': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
-            "tiers": [1, 2],
+            "assertions": ['tracer:no-new-extrema'],
+            "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: peak En 4.741e-08, salt residual 4.386e-07; tier 2: peak En 1.358e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 1: peak En 4.741e-08, salt residual 4.386e-07; tier 2: peak En 1.358e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 1: peak En 4.414e-08; tier 2: passes',
+                'nvfortran': 'tier 1: peak En 4.414e-08; tier 2: passes',
             },
         },
     },
@@ -1028,7 +1010,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.2 on the remap guard (h -0.04312 m)',
-                'nvfortran': 'tier 2: aborts day 0.2 on the remap guard (h -0.04334 m)',
+                'nvfortran': 'tier 2: aborts day 0.2 on the remap guard (h -0.04383 m)',
             },
         },
         'rx0_060/lagrangian': {
@@ -1046,43 +1028,34 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.2 on the remap guard (h -2.912 m)',
-                'nvfortran': 'tier 2: aborts day 0.2 on the remap guard (h -0.5796 m)',
+                'nvfortran': 'tier 2: aborts day 0.2 on the remap guard (h -0.236 m)',
             },
         },
         'rx0_060/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'energy:rest-settles', 'tracer:no-new-extrema'],
             "tiers": [2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 2: peak En 6.52e-06, salt residual 7.3e-07',
-                'nvfortran': 'tier 2: peak En 6.52e-06, salt residual 7.3e-07',
-            },
-        },
-        'slope/hycom/wright': {
-            "assertions": ['completed'],
-            "tiers": [2],
-            "toolchain_dependent": True,
-            "measured": {
-                'gfortran': 'tier 2: passes',
-                'nvfortran': 'tier 2: aborts',
+                'gfortran': 'tier 2: peak En 8.811e-06',
+                'nvfortran': 'tier 2: peak En 8.811e-06',
             },
         },
         'slope/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'tracer:no-new-extrema'],
             "tiers": [2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 2: peak En 6.2e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 2: peak En 6.2e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 2: peak En 5.298e-07',
+                'nvfortran': 'tier 2: peak En 5.298e-07',
             },
         },
         'slope/z_fixed/wright': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'energy:rest', 'tracer:no-new-extrema'],
+            "assertions": ['energy:rest', 'tracer:no-new-extrema'],
             "tiers": [2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 2: peak En 6.216e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 2: peak En 6.216e-07, salt residual 4.386e-07',
+                'gfortran': 'tier 2: peak En 5.311e-07',
+                'nvfortran': 'tier 2: peak En 5.311e-07',
             },
         },
     },
@@ -1093,7 +1066,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.0 on the remap guard (h -9.504e-05 m)',
-                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -0.003403 m)',
+                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -0.003401 m)',
             },
         },
         'seamount_steep/rho': {
@@ -1102,16 +1075,16 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.0 on the remap guard (h -9.53e-05 m)',
-                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -0.003398 m)',
+                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -0.003408 m)',
             },
         },
         'seamount_steep/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt', 'tracer:no-new-extrema'],
+            "assertions": ['tracer:no-new-extrema'],
             "tiers": [2],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 2: peak En 1.192e-07, salt residual 3.017e-07',
-                'nvfortran': 'tier 2: peak En 1.192e-07, salt residual 3.017e-07',
+                'gfortran': 'tier 2: peak En 1.192e-07',
+                'nvfortran': 'tier 2: peak En 1.192e-07',
             },
         },
         'slope/hycom': {
@@ -1120,7 +1093,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.0 on the remap guard (h -2.431 m)',
-                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -1.565 m)',
+                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -1.989 m)',
             },
         },
         'slope/hycom/wright': {
@@ -1129,7 +1102,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.0 on the remap guard (h -2.878 m)',
-                'nvfortran': 'tier 2: aborts',
+                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -0.02069 m)',
             },
         },
         'slope/rho': {
@@ -1138,25 +1111,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: aborts day 0.0 on the remap guard (h -1.036 m)',
-                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -2.419 m)',
-            },
-        },
-        'slope/z_fixed': {
-            "assertions": ['conserve:Heat', 'conserve:Salt'],
-            "tiers": [2],
-            "toolchain_dependent": False,
-            "measured": {
-                'gfortran': 'tier 2: peak En 1.368e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 2: peak En 1.368e-07, salt residual 4.386e-07',
-            },
-        },
-        'slope/z_fixed/wright': {
-            "assertions": ['conserve:Heat', 'conserve:Salt'],
-            "tiers": [2],
-            "toolchain_dependent": False,
-            "measured": {
-                'gfortran': 'tier 2: peak En 1.372e-07, salt residual 4.386e-07',
-                'nvfortran': 'tier 2: peak En 1.372e-07, salt residual 4.386e-07',
+                'nvfortran': 'tier 2: aborts day 0.0 on the remap guard (h -1.004 m)',
             },
         },
     },
