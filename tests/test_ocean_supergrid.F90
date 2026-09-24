@@ -11,6 +11,20 @@
 !!                            function; does NOT call error stop so it is safe
 !!                            in-process).
 !!   supergrid_ghost_extrap — ghost-row metric equals nearest physical row.
+!!   supergrid_tripolar_matches_generator — a folded tripolar mosaic read
+!!                            back with the periodic-x + fold topology holds
+!!                            exactly the metrics the analytic tripolar
+!!                            generator's path (assembler with the periodic
+!!                            seam + `metrics_fold_periodic_ghosts`) builds
+!!                            from the same supergrid — EVERYWHERE, ghosts
+!!                            included — plus explicit periodic-image /
+!!                            fold-conjugate / angle+pi ghost checks.
+!!   supergrid_angle_dx_read — the mosaic's `angle_dx` (degrees, every
+!!                            node) lands at T points as radians; periodic
+!!                            seam faces and ghost columns are wrapped.
+!!   supergrid_topology_mismatch_fails — a folding file without the fold
+!!                            tag, and a fold tag on a lon-lat file, are
+!!                            refused with a non-zero `ierr`.
 !!
 !! Discretization tolerance analysis:
 !!   The supergrid writer places T-cell centres at EVEN supergrid nodes
@@ -32,7 +46,12 @@ module test_ocean_supergrid
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t, metrics_finalize, &
                                 metrics_fill_spherical, &
-                                metrics_fill_from_supergrid
+                                metrics_fill_from_supergrid, &
+                                metrics_assemble_from_supergrid_arrays, &
+                                metrics_fold_periodic_ghosts, &
+                                tripolar_supergrid_arrays, &
+                                supergrid_angle_dx_from_geography, supergrid_top_row_folds
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_io_netcdf, only: nc_create_file, nc_close, &
                             nc_def_dim, nc_def_var_2d, nc_enddef, &
                             nc_put_var_2d
@@ -71,7 +90,10 @@ contains
                   new_unittest("supergrid_ghost_extrap", test_ghost_extrap), &
                   new_unittest("supergrid_nonuniform_face_spans", test_nonuniform_face_spans), &
                   new_unittest("supergrid_areaBu_interior", test_areaBu_interior), &
-                  new_unittest("supergrid_driven_quiescent_rest", test_supergrid_quiescent) &
+                  new_unittest("supergrid_driven_quiescent_rest", test_supergrid_quiescent), &
+                  new_unittest("supergrid_tripolar_matches_generator", test_tripolar_matches_generator), &
+                  new_unittest("supergrid_angle_dx_read", test_angle_dx_read), &
+                  new_unittest("supergrid_topology_mismatch_fails", test_topology_mismatch) &
                   ]
    end subroutine collect_ocean_supergrid_tests
 
@@ -807,6 +829,305 @@ contains
       call hv%destroy(); call pgf%destroy(); call cor%destroy(); call ct%destroy()
       call ms%destroy(); call metrics%destroy()
    end subroutine test_supergrid_quiescent
+
+   ! =================================================================
+   ! Periodic-x + tripolar-fold topology, and the grid rotation
+   ! =================================================================
+
+   subroutine write_supergrid_arrays(filename, sg_x, sg_y, sg_dx, sg_dy, sg_area, sg_angle)
+      !! Write an in-memory supergrid as a MOM6 mosaic, with the optional
+      !! `angle_dx` (degrees, node-sized) when `sg_angle` is present.
+      character(len=*), intent(in) :: filename
+      real(wp), intent(in) :: sg_x(:, :), sg_y(:, :), sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      real(wp), intent(in), optional :: sg_angle(:, :)
+      integer :: ncid, dim_nxp, dim_nyp, dim_nx, dim_ny
+      integer :: vid_x, vid_y, vid_dx, vid_dy, vid_area, vid_angle
+
+      call nc_create_file(filename, ncid)
+      call nc_def_dim(ncid, "nxp", size(sg_x, 1), dim_nxp)
+      call nc_def_dim(ncid, "nyp", size(sg_x, 2), dim_nyp)
+      call nc_def_dim(ncid, "nx", size(sg_area, 1), dim_nx)
+      call nc_def_dim(ncid, "ny", size(sg_area, 2), dim_ny)
+      call nc_def_var_2d(ncid, "x", [dim_nxp, dim_nyp], vid_x)
+      call nc_def_var_2d(ncid, "y", [dim_nxp, dim_nyp], vid_y)
+      call nc_def_var_2d(ncid, "dx", [dim_nx, dim_nyp], vid_dx)
+      call nc_def_var_2d(ncid, "dy", [dim_nxp, dim_ny], vid_dy)
+      call nc_def_var_2d(ncid, "area", [dim_nx, dim_ny], vid_area)
+      if (present(sg_angle)) call nc_def_var_2d(ncid, "angle_dx", [dim_nxp, dim_nyp], vid_angle)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, vid_x, sg_x)
+      call nc_put_var_2d(ncid, vid_y, sg_y)
+      call nc_put_var_2d(ncid, vid_dx, sg_dx)
+      call nc_put_var_2d(ncid, vid_dy, sg_dy)
+      call nc_put_var_2d(ncid, vid_area, sg_area)
+      if (present(sg_angle)) call nc_put_var_2d(ncid, vid_angle, sg_angle)
+      call nc_close(ncid)
+   end subroutine write_supergrid_arrays
+
+   pure function max_rel_diff(a, b) result(d)
+      !! max |a - b| / max(max |b|, tiny) over the WHOLE array.
+      real(wp), intent(in) :: a(:, :), b(:, :)
+      real(wp) :: d
+      d = maxval(abs(a - b))/max(maxval(abs(b)), tiny(1.0_wp))
+   end function max_rel_diff
+
+   subroutine folded_tripolar_supergrid(g, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      !! A synthetic TRIPOLAR mosaic: the analytic generator's supergrid
+      !! (a bipolar cap above 60N), with its top node row made a true fold
+      !! line — node `m` coincides with node `nxp + 1 - m`, the pairing a
+      !! MOM6 tripolar mosaic carries (`supergrid_top_row_folds`) — and the
+      !! top-row segments mirrored to match.
+      !!
+      !! The unmodified analytic top row is NOT a geometric fold: its index
+      !! conjugates sit at the same latitude on meridians 180 degrees apart
+      !! (the generator's fold is by index only).  That is why the reader's
+      !! fold detection refuses the raw analytic grid, and why this test
+      !! builds its own folded file.
+      type(hgrid_t), intent(in) :: g
+      real(wp), allocatable, intent(out) :: sg_x(:, :), sg_y(:, :), sg_dx(:, :), sg_dy(:, :)
+      real(wp), allocatable, intent(out) :: sg_area(:, :)
+      integer :: nxp, nyp, m
+
+      call tripolar_supergrid_arrays(g, -280.0_wp, 20.0_wp, 5.0_wp, RAD_EARTH, 60.0_wp, &
+                                     -240.0_wp, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      nxp = size(sg_x, 1)
+      nyp = size(sg_x, 2)
+      do m = nxp/2 + 2, nxp
+         sg_x(m, nyp) = sg_x(nxp + 1 - m, nyp)
+         sg_y(m, nyp) = sg_y(nxp + 1 - m, nyp)
+      end do
+      ! Segment m -> m+1 on the top row is the mirror of (nxp-m) -> (nxp+1-m).
+      do m = nxp/2 + 1, nxp - 1
+         sg_dx(m, nyp) = sg_dx(nxp - m, nyp)
+      end do
+   end subroutine folded_tripolar_supergrid
+
+   subroutine test_tripolar_matches_generator(error)
+      !! Write a folded tripolar mosaic with its geography-derived
+      !! `angle_dx`, read it back with `periodic_x` + `north_fold`, and
+      !! require every metric array — interior, seam faces, periodic ghost
+      !! columns and folded ghost rows alike — to match what the analytic
+      !! tripolar generator's path builds from the same in-memory supergrid
+      !! (`metrics_assemble_from_supergrid_arrays(periodic_x=.true.)` +
+      !! `metrics_fold_periodic_ghosts`).  The file round-trip is exact in
+      !! double precision, so the match is too.  Before the reader applied
+      !! the ghost topology its seam ghosts were constant-extrapolated and
+      !! its seam faces copied from the neighbouring face.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 16, NJ = 10, NG3 = 3
+      real(wp), parameter :: TOL = 1.0e-13_wp
+      character(len=*), parameter :: FN = "tmp_local_artifacts/test_supergrid_tripolar.nc"
+      type(hgrid_t) :: g
+      type(ocean_metrics_t) :: m_file, m_gen
+      real(wp), allocatable :: sg_x(:, :), sg_y(:, :), sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      real(wp), allocatable :: ang(:, :)
+      real(wp) :: d, expect, pi
+      integer :: ierr, i, j, isum, jsum
+
+      pi = acos(-1.0_wp)
+      call g%init(NI, NJ, NG3, 360.0_wp/real(NI, wp), 5.0_wp)
+      call folded_tripolar_supergrid(g, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      ang = supergrid_angle_dx_from_geography(sg_x, sg_y)
+      call write_supergrid_arrays(FN, sg_x, sg_y, sg_dx, sg_dy, sg_area, ang)
+
+      call m_gen%init(g)
+      call metrics_assemble_from_supergrid_arrays(m_gen, g, sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                  periodic_x=.true., sg_angle_dx=ang)
+      call metrics_fold_periodic_ghosts(m_gen, g)
+      call m_file%init(g)
+      call metrics_fill_from_supergrid(m_file, g, FN, ierr=ierr, periodic_x=.true., &
+                                       north_fold=.true.)
+      checks: block
+         call check(error, ierr == OCEAN_STATUS_OK, "tripolar mosaic read must succeed")
+         if (allocated(error)) exit checks
+         d = maxval([max_rel_diff(m_file%dxT, m_gen%dxT), max_rel_diff(m_file%dyT, m_gen%dyT), &
+                     max_rel_diff(m_file%areaT, m_gen%areaT), &
+                     max_rel_diff(m_file%geolatT, m_gen%geolatT), &
+                     max_rel_diff(m_file%geolonT, m_gen%geolonT)])
+         call check(error, d <= TOL, "T metrics (ghosts included) differ from the generator: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         d = maxval([max_rel_diff(m_file%dxCu, m_gen%dxCu), max_rel_diff(m_file%dyCu, m_gen%dyCu), &
+                     max_rel_diff(m_file%areaCu, m_gen%areaCu), &
+                     max_rel_diff(m_file%dy_cu, m_gen%dy_cu)])
+         call check(error, d <= TOL, "Cu metrics (ghosts included) differ from the generator: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         d = maxval([max_rel_diff(m_file%dxCv, m_gen%dxCv), max_rel_diff(m_file%dyCv, m_gen%dyCv), &
+                     max_rel_diff(m_file%areaCv, m_gen%areaCv), &
+                     max_rel_diff(m_file%dx_cv, m_gen%dx_cv)])
+         call check(error, d <= TOL, "Cv metrics (ghosts included) differ from the generator: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         d = maxval([max_rel_diff(m_file%dxBu, m_gen%dxBu), max_rel_diff(m_file%dyBu, m_gen%dyBu), &
+                     max_rel_diff(m_file%areaBu, m_gen%areaBu), &
+                     max_rel_diff(m_file%geolatBu, m_gen%geolatBu), &
+                     max_rel_diff(m_file%geolonBu, m_gen%geolonBu)])
+         call check(error, d <= TOL, "Bu metrics (ghosts included) differ from the generator: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         d = max_rel_diff(m_file%angle_dx, m_gen%angle_dx)
+         call check(error, d <= TOL, "angle_dx (ghosts included) differs from the generator: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         ! Not vacuous: the cap rotates the grid, the seam ghosts are
+         ! PERIODIC images (not copies of the edge column), and the seam
+         ! u-face spans the last and first half-cells.
+         call check(error, maxval(abs(m_file%angle_dx(NG3 + 1:NG3 + NI, NG3 + 1:NG3 + NJ))) > 0.1_wp, &
+                    "the tripolar cap should rotate the grid axes")
+         if (allocated(error)) exit checks
+         do j = NG3 + 1, NG3 + NJ
+            call check(error, m_file%dxT(1, j) == m_file%dxT(1 + NI, j) .and. &
+                       m_file%geolonT(NG3, j) == m_file%geolonT(NG3 + NI, j), &
+                       "west ghost column is not the periodic image of the east edge")
+            if (allocated(error)) exit checks
+            call check(error, m_file%dxCu(NG3 + 1, j) == &
+                       sg_dx(2*NI, 2*(j - NG3)) + sg_dx(1, 2*(j - NG3)), &
+                       "seam u-face span is not sg_dx(2ni) + sg_dx(1)")
+            if (allocated(error)) exit checks
+         end do
+         ! Folded ghost rows: scalar metrics are the conjugate's, the
+         ! rotation is the conjugate's + pi (in (-pi, pi]).
+         isum = 2*NG3 + NI + 1
+         jsum = 2*NG3 + 2*NJ + 1
+         do j = NG3 + NJ + 1, g%ny_total
+            do i = 1, g%nx_total
+               call check(error, m_file%areaT(i, j) == m_file%areaT(isum - i, jsum - j), &
+                          "folded ghost areaT is not the conjugate's")
+               if (allocated(error)) exit checks
+               expect = m_file%angle_dx(isum - i, jsum - j) + pi
+               if (expect > pi) expect = expect - 2.0_wp*pi
+               call check(error, abs(m_file%angle_dx(i, j) - expect) <= 1.0e-14_wp, &
+                          "folded ghost angle_dx is not the conjugate's + pi")
+               if (allocated(error)) exit checks
+            end do
+         end do
+      end block checks
+      call m_file%destroy()
+      call m_gen%destroy()
+   end subroutine test_tripolar_matches_generator
+
+   subroutine test_angle_dx_read(error)
+      !! A global lon-lat mosaic carrying an arbitrary `angle_dx` pattern
+      !! (degrees, distinct at every node): the metrics hold
+      !! `angle_dx(2i, 2j)` in RADIANS at T(i, j) — MOM6's
+      !! `sin_rot/cos_rot` source node.  With `periodic_x` the seam u-face
+      !! spans the last and first half-cells, `sg_dx(2ni) + sg_dx(1)`
+      !! (here equal to every other face on the uniform grid), and the
+      !! ghost columns hold the periodic images.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 12, NJ = 6
+      real(wp), parameter :: LAT_S = -30.0_wp, DLAT = 10.0_wp
+      character(len=*), parameter :: FN = "tmp_local_artifacts/test_supergrid_angle.nc"
+      type(hgrid_t) :: g
+      type(ocean_metrics_t) :: m
+      real(wp), allocatable :: sg_x(:, :), sg_y(:, :), sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      real(wp), allocatable :: ang(:, :)
+      real(wp) :: dlon, d
+      integer :: ierr, i, j, ng, mm, n
+
+      dlon = 360.0_wp/real(NI, wp)
+      g = make_grid(NI, NJ, dlon, DLAT)
+      ng = NGHOST
+      allocate (sg_x(2*NI + 1, 2*NJ + 1), sg_y(2*NI + 1, 2*NJ + 1), ang(2*NI + 1, 2*NJ + 1))
+      allocate (sg_dx(2*NI, 2*NJ + 1), sg_dy(2*NI + 1, 2*NJ), sg_area(2*NI, 2*NJ))
+      do n = 1, 2*NJ + 1
+         do mm = 1, 2*NI + 1
+            sg_x(mm, n) = (mm - 1)*0.5_wp*dlon
+            sg_y(mm, n) = LAT_S + (n - 1)*0.5_wp*DLAT
+            ang(mm, n) = 10.0_wp + 0.5_wp*real(mm, wp) - 0.25_wp*real(n, wp)
+         end do
+      end do
+      do n = 1, 2*NJ + 1
+         sg_dx(:, n) = RAD_EARTH*cos(sg_y(1, n)*DEG2RAD)*0.5_wp*dlon*DEG2RAD
+      end do
+      sg_dy = RAD_EARTH*0.5_wp*DLAT*DEG2RAD
+      do n = 1, 2*NJ
+         sg_area(:, n) = sg_dx(:, n)*sg_dy(1, n)
+      end do
+      call write_supergrid_arrays(FN, sg_x, sg_y, sg_dx, sg_dy, sg_area, ang)
+
+      call m%init(g)
+      call metrics_fill_from_supergrid(m, g, FN, ierr=ierr, periodic_x=.true., north_fold=.false.)
+      checks: block
+         call check(error, ierr == OCEAN_STATUS_OK, "lon-lat mosaic read must succeed")
+         if (allocated(error)) exit checks
+         d = 0.0_wp
+         do j = 1, NJ
+            do i = 1, NI
+               d = max(d, abs(m%angle_dx(ng + i, ng + j) - ang(2*i, 2*j)*DEG2RAD))
+            end do
+         end do
+         call check(error, d <= 1.0e-15_wp, "angle_dx(T) /= angle_dx(2i,2j) in radians: "//fmt_e(d))
+         if (allocated(error)) exit checks
+         do j = ng + 1, ng + NJ
+            call check(error, abs(m%dxCu(ng + 1, j) - (sg_dx(2*NI, 2*(j - ng)) + sg_dx(1, 2*(j - ng)))) &
+                       <= 1.0e-9_wp .and. m%dxCu(ng + NI + 1, j) == m%dxCu(ng + 1, j), &
+                       "periodic seam u-face span is not sg_dx(2ni) + sg_dx(1)")
+            if (allocated(error)) exit checks
+            call check(error, m%angle_dx(1, j) == m%angle_dx(1 + NI, j), &
+                       "angle_dx west ghost is not the periodic image")
+            if (allocated(error)) exit checks
+         end do
+      end block checks
+      call m%destroy()
+   end subroutine test_angle_dx_read
+
+   subroutine test_topology_mismatch(error)
+      !! The file decides whether the grid IS tripolar (its top node row
+      !! folds onto itself); the edge tags must agree, or the fold would
+      !! exchange the wrong cells.  Both disagreements are refused.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 16, NJ = 10, NG3 = 3
+      character(len=*), parameter :: FN_TRI = "tmp_local_artifacts/test_supergrid_tri_mismatch.nc"
+      character(len=*), parameter :: FN_LL = "tmp_local_artifacts/test_supergrid_ll_mismatch.nc"
+      type(hgrid_t) :: g
+      type(ocean_metrics_t) :: m
+      real(wp), allocatable :: sg_x(:, :), sg_y(:, :), sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      integer :: ierr
+
+      call g%init(NI, NJ, NG3, 360.0_wp/real(NI, wp), 5.0_wp)
+      call folded_tripolar_supergrid(g, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      call write_supergrid_arrays(FN_TRI, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      call m%init(g)
+      call metrics_fill_from_supergrid(m, g, FN_TRI, ierr=ierr, periodic_x=.true., &
+                                       north_fold=.false.)
+      call m%destroy()
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "a tripolar mosaic without north='tripolar_fold' must be refused")
+      if (allocated(error)) return
+
+      call write_analytic_supergrid(FN_LL, NI, NJ, -280.0_wp, 20.0_wp, 360.0_wp/real(NI, wp), &
+                                    5.0_wp, RAD_EARTH)
+      call m%init(g)
+      call metrics_fill_from_supergrid(m, g, FN_LL, ierr=ierr, periodic_x=.true., &
+                                       north_fold=.true.)
+      call m%destroy()
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "north='tripolar_fold' on a lon-lat mosaic must be refused")
+      if (allocated(error)) return
+
+      ! The fold row of a real MOM6 tripolar mosaic crosses 90N, where its
+      ! two copies of the pole are stored at longitudes 180 degrees apart
+      ! (OM_1deg: nodes 181 and 541 at -210 and -30).  That is the SAME
+      ! point, so it must not break the fold detection.
+      block
+         real(wp) :: px(5, 2), py(5, 2)
+         px(:, 1) = 0.0_wp
+         py(:, 1) = 80.0_wp
+         px(:, 2) = [-300.0_wp, -210.0_wp, -120.0_wp, -30.0_wp, 60.0_wp]
+         py(:, 2) = [85.0_wp, 90.0_wp, 70.0_wp, 90.0_wp, 85.0_wp]
+         call check(error, supergrid_top_row_folds(px, py), &
+                    "a fold row through the geographic pole must still count as folding")
+         if (allocated(error)) return
+         py(1, 2) = 84.0_wp
+         call check(error,.not. supergrid_top_row_folds(px, py), &
+                    "an unpaired top-row node must break the fold detection")
+         if (allocated(error)) return
+      end block
+
+      ! And the consistent pairing is accepted.
+      call m%init(g)
+      call metrics_fill_from_supergrid(m, g, FN_TRI, ierr=ierr, periodic_x=.true., &
+                                       north_fold=.true.)
+      call m%destroy()
+      call check(error, ierr == OCEAN_STATUS_OK, "the matching tripolar pairing must be accepted")
+   end subroutine test_topology_mismatch
 
    ! -----------------------------------------------------------------
    ! Helper

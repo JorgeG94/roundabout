@@ -52,7 +52,11 @@ module rdb_ocean_state
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
                                        ocean_bc_state_destroy, &
                                        ocean_bc_state_enter_data, &
-                                       ocean_bc_state_exit_data
+                                       ocean_bc_state_exit_data, &
+                                       ocean_bc_type_from_string, OBC_PERIODIC, &
+                                       OBC_TRIPOLAR_FOLD
+   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
+   use rdb_ocean_fold, only: fold_north_centre
    use rdb_ocean_sponge, only: ocean_sponge_t
    use rdb_ocean_diag, only: ocean_diag_t
    use rdb_ocean_restart, only: ocean_restart_t, restart_registry_t
@@ -1062,7 +1066,8 @@ contains
       call this%barotropic%destroy()
    end subroutine ocean_state_destroy
 
-   subroutine ocean_state_seed_from_cfg(state, grid, cfg, ierr, injected_b, injected_b_convention)
+   subroutine ocean_state_seed_from_cfg(state, grid, cfg, ierr, injected_b, injected_b_convention, &
+                                        periodic_x, periodic_y)
       !! Populate the ocean prognostic state with an analytical IC
       !! derived from cfg scalars.  Bathymetry is set per `cfg%ocean%topo%topo_config`
       !! (`"flat"` → uniform `ocean_max_depth`; `"spoon"` → MOM6 spoon
@@ -1111,8 +1116,17 @@ contains
          !! the single most dangerous argument in the geometry API). One
          !! of `BATHY_CONVENTION_DEPTH_POSITIVE_DOWN` /
          !! `_HEIGHT_POSITIVE_UP` (`rdb_ocean_bathymetry_inject`).
+      logical, intent(in), optional :: periodic_x
+         !! Grid topology the static geometry is wrapped with (see
+         !! `seed_wrap_static_2d`).  Absent ⇒ derived from the
+         !! `&ocean_bc_nml` west/east tags, exactly as `configure_ocean_bc`
+         !! derives `bc%periodic_x`.  The engine passes it when a staged
+         !! topology (`rdb_ocean_stage_topology`) overrides the tags.
+      logical, intent(in), optional :: periodic_y
+         !! As `periodic_x`, for south/north.
 
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
+      logical :: per_x, per_y, north_fold
       real(wp), allocatable :: water(:, :)
          !! Reference water-column thickness the IC seeds work on:
          !! `b − z_draft` under an ice shelf, a byte copy of `b`
@@ -1123,6 +1137,17 @@ contains
       idx_T = state%multilayer%idx_temperature
       nx = size(state%barotropic%b, 1)
       ny = size(state%barotropic%b, 2)
+
+      ! Grid topology of the static geometry (the same rule
+      ! `ocean_bc_state_init` applies to the tags, read here because the
+      ! seed runs BEFORE `configure_ocean_bc`).
+      per_x = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &
+              ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC
+      per_y = ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_PERIODIC .and. &
+              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC
+      if (present(periodic_x)) per_x = periodic_x
+      if (present(periodic_y)) per_y = periodic_y
+      north_fold = ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD
 
       ! Bathymetry.  `slope_scale` (the spoon/seamount length scale) is a
       ! metres knob; `set_bathymetry_*` works in GRID coordinate units,
@@ -1255,6 +1280,20 @@ contains
          end select
       end if
 
+      ! Make the bathymetry SEAM-CONSISTENT before anything reads it.  The
+      ! file loader and the injected-array path fill the ghosts by constant
+      ! extrapolation, and a formula setter evaluates its formula OUTSIDE
+      ! the domain; on a periodic or folded edge neither is the value the
+      ! seam needs.  Every field seeded below (the water column, h_layer,
+      ! the wet mask, the tracers, the zstar_full z_ref table) and every
+      ! setup-time consumer before the engine's first halo pass (the PGF's
+      ! own bathymetry copy, bt_H_ref, the wet/dry and sponge setup) reads
+      ! these ghosts — a stale seam ghost is a 1.9 m/s jet on the seam face
+      ! of the 1-degree global grid within three hours.  The engine still
+      ! re-wraps + halo-exchanges `b` later (the only fill a DECOMPOSED
+      ! axis can get); on the local axes that is now a no-op.
+      call seed_wrap_static_2d(state%barotropic%b, grid, per_x, per_y, north_fold)
+
       ! ---- Static ice-shelf cavity geometry (&ocean_cavity_dyn_nml, P5.1) ----
       ! ORDERING IS LOAD-BEARING and this is the only place it can go: the
       ! draft must exist before the water column `b − z_draft` seeds the
@@ -1277,6 +1316,11 @@ contains
             end if
             error stop "ocean_state_seed_from_cfg: ice-shelf cavity geometry failed"
          end if
+         ! Same seam rule as `b` just above, for the same reason: the
+         ! draft and its cover fraction are bathymetry-class geometry, and
+         ! the water column below reads their ghosts.
+         call seed_wrap_static_2d(state%metrics%z_draft, grid, per_x, per_y, north_fold)
+         call seed_wrap_static_2d(state%metrics%cover_frac, grid, per_x, per_y, north_fold)
          call cavity_water_column_impl(water, state%barotropic%b, &
                                        state%metrics%z_draft, nx, ny)
       else
@@ -1614,6 +1658,46 @@ contains
    end subroutine ocean_state_seed_from_cfg
 
 #ifndef RDB_NO_NETCDF
+   pure subroutine seed_wrap_static_2d(fld, grid, per_x, per_y, north_fold)
+      !! Fill the seam ghosts of a static, cell-centred 2-D geometry field
+      !! (bathymetry, ice draft, cover fraction) from their periodic /
+      !! north-fold images, on the host, at seed time.
+      !!
+      !! Only the axes this rank holds WHOLE are wrapped locally
+      !! (`nx_phys == nx_global` / `ny_phys == ny_global`); on a decomposed
+      !! axis the seam ghosts belong to a neighbour rank and are filled by
+      !! the engine's init-time halo exchange, which runs later.  The fold
+      !! is applied only on the rank that owns the north edge.  Composition
+      !! order matches the engine's init wrap: periodic first, so the fold
+      !! reads the wrapped corner columns.
+      real(wp), intent(inout) :: fld(:, :)
+         !! Cell-centred field, shape `(nx_total, ny_total)`.
+      type(hgrid_t), intent(in) :: grid
+      logical, intent(in) :: per_x
+         !! West/east edges are periodic.
+      logical, intent(in) :: per_y
+         !! South/north edges are periodic.
+      logical, intent(in) :: north_fold
+         !! North edge is the tripolar fold.
+
+      logical :: wrap_x, wrap_y, fold
+
+      if (size(fld, 1) /= grid%nx_total .or. size(fld, 2) /= grid%ny_total) return
+      wrap_x = per_x .and. grid%nx_phys == grid%nx_global
+      wrap_y = per_y .and. grid%ny_phys == grid%ny_global
+      fold = north_fold .and. grid%nx_phys == grid%nx_global .and. &
+             grid%j_offset_global + grid%ny_phys == grid%ny_global
+      if (wrap_x .or. wrap_y) then
+         call ocean_periodic_wrap_centre_2d(fld, grid%nx_total, grid%ny_total, &
+                                            grid%nx_phys, grid%ny_phys, grid%nghost, &
+                                            wrap_x, wrap_y)
+      end if
+      if (fold) then
+         call fold_north_centre(fld, grid%nx_total, grid%ny_total, &
+                                grid%nx_phys, grid%ny_phys, grid%nghost)
+      end if
+   end subroutine seed_wrap_static_2d
+
    subroutine seed_zinit_overlay(state, grid, cfg, ierr)
       !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
       !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
