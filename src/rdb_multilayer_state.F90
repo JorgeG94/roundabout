@@ -16,7 +16,11 @@ module rdb_multilayer_state
    !! Caller must set `this%nz_ml` before calling `init` — typically
    !! threaded through from `cfg%nz_layers` in `state_init_from_config`.
    use, intrinsic :: iso_fortran_env, only: int64
+#ifdef LFORTRAN_PASSING
+   use rdb_constants, only: wp, H_VANISHED
+#else
    use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
+#endif
    use rdb_grid, only: hgrid_t
    use rdb_tracer, only: tracer_t, TRACER_BUDGET_NONE, TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use rdb_mem_report, only: arr_bytes
@@ -24,6 +28,13 @@ module rdb_multilayer_state
    use rdb_error_ring, only: error_ring_push
    implicit none
    private
+
+#ifdef LFORTRAN_PASSING
+   integer, parameter :: NZ_STACK_MAX = 64
+      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
+      !! (an imported parameter used as an explicit-shape dummy bound inside a
+      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
+#endif
 
    public :: multilayer_state_t
 

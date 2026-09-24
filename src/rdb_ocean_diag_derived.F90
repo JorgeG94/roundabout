@@ -8,7 +8,11 @@
 !! cycle rule: this module USES that one).
 module rdb_ocean_diag_derived
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+#ifdef LFORTRAN_PASSING
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED
+#else
    use rdb_constants, only: wp, GRAVITY, H_VANISHED, NZ_STACK_MAX
+#endif
    use rdb_ocean_state, only: ocean_state_t
    use rdb_ocean_diag, only: ocean_diag_t, diag_fill_proc, diag_remap_proc, &
                              DIAG_OP_MEAN, DIAG_OP_INSTANT, DIAG_OP_UNSET, &
@@ -21,6 +25,13 @@ module rdb_ocean_diag_derived
    use rdb_error_ring, only: error_ring_push
    implicit none
    private
+
+#ifdef LFORTRAN_PASSING
+   integer, parameter :: NZ_STACK_MAX = 64
+      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
+      !! (an imported parameter used as an explicit-shape dummy bound inside a
+      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
+#endif
 
    public :: derived_entry_t
    public :: register_derived, apply_diag_selection

@@ -25,13 +25,24 @@ module rdb_ocean_pseudo_salt
    !! instead of the passive-path error: SSS piston restoring
    !! (`&ocean_restore_nml enable_restore_salt`) and sea-ice frazil /
    !! basal salt exchange (`&ocean_ice_nml enable`).
+#ifdef LFORTRAN_PASSING
+   use rdb_constants, only: wp, H_VANISHED
+#else
    use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
+#endif
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use pic_logger, only: global_logger
    use rdb_error_ring, only: error_ring_push
    implicit none
    private
+
+#ifdef LFORTRAN_PASSING
+   integer, parameter :: NZ_STACK_MAX = 64
+      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
+      !! (an imported parameter used as an explicit-shape dummy bound inside a
+      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
+#endif
 
    public :: ocean_pseudo_salt_register
    public :: ocean_pseudo_salt_seed
