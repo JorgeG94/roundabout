@@ -8,9 +8,9 @@ module rdb_ocean_metrics
    !! Storage convention (mirrors the C-grid prognostic sizing exactly,
    !! `nx = grid%nx_total`, `ny = grid%ny_total`):
    !!   * T  (cell centre)  arrays: `(nx,   ny)`     — like `h_layer`.
-   !!   * Cu (east  u-face) arrays: `(nx+1, ny)`     — like `u_face_x`.
-   !!   * Cv (north v-face) arrays: `(nx,   ny+1)`   — like `v_face_y`.
-   !!   * Bu (NE  corner)   arrays: `(nx+1, ny+1)`   — like `f_corner`.
+   !!   * Cu (WEST  u-face of T(i,j)) arrays: `(nx+1, ny)`   — like `u_face_x`.
+   !!   * Cv (SOUTH v-face of T(i,j)) arrays: `(nx,   ny+1)` — like `v_face_y`.
+   !!   * Bu (SW    corner of T(i,j)) arrays: `(nx+1, ny+1)` — like `f_corner`.
    !! All staggers are filled INCLUDING ghost rows/columns — the metric
    !! formulae extend naturally and unfilled ghosts are a known
    !! EOS-blowup class of bug (formula bathymetry ghost-fill gotcha).
@@ -1626,23 +1626,32 @@ contains
    end subroutine metrics_fold_north_cu_scalar
 
    ! Scalar north-fold for Cv-shaped (nx,ny+1) metric arrays.  Like
-   ! fold_north_v_face but a COPY (scalar) — and only the halo rows above
-   ! the fold line (the on-line row j=j_fold is physical, not a ghost, for
-   ! metrics, and already holds the correct value from assembly).
+   ! fold_north_v_face but a COPY (scalar).  Cv storage is the SOUTH face
+   ! (`rdb_ocean_fold` header), so the fold line is row ng+nj+1 and the
+   ! halo map is j' = 2ng+2nj+2 - j.  The fold-line row is assembled by the
+   ! generator; its two storage slots i / i' = 2ng+ni+1-i are ONE physical
+   ! face, so the west half is overwritten from the east mirror to make the
+   ! face length bit-identical on both sides (the cross-fold mass flux
+   ! `v·h·dx_cv` then pairs off exactly).
    subroutine metrics_fold_north_cv_scalar(arr, grid)
       real(wp), intent(inout) :: arr(:, :)
       type(hgrid_t), intent(in) :: grid
-      integer :: ng, ni, nj, isum, jsum, j_fold, i, j
+      integer :: ng, ni, nj, isum, jsum, j_fold, i, j, p, pm
       ng = grid%nghost
       ni = grid%nx_phys
       nj = grid%ny_phys
       isum = 2*ng + ni + 1
-      jsum = 2*ng + 2*nj
-      j_fold = ng + nj
+      jsum = 2*ng + 2*nj + 2
+      j_fold = ng + nj + 1
       do j = j_fold + 1, size(arr, 2)
          do i = 1, size(arr, 1)
             arr(i, j) = arr(isum - i, jsum - j)
          end do
+      end do
+      do i = 1, size(arr, 1)
+         p = modulo(i - ng - 1, ni) + 1
+         pm = ni + 1 - p
+         if (p < pm) arr(i, j_fold) = arr(ng + pm, j_fold)
       end do
    end subroutine metrics_fold_north_cv_scalar
 

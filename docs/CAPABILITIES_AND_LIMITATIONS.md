@@ -885,8 +885,15 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `phi_join` + lon-lat below, closed by a single-rank **north fold**
   (`north="tripolar_fold"`, requires periodic west/east). The fold
   reverses-i + sign-flips vector normals + antisymmetrically projects
-  the duplicated v/corner seam row; metric + `f_corner` ghosts are
-  folded once at configure. Kernels read full 2D metric arrays only.
+  the duplicated fold-line row — for roundabout's SOUTH-face v /
+  SW-corner storage that is row `ng+nj+1`, the north face of the last
+  T-row (index maps derived in the `rdb_ocean_fold` header) — and the
+  final meridional mass flux on that row, so the cross-fold exchange
+  telescopes to round-off (`tripolar_cross_fold_conservation_*`). The
+  fold line is a SEAM, never a north wall: the barotropic fast loop
+  updates its `vbt` and corner vorticity like an interior face. Metric +
+  `f_corner` ghosts are folded once at configure. Kernels read full 2D
+  metric arrays only.
   Vector→geographic output rotation at the seam is deferred (output
   shows model-frame velocities in the cap).
 - **Diag manager**: registry + cadence + procedure-pointer fill

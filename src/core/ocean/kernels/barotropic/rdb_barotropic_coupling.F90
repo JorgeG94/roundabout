@@ -17,7 +17,7 @@ module rdb_barotropic_coupling
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
    use rdb_ocean_top_drag, only: ocean_top_drag_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
-   use rdb_ocean_boundary_types, only: OBC_PERIODIC
+   use rdb_ocean_boundary_types, only: OBC_PERIODIC, OBC_TRIPOLAR_FOLD
    implicit none
    private
 
@@ -557,7 +557,9 @@ contains
          if (bc_s /= OBC_PERIODIC .and. has_s .and. j == grid%nghost + 1) then
             bt_work%bt_zeta_corner(i, j) = 0.0_wp
          end if
-         if (bc_n /= OBC_PERIODIC .and. has_n .and. j == grid%nghost + grid%ny_phys + 1) then
+         ! The tripolar fold line is a seam (interior corners), not a wall.
+         if (bc_n /= OBC_PERIODIC .and. bc_n /= OBC_TRIPOLAR_FOLD .and. has_n .and. &
+             j == grid%nghost + grid%ny_phys + 1) then
             bt_work%bt_zeta_corner(i, j) = 0.0_wp
          end if
       end do

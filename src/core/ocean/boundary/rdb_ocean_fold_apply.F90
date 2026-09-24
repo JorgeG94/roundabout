@@ -12,7 +12,8 @@ module rdb_ocean_fold_apply
    !!   * h_layer, η, tracer hTr  → centre fold (copy, no sign flip)
    !!   * u_face_x_layer, bt_ubt  → u-face fold (negate — true vector)
    !!   * v_face_y_layer, bt_vbt  → v-face fold (negate + on-row
-   !!     antisymmetric projection)
+   !!     antisymmetric projection of the fold line, storage row
+   !!     nghost+ny_phys+1 — see the `rdb_ocean_fold` header)
    !!
    !! Every routine no-ops when `bc%north_fold` is .false. ⇒ non-tripolar
    !! runs stay bit-identical.
