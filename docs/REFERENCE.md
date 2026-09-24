@@ -109,7 +109,12 @@ Split-explicit RK2. Each outer step:
    on `(η, u_bt, v_bt)` plus the nonlinear `ζ + KE` terms.
    `&ocean_bt_nml auto_n_inner = .true.` derives `n_inner` from the
    gravity-wave CFL **once, at configure time** (`configure_ocean_bt_split`),
-   writing the resolved value back into the config. It is not re-derived
+   writing the resolved value back into the config. The CFL is evaluated
+   PER WET CELL — local depth with local cell size,
+   `dt_bt = min_wet cfl_bt_safety/√(g·max(b,1)·(1/dx²+1/dy²))` (MOM6
+   `set_dtbt`), reduced across ranks — never the deepest depth anywhere
+   against the smallest cell anywhere (which on a tripolar grid is a land
+   cell at a bipole). It is not re-derived
    per step: CFL truncation is a counter (`dyn%ntrunc_total`), not a
    controller.
 3. **BT correction** — distributes the barotropic `Δu` back into the

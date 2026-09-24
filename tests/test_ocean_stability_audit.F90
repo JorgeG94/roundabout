@@ -56,6 +56,8 @@ contains
                   new_unittest("audit_viscous_cfl_bound_kh_downgrades", &
                                test_audit_viscous_cfl_bound_kh_downgrades), &
                   new_unittest("audit_viscous_cfl_safe_passes", test_audit_viscous_cfl_safe_passes), &
+                  new_unittest("audit_viscous_cfl_ignores_land_cell", &
+                               test_audit_viscous_cfl_ignores_land_cell), &
                   new_unittest("audit_kappa_h_spherical_uses_real_metric", &
                                test_audit_kappa_h_spherical_uses_real_metric), &
                   new_unittest("audit_ah_max_below_nu_h_warns_only", &
@@ -249,6 +251,49 @@ contains
                     "a config comfortably inside the viscous-CFL bound must pass")
       end block checks
    end subroutine test_audit_viscous_cfl_safe_passes
+
+   subroutine test_audit_viscous_cfl_ignores_land_cell(error)
+      !! The 1-degree tripolar abort in miniature: a 362 m cell among 33 km
+      !! cells.  As a LAND cell it must not trip the viscous-CFL check (no
+      !! operator acts there); the SAME cell made wet must.  Both configs
+      !! are otherwise identical, so the pair isolates the wet mask.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(config_t) :: cfg
+      real(wp), allocatable :: wm(:, :)
+      integer :: ierr, il, jl
+
+      checks: block
+         call grid%init(8, 8, 2, 3.3e4_wp, 3.3e4_wp)
+         il = grid%nghost + 4
+         jl = grid%nghost + 4
+         allocate (wm(grid%nx_total, grid%ny_total), source=1.0_wp)
+         wm(il, jl) = 0.0_wp
+         ! nu_h*dt/dx^2: 33 km -> 1000*900/3.3e4^2 = 8.3e-4 (fine);
+         ! 362 m -> 6.9 (55x over 0.125).
+         call base_config(cfg, 900.0_wp, 1000.0_wp, 1.0e5_wp, 0.0_wp, &
+                          bound_kh=.false., stress_tensor=.false.)
+
+         call make_cartesian_metrics(metrics, grid, wet_mask=wm)
+         ! Host-only edit: the audit is a host-side configure scan.
+         metrics%dxT(il, jl) = 362.0_wp
+         metrics%dyT(il, jl) = 362.0_wp
+         call ocean_stability_audit(cfg, metrics, grid, 0, ierr=ierr)
+         call destroy_cartesian_metrics(metrics)
+         call check(error, ierr == OCEAN_STATUS_OK, &
+                    "a tiny LAND cell must not trip the viscous-CFL check")
+         if (allocated(error)) exit checks
+
+         call make_cartesian_metrics(metrics, grid)
+         metrics%dxT(il, jl) = 362.0_wp
+         metrics%dyT(il, jl) = 362.0_wp
+         call ocean_stability_audit(cfg, metrics, grid, 0, ierr=ierr)
+         call destroy_cartesian_metrics(metrics)
+         call check(error, ierr == OCEAN_STATUS_ERR_SETUP, &
+                    "the same tiny cell WET must still trip the viscous-CFL check")
+      end block checks
+   end subroutine test_audit_viscous_cfl_ignores_land_cell
 
    subroutine test_audit_kappa_h_spherical_uses_real_metric(error)
       !! The FIXED kappa_h check: on a spherical grid the nominal

@@ -113,8 +113,9 @@ negligible (and `cfl=0` bit-identical) otherwise.
 ## #7 — Barotropic CFL in spin-up (`auto_n_inner`)
 
 Fixed `n_inner` can under-resolve the 2-D gravity-wave CFL in deep water →
-barotropic NaN. `&ocean_bt_nml auto_n_inner=.true.` derives `n_inner` from
-the 2-D `c·dt·√2/dx` bound each step.
+barotropic NaN. `&ocean_bt_nml auto_n_inner=.true.` derives `n_inner` once
+at configure from the 2-D bound `√(g·H)·dt_bt·√(1/dx²+1/dy²) ≤ cfl_bt_safety`,
+evaluated per wet cell (local depth, local cell size; land ignored).
 
 ## Bathymetry prep (real coastlines)
 

@@ -23,7 +23,7 @@ configurations within those limits.
 
 ## Time-step constraint — read this first
 
-> **The ocean path is not gravity-wave-CFL-bound.** `sim_type='ocean'` is **split-explicit**: the barotropic (gravity-wave) mode is sub-cycled in a fast forward-backward loop (`&ocean_bt_nml auto_n_inner` derives the substep count from the gravity-wave CFL each step), so the **outer/baroclinic `Δt` is bounded by advective/baroclinic CFL, not by `dx/√(gH)`** — O(minutes), e.g. `dt=1200 s` in the MOM6-reference double gyre.
+> **The ocean path is not gravity-wave-CFL-bound.** `sim_type='ocean'` is **split-explicit**: the barotropic (gravity-wave) mode is sub-cycled in a fast forward-backward loop (`&ocean_bt_nml auto_n_inner` derives the substep count from the gravity-wave CFL once at configure, per wet cell), so the **outer/baroclinic `Δt` is bounded by advective/baroclinic CFL, not by `dx/√(gH)`** — O(minutes), e.g. `dt=1200 s` in the MOM6-reference double gyre.
 
 The driver requires a fixed outer step (`&time_nml dt_fixed > 0`); there is no adaptive-CFL helper on this path.
 
@@ -199,7 +199,7 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 - **A MULTI-RANK file-backed draft** — `draft_config="file"` reads a static 2-D NetCDF draft through the PR-14 reader (the ISOMIP+ draft is BISICLES output with no analytic form, Asay-Davis et al. 2016 §3.1.1), single-rank only: it fails loud on `px*py > 1`, like the rest of the cavity.
 - **An AREA-BLENDED calving front** — `cover_frac` is binary (`merge(1, 0, z_draft > 0)`), so the front is a one-cell step. Every mask is already written as `1 − cover_frac` and would take a fractional field unchanged; what is missing is a producer for one.
 - **A draft-offset z-level T/S initial condition** — `build_z_ctr` measures depth from the COLUMN TOP, which under a draft is `z_draft` metres below `z = 0`, so a geopotential `T(z)` profile would land systematically too shallow. Refused for now rather than silently mis-placed.
-- **`auto_n_inner` under a shelf** — it derives the external gravity-wave speed from `max(b)`, the BED, not from `max(b − z_draft)`. That overestimates `c_ext` and buys more barotropic substeps than the CFL needs: conservative and never unstable, and exactly right at a calving front, but it means two runs that differ only by a flat lid choose different substep counts unless `n_inner` is pinned.
+- **`auto_n_inner` under a shelf** — it derives each wet cell's external gravity-wave speed from `b`, the BED, not from `b − z_draft`. That overestimates `c_ext` and buys more barotropic substeps than the CFL needs: conservative and never unstable, and exactly right at a calving front, but it means two runs that differ only by a flat lid choose different substep counts unless `n_inner` is pinned.
 - **`p_top` in the seven refused builders above**, in `&ocean_ice_nml`'s freezing-point callers (`eos_freezing_point(..., 0.0)` in frazil / basal flux / frazil uptake — the liquidus pressure depression is exactly what an ice-shelf load changes), and in the initialisation path — each a named follow-up, all currently fail-loud rather than silently inconsistent.
 - **Ice-shelf-cavity surface-pressure curvature corrections / `MAX_P_SURF` load cap** — out of scope.
 
@@ -694,7 +694,10 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (4) `&ocean_hvisc_nml ah_max < nu_h` silently clamping the configured
   viscosity (WARNING). All four use the ACTUAL minimum grid cell
   (`ocean_stability_min_cell`), never nominal `&grid_nml dx`/`dy`
-  (degrees on spherical/tripolar). The companion runtime diagnostic
+  (degrees on spherical/tripolar), and checks (1)-(2) take that minimum
+  over WET cells only — on the 1° tripolar grid the smallest cell anywhere
+  is a 362 m land cell at a land-locked bipole, which used to abort a
+  configuration whose ocean was inside the bound. The companion runtime diagnostic
   (`apply_velocity_truncation`'s NaN-catch, `rdb_ocean_dyn.F90`) reports
   the `(i,j,k)` of the first non-finite face plus the local cell size and
   viscous CFL there, gated behind the existing catch so it costs nothing
