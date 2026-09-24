@@ -27,7 +27,7 @@
 module test_ocean_ktop
    use, intrinsic :: iso_fortran_env, only: real64
    use rdb_constants, only: wp, H_VANISHED
-   use rdb_ocean_vcoord, only: ocean_vcoord_z_fixed_target, &
+   use rdb_ocean_vcoord, only: ocean_vcoord_z_fixed_target_uniform, &
                                ocean_vcoord_k_top_from_target, &
                                ocean_vcoord_closed_face_masks
    use testdrive, only: error_type, check, new_unittest, unittest_type
@@ -72,8 +72,8 @@ contains
       total_h = total_h_val
       eta = 0.0_wp
       z_top = z_top_val
-      call ocean_vcoord_z_fixed_target(tgt, total_h, eta, z_top, &
-                                       NX, NY, NZ, H_NOM, H_MIN)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, total_h, eta, z_top, &
+                                               NX, NY, NZ, H_NOM, H_MIN)
       call ocean_vcoord_k_top_from_target(k_top, k_top_u, k_top_v, tgt, &
                                           NX, NY, NZ, H_VANISHED)
    end subroutine build
@@ -152,8 +152,8 @@ contains
             total_h(i, j) = H_REF - z_top(i, j)
          end do
       end do
-      call ocean_vcoord_z_fixed_target(tgt, total_h, eta, z_top, &
-                                       NX, NY, NZ, H_NOM, H_MIN)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, total_h, eta, z_top, &
+                                               NX, NY, NZ, H_NOM, H_MIN)
       call ocean_vcoord_k_top_from_target(k_top, k_top_u, k_top_v, tgt, &
                                           NX, NY, NZ, H_VANISHED)
 
@@ -205,8 +205,8 @@ contains
             total_h(i, j) = H_REF - z_top(i, j)
          end do
       end do
-      call ocean_vcoord_z_fixed_target(tgt, total_h, eta, z_top, &
-                                       NX, NY, NZ, H_NOM, H_MIN)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, total_h, eta, z_top, &
+                                               NX, NY, NZ, H_NOM, H_MIN)
       call ocean_vcoord_k_top_from_target(k_top, k_top_u, k_top_v, tgt, &
                                           NX, NY, NZ, H_VANISHED)
       call ocean_vcoord_closed_face_masks(open_u, open_v, tgt, &

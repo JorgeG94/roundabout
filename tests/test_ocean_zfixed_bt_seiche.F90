@@ -104,7 +104,7 @@ module test_ocean_zfixed_bt_seiche
                             mask_layer_velocities
    use rdb_barotropic_coupling, only: apply_bt_correction, derive_bt_from_layers
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_Z_FIXED, &
-                               ocean_vcoord_z_fixed_target, &
+                               ocean_vcoord_z_fixed_target_uniform, &
                                ocean_vcoord_closed_face_masks
    use testdrive, only: error_type, check, new_unittest, unittest_type
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -281,8 +281,8 @@ contains
             end if
          end do
       end do
-      call ocean_vcoord_z_fixed_target(tgt, tot_h, eta0f, z_top, &
-                                       nx_t, ny_t, NZ, H_NOM, H_MIN)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, tot_h, eta0f, z_top, &
+                                               nx_t, ny_t, NZ, H_NOM, H_MIN)
 
       call ocean_vcoord_closed_face_masks(metrics%open_u, metrics%open_v, &
                                           tgt, nx_t, ny_t, NZ, H_VANISHED)

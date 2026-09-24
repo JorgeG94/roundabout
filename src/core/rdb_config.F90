@@ -122,6 +122,9 @@ module rdb_config
       !! Maximum number of z-levels for ocean-diag z_fixed output vgrid
    integer, parameter :: MAX_OCEAN_LAYER_RHO_INIT = 64
       !! Maximum number of per-layer density init entries.
+   integer, parameter :: MAX_Z_FIXED_DZ = 128
+      !! Maximum number of `&vcoord_nml z_fixed_dz` entries (nominal
+      !! `z_fixed` layer thicknesses).
    integer, parameter :: MAX_ICE_HLIM_VALS = 16
       !! Maximum number of `&ocean_ice_nml hlim` entries a user may STATE
       !! (PR-58). Caps how many edges may be listed, not `ncat` (unbounded
@@ -3435,6 +3438,33 @@ module rdb_config
          !! placeholder, no kernel branch is taken, byte-identical.
          !! Refused on any coordinate but `z_fixed`, and without a
          !! resolved `z_fixed_h_ref` (there would be no fillers to close).
+      character(len=16) :: z_fixed_profile = "uniform"
+         !! Nominal layer-thickness profile of `vcoord_type = "z_fixed"`:
+         !! `"uniform"` (default — `max_depth/nz_layers` everywhere,
+         !! byte-identical), `"list"` (the thicknesses in `z_fixed_dz`,
+         !! surface first) or `"tanh"` (a hyperbolic-tangent stretching
+         !! from `z_fixed_dz_top` at the surface, scaled to sum to
+         !! `&ocean_topo_nml max_depth`; see `rdb_vcoord ::
+         !! z_fixed_nominal_dz`).  The z_fixed target builder, the
+         !! closed-face mask, `k_top`, the cavity partial-top rule and the
+         !! bed partial-cell rule all read the profile.  Refused on any
+         !! other coordinate.
+      real(wp) :: z_fixed_dz(MAX_Z_FIXED_DZ) = -1.0_wp
+         !! `z_fixed_profile = "list"`: nominal layer thicknesses (m),
+         !! SURFACE FIRST (MOM6 `ALE_COORDINATE_CONFIG = "PARAM:..."` /
+         !! `vgrid` order).  Exactly `nz_layers` leading positive entries;
+         !! the rest unset (`<= 0`, default `-1`).  The profile's total is
+         !! its sum; a column deeper than that puts the excess in the bed
+         !! layer.
+      real(wp) :: z_fixed_dz_top = 2.0_wp
+         !! `z_fixed_profile = "tanh"`: surface-layer nominal thickness (m).
+         !! Must satisfy `nz_layers*z_fixed_dz_top < max_depth`.
+      real(wp) :: z_fixed_tanh_center = 0.5_wp
+         !! `z_fixed_profile = "tanh"`: transition centre as a fraction of
+         !! the layer-index span, `[0, 1]` (0 = surface, 1 = bed).
+      real(wp) :: z_fixed_tanh_width = 0.25_wp
+         !! `z_fixed_profile = "tanh"`: transition width as a fraction of
+         !! the layer-index span (`> 0`; small = abrupt).
 
       ! Logging parameters
       character(len=16) :: log_level = "info"
@@ -3915,7 +3945,11 @@ contains
                                        has_biharmonic_backstop, &
                                        leith_biharm_is_inert
       use rdb_ocean_horizontal_viscosity, only: aniso_mode_is_implemented
-      use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent
+      use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent, &
+                            parse_z_fixed_profile, z_fixed_nominal_dz, &
+                            ZFIXED_PROFILE_INVALID, ZFIXED_PROFILE_UNIFORM, &
+                            ZFIXED_PROFILE_LIST, ZFIXED_DZ_OK, ZFIXED_DZ_ERR_COUNT, &
+                            ZFIXED_DZ_ERR_TOO_DEEP
       use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z, &
                                VCOORD_ZSIGMA, VCOORD_LAGRANGIAN, VCOORD_ZSTAR_SIGMA, &
                                VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, H_VANISHED
@@ -4315,6 +4349,65 @@ contains
                               "'sigma' even split")
             has_error = .true.
          end if
+
+         ! Stretched `z_fixed` nominal profile.  Default "uniform" ⇒ no
+         ! check fires and nothing downstream changes.  Anything else must
+         ! be on `z_fixed` (no other family reads it — silently ignoring it
+         ! would be the bug) and must build: list length = nz_layers, tanh
+         ! parameters in range and leaving room to stretch.
+         block
+            integer :: zf_code, zf_ierr
+            real(wp), allocatable :: zf_dz(:)
+            zf_code = parse_z_fixed_profile(cfg%z_fixed_profile)
+            if (zf_code == ZFIXED_PROFILE_INVALID) then
+               call logger%error("&vcoord_nml z_fixed_profile = '"// &
+                                 trim(cfg%z_fixed_profile)//"' is not one of "// &
+                                 "'uniform', 'list', 'tanh'")
+               has_error = .true.
+            else if (zf_code /= ZFIXED_PROFILE_UNIFORM) then
+               if (parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_Z_FIXED) then
+                  call logger%error("&vcoord_nml z_fixed_profile = '"// &
+                                    trim(cfg%z_fixed_profile)//"' is only read by "// &
+                                    "vcoord_type = 'z_fixed' (got '"// &
+                                    trim(cfg%vcoord_type)//"'); it would be silently ignored")
+                  has_error = .true.
+               else if (cfg%nz_layers >= 1) then
+                  allocate (zf_dz(cfg%nz_layers))
+                  call z_fixed_nominal_dz(zf_code, cfg%nz_layers, cfg%ocean%topo%max_depth, &
+                                          cfg%z_fixed_dz, cfg%z_fixed_dz_top, &
+                                          cfg%z_fixed_tanh_center, cfg%z_fixed_tanh_width, &
+                                          zf_dz, zf_ierr)
+                  if (zf_ierr == ZFIXED_DZ_ERR_COUNT) then
+                     call logger%error("&vcoord_nml z_fixed_profile = 'list' needs exactly "// &
+                                       "nz_layers = "//to_string(cfg%nz_layers)// &
+                                       " leading positive z_fixed_dz entries (surface first, "// &
+                                       "no gaps), got "//to_string(count(cfg%z_fixed_dz > 0.0_wp)))
+                     has_error = .true.
+                  else if (zf_ierr == ZFIXED_DZ_ERR_TOO_DEEP) then
+                     call logger%error("&vcoord_nml z_fixed_profile = 'tanh': nz_layers * "// &
+                                       "z_fixed_dz_top = "// &
+                                       to_string(real(cfg%nz_layers, wp)*cfg%z_fixed_dz_top)// &
+                                       " m is not below &ocean_topo_nml max_depth = "// &
+                                       to_string(cfg%ocean%topo%max_depth)// &
+                                       " m — there is no depth left to stretch into")
+                     has_error = .true.
+                  else if (zf_ierr /= ZFIXED_DZ_OK) then
+                     call logger%error("&vcoord_nml z_fixed_profile = 'tanh' needs "// &
+                                       "&ocean_topo_nml max_depth > 0, z_fixed_dz_top > 0, "// &
+                                       "z_fixed_tanh_width > 0 and 0 <= z_fixed_tanh_center <= 1")
+                     has_error = .true.
+                  else if (zf_code == ZFIXED_PROFILE_LIST .and. &
+                           sum(zf_dz) < cfg%ocean%topo%max_depth) then
+                     call logger%warning("&vcoord_nml z_fixed_dz sums to "// &
+                                         to_string(sum(zf_dz))//" m, shallower than "// &
+                                         "&ocean_topo_nml max_depth = "// &
+                                         to_string(cfg%ocean%topo%max_depth)// &
+                                         " m: columns deeper than the profile carry the "// &
+                                         "excess in their bed layer")
+                  end if
+               end if
+            end if
+         end block
 
          ! `VCOORD_ZSIGMA` is NOT a working coordinate on the ocean path.
          ! Its deep branch reads `z_ref_global` as a table of absolute
@@ -5785,6 +5878,39 @@ contains
                cav_h_nominal = 0.0_wp
                if (cfg%nz_layers > 0) then
                   cav_h_nominal = cfg%ocean%topo%max_depth/real(cfg%nz_layers, wp)
+               end if
+               ! A stretched profile has no single `h_nominal`: whether a
+               ! thin cavity column spans two layers depends on the DEPTH
+               ! of its draft, which configure does not see.  The check
+               ! is then made against the thickest nominal layer and
+               ! downgraded to a warning — conservative, and it never
+               ! refuses a configuration the geometry might satisfy.
+               if (parse_z_fixed_profile(cfg%z_fixed_profile) /= ZFIXED_PROFILE_UNIFORM .and. &
+                   parse_z_fixed_profile(cfg%z_fixed_profile) /= ZFIXED_PROFILE_INVALID .and. &
+                   cfg%nz_layers > 0) then
+                  block
+                     real(wp), allocatable :: cav_dz(:)
+                     integer :: cav_ierr
+                     allocate (cav_dz(cfg%nz_layers))
+                     call z_fixed_nominal_dz(parse_z_fixed_profile(cfg%z_fixed_profile), &
+                                             cfg%nz_layers, cfg%ocean%topo%max_depth, &
+                                             cfg%z_fixed_dz, cfg%z_fixed_dz_top, &
+                                             cfg%z_fixed_tanh_center, &
+                                             cfg%z_fixed_tanh_width, cav_dz, cav_ierr)
+                     if (cav_ierr == ZFIXED_DZ_OK .and. &
+                         cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*maxval(cav_dz)) then
+                        call logger%warning("&ocean_cavity_dyn_nml h_min_cavity = "// &
+                                            to_string(cfg%ocean%cavity_dyn%h_min_cavity)// &
+                                            " m is below twice the thickest nominal "// &
+                                            "z_fixed layer ("//to_string(maxval(cav_dz))// &
+                                            " m) of the stretched profile: a cavity column "// &
+                                            "thinner than two nominal layers AT ITS DEPTH "// &
+                                            "carries a single partial live layer (ISOMIP+ "// &
+                                            "Asay-Davis et al. 2016, §3.1.5).  Not refused: "// &
+                                            "under a stretched profile it depends on the draft.")
+                     end if
+                  end block
+                  cav_h_nominal = 0.0_wp
                end if
                if (cav_h_nominal > 0.0_wp .and. &
                    cfg%ocean%cavity_dyn%h_min_cavity < 2.0_wp*cav_h_nominal) then
@@ -7770,6 +7896,7 @@ contains
       type(nml_group_t) :: g
       integer, pointer :: pi
       real(wp), pointer :: pr
+      real(wp), pointer :: pra(:)
       character(len=:), pointer :: ps
       logical, pointer :: pl
 
@@ -7847,6 +7974,27 @@ contains
       call g%add(nml_logical("zfixed_closed_faces", pl, &
                              "z_fixed partial steps: close every face whose layer is "// &
                              "an inert filler on either side (z-level wall, free-slip)"))
+      ps => cfg%z_fixed_profile
+      call g%add(nml_enum("z_fixed_profile", ps, &
+                          "z_fixed nominal layer-thickness profile: uniform "// &
+                          "(max_depth/nz), list (z_fixed_dz) or tanh stretching", &
+                          allowed=[character(len=7) :: "uniform", "list", "tanh"]))
+      pra => cfg%z_fixed_dz
+      call g%add(nml_real_array("z_fixed_dz", pra, &
+                                "z_fixed_profile='list': nominal layer thicknesses, "// &
+                                "surface first (exactly nz_layers entries)", units="m"))
+      pr => cfg%z_fixed_dz_top
+      call g%add(nml_real("z_fixed_dz_top", pr, &
+                          "z_fixed_profile='tanh': surface-layer nominal thickness", &
+                          units="m"))
+      pr => cfg%z_fixed_tanh_center
+      call g%add(nml_real("z_fixed_tanh_center", pr, &
+                          "z_fixed_profile='tanh': transition centre, fraction of the "// &
+                          "layer-index span (0 = surface, 1 = bed)", min=0.0_wp, max=1.0_wp))
+      pr => cfg%z_fixed_tanh_width
+      call g%add(nml_real("z_fixed_tanh_width", pr, &
+                          "z_fixed_profile='tanh': transition width, fraction of the "// &
+                          "layer-index span"))
       call schema%add_group(g)
    end subroutine register_vcoord
 

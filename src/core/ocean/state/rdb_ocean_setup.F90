@@ -31,8 +31,10 @@ module rdb_ocean_setup
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
                                ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_k_top_from_target, &
+                               ocean_vcoord_set_z_fixed_profile, &
                                ocean_vcoord_count_ledges
-   use rdb_vcoord, only: parse_remap_method
+   use rdb_vcoord, only: parse_remap_method, parse_z_fixed_profile, z_fixed_nominal_dz, &
+                         ZFIXED_PROFILE_UNIFORM, ZFIXED_PROFILE_INVALID, ZFIXED_DZ_OK
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
    use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
                                  top_drag_fill_face_cover_impl
@@ -122,6 +124,7 @@ module rdb_ocean_setup
    public :: configure_ocean_porous
    public :: configure_ocean_closed_faces
    public :: configure_ocean_k_top
+   public :: configure_ocean_z_fixed_profile
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
    public :: configure_ocean_top_drag
@@ -1297,7 +1300,7 @@ contains
       ! Eulerian-z (no ALE remap).
       ocean_state%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)
       ocean_state%vcoord%remap_method = parse_remap_method(cfg%remap_method)
-      ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
+      call configure_ocean_z_fixed_profile(cfg, ocean_state, compute_rank, log_it=.false.)
       ! Isopycnal (VCOORD_RHO) target densities: a uniform light->dense
       ! linspace from rho_target_light/dense (MOM6 ALE_COORDINATE_CONFIG=
       ! UNIFORM analogue).  `rho_target(0)` is the lightest (surface)
@@ -2366,6 +2369,52 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
 
+   subroutine configure_ocean_z_fixed_profile(cfg, ocean_state, compute_rank, log_it)
+      !! Resolve the `VCOORD_Z_FIXED` nominal layering onto the vcoord slot:
+      !! `z_fixed_h_ref = &ocean_topo_nml max_depth` (the uniform
+      !! `max_depth/nz` spacing — the default, byte-identical), or, under
+      !! `&vcoord_nml z_fixed_profile = "list" | "tanh"`, the stretched
+      !! per-layer tables `z_fixed_zi` / `z_fixed_dz` built by
+      !! `rdb_vcoord :: z_fixed_nominal_dz` (`z_fixed_h_ref` then becomes
+      !! the profile's total depth).
+      !!
+      !! Idempotent (it rebuilds from `cfg` each call).  Called twice: by
+      !! `engine_setup` BEFORE the IC seed — the cavity `z_fixed` seed lays
+      !! `h_layer` from the same target builder and must see the same
+      !! profile — and from `configure_ocean_lateral`, which has always
+      !! owned `z_fixed_h_ref`.  Both precede `ocean_state_enter_data`, so
+      !! the copyin captures the tables.  `validate_config` has already
+      !! refused a profile that does not build, or one on another family.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      integer, intent(in) :: compute_rank
+      logical, intent(in) :: log_it
+         !! Log the resolved profile (rank 0).
+      integer :: code, ierr, nz
+      real(wp), allocatable :: dz(:)
+
+      ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
+      ocean_state%vcoord%z_fixed_use_profile = .false.
+      if (.not. ocean_state%vcoord%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      code = parse_z_fixed_profile(cfg%z_fixed_profile)
+      if (code == ZFIXED_PROFILE_UNIFORM .or. code == ZFIXED_PROFILE_INVALID) return
+      nz = ocean_state%vcoord%nz_ml
+      allocate (dz(nz))
+      call z_fixed_nominal_dz(code, nz, cfg%ocean%topo%max_depth, cfg%z_fixed_dz, &
+                              cfg%z_fixed_dz_top, cfg%z_fixed_tanh_center, &
+                              cfg%z_fixed_tanh_width, dz, ierr)
+      if (ierr /= ZFIXED_DZ_OK) return
+      call ocean_vcoord_set_z_fixed_profile(ocean_state%vcoord, dz)
+      if (log_it .and. compute_rank == 0) then
+         call logger%info("z_fixed profile:  "//trim(cfg%z_fixed_profile)// &
+                          " — nominal dz "//to_string(dz(1))//" m (surface) … "// &
+                          to_string(dz(nz))//" m (bed), total "// &
+                          to_string(ocean_state%vcoord%z_fixed_h_ref)//" m over "// &
+                          to_string(nz)//" layers")
+      end if
+   end subroutine configure_ocean_z_fixed_profile
+
    subroutine configure_ocean_k_top(cfg, ocean_state, grid, compute_rank)
       !! Fill `ms%k_top` / `k_top_u` / `k_top_v` — the shared index of
       !! the first LIVE layer counting down from the top, and the field
@@ -2423,7 +2472,10 @@ contains
       allocate (eta0(nx, ny), source=0.0_wp)
       call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
                                        eta0, ocean_state%vcoord%z_top, &
-                                       nx, ny, nz, h_nominal, h_min)
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, h_min)
       call ocean_vcoord_k_top_from_target(ocean_state%multilayer%k_top, &
                                           ocean_state%multilayer%k_top_u, &
                                           ocean_state%multilayer%k_top_v, &
@@ -2620,7 +2672,10 @@ contains
       allocate (eta0(nx, ny), source=0.0_wp)
       call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
                                        eta0, ocean_state%vcoord%z_top, &
-                                       nx, ny, nz, h_nominal, h_min)
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, h_min)
       call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
