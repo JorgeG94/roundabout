@@ -260,7 +260,9 @@ north fold (`north="tripolar_fold"`, requires periodic west/east).
 Kernels consume full 2D metric arrays only (`ocean_metrics_t` slot);
 the fold exchange (`rdb_ocean_fold` + `rdb_ocean_fold_apply`)
 reverses-i and sign-flips vector normals, projecting the
-duplicated-DOF v/corner seam row antisymmetric.
+duplicated-DOF fold-line row antisymmetric -- storage row `ng+nj+1`, because
+roundabout's `v` sits on the SOUTH face of its cell and corners at the SW
+(MOM6's north-face rule is one row off here; see `rdb_ocean_fold` header).
 
 **Vertical coords** — all ten `VCOORD_*` families dispatch through the
 same ALE remap path; see the next subsection.
