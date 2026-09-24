@@ -41,7 +41,7 @@ module test_ocean_zfixed_closed_faces
    use rdb_constants, only: wp, H_VANISHED
    use rdb_ocean_vcoord, only: ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_count_ledges, &
-                               ocean_vcoord_z_fixed_target
+                               ocean_vcoord_z_fixed_target_uniform
    use rdb_ocean_vcoord, only: VCOORD_Z_FIXED
    use rdb_config, only: config_t, read_config_from_string
    use rdb_grid, only: hgrid_t
@@ -285,8 +285,8 @@ contains
       total_h(3, 1) = 120.0_wp
       eta = 0.0_wp
       z_top = 0.0_wp
-      call ocean_vcoord_z_fixed_target(tgt, total_h, eta, z_top, &
-                                       NX, NY, NZ, H_NOM, FILLER)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, total_h, eta, z_top, &
+                                               NX, NY, NZ, H_NOM, FILLER)
       call ocean_vcoord_closed_face_masks(ou, ov, tgt, NX, NY, NZ, H_VANISHED)
 
       ! The target must have produced the staircase this case is about.

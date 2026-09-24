@@ -340,6 +340,52 @@ class Vcoord(Group):
         default=False,
     )
 
+    z_fixed_profile = Enum(
+        'z_fixed_profile',
+        doc='z_fixed nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching',
+        units='',
+        required=False,
+        default='uniform',
+        allowed=('uniform', 'list', 'tanh'),
+    )
+
+    z_fixed_dz = RealArray(
+        'z_fixed_dz',
+        doc="z_fixed_profile='list': nominal layer thicknesses, surface first (exactly nz_layers entries)",
+        units='m',
+        required=False,
+        default=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0),
+        size=128,
+    )
+
+    z_fixed_dz_top = Real(
+        'z_fixed_dz_top',
+        doc="z_fixed_profile='tanh': surface-layer nominal thickness",
+        units='m',
+        required=False,
+        default=2.0,
+    )
+
+    z_fixed_tanh_center = Real(
+        'z_fixed_tanh_center',
+        doc="z_fixed_profile='tanh': transition centre, fraction of the layer-index span (0 = surface, 1 = bed)",
+        units='',
+        required=False,
+        default=0.5,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+    )
+
+    z_fixed_tanh_width = Real(
+        'z_fixed_tanh_width',
+        doc="z_fixed_profile='tanh': transition width, fraction of the layer-index span",
+        units='',
+        required=False,
+        default=0.25,
+    )
+
 
 class Physics(Group):
     """`&physics_nml` -- Barotropic physics: bottom drag, wind stress, Coriolis."""
@@ -6167,4 +6213,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 675
+N_KNOBS = 680

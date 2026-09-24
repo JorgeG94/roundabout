@@ -178,7 +178,9 @@ module rdb_constants
       !! Fixed-z interfaces with vanishing layers in shallow water.
       !! ALE remap pulls `h_layer(k) → h_target(k)` where the targets
       !! come from absolute-depth interfaces `z_target = (0, h_nominal,
-      !! 2·h_nominal, ..., h_ref)` with `h_nominal = h_ref/nz_ml`.
+      !! 2·h_nominal, ..., h_ref)` with `h_nominal = h_ref/nz_ml` — or,
+      !! under `&vcoord_nml z_fixed_profile = "list" | "tanh"`, from a
+      !! stretched per-layer table (`ocean_vcoord_t%z_fixed_zi`).
       !! In deep cells the interfaces stay locked at those depths; in
       !! shallow cells the bed-side layers vanish to a minimum
       !! thickness `h_min` while the surface layer absorbs the residual.

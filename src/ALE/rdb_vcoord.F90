@@ -51,6 +51,30 @@ module rdb_vcoord
    public :: parse_stretching_mode
    public :: vcoord_h_min_role
    public :: vcoord_h_min_is_coherent
+   public :: parse_z_fixed_profile
+   public :: z_fixed_nominal_dz
+
+   ! ---- `VCOORD_Z_FIXED` nominal-thickness profiles (`&vcoord_nml z_fixed_profile`) ----
+   integer, parameter, public :: ZFIXED_PROFILE_INVALID = -1
+      !! Unrecognised `z_fixed_profile` string.
+   integer, parameter, public :: ZFIXED_PROFILE_UNIFORM = 0
+      !! `max_depth/nz` everywhere — the historical (and default) layering.
+   integer, parameter, public :: ZFIXED_PROFILE_LIST = 1
+      !! Explicit nominal thicknesses, `&vcoord_nml z_fixed_dz`, surface first.
+   integer, parameter, public :: ZFIXED_PROFILE_TANH = 2
+      !! Hyperbolic-tangent stretching from `z_fixed_dz_top` at the surface.
+   integer, parameter, public :: ZFIXED_DZ_OK = 0
+      !! `z_fixed_nominal_dz` status: profile built.
+   integer, parameter, public :: ZFIXED_DZ_ERR_COUNT = 1
+      !! List length (leading positive entries) is not `nz`, or a positive
+      !! entry follows an unset one.
+   integer, parameter, public :: ZFIXED_DZ_ERR_VALUE = 2
+      !! A tanh parameter is out of range (`dz_top <= 0`, `width <= 0`,
+      !! `center` outside `[0, 1]`) or `h_ref <= 0`.
+   integer, parameter, public :: ZFIXED_DZ_ERR_TOO_DEEP = 3
+      !! tanh: `nz*dz_top >= h_ref` — no room to stretch.
+   integer, parameter, public :: ZFIXED_DZ_ERR_PROFILE = 4
+      !! Unrecognised profile code.
 
    integer, parameter, public :: STRETCH_UNIFORM = 0
    integer, parameter, public :: STRETCH_LOG = 1
@@ -758,5 +782,127 @@ contains
          method = REMAP_PLM
       end select
    end function parse_remap_method
+
+   pure integer function parse_z_fixed_profile(str) result(code)
+      !! `&vcoord_nml z_fixed_profile` string -> `ZFIXED_PROFILE_*` code
+      !! (`ZFIXED_PROFILE_INVALID` for anything else — the caller fails loud).
+      character(len=*), intent(in) :: str
+      select case (trim(adjustl(str)))
+      case ("uniform")
+         code = ZFIXED_PROFILE_UNIFORM
+      case ("list")
+         code = ZFIXED_PROFILE_LIST
+      case ("tanh")
+         code = ZFIXED_PROFILE_TANH
+      case default
+         code = ZFIXED_PROFILE_INVALID
+      end select
+   end function parse_z_fixed_profile
+
+   pure subroutine z_fixed_nominal_dz(profile, nz, h_ref, dz_list, dz_top, center, width, &
+                                      dz, ierr)
+      !! Nominal layer thicknesses of a `VCOORD_Z_FIXED` column, SURFACE
+      !! FIRST (`dz(1)` is the top layer) — the order MOM6 writes
+      !! `ALE_COORDINATE_CONFIG = "PARAM:..."` lists and `vgrid` files in.
+      !! The caller flips to the bottom-up state convention.
+      !!
+      !! * `ZFIXED_PROFILE_UNIFORM` — `dz = h_ref/nz`.
+      !! * `ZFIXED_PROFILE_LIST` — the leading positive entries of
+      !!   `dz_list`, which must number exactly `nz` (entries past them
+      !!   must be unset, i.e. `<= 0`).  The total depth is whatever they
+      !!   sum to; a column deeper than that puts the excess in the bed
+      !!   layer, exactly as the uniform profile does below `h_ref`.
+      !! * `ZFIXED_PROFILE_TANH` — a hyperbolic-tangent ramp in the layer
+      !!   INDEX `n = 1..nz` (surface first), from exactly `dz_top` at the
+      !!   surface to an emergent bottom thickness, scaled so the column
+      !!   sums to `h_ref`:
+      !!
+      !!       s(n)  = [tanh((n-c)/w) - tanh((1-c)/w)] / [tanh((nz-c)/w) - tanh((1-c)/w)]
+      !!       dz(n) = dz_top + A s(n),   A = (h_ref - nz dz_top) / sum_n s(n)
+      !!
+      !!   with `c = 1 + center (nz-1)` and `w = width (nz-1)`.  `s(1) = 0`,
+      !!   `s(nz) = 1` and `s` is increasing, so the profile is monotone and
+      !!   `dz(1) = dz_top` exactly.  The same shape as MOM6's OM4 z*
+      !!   grids (thin near the surface, a tanh transition, thick abyssal
+      !!   layers); `h_ref = 6500`, `nz = 50`, `dz_top = 2`, `center = 0.5`,
+      !!   `width = 0.25` gives 2 m at the top and ~250 m at depth.
+      integer, intent(in) :: profile
+         !! `ZFIXED_PROFILE_*` code.
+      integer, intent(in) :: nz
+         !! Number of layers.
+      real(wp), intent(in) :: h_ref
+         !! Reference column depth (m) — `&ocean_topo_nml max_depth`.
+      real(wp), intent(in) :: dz_list(:)
+         !! `&vcoord_nml z_fixed_dz` (m), surface first; `<= 0` = unset.
+      real(wp), intent(in) :: dz_top
+         !! tanh: surface-layer thickness (m).
+      real(wp), intent(in) :: center
+         !! tanh: transition centre as a fraction of the index span `[0, 1]`.
+      real(wp), intent(in) :: width
+         !! tanh: transition width as a fraction of the index span (`> 0`).
+      real(wp), intent(out) :: dz(nz)
+         !! Nominal thicknesses (m), surface first.
+      integer, intent(out) :: ierr
+         !! `ZFIXED_DZ_*` status.
+      integer :: n, n_set
+      real(wp) :: c, w, t1, tn, s_sum, a
+      real(wp) :: s(nz)
+
+      dz = 0.0_wp
+      ierr = ZFIXED_DZ_OK
+      select case (profile)
+      case (ZFIXED_PROFILE_UNIFORM)
+         if (h_ref <= 0.0_wp) then
+            ierr = ZFIXED_DZ_ERR_VALUE
+            return
+         end if
+         dz = h_ref/real(nz, wp)
+      case (ZFIXED_PROFILE_LIST)
+         n_set = 0
+         do n = 1, size(dz_list)
+            if (dz_list(n) > 0.0_wp) then
+               if (n_set /= n - 1) then
+                  ierr = ZFIXED_DZ_ERR_COUNT
+                  return
+               end if
+               n_set = n
+            end if
+         end do
+         if (n_set /= nz) then
+            ierr = ZFIXED_DZ_ERR_COUNT
+            return
+         end if
+         dz = dz_list(1:nz)
+      case (ZFIXED_PROFILE_TANH)
+         if (h_ref <= 0.0_wp .or. dz_top <= 0.0_wp .or. width <= 0.0_wp .or. &
+             center < 0.0_wp .or. center > 1.0_wp) then
+            ierr = ZFIXED_DZ_ERR_VALUE
+            return
+         end if
+         if (real(nz, wp)*dz_top >= h_ref) then
+            ierr = ZFIXED_DZ_ERR_TOO_DEEP
+            return
+         end if
+         if (nz == 1) then
+            dz(1) = h_ref
+            return
+         end if
+         c = 1.0_wp + center*real(nz - 1, wp)
+         w = width*real(nz - 1, wp)
+         t1 = tanh((1.0_wp - c)/w)
+         tn = tanh((real(nz, wp) - c)/w)
+         do n = 1, nz
+            s(n) = (tanh((real(n, wp) - c)/w) - t1)/(tn - t1)
+         end do
+         s(1) = 0.0_wp
+         s_sum = sum(s)
+         a = (h_ref - real(nz, wp)*dz_top)/s_sum
+         do n = 1, nz
+            dz(n) = dz_top + a*s(n)
+         end do
+      case default
+         ierr = ZFIXED_DZ_ERR_PROFILE
+      end select
+   end subroutine z_fixed_nominal_dz
 
 end module rdb_vcoord

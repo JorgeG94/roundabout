@@ -108,7 +108,7 @@ module test_ocean_zfixed_cor_ref
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
-   use rdb_ocean_metrics, only: ocean_metrics_t, metrics_closed_faces_alloc
+   use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
@@ -129,7 +129,7 @@ module test_ocean_zfixed_cor_ref
    use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step_split, ocean_porous_refresh, &
                             SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_Z_FIXED, &
-                               ocean_vcoord_z_fixed_target
+                               ocean_vcoord_z_fixed_target_uniform
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -294,12 +294,18 @@ contains
       ms%nz_ml = NZ
       call ms%init(grid)
       call bt_work%init(grid, nz_ml=NZ)
-      call make_cartesian_metrics(metrics, grid)
-      call metrics_closed_faces_alloc(metrics, grid, NZ)
+      ! The z-level masks are sized BEFORE the device map (`nz_closed`),
+      ! never grown after it: `metrics_closed_faces_alloc` on a mapped slot
+      ! frees the mapped `(1,1,1)` placeholders and leaves two stale device
+      ! entries that a later host allocation in this binary lands on
+      ! ("partially present", FATAL on `-gpu=mem:separate`).  The host
+      ! edit is then pushed.
+      call make_cartesian_metrics(metrics, grid, nz_closed=NZ)
       metrics%open_u = 1.0_wp
       metrics%open_v = 1.0_wp
       metrics%open_u(:, :, 1) = 0.0_wp
       metrics%open_v(:, :, 1) = 0.0_wp
+      !$acc update device(metrics%open_u, metrics%open_v)
       metrics%use_closed_faces = .true.
 
       iface = ig + 5
@@ -432,8 +438,8 @@ contains
       ms%nz_ml = NZ
       call ms%init(grid)
       call bt_work%init(grid, nz_ml=NZ)
-      call make_cartesian_metrics(metrics, grid)
-      call metrics_closed_faces_alloc(metrics, grid, NZ)
+      ! Masks sized before the map (see `test_cor_ref_open_mean`).
+      call make_cartesian_metrics(metrics, grid, nz_closed=NZ)
 
       allocate (shelf(nx_t, ny_t))
       allocate (f_corner(nx_t + 1, ny_t + 1), source=F0)
@@ -441,6 +447,7 @@ contains
       allocate (fv_pc(size(bt_work%F_bt_v_fast, 1), size(bt_work%F_bt_v_fast, 2)))
 
       call build_ledge_mask(metrics, shelf, nx_t, ny_t, ig, n_closed)
+      !$acc update device(metrics%open_u, metrics%open_v)
 
       do k = 1, NZ
          do j = 1, ny_t
@@ -664,8 +671,8 @@ contains
       allocate (z_top(nx_t, ny_t), source=0.0_wp)
       allocate (tgt(nx_t, ny_t, NZ), source=0.0_wp)
       allocate (shelf(nx_t, ny_t), source=.false.)
-      call ocean_vcoord_z_fixed_target(tgt, tot_h, eta0f, z_top, &
-                                       nx_t, ny_t, NZ, H_NOM, H_MIN)
+      call ocean_vcoord_z_fixed_target_uniform(tgt, tot_h, eta0f, z_top, &
+                                               nx_t, ny_t, NZ, H_NOM, H_MIN)
 
       call build_ledge_mask(metrics, shelf, nx_t, ny_t, ig, n_closed)
       !$acc update device(metrics%open_u, metrics%open_v)

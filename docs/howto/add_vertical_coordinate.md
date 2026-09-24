@@ -172,7 +172,9 @@ as the assertions the rigid-top slice must flip.
   layers to `zstar_h_min`; under a rigid top Z_FIXED also clips TOP-side
   layers to the same filler and cuts the first live layer into a partial cell.
   A partial cell needs a minimum thickness or it ships slivers: the bed's
-  threshold is `zstar_h_min` and the top's is `0.1*h_nominal`
+  threshold is `zstar_h_min` and the top's is `0.1*h_nominal` — on a
+  stretched profile (`z_fixed_profile`), `0.1*` the straddling layer's OWN
+  nominal thickness —
   (`Z_FIXED_TOP_PARTIAL_FRAC`, MITgcm's `hFacMin` / Losch 2008 §2.1), with a
   sub-threshold cut MERGED into the neighbour away from the boundary. Operators
   that divide by `h_layer` gate on `H_VANISHED`
