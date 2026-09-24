@@ -289,12 +289,22 @@ contains
    end function ocean_munk_required_nu_h
 
    pure subroutine ocean_stability_min_cell(metrics, grid, dx_min, i_at, j_at, is_x)
-      !! Smallest actual cell edge over the PHYSICAL domain (excludes
-      !! ghosts), taken over BOTH `dxT` and `dyT`, with its (i,j)
+      !! Smallest actual cell edge over the WET PHYSICAL domain (excludes
+      !! ghosts and land), taken over BOTH `dxT` and `dyT`, with its (i,j)
       !! location and which axis (`is_x`) it came from — for actionable
       !! messages ("near j=110"). Host-side, configure time; the grid
       !! sizes here are at most a few 10^5 cells (a global tripolar
       !! config), trivial to scan once.
+      !!
+      !! **Wet cells only** (`metrics%wet_T > 0.5`): no viscous or
+      !! diffusive operator acts on a land cell, and on the 1° tripolar
+      !! grid the smallest cell anywhere is a 362 m LAND cell at a
+      !! land-locked bipole, which made the viscous-CFL check abort a
+      !! configuration whose smallest OCEAN cell was comfortably inside
+      !! the bound.  Where the smallest cell is wet (every all-wet grid)
+      !! the result is unchanged, value and location.  No wet cell ⇒
+      !! `dx_min = huge`, which the caller already treats as "no
+      !! constraint expressible".
       type(ocean_metrics_t), intent(in) :: metrics
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(out) :: dx_min
@@ -313,6 +323,7 @@ contains
       is_x = .true.
       do j = j0, j1
          do i = i0, i1
+            if (metrics%wet_T(i, j) <= 0.5_wp) cycle
             if (metrics%dxT(i, j) < dx_min) then
                dx_min = metrics%dxT(i, j)
                i_at = i

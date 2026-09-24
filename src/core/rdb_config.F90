@@ -574,7 +574,8 @@ module rdb_config
          !! Overwritten when `auto_n_inner = .true.`.
       logical :: auto_n_inner = .false.
          !! If `.true.`, derive `n_inner` at setup from the gravity-wave
-         !! CFL.  Default `.false.`.
+         !! CFL, evaluated per WET cell (local depth with local cell size,
+         !! MOM6 `set_dtbt`; land never limits it).  Default `.false.`.
       real(wp) :: cfl_bt_safety = 0.65_wp
          !! Safety fraction on the shallow-water CFL bound when
          !! `auto_n_inner = .true.` (typical 0.65-0.7).
