@@ -894,8 +894,33 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   updates its `vbt` and corner vorticity like an interior face. Metric +
   `f_corner` ghosts are folded once at configure. Kernels read full 2D
   metric arrays only.
-  Vector→geographic output rotation at the seam is deferred (output
-  shows model-frame velocities in the cap).
+  The `supergrid` reader applies the SAME ghost-metric topology as the
+  analytic `tripolar` (`metrics_fold_periodic_ghosts`) whenever the edge
+  tags say periodic-x and/or `tripolar_fold`, spans the periodic seam
+  faces across the seam (`sg_dx(2ni) + sg_dx(1)`), and fails loud when
+  the tags disagree with the file (a mosaic IS tripolar iff its top node
+  row folds onto itself, `m ↔ 2ni+2−m`). The grid rotation is read into
+  `metrics%angle_dx` (radians at T, MOM6's `angle_dx` convention:
+  the grid +i axis counter-clockwise from true east; from the mosaic's
+  `angle_dx` when present, else from the node geography — and always
+  from geography on the analytic tripolar). Nothing consumes it yet:
+  rotating lat-lon vector forcing onto the grid
+  (`u_grid = cos·u_E + sin·v_N`, `v_grid = −sin·u_E + cos·v_N`) is the
+  in-model regrid's job, and until then vector forcing files must be
+  pre-rotated. Vector→geographic output rotation at the seam is
+  deferred (output shows model-frame velocities in the cap). Known
+  limit: the analytic `tripolar` top row is a fold by INDEX only — its
+  index conjugates sit on meridians 180° apart, not on the same point —
+  so it cannot be written out and read back as a `supergrid`.
+- **Static geometry is seam-consistent from the moment it exists.**
+  Every bathymetry source (NetCDF file, API-staged array, formula
+  setters) is periodic-wrapped and north-folded inside the IC seed,
+  before any field is derived from it, and the PGF's own bathymetry
+  copy (FV-MOM6 / gprime) is taken after the engine's init-time halo
+  pass. A constant-extrapolated seam ghost used to reach that copy — a
+  spurious seam jet on file-bathymetry periodic grids (1.9 m/s within
+  3 h on the 1° global grid); gated by `test_ocean_periodic_seam_file`
+  (shift invariance under an `nx/2` roll).
 - **Diag manager**: registry + cadence + procedure-pointer fill
   dispatch. Default device-resident fills for `SSH, T, S, u_centre,
   v_centre, KE`; CONSERVATIVE vertical remap onto fixed-z

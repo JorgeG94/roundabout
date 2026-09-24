@@ -283,6 +283,7 @@ set(RDB_TESTS
     "test_ocean_diag_precision|test_ocean_diag_precision|collect_ocean_diag_precision_tests|ocean_diag_precision|ocean"
     "test_ocean_boundary|test_ocean_boundary|collect_ocean_boundary_tests|ocean_boundary|ocean"
     "test_ocean_periodic|test_ocean_periodic|collect_ocean_periodic_tests|ocean_periodic|ocean"
+    "test_ocean_periodic_seam_file|test_ocean_periodic_seam_file|collect_ocean_periodic_seam_file_tests|ocean_periodic_seam_file|ocean"
     "test_ocean_fold|test_ocean_fold|collect_ocean_fold_tests|ocean_fold|ocean"
     "test_ocean_tripolar|test_ocean_tripolar|collect_ocean_tripolar_tests|ocean_tripolar|ocean"
     "test_ocean_stability_audit|test_ocean_stability_audit|collect_ocean_stability_audit_tests|ocean_stability_audit|ocean"
@@ -368,6 +369,7 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
     test_ocean_cavity_draft_file
+    test_ocean_periodic_seam_file
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -386,6 +388,7 @@ set(NETCDF_TESTS
 # those modules aren't built.
 set(NETCDF_REQUIRED_TESTS
     test_ocean_cavity_draft_file
+    test_ocean_periodic_seam_file
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
