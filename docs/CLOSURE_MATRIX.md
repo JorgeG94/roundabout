@@ -187,7 +187,7 @@ bit-identical.  Deferred: biharmonic `Au`, EBT/SQG vertical structure.
 |---|---|---|
 | Quadratic log-layer (Cd) | `default` | MOM6/ROMS `Cd ≈ 2.5e-3` |
 | Linear (Rayleigh) | `form="linear"` | Rayleigh drag rate `r` (1/s) |
-| HBBL-distributed | `hbbl` | spreads stress over bottom `hbbl` m |
+| HBBL-distributed | `hbbl` | spreads stress over bottom `hbbl` m; REQUIRED under `z_fixed` / `zstar_full` — the bed-only mode drags `k=1`, a filler in every column shallower than the deepest layer (configure warns) |
 | Implicit-fold (backward-Euler vdiff bed diagonal) | `&ocean_vdiff_nml implicit_drag` | folds bottom drag into the vdiff bed (`k=1`) diagonal as a stress bottom-BC instead of the explicit pre-solve add; thin-layer (z*/ZSTAR_FULL pinch-out) CFL-stable. Mutually exclusive with `&ocean_bdrag_nml implicit` (split-apply) and HBBL (`hbbl>0`), fail-loud at configure. Test: `test_ocean_vdiff_implicit_stress_drag` |
 
 ## Ice-shelf top drag (`&ocean_tdrag_nml`; ocean only, default off)
