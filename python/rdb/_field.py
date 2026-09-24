@@ -86,11 +86,19 @@ class Field:
         Silent re-sync; never raises for staleness (D3.4) -- see module
         docstring point 4."""
         self._alive()
-        gen_now = self._model._step_count()
-        if gen_now != self._gen:
-            check(self._model._lib.rdb_ocean_refresh_host(
-                self._model._handle), "rdb_ocean_refresh_host")
-            self._gen = gen_now
+        # ALWAYS ask the library: `rdb_ocean_refresh_host` is gated on the
+        # handle's own `host_is_current` flag (a no-op flag check when
+        # nothing moved), which is the only authority on whether the HOST
+        # copy is current.  Comparing the step count against this Field's
+        # own `_gen` is not: a Field constructed AFTER a step is stamped
+        # with the current step count by its getter, so the old
+        # `gen_now != self._gen` test skipped the refresh and every such
+        # Field read stale host memory on the GPU build (the initial
+        # state, if nothing else had refreshed it) -- silently, on
+        # `-gpu=mem:separate` only.
+        check(self._model._lib.rdb_ocean_refresh_host(
+            self._model._handle), "rdb_ocean_refresh_host")
+        self._gen = self._model._step_count()
 
     # ---- shape ---------------------------------------------------------
     @property

@@ -114,3 +114,18 @@ def test_closed_model_field_access_raises(ocean_nml):
         assert False, "expected RdbClosedError"
     except rdb.RdbClosedError:
         pass
+
+
+def test_field_taken_after_step_reads_current_state(ocean_nml):
+    """Regression (GPU `mem:separate` only): a Field constructed AFTER
+    stepping is stamped by its getter with the current step count, so a
+    `_fresh()` that compared only against the Field's own stamp never
+    refreshed the host copy and read the INITIAL state. A constant wind
+    spins up the surface layer from rest; a Field taken only after the
+    steps must see that motion."""
+    nml = ocean_nml + "&physics_nml wind_stress_x = 0.1 /\n"
+    with rdb.Model(nml) as m:
+        m.step(3)
+        u = m.u.copy()  # first Field touch happens after the steps
+        umax = max(abs(v) for plane in u for col in plane for v in col)
+        assert umax > 0.0
