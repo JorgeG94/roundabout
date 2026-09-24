@@ -14,7 +14,7 @@ module rdb_ocean_setup
 #else
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
-   use rdb_constants, only: H_VANISHED
+   use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
@@ -919,6 +919,23 @@ contains
                              " m/s  thick_min="//to_string(cfg%ocean%bdrag%bbl_thick_min)//" m")
          else
             call logger%info("Bottom drag BBL:  bed-layer only (HBBL=0)")
+            ! Bed-only mode drags layer k = 1.  On a coordinate whose bed-side
+            ! layers VANISH (z_fixed, zstar_full) k = 1 is an inert filler in
+            ! every column shallower than the deepest nominal interface, so
+            ! almost the whole domain runs with NO bottom drag — measured on
+            ! the global 1-degree case (validation_examples/ocean/global_1deg).
+            ! HBBL mode accumulates thickness from the bed up, skips the
+            ! fillers and reaches the live bottom layer.
+            if ((cfg%ocean%bdrag%cd > 0.0_wp .or. cfg%ocean%bdrag%r > 0.0_wp) .and. &
+                (parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .or. &
+                 parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL)) then
+               call logger%warning("&ocean_bdrag_nml hbbl = 0 (bed-layer-only drag) under "// &
+                                   "vcoord_type = '"//trim(cfg%vcoord_type)//"': the drag "// &
+                                   "acts on layer k = 1, an inert filler in every column "// &
+                                   "shallower than the deepest nominal layer, so those "// &
+                                   "columns get NO bottom drag.  Set hbbl > 0 (MOM6 "// &
+                                   "OM4/OM_1deg: HBBL = 10 m, bg_vel = 0.1 m/s).")
+            end if
          end if
          if (cfg%ocean%bdrag%channel_drag) then
             call logger%info("Channel drag:     ON  cdrag_side="// &
