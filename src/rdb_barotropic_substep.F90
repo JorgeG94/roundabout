@@ -52,7 +52,7 @@ module rdb_barotropic_substep
    use rdb_bt_cont_type, only: find_uhbt, find_vhbt
    ! rdb_coriolis_adv removed: cor was demoted to a plain f_corner(:,:) dummy
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_OPEN, OBC_CLAMPED, &
-                                       OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC
+                                       OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
    use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, &
                              ocean_halo_bt_group_2d_wide, &
                              ocean_halo_is_decomposed, &
@@ -455,7 +455,7 @@ contains
       logical :: do_fold
          !! Tripolar north-fold flag cached from bc%north_fold.  Gates the
          !! inline fold DC loops in the fast loop; .false. ⇒ bit-identical.
-      integer :: nf_isum, nf_jsum_c, nf_jsum_v, nf_jfold, nf_jlo_c, nf_imid
+      integer :: nf_isum, nf_jsum_c, nf_jsum_v, nf_jfold, nf_jlo_c, nf_p, nf_pm
          !! Cached fold index constants (centre/v-face/u-face maps).
       integer :: i_w_face, i_e_face, j_s_face, j_n_face
       integer :: i_w_int, i_e_int, j_s_int, j_n_int
@@ -586,10 +586,9 @@ contains
       ! Fold index constants (storage maps, Appendix A).
       nf_isum = 2*grid%nghost + grid%nx_phys + 1      ! centre/v i-map sum
       nf_jsum_c = 2*grid%nghost + 2*grid%ny_phys + 1   ! T/u j-halo sum
-      nf_jsum_v = 2*grid%nghost + 2*grid%ny_phys       ! v j-map sum
-      nf_jfold = grid%nghost + grid%ny_phys            ! v self-conjugate row
+      nf_jsum_v = 2*grid%nghost + 2*grid%ny_phys + 2   ! v j-map sum (SOUTH-face v)
+      nf_jfold = grid%nghost + grid%ny_phys + 1        ! v fold-line row (= j_n_face)
       nf_jlo_c = grid%nghost + grid%ny_phys + 1        ! first T/u north halo row
-      nf_imid = grid%nghost + (grid%nx_phys + 1)/2     ! v on-row west-half end
       clamped_u_w = 0.0_wp
       clamped_u_e = 0.0_wp
       clamped_v_s = 0.0_wp
@@ -1052,7 +1051,9 @@ contains
             if (bc_w /= OBC_PERIODIC .and. has_w .and. i == grid%nghost + 1) bt_zeta_corner(i, j) = 0.0_wp
             if (bc_e /= OBC_PERIODIC .and. has_e .and. i == grid%nghost + grid%nx_phys + 1) bt_zeta_corner(i, j) = 0.0_wp
             if (bc_s /= OBC_PERIODIC .and. has_s .and. j == grid%nghost + 1) bt_zeta_corner(i, j) = 0.0_wp
-            if (bc_n /= OBC_PERIODIC .and. has_n .and. j == grid%nghost + grid%ny_phys + 1) bt_zeta_corner(i, j) = 0.0_wp
+            ! The tripolar fold line is a seam (interior corners), not a wall.
+            if (bc_n /= OBC_PERIODIC .and. bc_n /= OBC_TRIPOLAR_FOLD .and. has_n .and. &
+                j == grid%nghost + grid%ny_phys + 1) bt_zeta_corner(i, j) = 0.0_wp
          end do
          ! Periodic η ghost-wrap (design §1.5 step 3).  Required before
          ! Pass 2b because the u-update at the west wall face reads
@@ -1563,7 +1564,9 @@ contains
                   end if
                case (OBC_CLAMPED)
                   bt_vbt(i, j_n_face) = clamped_v_n
-               case (OBC_PERIODIC)
+               case (OBC_PERIODIC, OBC_TRIPOLAR_FOLD)
+                  ! Seam, not a wall: the fold-line face is an interior
+                  ! face (projected antisymmetric by the fold below).
                   continue
                case default
                   bt_vbt(i, j_n_face) = 0.0_wp
@@ -1606,15 +1609,21 @@ contains
          ! the reflected+negated interior; (2) the self-conjugate fold row
          ! j=nf_jfold antisymmetrised — west half overwritten from the negated
          ! east mirror, self-fixed column (odd ni) → 0.  Runs after periodic-x.
+         ! The fold-line row is j_n_face (north face of the last T-row,
+         ! SOUTH-face storage); the substep updated it as an interior face
+         ! (the north BC dispatch above skips OBC_TRIPOLAR_FOLD).  Same
+         ! periodic-aware projection as `fold_north_v_face` (rdb_ocean_fold).
          if (do_fold) then
             do concurrent(j=nf_jfold + 1:ny + 1, i=1:nx)
                bt_vbt(i, j) = -bt_vbt(nf_isum - i, nf_jsum_v - j)
             end do
-            do concurrent(i=grid%nghost + 1:nf_imid)
-               if (nf_isum - i == i) then
+            do concurrent(i=1:nx) local(nf_p, nf_pm)
+               nf_p = modulo(i - grid%nghost - 1, grid%nx_phys) + 1
+               nf_pm = grid%nx_phys + 1 - nf_p
+               if (nf_p < nf_pm) then
+                  bt_vbt(i, nf_jfold) = -bt_vbt(grid%nghost + nf_pm, nf_jfold)
+               else if (nf_p == nf_pm) then
                   bt_vbt(i, nf_jfold) = 0.0_wp
-               else
-                  bt_vbt(i, nf_jfold) = -bt_vbt(nf_isum - i, nf_jfold)
                end if
             end do
          end if

@@ -19,6 +19,7 @@ module rdb_ocean_dyn
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state
+   use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, fold_north_v_face
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
                              ocean_halo_bt_group_2d, ocean_halo_centre, &
@@ -4187,6 +4188,23 @@ contains
                      size(ms%h_av_layer, 3), grid%nx_phys, grid%ny_phys, grid%nghost, &
                      bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
                      bc%periodic_y .and. .not. ocean_halo_is_decomposed_y())
+               end if
+               ! Tripolar north fold of the time-means, periodic-FIRST (the
+               ! wrap above): the Coriolis/hvisc stencils that read
+               ! u_av/v_av/h_av at the seam need the mirrored north ghosts and
+               ! the antisymmetric fold-line v_av exactly as step 0 gives the
+               ! prognostics.  Without it the pred_corr seam tendencies read
+               ! the interior-only continuity output (stale ghost rows).
+               if (bc%north_fold) then
+                  call fold_north_u_face(ms%u_av_layer, size(ms%u_av_layer, 1), &
+                                         size(ms%u_av_layer, 2), size(ms%u_av_layer, 3), &
+                                         grid%nx_phys, grid%ny_phys, grid%nghost)
+                  call fold_north_v_face(ms%v_av_layer, size(ms%v_av_layer, 1), &
+                                         size(ms%v_av_layer, 2), size(ms%v_av_layer, 3), &
+                                         grid%nx_phys, grid%ny_phys, grid%nghost)
+                  call fold_north_centre(ms%h_av_layer, size(ms%h_av_layer, 1), &
+                                         size(ms%h_av_layer, 2), size(ms%h_av_layer, 3), &
+                                         grid%nx_phys, grid%ny_phys, grid%nghost)
                end if
             end if
          end if
