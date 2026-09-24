@@ -570,9 +570,15 @@ module rdb_config
       real(wp) :: cfl_bt_safety = 0.65_wp
          !! Safety fraction on the shallow-water CFL bound when
          !! `auto_n_inner = .true.` (typical 0.65-0.7).
-      real(wp) :: bebt = 0.0_wp
-         !! BT continuity-flux velocity projection weight.  Default `0.0`
-         !! = forward-backward Euler, bit-identical.
+      real(wp) :: bebt = 0.1_wp
+         !! BT continuity-flux velocity projection weight (MOM6 `BEBT`).
+         !! Default `0.1` = MOM6's default (`MOM_barotropic.F90` get_param
+         !! "BEBT", default=0.1): damps the barotropic gravity waves at
+         !! `|λ|² = 1 − b·a²` per substep (`a = c·dt_bt·k_eff`), which is
+         !! what damps the barotropic grid-scale mode under `pred_corr`.
+         !! `0.0` = pure forward-backward Euler (neutral, the pre-2026-09-22
+         !! default).  The FB stability limit tightens to
+         !! `a ≤ 2/√(1+2·bebt)` (MOM6 `set_dtbt`'s `1+2·BEBT` factor).
       logical :: use_cont_type = .false.
          !! When `.true.`, the BT substep uses a piecewise-cubic
          !! flux-bounded closure instead of `uh = u·h_face`.  Default `.false.`.
@@ -2311,7 +2317,7 @@ module rdb_config
          !! branches only ⇒ bit-identical.  Fail-loud composed with
          !! `&ocean_wetdry_nml enable` (that module owns its own barotropic
          !! limiter; composition deferred).
-      logical :: renorm_consistent_flux = .false.
+      logical :: renorm_consistent_flux = .true.
          !! Continuous flux model in the `uhbt`/`vhbt` Newton
          !! renormalisation (see `continuity_t%renorm_consistent_flux`):
          !! a layer whose upwind donor flips under the barotropic
@@ -2324,9 +2330,11 @@ module rdb_config
          !! bathymetric step), and an exponentially pumped barotropic
          !! grid-scale mode under `pred_corr` (finding B of the
          !! vertical-coordinate stability matrix).  Newton is bracketed by
-         !! bisection (MOM6 `zonal_flux_adjust`).  Default `.false.` ⇒
-         !! bit-identical; on, it is still bit-identical on every face
-         !! where no donor flips.  Ignored by the wet/dry single-step form.
+         !! bisection (MOM6 `zonal_flux_adjust`).  Default `.true.`
+         !! (MOM6 behaviour, maintainer decision 2026-09-22); it is
+         !! bit-identical to the historical model on every face where no
+         !! donor flips.  `.false.` restores the historical discontinuous
+         !! model.  Ignored by the wet/dry single-step form.
    end type ocean_continuity_config_t
    type :: ocean_isopycnal_config_t
       !! `&ocean_isopycnal_nml`: grounding-stability controls for the
@@ -9410,7 +9418,8 @@ contains
       call g%add(nml_real("cfl_bt_safety", pr, &
                           "Safety fraction on the BT CFL when auto_n_inner"))
       pr => cfg%ocean%bt%bebt
-      call g%add(nml_real("bebt", pr, "Forward-velocity-projection weight (MOM6 BEBT)"))
+      call g%add(nml_real("bebt", pr, &
+                          "Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6)"))
       pl => cfg%ocean%bt%use_cont_type
       call g%add(nml_logical("use_cont_type", pl, &
                              "Use the BT_cont flux-bounded closure (MOM6 USE_BT_CONT_TYPE)"))

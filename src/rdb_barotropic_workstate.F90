@@ -125,14 +125,18 @@ module rdb_barotropic_workstate
          !! speed `sqrt(g_FS · H)`; else the gprime knobs net out to
          !! full `g`.
 
-      real(wp) :: bebt = 0.0_wp
-         !! BT velocity-projection coefficient (MOM6 BT_PROJECT_VELOCITY).
-         !! Continuity flux uses
-         !! `ubt_trans = (1+bebt)·ubt^n − bebt·ubt^{n-1}` — time
-         !! extrapolation so η anticipates the later velocity update.
-         !! `bebt = 0` ⇒ `ubt_trans = ubt^n` (forward-backward Euler,
-         !! bit-identical); MOM6 reference value 0.2.  Set via
-         !! `ocean_bebt` namelist.
+      real(wp) :: bebt = 0.1_wp
+         !! MOM6 `BEBT` (default 0.1, as MOM6).  Continuity flux uses
+         !! `ubt_trans = (1+bebt)·ubt^n − bebt·ubt^{n-1}` — the
+         !! `BT_PROJECT_VELOCITY` spelling.  Because η is updated BEFORE
+         !! the velocity in this loop, it is the same scheme as MOM6's
+         !! default (`BT_PROJECT_VELOCITY = .false.`: predictor η, then
+         !! `(1−bebt)·ubt^n + bebt·ubt^{n+1}` transport): this loop's η is
+         !! MOM6's `eta_pred` and the velocity sequence is identical, so
+         !! the per-substep damping `|λ|² = 1 − bebt·a²` and the stability
+         !! limit `a ≤ 2/√(1+2·bebt)` are MOM6's.  `bebt = 0` ⇒
+         !! `ubt_trans = ubt^n` (neutral forward-backward Euler).  Set via
+         !! `&ocean_bt_nml bebt`.
 
       logical :: substep_zeta_ke = .true.
          !! Live `(ζ_bt+f)·v − ∇KE` in the fast loop (default,
