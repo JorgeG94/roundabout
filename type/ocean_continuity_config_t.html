@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.2% of total for derived types.</p>Including implementation: 6 statements,  0.1% of total for derived types.">6 statements</a>
+                 title="<p> 0.2% of total for derived types.</p>Including implementation: 7 statements,  0.1% of total for derived types.">7 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,9 +134,10 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-h_min~34">h_min</a>
+            <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-h_min~31">h_min</a>
             <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-positive_definite~2">positive_definite</a>
             <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-ppm_limit_pos">ppm_limit_pos</a>
+            <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-renorm_consistent_flux~2">renorm_consistent_flux</a>
             <a class="list-group-item" href="../type/ocean_continuity_config_t.html#variable-vol_cfl~2">vol_cfl</a>
         </div>
       </div>
@@ -315,7 +316,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~34"></span>
+              <span class="anchor" id="variable-h_min~31"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -387,6 +388,37 @@ vanishing layers (shelf-break, seamount, wet/dry boundary)
 the reconstruction collapses to a constant — equivalent
 to upwind for that cell.  Bounds mass flux through
 near-vanishing layers by the actual layer thickness.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-renorm_consistent_flux~2"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>renorm_consistent_flux</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>Continuous flux model in the <code>uhbt</code>/<code>vhbt</code> Newton
+renormalisation (see <code>continuity_t%renorm_consistent_flux</code>):
+a layer whose upwind donor flips under the barotropic
+correction carries <code>(u0 + du)·h_face(new donor)</code> instead of the
+historical <code>flux0 + du·h_face(new donor)</code>, which jumps by
+<code>u0·(h_new − h_old)</code> at the flip and leaves the solve with no
+root when <code>uhbt</code> falls in the gap — a wrong-sign layer
+transport, an O(η) mismatch between the layer and barotropic
+free surfaces at every thickness jump (a sigma layer over a
+bathymetric step), and an exponentially pumped barotropic
+grid-scale mode under <code>pred_corr</code> (finding B of the
+vertical-coordinate stability matrix).  Newton is bracketed by
+bisection (MOM6 <code>zonal_flux_adjust</code>).  Default <code>.false.</code> ⇒
+bit-identical; on, it is still bit-identical on every face
+where no donor flips.  Ignored by the wet/dry single-step form.</p>
             </td>
         </tr>
         <tr>
@@ -463,6 +495,22 @@ near-bed mass residual at steep shelf breaks.</p>
 <span class="w">         </span><span class="c">!! branches only ⇒ bit-identical.  Fail-loud composed with</span>
 <span class="w">         </span><span class="c">!! `&amp;ocean_wetdry_nml enable` (that module owns its own barotropic</span>
 <span class="w">         </span><span class="c">!! limiter; composition deferred).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">renorm_consistent_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! Continuous flux model in the `uhbt`/`vhbt` Newton</span>
+<span class="w">         </span><span class="c">!! renormalisation (see `continuity_t%renorm_consistent_flux`):</span>
+<span class="w">         </span><span class="c">!! a layer whose upwind donor flips under the barotropic</span>
+<span class="w">         </span><span class="c">!! correction carries `(u0 + du)·h_face(new donor)` instead of the</span>
+<span class="w">         </span><span class="c">!! historical `flux0 + du·h_face(new donor)`, which jumps by</span>
+<span class="w">         </span><span class="c">!! `u0·(h_new − h_old)` at the flip and leaves the solve with no</span>
+<span class="w">         </span><span class="c">!! root when `uhbt` falls in the gap — a wrong-sign layer</span>
+<span class="w">         </span><span class="c">!! transport, an O(η) mismatch between the layer and barotropic</span>
+<span class="w">         </span><span class="c">!! free surfaces at every thickness jump (a sigma layer over a</span>
+<span class="w">         </span><span class="c">!! bathymetric step), and an exponentially pumped barotropic</span>
+<span class="w">         </span><span class="c">!! grid-scale mode under `pred_corr` (finding B of the</span>
+<span class="w">         </span><span class="c">!! vertical-coordinate stability matrix).  Newton is bracketed by</span>
+<span class="w">         </span><span class="c">!! bisection (MOM6 `zonal_flux_adjust`).  Default `.false.` ⇒</span>
+<span class="w">         </span><span class="c">!! bit-identical; on, it is still bit-identical on every face</span>
+<span class="w">         </span><span class="c">!! where no donor flips.  Ignored by the wet/dry single-step form.</span>
 <span class="w">   </span><span class="k">end type </span><span class="n">ocean_continuity_config_t</span>
 </pre></div>
 
@@ -486,7 +534,7 @@ near-bed mass residual at steep shelf breaks.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 23:14 +0000             </p>
+ on 2026-09-23 23:55 +0000             </p>
           </div>
         </div>
         <br>
