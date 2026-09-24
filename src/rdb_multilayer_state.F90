@@ -16,7 +16,7 @@ module rdb_multilayer_state
    !! Caller must set `this%nz_ml` before calling `init` — typically
    !! threaded through from `cfg%nz_layers` in `state_init_from_config`.
    use, intrinsic :: iso_fortran_env, only: int64
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_tracer, only: tracer_t, TRACER_BUDGET_NONE, TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use rdb_mem_report, only: arr_bytes
@@ -329,9 +329,220 @@ module rdb_multilayer_state
       procedure, non_overridable :: bytes => multilayer_state_bytes
       procedure, non_overridable :: register_passive_tracer => &
          multilayer_register_passive_tracer
+      procedure, non_overridable :: enforce_vanished_content => &
+         multilayer_enforce_vanished_content
+      procedure, non_overridable :: enforce_vanished_content_host => &
+         multilayer_enforce_vanished_content_host
+      procedure, non_overridable :: scan_vanished_content => &
+         multilayer_scan_vanished_content
    end type multilayer_state_t
 
 contains
+
+   subroutine multilayer_enforce_vanished_content(this, nx, ny)
+      !! **THE enforcement point for invariant I1′.**
+      !!
+      !!     I1′:  `h_layer <= H_VANISHED  ⇒  hTr = h_layer·c_live`, every
+      !!           registered tracer, `c_live` = the concentration of the
+      !!           filler's donor live layer (the nearest live layer above;
+      !!           the topmost live layer for the fillers above it).
+      !!
+      !! Walks the tracer registry and, per column, pools every filler with
+      !! its donor live layer and mixes the pool to one concentration
+      !! (`rdb_vl_merge_content`, the ONE definition of the rule — see
+      !! `src/shared_module_utilities/rdb_vanished_layer.inc`).
+      !!
+      !! **Nothing is recorded in any budget** and nothing should be: the pool
+      !! lies WITHIN a column, so the column integral — which is what every
+      !! budget contributor measures — is unchanged to round-off.  A budget
+      !! entry here would be a contributor that always sums to zero, i.e.
+      !! noise in the one instrument that detects real leaks.
+      !!
+      !! **Why a state-owned sweep and not a rule each kernel remembers.**  The
+      !! tree has ~40 sites that write tracer content and only the ALE remap
+      !! checked `h` on the way in; the surface-flux, melt, sponge, hdiff,
+      !! vdiff, vertical-advection and OBC writers all deposit into whatever
+      !! layer they were handed.  "Correct by construction, per author,
+      !! forever" is exactly the property that failed and produced the day-16
+      !! z_fixed budget break.  One sweep at a defined point of the step makes
+      !! the invariant structural.
+      !!
+      !! **Why `h·c_live` and not zero.**  Every transport kernel reads a
+      !! filler's concentration as `hTr/h`, and the continuity step moves
+      !! thickness out of (and into) fillers between two remaps.  A filler
+      !! holding ZERO content hands that thickness to the live layers as
+      !! fresh, 0 °C water, so a uniform tracer does not stay uniform — the
+      !! previous rule (I1, `hTr = 0`) left 258 thin live cells at S = 0–34.43
+      !! after 10 days of a uniform-S = 35 `double_gyre_mom6` run.  A filler
+      !! holding its
+      !! donor's concentration preserves tracer constancy.
+      !!
+      !! **Placement:** once per outer step, after every tracer update and after
+      !! the ALE remap — `ocean_dyn_step_split_multilayer`'s tail.  The remap
+      !! already establishes I1′ internally; this catches everything that
+      !! writes AFTER it, and the families with no vanishing layers at all
+      !! (sigma, z*-lite, the whole double-gyre / Eady / channel set) see a
+      !! textual no-op: `rdb_vl_merge_content` mutates nothing on a column
+      !! with no sub-threshold layer.
+      !!
+      !! Outer-shim + flat-impl: the registry is an array of derived types, so
+      !! the per-tracer array is pulled out on the host and handed to the flat
+      !! `_impl` as an explicit-shape dummy (CLAUDE.md, "Outer-shim + flat-impl
+      !! call sites").
+      class(multilayer_state_t), intent(inout) :: this
+      integer, intent(in) :: nx
+         !! i-extent of `h_layer` / `hTr` (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent (total, incl. halos).
+      integer :: t
+
+      if (.not. allocated(this%h_layer)) return
+      if (.not. allocated(this%tracers)) return
+      do t = 1, size(this%tracers)
+         if (.not. allocated(this%tracers(t)%hTr)) cycle
+         call enforce_vanished_one_impl(nx, ny, this%nz_ml, this%h_layer, &
+                                        this%tracers(t)%hTr)
+      end do
+   end subroutine multilayer_enforce_vanished_content
+
+   pure subroutine enforce_vanished_one_impl(nx, ny, nz, h_layer, hTr)
+      !! Flat-impl of the I1′ sweep for ONE tracer.  Explicit-shape dummies so
+      !! NVHPC does not walk a descriptor per launch.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      integer :: i, j, k
+      real(wp) :: h_col(NZ_STACK_MAX), q_col(NZ_STACK_MAX)
+
+      do concurrent(j=1:ny, i=1:nx) local(k, h_col, q_col)
+         do k = 1, nz
+            h_col(k) = h_layer(i, j, k)
+            q_col(k) = hTr(i, j, k)
+         end do
+         call rdb_vl_merge_content(nz, h_col, q_col)
+         do k = 1, nz
+            hTr(i, j, k) = q_col(k)
+         end do
+      end do
+   end subroutine enforce_vanished_one_impl
+
+   subroutine multilayer_enforce_vanished_content_host(this, nx, ny)
+      !! HOST twin of `enforce_vanished_content`, for SETUP only.  The seed
+      !! (`ocean_state_seed_land_cells`) runs before `enter_data`, where a
+      !! `do concurrent` on the offload build would work on device memory
+      !! that is not mapped yet (`mem:separate`: no implicit copies).  Plain
+      !! host loops over the SAME included `rdb_vl_merge_content`, so the
+      !! seeded state satisfies I1′ by the one definition.  Never call it on
+      !! a device-resident state.
+      class(multilayer_state_t), intent(inout) :: this
+      integer, intent(in) :: nx
+         !! i-extent (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent (total, incl. halos).
+      integer :: t, i, j, k
+      real(wp) :: h_col(NZ_STACK_MAX), q_col(NZ_STACK_MAX)
+
+      if (.not. allocated(this%h_layer)) return
+      if (.not. allocated(this%tracers)) return
+      do t = 1, size(this%tracers)
+         if (.not. allocated(this%tracers(t)%hTr)) cycle
+         do j = 1, ny
+            do i = 1, nx
+               do k = 1, this%nz_ml
+                  h_col(k) = this%h_layer(i, j, k)
+                  q_col(k) = this%tracers(t)%hTr(i, j, k)
+               end do
+               call rdb_vl_merge_content(this%nz_ml, h_col, q_col)
+               do k = 1, this%nz_ml
+                  this%tracers(t)%hTr(i, j, k) = q_col(k)
+               end do
+            end do
+         end do
+      end do
+   end subroutine multilayer_enforce_vanished_content_host
+
+   pure subroutine multilayer_scan_vanished_content(this, nx, ny, n_bad, worst)
+      !! Pure I1′ TRIPWIRE scan — counts the vanished cells that do NOT hold
+      !! their donor's concentration (`rdb_vl_holds_live_conc`: `|hTr −
+      !! h·c_live| > 1e-12·|h·c_live|`, i.e. `hTr ≠ 0` in a column with no
+      !! live layer) and reports the largest offending `|hTr − h·c_live|`,
+      !! without touching anything.  Two device reductions per tracer, two
+      !! scalars out; no H←D copy on the healthy path.
+      !!
+      !! The impure half (log + `error stop`) lives with the caller, in
+      !! `rdb_ocean_dyn`, because this type is below the logger in the
+      !! dependency order and because a `pure` scan is what a unit test can
+      !! assert against without provoking an abort.
+      class(multilayer_state_t), intent(in) :: this
+      integer, intent(in) :: nx, ny
+      integer, intent(out) :: n_bad
+         !! Number of `(i,j,k,tracer)` cells violating I1′.
+      real(wp), intent(out) :: worst
+         !! Largest `|hTr − h·c_live|` found in a vanished layer (0 when clean).
+      integer :: t, n_t
+      real(wp) :: w_t
+
+      n_bad = 0
+      worst = 0.0_wp
+      if (.not. allocated(this%h_layer)) return
+      if (.not. allocated(this%tracers)) return
+      do t = 1, size(this%tracers)
+         if (.not. allocated(this%tracers(t)%hTr)) cycle
+         call scan_vanished_one_impl(nx, ny, this%nz_ml, this%h_layer, &
+                                     this%tracers(t)%hTr, n_t, w_t)
+         n_bad = n_bad + n_t
+         worst = max(worst, w_t)
+      end do
+   end subroutine multilayer_scan_vanished_content
+
+   pure subroutine scan_vanished_one_impl(nx, ny, nz, h_layer, hTr, n_bad, worst)
+      !! Flat-impl of the I1′ scan for ONE tracer.  Per column: find the
+      !! topmost live layer, then walk DOWN carrying the nearest live layer
+      !! above — the donor map `rdb_vl_merge_content` / `rdb_vl_column_conc`
+      !! use — and test each filler against its donor's `hTr/h`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: hTr(nx, ny, nz)
+      integer, intent(out) :: n_bad
+      real(wp), intent(out) :: worst
+      integer :: i, j, k, k_top, k_don
+      real(wp) :: c_live
+
+      n_bad = 0
+      worst = 0.0_wp
+      ! No explicit data clause: nvfortran emits `implicit copyin(...) [if not
+      ! already present]`, which is a no-op for the production state (mapped by
+      ! `enter_data`) and still correct for a host-only unit test.  `present(...)`
+      ! here would make the test abort with a present-table lookup failure.
+      !$acc parallel loop collapse(2) private(k, k_top, k_don, c_live) &
+      !$acc   reduction(+:n_bad) reduction(max:worst)
+      do j = 1, ny
+         do i = 1, nx
+            k_top = 0
+            !$acc loop seq
+            do k = nz, 1, -1
+               if (rdb_vl_is_live(h_layer(i, j, k))) then
+                  k_top = k
+                  exit
+               end if
+            end do
+            k_don = k_top
+            !$acc loop seq
+            do k = nz, 1, -1
+               if (rdb_vl_is_live(h_layer(i, j, k))) then
+                  k_don = k
+               else
+                  c_live = 0.0_wp
+                  if (k_don > 0) c_live = hTr(i, j, k_don)/h_layer(i, j, k_don)
+                  if (.not. rdb_vl_holds_live_conc(hTr(i, j, k), h_layer(i, j, k), c_live)) then
+                     n_bad = n_bad + 1
+                     worst = max(worst, abs(hTr(i, j, k) - h_layer(i, j, k)*c_live))
+                  end if
+               end if
+            end do
+         end do
+      end do
+   end subroutine scan_vanished_one_impl
 
    subroutine multilayer_state_init(this, grid, with_ideal_age)
       !! Allocate per-layer C-grid arrays at the grid size and the
@@ -713,5 +924,7 @@ contains
       !$acc&                 this%salt_budget_remap, this%wet_mask)
       !$acc exit data delete(this%k_top, this%k_top_u, this%k_top_v)
    end subroutine multilayer_state_exit_data_impl
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_multilayer_state

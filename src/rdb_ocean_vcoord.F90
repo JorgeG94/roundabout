@@ -110,13 +110,44 @@ module rdb_ocean_vcoord
       !! `h_min` and hands its water to the layer above).
       !!
       !! The two thresholds differ on purpose and the asymmetry is the
-      !! honest one: the bed's threshold is `zstar_h_min` (today's
-      !! behaviour, kept bit-for-bit), the top's is a fraction of the
-      !! spacing.  `0.1` is MITgcm's `hFacMin` default, which is the
-      !! minimum partial-cell fraction Losch (2008, JGR 113 C08043, §2.1)
-      !! used for exactly this ice-shelf partial-top-cell problem.  Not a
-      !! namelist knob: it is inert unless `z_top > 0`, and a cavity on a
-      !! z-like coordinate is itself a new, fenced configuration.
+      !! honest one: the bed's threshold is `Z_FIXED_BED_PARTIAL_MIN`
+      !! (below), the top's is a fraction of the spacing.  `0.1` is
+      !! MITgcm's `hFacMin` default, which is the minimum partial-cell
+      !! fraction Losch (2008, JGR 113 C08043, §2.1) used for exactly
+      !! this ice-shelf partial-top-cell problem.  Not a namelist knob:
+      !! it is inert unless `z_top > 0`, and a cavity on a z-like
+      !! coordinate is itself a new, fenced configuration.
+
+   real(wp), parameter :: Z_FIXED_BED_PARTIAL_MIN = H_VANISHED
+      !! Minimum LIVE partial BOTTOM cell thickness for `VCOORD_Z_FIXED`
+      !! — the bed mirror of `Z_FIXED_TOP_PARTIAL_FRAC`, expressed as an
+      !! absolute thickness rather than a fraction of the spacing.
+      !!
+      !! **What it closes.** The bed branch used to floor its partial
+      !! cell at `h_min` (`zstar_h_min`) alone, and the contract for this
+      !! family is `zstar_h_min <= H_VANISHED`.  That leaves the half-open
+      !! band `(zstar_h_min, H_VANISHED] = (1e-4, 1.5e-4]` with the
+      !! default `h_min`, in which a layer is **live to the coordinate
+      !! and vanished to every consumer** — the EOS substitutes reference
+      !! T/S, the remap reads its concentration as zero, `k_top`-style
+      !! scans walk past it.  A millimetre of `η` is enough to flip a bed
+      !! remainder across it, and on
+      !! `validation_examples/ocean/isomip_plus/ocean0_idealised_zfixed.nml`
+      !! five columns did so 165 times in five days.  With this floor the
+      !! bed partial cell is either a live layer strictly ABOVE the marker
+      !! or an inert filler at exactly `h_min`; nothing lands in between.
+      !!
+      !! **Why not `Z_FIXED_TOP_PARTIAL_FRAC*h_nominal` at the bed too.**
+      !! That is the full mirror, and it is a different, larger change:
+      !! with a 20 m spacing it would merge away every bed cell thinner
+      !! than 2 m, moving the level structure — and the effective
+      !! bathymetry — of every shipped `z_fixed` configuration.  The
+      !! thin-layer CFL argument that motivates the top's 10 % applies at
+      !! the bed as well and that mirror may still be worth taking, but it
+      !! is a bathymetry change and belongs in its own slice with its own
+      !! validation.  This constant fixes the defect that is actually
+      !! diagnosed: a 0.05 mm window, so in practice only a column whose
+      !! bed remainder lands inside it moves at all.
 
    type :: ocean_vcoord_t
       logical :: is_init = .false.
@@ -342,6 +373,15 @@ module rdb_ocean_vcoord
          !! capped at a 1.25× rescale factor.  The barotropic/depth-mean
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
+      logical :: check_vanished_content = .false.
+         !! `&vcoord_nml check_vanished_content` — the I1′ tripwire.  Carried
+         !! on this slot (rather than on `ocean_dyn_t`) because the vertical
+         !! coordinate is what MAKES vanished layers, so the knob that
+         !! polices them belongs beside `zstar_h_min` and the filler
+         !! contract.  A plain scalar on the type: it rides the existing
+         !! `copyin(this)` and adds no device array.  Read by
+         !! `check_vanished_invariant_or_die` in `rdb_ocean_dyn`.  Default
+         !! `.false.` ⇒ no scan, no cost.
       logical :: zfixed_closed_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
          !! closure.  Only meaningful on `VCOORD_Z_FIXED`, where a layer
@@ -961,11 +1001,14 @@ contains
       !! bed) in "depth below the column top", `z_below_loc` tracking the
       !! bottom interface of the layer being laid:
       !!
-      !!   * **bed side, unchanged.** A layer whose nominal top interface
-      !!     is deeper than the remaining column (by more than `h_min`)
-      !!     collapses to the inert filler `h_min` and hands its water
-      !!     UP; the lowest live layer is the partial BOTTOM cell and
-      !!     absorbs `η` plus the bed fillers' `h_min` debt.
+      !!   * **bed side.** A layer whose nominal top interface is deeper
+      !!     than the remaining column collapses to the inert filler
+      !!     `h_min` and hands its water UP; the lowest live layer is the
+      !!     partial BOTTOM cell and absorbs `η` plus the bed fillers'
+      !!     `h_min` debt.  A cut that would leave the partial bottom
+      !!     cell at or below `Z_FIXED_BED_PARTIAL_MIN` collapses it too
+      !!     — see that constant: no LIVE thickness may land in the
+      !!     `(h_min, H_VANISHED]` band.
       !!   * **top side, new.** A layer whose nominal range lies entirely
       !!     above the column top — i.e. inside the ice — collapses to
       !!     `h_min` and stacks immediately under the ice base.  The
@@ -1016,10 +1059,13 @@ contains
          !! Inert-filler thickness (`zstar_h_min`, `<= H_VANISHED`).
       integer :: i, j, k, k_live_top
       real(wp) :: z_below_loc, z_above_nominal_loc, z_top_loc, partial_min
+      real(wp) :: bed_partial_min
+      logical :: vanish_loc
 
       partial_min = max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*h_nominal)
+      bed_partial_min = max(h_min, Z_FIXED_BED_PARTIAL_MIN)
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, k_live_top, z_below_loc, z_above_nominal_loc, z_top_loc)
+         local(k, k_live_top, z_below_loc, z_above_nominal_loc, z_top_loc, vanish_loc)
          z_top_loc = z_top(i, j)
          ! Index of the shallowest layer the rigid top leaves live: the
          ! largest k whose nominal BOTTOM interface, at depth
@@ -1045,11 +1091,17 @@ contains
                ! top cell (k = k_live_top) is cut at the ice base and
                ! pays for them, and every filler above lands on h_min.
                z_above_nominal_loc = real(nz - k, wp)*h_min
+               vanish_loc = z_above_nominal_loc > z_below_loc - h_min
             else
                z_above_nominal_loc = real(nz - k, wp)*h_nominal - z_top_loc
+               ! Bed side: a LIVE partial bottom cell must clear the
+               ! REMAP's vanish marker, not merely `h_min`.  `>=` (not
+               ! `>`) because the marker itself reads as vanished — the
+               ! strict-`>` convention of `H_VANISHED`.
+               vanish_loc = z_above_nominal_loc >= z_below_loc - bed_partial_min
             end if
-            if (z_above_nominal_loc > z_below_loc - h_min) then
-               ! Below the bed / would be sub-h_min — vanish.
+            if (vanish_loc) then
+               ! Below the bed / would be a sub-marker sliver — vanish.
                target_h(i, j, k) = h_min
                z_below_loc = z_below_loc - h_min
             else
@@ -1777,8 +1829,10 @@ contains
       !! Caller supplies `nk >= 2`.  The RHO regrid kernel pre-compacts
       !! vanished layers (so `nk` is the surviving count) and fast-paths
       !! `nk <= 1` upstream; the DENSITY diagnostic remap passes the full
-      !! `nz` column (it assumes a non-vanished column — vanished-layer
-      !! compaction for diagnostics is a deferred refinement).  Lightest
+      !! `nz` column, with every vanished layer given zero thickness and the
+      !! density of its nearest live neighbour, so the PPM edges it touches
+      !! are the live layer's own value (no compaction, same effect on the
+      !! inversion).  Lightest
       !! target maps to the surface (index 2), densest to the bed (the
       !! surface→bed ordering the callers FLIP into the bottom-up state).
       !$acc routine seq

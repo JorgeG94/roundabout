@@ -25,7 +25,7 @@ module rdb_ocean_pseudo_salt
    !! instead of the passive-path error: SSS piston restoring
    !! (`&ocean_restore_nml enable_restore_salt`) and sea-ice frazil /
    !! basal salt exchange (`&ocean_ice_nml enable`).
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use pic_logger, only: global_logger
@@ -87,25 +87,36 @@ contains
       ms%tracers(ms%idx_pseudo_salt)%hTr = ms%tracers(ms%idx_salinity)%hTr
    end subroutine ocean_pseudo_salt_seed
 
-   pure subroutine ocean_pseudo_salt_deviation(h_layer, hTr_ps, hTr_s, buf, nx, ny, nz)
+   pure subroutine ocean_pseudo_salt_deviation(h_layer, hTr_ps, hTr_s, buf, nx, ny, nz, &
+                                               missing)
       !! Diagnostic helper: `D(i,j,k) = hTr_ps/h - hTr_s/h`, i.e. the
       !! pseudo-salt concentration minus the salinity concentration.
-      !! Vanishing layers (h <= 0) write zero (not NaN), matching
-      !! `fill_tracer_impl`'s convention.
+      !!
+      !! A vanished layer (`rdb_vl_is_live` false — the ONE predicate, see
+      !! `src/core/ocean/README.md`, "The vanished-layer content rule")
+      !! writes `missing`, which the caller passes as the IEEE NaN sentinel
+      !! `fill_tracer_impl` uses for the two concentrations this is the
+      !! difference of.  It used to write `0` below a private `1e-6 m`
+      !! floor: a deviation of zero is the one value this diagnostic
+      !! exists to report as "the two transport paths agree", so a filler
+      !! read as a perfect score, and layers between `1e-6 m` and
+      !! `H_VANISHED` were divided through at all.
       integer, intent(in)     :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: hTr_ps(nx, ny, nz)
       real(wp), intent(in)    :: hTr_s(nx, ny, nz)
       real(wp), intent(inout) :: buf(nx, ny, nz)
+      real(wp), intent(in)    :: missing
+         !! Value written on a vanished layer (the diagnostics' NaN).
       integer :: i, j, k
       real(wp) :: h
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
-         if (h > 1.0e-6_wp) then
-            buf(i, j, k) = hTr_ps(i, j, k)/h - hTr_s(i, j, k)/h
+         if (rdb_vl_is_live(h)) then
+            buf(i, j, k) = rdb_vl_conc(hTr_ps(i, j, k), h) - rdb_vl_conc(hTr_s(i, j, k), h)
          else
-            buf(i, j, k) = 0.0_wp
+            buf(i, j, k) = missing
          end if
       end do
    end subroutine ocean_pseudo_salt_deviation
@@ -148,5 +159,7 @@ contains
       logical :: warn
       warn = enable_ps .and. .not. enable_thermodynamics
    end function pseudo_salt_needs_thermo_warning
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_pseudo_salt

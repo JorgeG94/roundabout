@@ -1079,6 +1079,9 @@ contains
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
             h_sfc = ms%h_layer(i, j, nz)
+            ! vanished-ok: falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
+            ! concentration: a vanished surface layer must not hand the
+            ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
                t_sfc = temp_h(i, j, nz)/h_sfc
                s_sfc = salt_h(i, j, nz)/h_sfc
@@ -1176,6 +1179,9 @@ contains
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
             h_sfc = ms%h_layer(i, j, nz)
+            ! vanished-ok: falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
+            ! concentration: a vanished surface layer must not hand the
+            ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
                t_sfc = temp_h(i, j, nz)/h_sfc
                s_sfc = salt_h(i, j, nz)/h_sfc
@@ -1760,6 +1766,9 @@ contains
             if (k >= 2 .and. k <= nz) then
                hu = h_layer(i, j, k)      ! upper layer (toward surface)
                hl = h_layer(i, j, k - 1)  ! lower layer
+               ! vanished-ok: a PAIRWISE gate — the double-diffusive term needs BOTH layers
+               ! live and is skipped otherwise; a per-layer `rdb_vl_conc` would
+               ! silently make the difference finite.
                if (hu > H_VANISHED .and. hl > H_VANISHED) then
                   t_u = temp_h(i, j, k)/hu
                   t_l = temp_h(i, j, k - 1)/hl

@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.7% of total for modules and submodules.">437 statements</a>
+                 title=" 0.8% of total for modules and submodules.">471 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,7 +134,7 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#variable-ocean_remap_precond_rtol">OCEAN_REMAP_PRECOND_RTOL</a>
-            <a class="list-group-item" href="../module/rdb_ocean_remap.html#variable-h_floor">H_FLOOR</a>
+            <a class="list-group-item" href="../module/rdb_ocean_remap.html#variable-h_floor~3">H_FLOOR</a>
         </div>
       </div>
     </div>
@@ -159,10 +159,12 @@
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_apply_ale_remap_centres">ocean_apply_ale_remap_centres</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_apply_ale_remap_faces">ocean_apply_ale_remap_faces</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_apply_ale_remap_step">ocean_apply_ale_remap_step</a>
+            <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_remap_merge_vanished_content">ocean_remap_merge_vanished_content</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_remap_scan_preconditions">ocean_remap_scan_preconditions</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_remap_tracer_column">ocean_remap_tracer_column</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-build_ts_concentration">build_ts_concentration</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-ocean_remap_tracer_field">ocean_remap_tracer_field</a>
+            <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-remap_fold_filler_defect">remap_fold_filler_defect</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-remap_x_face_velocity">remap_x_face_velocity</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-remap_y_face_velocity">remap_y_face_velocity</a>
             <a class="list-group-item" href="../module/rdb_ocean_remap.html#proc-rescale_anomaly_ke">rescale_anomaly_ke</a>
@@ -189,21 +191,26 @@ registered <code>multilayer.tracers(t)%hTr</code> from the current (Lagrangian) 
 to <code>vcoord%target_h</code>. The kernel is the per-column <code>remap_column</code> from
 <code>rdb_remap_column</code> (shared with coastal); this module wires it across the
 registered tracer slot list plus the face-velocity pass.</p>
-<p>Per-column conservation: sum_k(c_old·h_old) = sum_k(c_new·h_new) to machine
-precision (modulo the c = hTr/h step, which a vanishing-layer guard protects).</p>
+<p>Per-column conservation: sum_k(hTr) is preserved to machine precision.
+The <code>c = hTr/h</code> ↔ <code>hTr = c·h</code> round trip is protected by a TWO-SIDED
+vanishing-layer guard (<code>rdb_vl_merge_content</code>, invariant I1′) which
+keeps the content of a sub-threshold layer in the column instead of
+deleting it, and leaves every sub-threshold layer holding <code>h·c_live</code>,
+the concentration of its donor live layer. See
+<code>src/core/ocean/README.md</code> (&ldquo;The vanished-layer content rule&rdquo;).</p>
 <br>          <div class="card mb-4">
       <h3 class="card-header card-title bg-light">Uses</h3>
       <div class="card-body">
         <ul class="list-group list-group-flush">
             <li class="list-group-item">
               <ul class="list-inline">
-                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
-                  <li class="list-inline-item"><a href='rdb_remap_column.html'>rdb_remap_column</a></li>
-                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
                   <li class="list-inline-item"><a href='rdb_eos.html'>rdb_eos</a></li>
-                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_remap_column.html'>rdb_remap_column</a></li>
                   <li class="list-inline-item"><a href='rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
                   <li class="list-inline-item"><a href='rdb_tracer.html'>rdb_tracer</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
               </ul>
             </li>
             <li class="list-group-item">
@@ -1010,7 +1017,7 @@ tail) are percent-level, decades above this.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_floor"></span>
+              <span class="anchor" id="variable-h_floor~3"></span>
               real(kind=wp),
             </td>
               <td>private,</td>
@@ -1065,7 +1072,7 @@ below the split driver in the dependency tree.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~200"></span>
+              <span class="anchor" id="variable-grid~13"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1080,7 +1087,7 @@ below the split driver in the dependency tree.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-vcoord~5"></span>
+              <span class="anchor" id="variable-vcoord"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1095,7 +1102,7 @@ below the split driver in the dependency tree.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~108"></span>
+              <span class="anchor" id="variable-ms~6"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1110,7 +1117,7 @@ below the split driver in the dependency tree.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_eta~7"></span>
+              <span class="anchor" id="variable-bt_eta"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -1126,7 +1133,7 @@ below the split driver in the dependency tree.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_h_ref~5"></span>
+              <span class="anchor" id="variable-bt_h_ref"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1143,7 +1150,7 @@ handle on the split-driver state.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~2"></span>
+              <span class="anchor" id="variable-method~5"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -1159,7 +1166,7 @@ cuts the spurious vertical mixing a 1st-order limiter introduces).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~37"></span>
+              <span class="anchor" id="variable-eos~8"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in),</td>
@@ -1175,7 +1182,7 @@ cuts the spurious vertical mixing a 1st-order limiter introduces).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~76"></span>
+              <span class="anchor" id="variable-dt~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in),</td>
@@ -1223,7 +1230,7 @@ thickness verbatim (no across-cell to average).</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~201"></span>
+              <span class="anchor" id="variable-grid~14"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1253,7 +1260,7 @@ thickness verbatim (no across-cell to average).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~2"></span>
+              <span class="anchor" id="variable-h_new~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1268,7 +1275,7 @@ thickness verbatim (no across-cell to average).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-u_face_x~2"></span>
+              <span class="anchor" id="variable-u_face_x"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -1283,7 +1290,7 @@ thickness verbatim (no across-cell to average).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-v_face_y~2"></span>
+              <span class="anchor" id="variable-v_face_y"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -1298,7 +1305,7 @@ thickness verbatim (no across-cell to average).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~4"></span>
+              <span class="anchor" id="variable-method~7"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -1329,7 +1336,7 @@ thickness verbatim (no across-cell to average).</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zlevel_faces~3"></span>
+              <span class="anchor" id="variable-zlevel_faces"></span>
               logical,
             </td>
 <td>intent(in),</td>
@@ -1409,7 +1416,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~202"></span>
+              <span class="anchor" id="variable-grid~15"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -1424,7 +1431,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-vcoord~6"></span>
+              <span class="anchor" id="variable-vcoord~2"></span>
               type(<a href='../type/ocean_vcoord_t.html'>ocean_vcoord_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1439,7 +1446,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ms~109"></span>
+              <span class="anchor" id="variable-ms~7"></span>
               type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -1454,7 +1461,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_eta~8"></span>
+              <span class="anchor" id="variable-bt_eta~2"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -1469,7 +1476,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-bt_h_ref~6"></span>
+              <span class="anchor" id="variable-bt_h_ref~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1484,7 +1491,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~7"></span>
+              <span class="anchor" id="variable-method~10"></span>
               integer,
             </td>
 <td>intent(in),</td>
@@ -1499,7 +1506,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eos~38"></span>
+              <span class="anchor" id="variable-eos~9"></span>
               type(<a href='../type/eos_t.html'>eos_t</a>),
             </td>
 <td>intent(in),</td>
@@ -1514,7 +1521,7 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dt~77"></span>
+              <span class="anchor" id="variable-dt~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in),</td>
@@ -1523,6 +1530,81 @@ absent or τ=0 (default) ⇒ filter skipped, bit-identical.</p>
             </td>
             <td>::</td>
             <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_remap_merge_vanished_content"></span> <h3>public pure subroutine <a href='../proc/ocean_remap_merge_vanished_content.html'>ocean_remap_merge_vanished_content</a>(nz, h_col, q_col)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Public test shim over the included <code>rdb_vl_merge_content</code> — the ONE
+definition of the vanished-layer content rule
+(<code>src/shared_module_utilities/rdb_vanished_layer.inc</code>).  Production
+code calls the included copy directly; this exists so
+<code>tests/test_ocean_remap_vanished.F90</code> can assert the rule&rsquo;s own
+properties without a second transcription of it.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~52"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_col~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_col</strong>(NZ_STACK_MAX)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_col"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_col</strong>(NZ_STACK_MAX)</td>
             <td>
 
             </td>
@@ -1556,7 +1638,7 @@ badly they are missed — the domain-wide counterpart of
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~279"></span>
+              <span class="anchor" id="variable-nx~45"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1571,7 +1653,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~279"></span>
+              <span class="anchor" id="variable-ny~45"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1586,7 +1668,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~213"></span>
+              <span class="anchor" id="variable-nz~48"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1616,7 +1698,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~5"></span>
+              <span class="anchor" id="variable-h_new~6"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1646,7 +1728,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n_bad~2"></span>
+              <span class="anchor" id="variable-n_bad"></span>
               integer,
             </td>
 <td>intent(out)</td>
@@ -1661,7 +1743,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-worst_rel~2"></span>
+              <span class="anchor" id="variable-worst_rel"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1676,7 +1758,7 @@ badly they are missed — the domain-wide counterpart of
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-worst_neg~2"></span>
+              <span class="anchor" id="variable-worst_neg"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -1702,8 +1784,10 @@ badly they are missed — the domain-wide counterpart of
     <div class="card-body">
           
   <p>Single-column unit-test entry: wraps <code>remap_column</code> with the
-c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
-<code>ocean_remap_tracer_field</code>.</p>
+c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
+vanishing-layer merge the production kernel runs
+(<code>rdb_vl_merge_content</code> + <code>rdb_vl_column_conc</code>), so this entry cannot drift from
+<code>ocean_remap_tracer_field</code>. Production callers go through that one.</p>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1718,7 +1802,7 @@ c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~215"></span>
+              <span class="anchor" id="variable-nz~50"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1748,7 +1832,7 @@ c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~6"></span>
+              <span class="anchor" id="variable-h_new~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1778,7 +1862,7 @@ c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~8"></span>
+              <span class="anchor" id="variable-method~11"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1805,7 +1889,8 @@ c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
           
   <p>Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer
 content + pre-remap thicknesses, for the VCOORD_RHO density inversion.
-Guarded against H_VANISHED (sub-floor layer ⇒ c = 0). Flat-impl,
+Per-layer <code>rdb_vl_conc</code> (a filler reads <code>hTr/h</code>, its donor&rsquo;s
+concentration by I1′; a zero-thickness layer reads 0). Flat-impl,
 explicit-shape; one cadence-bounded launch per remap.</p>
 
   <h4>Arguments</h4>
@@ -1821,7 +1906,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~280"></span>
+              <span class="anchor" id="variable-nx~46"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1836,7 +1921,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~280"></span>
+              <span class="anchor" id="variable-ny~46"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1851,7 +1936,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~214"></span>
+              <span class="anchor" id="variable-nz~49"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1881,7 +1966,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr_t~2"></span>
+              <span class="anchor" id="variable-htr_t"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1896,7 +1981,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr_s~2"></span>
+              <span class="anchor" id="variable-htr_s"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -1955,7 +2040,7 @@ explicit-shape; one cadence-bounded launch per remap.</p>
 guarded) → per-column remap kernel → hTr_new = c_new·h_new. Conservative.
 <code>budget</code> (optional): when present, the per-cell hTr_new−hTr_old increment
 is accumulated into the slot (heat/salt remap deltas) before overwriting.
-Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.</p>
+Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.</p><a href="../proc/ocean_remap_tracer_field.html" class="pull-right"><emph>Read more&hellip;</emph></a>
 
   <h4>Arguments</h4>
       <table class="table table-striped varlist">
@@ -1970,7 +2055,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~274"></span>
+              <span class="anchor" id="variable-nx~40"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1985,7 +2070,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~274"></span>
+              <span class="anchor" id="variable-ny~40"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2000,7 +2085,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~207"></span>
+              <span class="anchor" id="variable-nz~42"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2030,7 +2115,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new"></span>
+              <span class="anchor" id="variable-h_new~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2045,7 +2130,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-htr~16"></span>
+              <span class="anchor" id="variable-htr~2"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2060,7 +2145,7 @@ Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.<
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~3"></span>
+              <span class="anchor" id="variable-method~6"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2109,7 +2194,7 @@ equal-thickness specialisations, i.e. bit-identical.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-budget~9"></span>
+              <span class="anchor" id="variable-budget"></span>
               real(kind=wp),
             </td>
 <td>intent(inout),</td>
@@ -2120,6 +2205,110 @@ equal-thickness specialisations, i.e. bit-identical.</p>
             <td><strong>budget</strong>(nx,ny,nz)</td>
             <td>
 
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-remap_fold_filler_defect"></span> <h3>private pure subroutine <a href='../proc/remap_fold_filler_defect.html'>remap_fold_filler_defect</a>(nz, h_old_col, h_new_col, q_src, q_new)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>On a column that carries a vanished layer (source or target), make
+the tracer remap conservative EXACTLY, not just on a matched column:
+the content the remap failed to place, <code>Σ q_src − Σ q_new</code>, is
+handed to the topmost live target layer (the donor of any fillers
+above it, so the write-side pool that follows shares it with them).</p><a href="../proc/remap_fold_filler_defect.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~51"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old_col~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old_col</strong>(NZ_STACK_MAX)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new_col~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new_col</strong>(NZ_STACK_MAX)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_src"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_src</strong>(NZ_STACK_MAX)</td>
+            <td>
+<p>Source content the remap was handed (after the read-side pool).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(NZ_STACK_MAX)</td>
+            <td>
+<p>Target content <code>c_new·h_new</code>, before the write-side pool.</p>
             </td>
         </tr>
     </tbody>
@@ -2153,7 +2342,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~276"></span>
+              <span class="anchor" id="variable-nx~42"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2168,7 +2357,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~276"></span>
+              <span class="anchor" id="variable-ny~42"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2183,7 +2372,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~209"></span>
+              <span class="anchor" id="variable-nz~44"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2213,7 +2402,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~3"></span>
+              <span class="anchor" id="variable-h_new~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2228,7 +2417,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-u_face_x~3"></span>
+              <span class="anchor" id="variable-u_face_x~2"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2243,7 +2432,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~5"></span>
+              <span class="anchor" id="variable-method~8"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2273,7 +2462,7 @@ anomaly KE matches pre-remap, barotropic mean preserved. See
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zlevel_faces~4"></span>
+              <span class="anchor" id="variable-zlevel_faces~2"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -2291,7 +2480,7 @@ the source and the target column.  A layer that is an inert
 filler on one side then has an exactly-zero target thickness,
 which is the one case every <code>remap_column</code> variant already
 short-circuits (<code>dz_new &lt;= 0 ⇒ q_new = 0</code>), so no momentum is
-poured INTO a closed layer and none is carried OUT of one.</p><a href="../proc/remap_x_face_velocity.html#variable-zlevel_faces~4" class="pull-right"><emph>Read more&hellip;</emph></a>
+poured INTO a closed layer and none is carried OUT of one.</p><a href="../proc/remap_x_face_velocity.html#variable-zlevel_faces~2" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
@@ -2353,7 +2542,7 @@ semantics.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~277"></span>
+              <span class="anchor" id="variable-nx~43"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2368,7 +2557,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~277"></span>
+              <span class="anchor" id="variable-ny~43"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2383,7 +2572,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~210"></span>
+              <span class="anchor" id="variable-nz~45"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2413,7 +2602,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_new~4"></span>
+              <span class="anchor" id="variable-h_new~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -2428,7 +2617,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-v_face_y~3"></span>
+              <span class="anchor" id="variable-v_face_y~2"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -2443,7 +2632,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~6"></span>
+              <span class="anchor" id="variable-method~9"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2473,7 +2662,7 @@ semantics.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zlevel_faces~5"></span>
+              <span class="anchor" id="variable-zlevel_faces~3"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -2491,7 +2680,7 @@ the source and the target column.  A layer that is an inert
 filler on one side then has an exactly-zero target thickness,
 which is the one case every <code>remap_column</code> variant already
 short-circuits (<code>dz_new &lt;= 0 ⇒ q_new = 0</code>), so no momentum is
-poured INTO a closed layer and none is carried OUT of one.</p><a href="../proc/remap_y_face_velocity.html#variable-zlevel_faces~5" class="pull-right"><emph>Read more&hellip;</emph></a>
+poured INTO a closed layer and none is carried OUT of one.</p><a href="../proc/remap_y_face_velocity.html#variable-zlevel_faces~3" class="pull-right"><emph>Read more&hellip;</emph></a>
             </td>
         </tr>
         <tr>
@@ -2556,7 +2745,7 @@ Barotropic mean u_bar preserved verbatim; degenerate columns untouched.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~211"></span>
+              <span class="anchor" id="variable-nz~46"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -2659,7 +2848,7 @@ Barotropic mean u_bar preserved verbatim; degenerate columns untouched.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 23:55 +0000             </p>
+ on 2026-09-24 02:37 +0000             </p>
           </div>
         </div>
         <br>

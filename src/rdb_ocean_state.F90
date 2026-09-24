@@ -3212,26 +3212,22 @@ contains
          ! h_layer floor on land.
          call seed_land_h_floor_impl(ms%h_layer, ms%wet_mask, nz_ml)
 
-         ! The SAME contract, on a WET column, for the inert fillers a
-         ! rigid-top coordinate leaves inside the ice (and below the
-         ! bed).  `h = zstar_h_min <= H_VANISHED` puts them on the
-         ! vanished side of every gate, so the first ALE regrid writes
-         ! their `hTr` to zero — un-budgeted, because the latch was taken
-         ! with the seed's `c*h_min` still in them.  Measured on
-         ! `cavity_sloping_lid_rest_zfixed.nml` before this hold: a
-         ! step-1 salt residual of `-1.604E-06` relative (3.5e10 kg of
-         ! salt, all of it filler content), flat thereafter — the exact
-         ! shape commit `4d8ac2e0` recorded for the grounded columns.
-         ! Fenced to `z_fixed` x cavity, the only configuration that
-         ! vanishes a layer on a wet column today, so every existing
-         ! namelist is bit-identical.
+         ! On a WET column, the inert fillers a rigid-top coordinate leaves
+         ! inside the ice (and below the bed) are seeded with the IC's own
+         ! `c(z)*h_min` — the concentration at the filler's depth, not its
+         ! donor's.  Establish invariant I1′ (`hTr = h*c_live`) HERE, with
+         ! the one definition (`rdb_vl_merge_content`, host twin because
+         ! this runs before `enter_data`), so the budget latch sees the
+         ! state every later step holds.  Column-conservative, so the
+         ! latch's content is unchanged either way; this is about the
+         ! seeded state satisfying the invariant, not about the budget.
+         ! (Under the previous rule, I1, the first regrid ZEROED these
+         ! fillers un-budgeted — `-1.604E-06` relative at step 1 on
+         ! `cavity_sloping_lid_rest_zfixed.nml` — which is why this fence
+         ! was a zeroing hold.)  Fenced to `z_fixed` x cavity so every
+         ! other namelist's step-0 state is bit-identical.
          if (state%metrics%use_cavity .and. state%vcoord%coord_type == VCOORD_Z_FIXED) then
-            if (allocated(ms%tracers)) then
-               do t = 1, size(ms%tracers)
-                  call seed_vanished_tracer_hold_impl(ms%tracers(t)%hTr, &
-                                                      ms%h_layer, nz_ml)
-               end do
-            end if
+            call ms%enforce_vanished_content_host(size(ms%h_layer, 1), size(ms%h_layer, 2))
          end if
 
          ! Zero layer face velocities at land faces.
@@ -3312,42 +3308,6 @@ contains
          end do
       end do
    end subroutine seed_land_tracer_hold_impl
-
-   pure subroutine seed_vanished_tracer_hold_impl(hTr, h_layer, nz)
-      !! Zero the extensive tracer content `hTr` on any layer the target
-      !! grid seeded as an INERT FILLER (`h_layer <= H_VANISHED`),
-      !! whether or not the column is wet.
-      !!
-      !! The vanished-layer twin of `seed_land_tracer_hold_impl`, and it
-      !! rests on the same argument: a filler is on the vanished side of
-      !! every `h > H_VANISHED` gate, so the ALE remap's concentration
-      !! step writes `c = 0` and therefore `hTr = 0` at the FIRST regrid.
-      !! Whatever the seed put there is content the regrid discards
-      !! silently and un-budgeted — a step change in the console `Error`
-      !! residual between step 0 and step 1.  The seed's job is to hand
-      !! the budget latch the state the running solver holds.
-      !!
-      !! This is the state, not a choice: the physically-valued filler
-      !! (option (i) — carry `c_live*h_min` in the prognostic state and
-      !! debit the donor) would need a wet-column analogue of the
-      !! land-state contract and would change the remap's conservation
-      !! bookkeeping.  The vanished-layer T/S that the PGF and the EOS
-      !! need is substituted at CONSUMPTION instead, which is a separate
-      !! slice.
-      integer, intent(in) :: nz
-      real(wp), intent(inout) :: hTr(:, :, :)
-      real(wp), intent(in) :: h_layer(:, :, :)
-      integer :: i, j, k, nx, ny
-      nx = size(hTr, 1)
-      ny = size(hTr, 2)
-      do k = 1, nz
-         do j = 1, ny
-            do i = 1, nx
-               if (h_layer(i, j, k) <= H_VANISHED) hTr(i, j, k) = 0.0_wp
-            end do
-         end do
-      end do
-   end subroutine seed_vanished_tracer_hold_impl
 
    pure subroutine seed_land_h_floor_impl(h_layer, wet_mask, nz)
       !! Floor land-cell layer thickness to `H_VANISHED` (never 0 ⇒ no

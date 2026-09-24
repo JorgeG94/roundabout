@@ -1228,6 +1228,8 @@ contains
             ! touches a CLOSED face layer.  The tracer twin does exactly
             ! this, unconditionally, in `build_factorize_tracer_matrix`.
             if (zlevel_faces) then
+               ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+               ! a momentum-grid question, not a tracer concentration.
                if (hvel(1) <= H_VANISHED .or. hvel(2) <= H_VANISHED) alpha = 0.0_wp
             end if
          end if
@@ -1307,7 +1309,11 @@ contains
             alpha = dt*nu_face_kp1/(hf_k*dz_top)
             ! z-level partial steps — see the bed row.
             if (zlevel_faces) then
+               ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+               ! a momentum-grid question, not a tracer concentration.
                if (hvel(k) <= H_VANISHED .or. hvel(k - 1) <= H_VANISHED) beta = 0.0_wp
+               ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+               ! a momentum-grid question, not a tracer concentration.
                if (hvel(k) <= H_VANISHED .or. hvel(k + 1) <= H_VANISHED) alpha = 0.0_wp
             end if
             a_diag(i, j, k) = -beta
@@ -1358,6 +1364,8 @@ contains
             beta = dt*nu_face_k/(hf_k*dz_bot)
             ! z-level partial steps — see the bed row.
             if (zlevel_faces) then
+               ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+               ! a momentum-grid question, not a tracer concentration.
                if (hvel(ktop) <= H_VANISHED .or. hvel(ktop - 1) <= H_VANISHED) beta = 0.0_wp
             end if
             a_diag(i, j, ktop) = -beta

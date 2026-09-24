@@ -1,0 +1,760 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>multilayer_enforce_vanished_content &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>multilayer_enforce_vanished_content
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">12 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_multilayer_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_multilayer_state.f90.html'>rdb_multilayer_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">multilayer_enforce_vanished_content</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/multilayer_enforce_vanished_content.html#variable-t~31">t</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/multilayer_enforce_vanished_content.html#src">multilayer_enforce_vanished_content</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine multilayer_enforce_vanished_content(this, nx, ny)  
+</h2>
+    
+
+    <p><strong>THE enforcement point for invariant I1′.</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">I1′</span><span class="o">:</span><span class="w">  </span><span class="n n-Quoted">`h_layer &lt;= H_VANISHED  ⇒  hTr = h_layer·c_live`</span><span class="p">,</span><span class="w"> </span><span class="k">every</span>
+<span class="w">      </span><span class="n">registered</span><span class="w"> </span><span class="n">tracer</span><span class="p">,</span><span class="w"> </span><span class="n n-Quoted">`c_live`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">concentration</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">the</span>
+<span class="w">      </span><span class="n">filler</span><span class="s1">'s donor live layer (the nearest live layer above;</span>
+<span class="s1">      the topmost live layer for the fillers above it).</span>
+</code></pre></div>
+
+<p>Walks the tracer registry and, per column, pools every filler with
+its donor live layer and mixes the pool to one concentration
+(<code>rdb_vl_merge_content</code>, the ONE definition of the rule — see
+<code>src/shared_module_utilities/rdb_vanished_layer.inc</code>).</p>
+<p><strong>Nothing is recorded in any budget</strong> and nothing should be: the pool
+lies WITHIN a column, so the column integral — which is what every
+budget contributor measures — is unchanged to round-off.  A budget
+entry here would be a contributor that always sums to zero, i.e.
+noise in the one instrument that detects real leaks.</p>
+<p><strong>Why a state-owned sweep and not a rule each kernel remembers.</strong>  The
+tree has ~40 sites that write tracer content and only the ALE remap
+checked <code>h</code> on the way in; the surface-flux, melt, sponge, hdiff,
+vdiff, vertical-advection and OBC writers all deposit into whatever
+layer they were handed.  &ldquo;Correct by construction, per author,
+forever&rdquo; is exactly the property that failed and produced the day-16
+z_fixed budget break.  One sweep at a defined point of the step makes
+the invariant structural.</p>
+<p><strong>Why <code>h·c_live</code> and not zero.</strong>  Every transport kernel reads a
+filler&rsquo;s concentration as <code>hTr/h</code>, and the continuity step moves
+thickness out of (and into) fillers between two remaps.  A filler
+holding ZERO content hands that thickness to the live layers as
+fresh, 0 °C water, so a uniform tracer does not stay uniform — the
+previous rule (I1, <code>hTr = 0</code>) left 258 thin live cells at S = 0–34.43
+after 10 days of a uniform-S = 35 <code>double_gyre_mom6</code> run.  A filler
+holding its
+donor&rsquo;s concentration preserves tracer constancy.</p>
+<p><strong>Placement:</strong> once per outer step, after every tracer update and after
+the ALE remap — <code>ocean_dyn_step_split_multilayer</code>&rsquo;s tail.  The remap
+already establishes I1′ internally; this catches everything that
+writes AFTER it, and the families with no vanishing layers at all
+(sigma, z*-lite, the whole double-gyre / Eady / channel set) see a
+textual no-op: <code>rdb_vl_merge_content</code> mutates nothing on a column
+with no sub-threshold layer.</p>
+<p>Outer-shim + flat-impl: the registry is an array of derived types, so
+the per-tracer array is pulled out on the host and handed to the flat
+<code>_impl</code> as an explicit-shape dummy (CLAUDE.md, &ldquo;Outer-shim + flat-impl
+call sites&rdquo;).</p>
+
+    <h3>Type Bound</h3>
+    <p><a href='../type/multilayer_state_t.html'>multilayer_state_t</a></p>
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~313"></span>
+              class(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~408"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                <p>i-extent of <code>h_layer</code> / <code>hTr</code> (total, incl. halos).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~408"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                <p>j-extent (total, incl. halos).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~multilayer_enforce_vanished_content~~CallsGraph Pages: 1 -->
+<svg id="procmultilayer_enforce_vanished_contentCallsGraph" width="641pt" height="69pt"
+ viewBox="0.00 0.00 641.00 69.05" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph" class="graph" transform="scale(0.93 0.93) rotate(0) translate(4 70)">
+<title>proc~~multilayer_enforce_vanished_content~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 683,-70 683,4 -4,4"/>
+<!-- proc~multilayer_enforce_vanished_content -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_node1" class="node">
+<title>proc~multilayer_enforce_vanished_content</title>
+<polygon fill="none" stroke="black" points="316,-45 0,-45 0,-21 316,-21 316,-45"/>
+<text text-anchor="middle" x="158" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">multilayer_state_t%multilayer_enforce_vanished_content</text>
+</g>
+<!-- proc~enforce_vanished_one_impl -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_node2" class="node">
+<title>proc~enforce_vanished_one_impl</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CallsGraph_node2"><a xlink:href="../proc/enforce_vanished_one_impl.html" xlink:title="enforce_vanished_one_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="512,-45 352,-45 352,-21 512,-21 512,-45"/>
+<text text-anchor="middle" x="432" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">enforce_vanished_one_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~multilayer_enforce_vanished_content&#45;&gt;proc~enforce_vanished_one_impl -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_edge1" class="edge">
+<title>proc~multilayer_enforce_vanished_content&#45;&gt;proc~enforce_vanished_one_impl</title>
+<path fill="none" stroke="#ff0000" d="M316.04,-33C324.75,-33 333.34,-33 341.67,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="341.68,-36.5 351.68,-33 341.68,-29.5 341.68,-36.5"/>
+</g>
+<!-- local -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_node3" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="640.5,-66 586.5,-66 586.5,-42 640.5,-42 640.5,-66"/>
+<text text-anchor="middle" x="613.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~enforce_vanished_one_impl&#45;&gt;local -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_edge2" class="edge">
+<title>proc~enforce_vanished_one_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M512.25,-42.27C534.65,-44.89 557.94,-47.62 576.42,-49.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="576.1,-53.26 586.44,-50.95 576.91,-46.31 576.1,-53.26"/>
+</g>
+<!-- rdb_vl_merge_content -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_node4" class="node">
+<title>rdb_vl_merge_content</title>
+<polygon fill="#777777" stroke="#777777" points="679,-24 548,-24 548,0 679,0 679,-24"/>
+<text text-anchor="middle" x="613.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_merge_content</text>
+</g>
+<!-- proc~enforce_vanished_one_impl&#45;&gt;rdb_vl_merge_content -->
+<g id="proc~~multilayer_enforce_vanished_content~~CallsGraph_edge3" class="edge">
+<title>proc~enforce_vanished_one_impl&#45;&gt;rdb_vl_merge_content</title>
+<path fill="none" stroke="#ff0000" d="M512.25,-23.73C520.73,-22.74 529.34,-21.73 537.76,-20.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="538.4,-24.19 547.93,-19.55 537.59,-17.24 538.4,-24.19"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmultilayer_enforce_vanished_contentCallsGraph = svgPanZoom('#procmultilayer_enforce_vanished_contentCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~multilayer_enforce_vanished_content~~CalledByGraph Pages: 1 -->
+<svg id="procmultilayer_enforce_vanished_contentCalledByGraph" width="641pt" height="56pt"
+ viewBox="0.00 0.00 641.00 56.27" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph" class="graph" transform="scale(0.76 0.76) rotate(0) translate(4 70)">
+<title>proc~~multilayer_enforce_vanished_content~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 839,-70 839,4 -4,4"/>
+<!-- proc~multilayer_enforce_vanished_content -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node1" class="node">
+<title>proc~multilayer_enforce_vanished_content</title>
+<polygon fill="none" stroke="black" points="835,-45 519,-45 519,-21 835,-21 835,-45"/>
+<text text-anchor="middle" x="677" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">multilayer_state_t%multilayer_enforce_vanished_content</text>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node2" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CalledByGraph_node2"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-45 358,-45 358,-21 483,-21 483,-45"/>
+<text text-anchor="middle" x="420.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~multilayer_enforce_vanished_content -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~multilayer_enforce_vanished_content</title>
+<path fill="none" stroke="#ff0000" d="M483.11,-33C491.23,-33 499.85,-33 508.75,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="508.92,-36.5 518.92,-33 508.92,-29.5 508.92,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node3" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CalledByGraph_node3"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-33C330.15,-33 338.91,-33 347.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.78,-36.5 357.78,-33 347.78,-29.5 347.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~multilayer_enforce_vanished_content~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~multilayer_enforce_vanished_content~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmultilayer_enforce_vanished_contentCalledByGraph = svgPanZoom('#procmultilayer_enforce_vanished_contentCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~31"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">multilayer_enforce_vanished_content</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! **THE enforcement point for invariant I1′.**</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!     I1′:  `h_layer &lt;= H_VANISHED  ⇒  hTr = h_layer·c_live`, every</span>
+<span class="w">      </span><span class="c">!!           registered tracer, `c_live` = the concentration of the</span>
+<span class="w">      </span><span class="c">!!           filler's donor live layer (the nearest live layer above;</span>
+<span class="w">      </span><span class="c">!!           the topmost live layer for the fillers above it).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Walks the tracer registry and, per column, pools every filler with</span>
+<span class="w">      </span><span class="c">!! its donor live layer and mixes the pool to one concentration</span>
+<span class="w">      </span><span class="c">!! (`rdb_vl_merge_content`, the ONE definition of the rule — see</span>
+<span class="w">      </span><span class="c">!! `src/shared_module_utilities/rdb_vanished_layer.inc`).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Nothing is recorded in any budget** and nothing should be: the pool</span>
+<span class="w">      </span><span class="c">!! lies WITHIN a column, so the column integral — which is what every</span>
+<span class="w">      </span><span class="c">!! budget contributor measures — is unchanged to round-off.  A budget</span>
+<span class="w">      </span><span class="c">!! entry here would be a contributor that always sums to zero, i.e.</span>
+<span class="w">      </span><span class="c">!! noise in the one instrument that detects real leaks.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Why a state-owned sweep and not a rule each kernel remembers.**  The</span>
+<span class="w">      </span><span class="c">!! tree has ~40 sites that write tracer content and only the ALE remap</span>
+<span class="w">      </span><span class="c">!! checked `h` on the way in; the surface-flux, melt, sponge, hdiff,</span>
+<span class="w">      </span><span class="c">!! vdiff, vertical-advection and OBC writers all deposit into whatever</span>
+<span class="w">      </span><span class="c">!! layer they were handed.  "Correct by construction, per author,</span>
+<span class="w">      </span><span class="c">!! forever" is exactly the property that failed and produced the day-16</span>
+<span class="w">      </span><span class="c">!! z_fixed budget break.  One sweep at a defined point of the step makes</span>
+<span class="w">      </span><span class="c">!! the invariant structural.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Why `h·c_live` and not zero.**  Every transport kernel reads a</span>
+<span class="w">      </span><span class="c">!! filler's concentration as `hTr/h`, and the continuity step moves</span>
+<span class="w">      </span><span class="c">!! thickness out of (and into) fillers between two remaps.  A filler</span>
+<span class="w">      </span><span class="c">!! holding ZERO content hands that thickness to the live layers as</span>
+<span class="w">      </span><span class="c">!! fresh, 0 °C water, so a uniform tracer does not stay uniform — the</span>
+<span class="w">      </span><span class="c">!! previous rule (I1, `hTr = 0`) left 258 thin live cells at S = 0–34.43</span>
+<span class="w">      </span><span class="c">!! after 10 days of a uniform-S = 35 `double_gyre_mom6` run.  A filler</span>
+<span class="w">      </span><span class="c">!! holding its</span>
+<span class="w">      </span><span class="c">!! donor's concentration preserves tracer constancy.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Placement:** once per outer step, after every tracer update and after</span>
+<span class="w">      </span><span class="c">!! the ALE remap — `ocean_dyn_step_split_multilayer`'s tail.  The remap</span>
+<span class="w">      </span><span class="c">!! already establishes I1′ internally; this catches everything that</span>
+<span class="w">      </span><span class="c">!! writes AFTER it, and the families with no vanishing layers at all</span>
+<span class="w">      </span><span class="c">!! (sigma, z*-lite, the whole double-gyre / Eady / channel set) see a</span>
+<span class="w">      </span><span class="c">!! textual no-op: `rdb_vl_merge_content` mutates nothing on a column</span>
+<span class="w">      </span><span class="c">!! with no sub-threshold layer.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Outer-shim + flat-impl: the registry is an array of derived types, so</span>
+<span class="w">      </span><span class="c">!! the per-tracer array is pulled out on the host and handed to the flat</span>
+<span class="w">      </span><span class="c">!! `_impl` as an explicit-shape dummy (CLAUDE.md, "Outer-shim + flat-impl</span>
+<span class="w">      </span><span class="c">!! call sites").</span>
+<span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">         </span><span class="c">!! i-extent of `h_layer` / `hTr` (total, incl. halos).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">         </span><span class="c">!! j-extent (total, incl. halos).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">h_layer</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      do </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">         call </span><span class="n">enforce_vanished_one_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">this</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">t</span><span class="p">)%</span><span class="n">hTr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">multilayer_enforce_vanished_content</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-24 02:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

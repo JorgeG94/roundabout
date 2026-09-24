@@ -1,0 +1,815 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_fold_filler_defect &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_fold_filler_defect
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">24 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_remap.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_remap.f90.html'>rdb_ocean_remap.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_fold_filler_defect</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/remap_fold_filler_defect.html#variable-defect">defect</a>
+            <a class="list-group-item" href="../proc/remap_fold_filler_defect.html#variable-has_filler">has_filler</a>
+            <a class="list-group-item" href="../proc/remap_fold_filler_defect.html#variable-k~49">k</a>
+            <a class="list-group-item" href="../proc/remap_fold_filler_defect.html#variable-k_top_live">k_top_live</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_fold_filler_defect.html#src">remap_fold_filler_defect</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine remap_fold_filler_defect(nz, h_old_col, h_new_col, q_src, q_new)  
+</h2>
+    
+
+    <p>On a column that carries a vanished layer (source or target), make
+the tracer remap conservative EXACTLY, not just on a matched column:
+the content the remap failed to place, <code>Σ q_src − Σ q_new</code>, is
+handed to the topmost live target layer (the donor of any fillers
+above it, so the write-side pool that follows shares it with them).</p>
+<p>Why it is needed.  <code>remap_column</code> conserves only when <code>Σ h_old ==
+Σ h_new</code>, and the target builders reach that sum by a different
+arithmetic route than continuity does, so they differ by a few ulp
+every step (<code>OCEAN_REMAP_PRECOND_RTOL</code>).  The unmatched sliver is at
+the TOP of the column, and it goes with its content.  Under I1 that
+sliver was an empty filler and the loss was invisible; under I1′ the
+filler carries <code>c_live</code>, and on a quasi-steady column the sliver has
+the same sign every step: <code>cavity_flat_lid_rest_zfixed.nml</code> AT REST
+lost salt at <code>-1.2e-13</code>/day (the whole run&rsquo;s residual: <code>-3.2e-12</code> at
+day 30, against <code>-1.4e-13</code> under I1) until this fold.</p>
+<p><strong>Bit-identity:</strong> a column with no layer at or below <code>H_VANISHED</code>
+on either grid returns before touching anything, so every family
+without fillers (sigma, z*-lite, <code>eulerian_z</code>) is unchanged.  A
+column with no live target layer is left to the pool (land: zero).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~51"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old_col~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old_col</strong>(NZ_STACK_MAX)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new_col~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new_col</strong>(NZ_STACK_MAX)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_src"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_src</strong>(NZ_STACK_MAX)</td>
+            <td>
+                <p>Source content the remap was handed (after the read-side pool).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(NZ_STACK_MAX)</td>
+            <td>
+                <p>Target content <code>c_new·h_new</code>, before the write-side pool.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_fold_filler_defect~~CallsGraph Pages: 1 -->
+<svg id="procremap_fold_filler_defectCallsGraph" width="267pt" height="32pt"
+ viewBox="0.00 0.00 267.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_fold_filler_defect~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~remap_fold_filler_defect~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 263,-28 263,4 -4,4"/>
+<!-- proc~remap_fold_filler_defect -->
+<g id="proc~~remap_fold_filler_defect~~CallsGraph_node1" class="node">
+<title>proc~remap_fold_filler_defect</title>
+<polygon fill="none" stroke="black" points="141,-24 0,-24 0,0 141,0 141,-24"/>
+<text text-anchor="middle" x="70.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_fold_filler_defect</text>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_fold_filler_defect~~CallsGraph_node2" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="259,-24 177,-24 177,0 259,0 259,-24"/>
+<text text-anchor="middle" x="218" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_fold_filler_defect&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_fold_filler_defect~~CallsGraph_edge1" class="edge">
+<title>proc~remap_fold_filler_defect&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M141.27,-12C149.88,-12 158.55,-12 166.8,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="166.97,-15.5 176.97,-12 166.97,-8.5 166.97,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_fold_filler_defect~~CalledByGraph Pages: 1 -->
+<svg id="procremap_fold_filler_defectCalledByGraph" width="641pt" height="75pt"
+ viewBox="0.00 0.00 641.00 75.03" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph" class="graph" transform="scale(0.65 0.65) rotate(0) translate(4 112)">
+<title>proc~~remap_fold_filler_defect~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 987,-112 987,4 -4,4"/>
+<!-- proc~remap_fold_filler_defect -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node1" class="node">
+<title>proc~remap_fold_filler_defect</title>
+<polygon fill="none" stroke="black" points="983,-87 842,-87 842,-63 983,-63 983,-87"/>
+<text text-anchor="middle" x="912.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_fold_filler_defect</text>
+</g>
+<!-- proc~ocean_remap_tracer_column -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node2" class="node">
+<title>proc~ocean_remap_tracer_column</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node2"><a xlink:href="../proc/ocean_remap_tracer_column.html" xlink:title="ocean_remap_tracer_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="806,-108 638,-108 638,-84 806,-84 806,-108"/>
+<text text-anchor="middle" x="722" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;proc~remap_fold_filler_defect -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;proc~remap_fold_filler_defect</title>
+<path fill="none" stroke="#ff0000" d="M806.23,-86.73C814.71,-85.78 823.32,-84.82 831.76,-83.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="832.42,-87.33 841.97,-82.75 831.64,-80.38 832.42,-87.33"/>
+</g>
+<!-- proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node3" class="node">
+<title>proc~ocean_remap_tracer_field</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node3"><a xlink:href="../proc/ocean_remap_tracer_field.html" xlink:title="ocean_remap_tracer_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="797.5,-66 646.5,-66 646.5,-42 797.5,-42 797.5,-66"/>
+<text text-anchor="middle" x="722" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_field&#45;&gt;proc~remap_fold_filler_defect -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_remap_tracer_field&#45;&gt;proc~remap_fold_filler_defect</title>
+<path fill="none" stroke="#ff0000" d="M797.5,-62.3C808.69,-63.55 820.27,-64.84 831.56,-66.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="831.51,-69.61 841.84,-67.24 832.29,-62.65 831.51,-69.61"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node4" class="node">
+<title>proc~ocean_apply_ale_remap_centres</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node4"><a xlink:href="../proc/ocean_apply_ale_remap_centres.html" xlink:title="ocean_apply_ale_remap_centres">
+<polygon fill="#d9534f" stroke="#d9534f" points="602,-87 416,-87 416,-63 602,-63 602,-87"/>
+<text text-anchor="middle" x="509" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_centres</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#00ffff" d="M602.24,-65.82C613.53,-64.7 625.03,-63.55 636.21,-62.44"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="636.76,-65.9 646.36,-61.43 636.07,-58.94 636.76,-65.9"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node5" class="node">
+<title>proc~ocean_apply_ale_remap_step</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node5"><a xlink:href="../proc/ocean_apply_ale_remap_step.html" xlink:title="ocean_apply_ale_remap_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="593.5,-45 424.5,-45 424.5,-21 593.5,-21 593.5,-45"/>
+<text text-anchor="middle" x="509" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#00ffff" d="M593.7,-41.33C607.68,-42.72 622.19,-44.17 636.2,-45.56"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="636,-49.06 646.29,-46.56 636.69,-42.09 636,-49.06"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-45 255,-45 255,-21 380,-21 380,-45"/>
+<text text-anchor="middle" x="317.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step</title>
+<path fill="none" stroke="#00ffff" d="M380.03,-33C390.98,-33 402.6,-33 414.21,-33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.39,-36.5 424.39,-33 414.39,-29.5 414.39,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-33C227.15,-33 235.91,-33 244.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.78,-36.5 254.78,-33 244.78,-29.5 244.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~remap_fold_filler_defect~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~remap_fold_filler_defect~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_fold_filler_defectCalledByGraph = svgPanZoom('#procremap_fold_filler_defectCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-defect"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>defect</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-has_filler"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>has_filler</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~49"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top_live"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top_live</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_fold_filler_defect</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">,</span><span class="w"> </span><span class="n">h_new_col</span><span class="p">,</span><span class="w"> </span><span class="n">q_src</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! On a column that carries a vanished layer (source or target), make</span>
+<span class="w">      </span><span class="c">!! the tracer remap conservative EXACTLY, not just on a matched column:</span>
+<span class="w">      </span><span class="c">!! the content the remap failed to place, `Σ q_src − Σ q_new`, is</span>
+<span class="w">      </span><span class="c">!! handed to the topmost live target layer (the donor of any fillers</span>
+<span class="w">      </span><span class="c">!! above it, so the write-side pool that follows shares it with them).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Why it is needed.  `remap_column` conserves only when `Σ h_old ==</span>
+<span class="w">      </span><span class="c">!! Σ h_new`, and the target builders reach that sum by a different</span>
+<span class="w">      </span><span class="c">!! arithmetic route than continuity does, so they differ by a few ulp</span>
+<span class="w">      </span><span class="c">!! every step (`OCEAN_REMAP_PRECOND_RTOL`).  The unmatched sliver is at</span>
+<span class="w">      </span><span class="c">!! the TOP of the column, and it goes with its content.  Under I1 that</span>
+<span class="w">      </span><span class="c">!! sliver was an empty filler and the loss was invisible; under I1′ the</span>
+<span class="w">      </span><span class="c">!! filler carries `c_live`, and on a quasi-steady column the sliver has</span>
+<span class="w">      </span><span class="c">!! the same sign every step: `cavity_flat_lid_rest_zfixed.nml` AT REST</span>
+<span class="w">      </span><span class="c">!! lost salt at `-1.2e-13`/day (the whole run's residual: `-3.2e-12` at</span>
+<span class="w">      </span><span class="c">!! day 30, against `-1.4e-13` under I1) until this fold.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Bit-identity:** a column with no layer at or below `H_VANISHED`</span>
+<span class="w">      </span><span class="c">!! on either grid returns before touching anything, so every family</span>
+<span class="w">      </span><span class="c">!! without fillers (sigma, z*-lite, `eulerian_z`) is unchanged.  A</span>
+<span class="w">      </span><span class="c">!! column with no live target layer is left to the pool (land: zero).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_new_col</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_src</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Source content the remap was handed (after the read-side pool).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Target content `c_new·h_new`, before the write-side pool.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">k_top_live</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">has_filler</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">defect</span>
+
+<span class="w">      </span><span class="n">has_filler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="n">k_top_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_old_col</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_new_col</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">has_filler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_new_col</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="n">k_top_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">has_filler</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">k_top_live</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      </span><span class="n">defect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">defect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">defect</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">q_src</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      </span><span class="n">q_new</span><span class="p">(</span><span class="n">k_top_live</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">k_top_live</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">defect</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">remap_fold_filler_defect</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-24 02:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -63,6 +63,34 @@ module rdb_constants
       !! Dynamic-vanish threshold (m).  A layer thinner than this is
       !! dynamically VANISHED — skip / merge into a neighbour, do NOT clamp.
       !! When dividing by `h_layer` for a PHYSICAL result, gate on this.
+      !! Tests of it are STRICT `>`: a layer sitting exactly ON the marker
+      !! reads as vanished, which is what the geometric vcoord families
+      !! rely on (`rdb_vcoord :: vcoord_h_min_role`).
+      !!
+      !! **Do not hand-roll the test.** Tracers are stored as CONTENT
+      !! (`hTr = h·c`) and the tree holds one invariant about vanished
+      !! layers —
+      !!
+      !!     I1′:  `h <= H_VANISHED  ⇒  hTr = h·c_live`, every registered
+      !!           tracer, `c_live` the concentration of the filler's donor
+      !!           (nearest live layer above; topmost live layer for the
+      !!           fillers above it; `hTr = 0` with no live layer)
+      !!
+      !! — with ONE definition of the predicate, of "the concentration of
+      !! layer k", and of the column merge that restores it:
+      !! `src/shared_module_utilities/rdb_vanished_layer.inc`
+      !! (`rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_column_conc`,
+      !! `rdb_vl_holds_live_conc`, `rdb_vl_merge_content`), ONE
+      !! enforcement point (`multilayer_state_t%enforce_vanished_content`,
+      !! at the tail of the outer step) and a fail-loud tripwire
+      !! (`&vcoord_nml check_vanished_content`).  The contract, and the
+      !! table of consumers that deliberately substitute something ELSE
+      !! (the EOS's reference T/S, the sponge's nearest massive layer, the
+      !! diagnostics' NaN, the melt sampler's skip), is written down once
+      !! in `src/core/ocean/README.md`, "The vanished-layer content rule".
+      !! A new raw `hTr/h` divide or a new comparison against this constant
+      !! outside the sanctioned modules is flagged by the `vanished-layer`
+      !! pre-commit hook.
    real(wp), parameter :: H_DIV_EPS = 1.0e-20_wp
       !! Pure division-safety epsilon (m), far below any physical thickness:
       !! adding it (`1/(h+H_DIV_EPS)`) only prevents a 1/0, never changes a

@@ -134,7 +134,7 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../module/rdb_constants.html#variable-cp_water">CP_WATER</a>
-            <a class="list-group-item" href="../module/rdb_constants.html#variable-deg2rad~3">DEG2RAD</a>
+            <a class="list-group-item" href="../module/rdb_constants.html#variable-deg2rad">DEG2RAD</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-dry_tolerance">DRY_TOLERANCE</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-froude_cap">FROUDE_CAP</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-gravity">GRAVITY</a>
@@ -148,7 +148,7 @@
             <a class="list-group-item" href="../module/rdb_constants.html#variable-nh_min_depth">NH_MIN_DEPTH</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-nz_stack_max">NZ_STACK_MAX</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-omega_earth">OMEGA_EARTH</a>
-            <a class="list-group-item" href="../module/rdb_constants.html#variable-pi~9">PI</a>
+            <a class="list-group-item" href="../module/rdb_constants.html#variable-pi~2">PI</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-rad2deg">RAD2DEG</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-remap_pcm">REMAP_PCM</a>
             <a class="list-group-item" href="../module/rdb_constants.html#variable-remap_plm">REMAP_PLM</a>
@@ -5992,7 +5992,7 @@ heat flux Q_net [W/m²] to kinematic heat flux Q_net/(rho_0·cp) [m·K/s].</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-deg2rad~3"></span>
+              <span class="anchor" id="variable-deg2rad"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -6096,7 +6096,34 @@ parameter
             <td>
                 <p>Dynamic-vanish threshold (m).  A layer thinner than this is
 dynamically VANISHED — skip / merge into a neighbour, do NOT clamp.
-When dividing by <code>h_layer</code> for a PHYSICAL result, gate on this.</p>
+When dividing by <code>h_layer</code> for a PHYSICAL result, gate on this.
+Tests of it are STRICT <code>&gt;</code>: a layer sitting exactly ON the marker
+reads as vanished, which is what the geometric vcoord families
+rely on (<code>rdb_vcoord :: vcoord_h_min_role</code>).</p>
+<p><strong>Do not hand-roll the test.</strong> Tracers are stored as CONTENT
+(<code>hTr = h·c</code>) and the tree holds one invariant about vanished
+layers —</p>
+<div class="codehilite"><pre><span></span><code><span class="n">I1′</span><span class="o">:</span><span class="w">  </span><span class="n n-Quoted">`h &lt;= H_VANISHED  ⇒  hTr = h·c_live`</span><span class="p">,</span><span class="w"> </span><span class="k">every</span><span class="w"> </span><span class="n">registered</span>
+<span class="w">      </span><span class="n">tracer</span><span class="p">,</span><span class="w"> </span><span class="n n-Quoted">`c_live`</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">concentration</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">filler</span><span class="s1">'s donor</span>
+<span class="s1">      (nearest live layer above; topmost live layer for the</span>
+<span class="s1">      fillers above it; `hTr = 0` with no live layer)</span>
+</code></pre></div>
+
+<p>— with ONE definition of the predicate, of &ldquo;the concentration of
+layer k&rdquo;, and of the column merge that restores it:
+<code>src/shared_module_utilities/rdb_vanished_layer.inc</code>
+(<code>rdb_vl_is_live</code>, <code>rdb_vl_conc</code>, <code>rdb_vl_column_conc</code>,
+<code>rdb_vl_holds_live_conc</code>, <code>rdb_vl_merge_content</code>), ONE
+enforcement point (<code>multilayer_state_t%enforce_vanished_content</code>,
+at the tail of the outer step) and a fail-loud tripwire
+(<code>&amp;vcoord_nml check_vanished_content</code>).  The contract, and the
+table of consumers that deliberately substitute something ELSE
+(the EOS&rsquo;s reference T/S, the sponge&rsquo;s nearest massive layer, the
+diagnostics&rsquo; NaN, the melt sampler&rsquo;s skip), is written down once
+in <code>src/core/ocean/README.md</code>, &ldquo;The vanished-layer content rule&rdquo;.
+A new raw <code>hTr/h</code> divide or a new comparison against this constant
+outside the sanctioned modules is flagged by the <code>vanished-layer</code>
+pre-commit hook.</p>
             </td>
         </tr>
         <tr>
@@ -6267,7 +6294,7 @@ parameter
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-pi~9"></span>
+              <span class="anchor" id="variable-pi~2"></span>
               real(kind=wp),
             </td>
               <td>public,</td>
@@ -6709,7 +6736,7 @@ a silent thread-local-storage overrun, not a crash.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~407"></span>
+              <span class="anchor" id="variable-nz~29"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -6754,7 +6781,7 @@ a silent thread-local-storage overrun, not a crash.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~406"></span>
+              <span class="anchor" id="variable-nz~28"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -6803,7 +6830,7 @@ a silent thread-local-storage overrun, not a crash.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 23:55 +0000             </p>
+ on 2026-09-24 02:37 +0000             </p>
           </div>
         </div>
         <br>

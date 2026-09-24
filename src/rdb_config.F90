@@ -3374,6 +3374,23 @@ module rdb_config
          !! are caller obligations and neither was ever checked; a violation
          !! silently CREATES or DELETES tracer mass.  Diagnostic knob —
          !! .false. (default) = the check never runs = bit-identical.
+      logical :: check_vanished_content = .false.
+         !! **I1′ tripwire** — assert `h_layer <= H_VANISHED ⇒ hTr =
+         !! h_layer·c_live` (the donor live layer's concentration; `hTr = 0`
+         !! in a column with no live layer) for every registered tracer, once
+         !! per outer step, immediately after the enforcement point that
+         !! establishes it (`multilayer_state_t%enforce_vanished_content`).
+         !! A violation logs the offending cell count and the worst
+         !! `|hTr − h·c_live|` and `error stop`s.
+         !!
+         !! HEAVY only in the sense that it adds two device reductions per
+         !! tracer per step; the healthy path does no H←D copy.  Default
+         !! `.false.`.  Turn it ON for any configuration whose coordinate
+         !! actually vanishes layers (`z_fixed`, `zstar_full`, wet/dry) —
+         !! the stability suite does.  Inert on a family with no fillers.
+         !!
+         !! See `src/core/ocean/README.md`, "The vanished-layer content
+         !! rule".
       logical :: zfixed_closed_faces = .false.
          !! **Partial-step z-level face closure** under
          !! `vcoord_type = "z_fixed"` (Adcroft, Hill & Marshall 1997;
@@ -7719,6 +7736,11 @@ contains
                              "ALE remap: fail loud when a column violates the overlap "// &
                              "sweep's preconditions (non-negative thicknesses, "// &
                              "matching column totals)"))
+      pl => cfg%check_vanished_content
+      call g%add(nml_logical("check_vanished_content", pl, &
+                             "I1' tripwire: fail loud if any layer at or below "// &
+                             "H_VANISHED does not hold its donor live layer's "// &
+                             "concentration (debug/validation)"))
       pl => cfg%zfixed_closed_faces
       call g%add(nml_logical("zfixed_closed_faces", pl, &
                              "z_fixed partial steps: close every face whose layer is "// &

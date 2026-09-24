@@ -6,8 +6,13 @@ module rdb_ocean_remap
    !! `rdb_remap_column` (shared with coastal); this module wires it across the
    !! registered tracer slot list plus the face-velocity pass.
    !!
-   !! Per-column conservation: sum_k(c_old·h_old) = sum_k(c_new·h_new) to machine
-   !! precision (modulo the c = hTr/h step, which a vanishing-layer guard protects).
+   !! Per-column conservation: sum_k(hTr) is preserved to machine precision.
+   !! The `c = hTr/h` ↔ `hTr = c·h` round trip is protected by a TWO-SIDED
+   !! vanishing-layer guard (`rdb_vl_merge_content`, invariant I1′) which
+   !! keeps the content of a sub-threshold layer in the column instead of
+   !! deleting it, and leaves every sub-threshold layer holding `h·c_live`,
+   !! the concentration of its donor live layer. See
+   !! `src/core/ocean/README.md` ("The vanished-layer content rule").
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
@@ -23,15 +28,19 @@ module rdb_ocean_remap
    implicit none
    private
 
-   ! Vanishing-layer guard for the `c = hTr / h` step — the D4 skip/merge
-   ! marker, NOT a positivity floor: below it the layer's concentration is
-   ! taken as 0 rather than recovered from a near-zero divisor.  Aliased to
-   ! `H_VANISHED` (same value) so there is ONE definition of "vanished" in
-   ! the tree; it used to be a bare `1.5e-4_wp` literal here, which is a
-   ! third definition waiting to drift from the constant of record.  Every
-   ! test of it is a STRICT `>`: a layer sitting exactly ON the marker reads
-   ! as vanished, which is what the geometric vcoord families rely on (see
-   ! `rdb_vcoord :: vcoord_h_min_role`).
+   ! Degenerate-COLUMN guard for `rescale_anomaly_ke` — a face column whose
+   ! whole depth is at or below the vanish marker has no barotropic mean to
+   ! rescale about.  Aliased to `H_VANISHED` (same value) so there is ONE
+   ! definition of "vanished" in the tree; it used to be a bare `1.5e-4_wp`
+   ! literal here, which is a third definition waiting to drift from the
+   ! constant of record.
+   !
+   ! The per-LAYER tests it used to serve — `c = hTr/h` and the I1′ merge —
+   ! now go through `rdb_vl_column_conc` / `rdb_vl_merge_content`, the included
+   ! single definition (`src/shared_module_utilities/rdb_vanished_layer.inc`).
+   ! Every test of the marker is a STRICT `>`: a layer sitting exactly ON it
+   ! reads as vanished, which is what the geometric vcoord families rely on
+   ! (see `rdb_vcoord :: vcoord_h_min_role`).
    real(wp), parameter :: H_FLOOR = H_VANISHED
 
    real(wp), parameter, public :: OCEAN_REMAP_PRECOND_RTOL = 1.0e-9_wp
@@ -48,6 +57,7 @@ module rdb_ocean_remap
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
+   public :: ocean_remap_merge_vanished_content   ! exposed for unit tests
 
 #ifdef LFORTRAN_PASSING
    integer, parameter :: NZ_STACK_MAX = 64
@@ -200,6 +210,22 @@ contains
       !! `budget` (optional): when present, the per-cell hTr_new−hTr_old increment
       !! is accumulated into the slot (heat/salt remap deltas) before overwriting.
       !! Flat-arg so GPU codegen doesn't chase the array-of-derived-types pointer.
+      !!
+      !! **The vanishing-layer guard is two-sided** (`rdb_vl_merge_content`,
+      !! invariant I1′): on the READ side a SOURCE filler is pooled with its
+      !! donor live layer, and the reconstruction is handed the donor's
+      !! concentration for it (`rdb_vl_column_conc`) — never one recovered
+      !! from a near-zero divisor; on the WRITE side a TARGET filler is pooled
+      !! with ITS donor live target layer, so it receives `h_new·c_live`,
+      !! taken from that layer. Without the write half the remap parks
+      !! arbitrary content in a filler (the day-16 z_fixed salt/heat break,
+      !! when the read side then zeroed it); with a write half that ZEROES the
+      !! filler (the previous I1), a uniform tracer stops being uniform — the
+      !! thickness the continuity step later moves out of the filler arrives
+      !! in the live layers carrying no content.
+      !! Post-condition (I1′): `h_new <= H_VANISHED ⇒ hTr = h_new·c_live`,
+      !! column sum conserved to round-off, so `budget` still telescopes per
+      !! column.
       integer, intent(in) :: nx, ny, nz, method
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
@@ -216,36 +242,40 @@ contains
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
       real(wp) :: c_old_col(NZ_STACK_MAX), c_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX)
-      real(wp) :: hTr_new
+      real(wp) :: hTr_col(NZ_STACK_MAX), hTr_new_col(NZ_STACK_MAX)
 
       ! Gate the budget write INSIDE the one loop (as vdiff does); splitting
       ! present(budget) into two loops makes NVHPC compile the no-budget branch
       ! ~25x slower. Bit-identical to the split form.
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, hTr_new)
+         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, hTr_new_col)
          do k = 1, nz
             h_old_col(k) = h_old(i, j, k)
             h_new_col(k) = h_new(i, j, k)
             hTr_col(k) = hTr(i, j, k)
-            if (h_old_col(k) > H_FLOOR) then
-               c_old_col(k) = hTr_col(k)/h_old_col(k)
-            else
-               c_old_col(k) = 0.0_wp
-            end if
          end do
+         ! Read side. `hTr_col` is a LOCAL copy — the budget below still
+         ! differences against the original `hTr` array, so the merge is
+         ! invisible to the leak detector.
+         call rdb_vl_merge_content(nz, h_old_col, hTr_col)
+         call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old_col)
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
                            c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
+         ! Write side.
+         do k = 1, nz
+            hTr_new_col(k) = c_new_col(k)*h_new_col(k)
+         end do
+         call remap_fold_filler_defect(nz, h_old_col, h_new_col, hTr_col, hTr_new_col)
+         call rdb_vl_merge_content(nz, h_new_col, hTr_new_col)
          if (present(budget)) then
             do k = 1, nz
-               hTr_new = c_new_col(k)*h_new_col(k)
-               budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
-               hTr(i, j, k) = hTr_new
+               budget(i, j, k) = budget(i, j, k) + (hTr_new_col(k) - hTr(i, j, k))
+               hTr(i, j, k) = hTr_new_col(k)
             end do
          else
             do k = 1, nz
-               hTr(i, j, k) = c_new_col(k)*h_new_col(k)
+               hTr(i, j, k) = hTr_new_col(k)
             end do
          end if
       end do
@@ -726,7 +756,8 @@ contains
    pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
       !! Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer
       !! content + pre-remap thicknesses, for the VCOORD_RHO density inversion.
-      !! Guarded against H_VANISHED (sub-floor layer ⇒ c = 0). Flat-impl,
+      !! Per-layer `rdb_vl_conc` (a filler reads `hTr/h`, its donor's
+      !! concentration by I1′; a zero-thickness layer reads 0). Flat-impl,
       !! explicit-shape; one cadence-bounded launch per remap.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
@@ -736,36 +767,106 @@ contains
       real(wp), intent(out) :: conc_s(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         if (h_old(i, j, k) > H_VANISHED) then
-            conc_t(i, j, k) = hTr_T(i, j, k)/h_old(i, j, k)
-            conc_s(i, j, k) = hTr_S(i, j, k)/h_old(i, j, k)
-         else
-            conc_t(i, j, k) = 0.0_wp
-            conc_s(i, j, k) = 0.0_wp
-         end if
+         conc_t(i, j, k) = rdb_vl_conc(hTr_T(i, j, k), h_old(i, j, k))
+         conc_s(i, j, k) = rdb_vl_conc(hTr_S(i, j, k), h_old(i, j, k))
       end do
    end subroutine build_ts_concentration
 
    subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method)
       !! Single-column unit-test entry: wraps `remap_column` with the
-      !! c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
-      !! `ocean_remap_tracer_field`.
+      !! c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
+      !! vanishing-layer merge the production kernel runs
+      !! (`rdb_vl_merge_content` + `rdb_vl_column_conc`), so this entry cannot drift from
+      !! `ocean_remap_tracer_field`. Production callers go through that one.
       integer, intent(in) :: nz, method
       real(wp), intent(in) :: h_old(nz), h_new(nz)
       real(wp), intent(inout) :: hTr_inout(nz)
       real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX)
+      real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
+      real(wp) :: hTr_col(NZ_STACK_MAX), hTr_src(NZ_STACK_MAX)
       integer :: k
       do k = 1, nz
-         if (h_old(k) > H_FLOOR) then
-            c_old(k) = hTr_inout(k)/h_old(k)
-         else
-            c_old(k) = 0.0_wp
-         end if
+         h_old_col(k) = h_old(k)
+         h_new_col(k) = h_new(k)
+         hTr_col(k) = hTr_inout(k)
       end do
+      call rdb_vl_merge_content(nz, h_old_col, hTr_col)
+      call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old)
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
       do k = 1, nz
-         hTr_inout(k) = c_new(k)*h_new(k)
+         hTr_src(k) = hTr_col(k)
+         hTr_col(k) = c_new(k)*h_new(k)
+      end do
+      call remap_fold_filler_defect(nz, h_old_col, h_new_col, hTr_src, hTr_col)
+      call rdb_vl_merge_content(nz, h_new_col, hTr_col)
+      do k = 1, nz
+         hTr_inout(k) = hTr_col(k)
       end do
    end subroutine ocean_remap_tracer_column
+
+   pure subroutine remap_fold_filler_defect(nz, h_old_col, h_new_col, q_src, q_new)
+      !$acc routine seq
+      !! On a column that carries a vanished layer (source or target), make
+      !! the tracer remap conservative EXACTLY, not just on a matched column:
+      !! the content the remap failed to place, `Σ q_src − Σ q_new`, is
+      !! handed to the topmost live target layer (the donor of any fillers
+      !! above it, so the write-side pool that follows shares it with them).
+      !!
+      !! Why it is needed.  `remap_column` conserves only when `Σ h_old ==
+      !! Σ h_new`, and the target builders reach that sum by a different
+      !! arithmetic route than continuity does, so they differ by a few ulp
+      !! every step (`OCEAN_REMAP_PRECOND_RTOL`).  The unmatched sliver is at
+      !! the TOP of the column, and it goes with its content.  Under I1 that
+      !! sliver was an empty filler and the loss was invisible; under I1′ the
+      !! filler carries `c_live`, and on a quasi-steady column the sliver has
+      !! the same sign every step: `cavity_flat_lid_rest_zfixed.nml` AT REST
+      !! lost salt at `-1.2e-13`/day (the whole run's residual: `-3.2e-12` at
+      !! day 30, against `-1.4e-13` under I1) until this fold.
+      !!
+      !! **Bit-identity:** a column with no layer at or below `H_VANISHED`
+      !! on either grid returns before touching anything, so every family
+      !! without fillers (sigma, z*-lite, `eulerian_z`) is unchanged.  A
+      !! column with no live target layer is left to the pool (land: zero).
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_old_col(NZ_STACK_MAX)
+      real(wp), intent(in) :: h_new_col(NZ_STACK_MAX)
+      real(wp), intent(in) :: q_src(NZ_STACK_MAX)
+         !! Source content the remap was handed (after the read-side pool).
+      real(wp), intent(inout) :: q_new(NZ_STACK_MAX)
+         !! Target content `c_new·h_new`, before the write-side pool.
+      integer :: k, k_top_live
+      logical :: has_filler
+      real(wp) :: defect
+
+      has_filler = .false.
+      k_top_live = 0
+      do k = 1, nz
+         if (.not. rdb_vl_is_live(h_old_col(k)) .or. .not. rdb_vl_is_live(h_new_col(k))) then
+            has_filler = .true.
+         end if
+         if (rdb_vl_is_live(h_new_col(k))) k_top_live = k
+      end do
+      if (.not. has_filler .or. k_top_live == 0) return
+      defect = 0.0_wp
+      do k = 1, nz
+         defect = defect + (q_src(k) - q_new(k))
+      end do
+      q_new(k_top_live) = q_new(k_top_live) + defect
+   end subroutine remap_fold_filler_defect
+
+   pure subroutine ocean_remap_merge_vanished_content(nz, h_col, q_col)
+      !! Public test shim over the included `rdb_vl_merge_content` — the ONE
+      !! definition of the vanished-layer content rule
+      !! (`src/shared_module_utilities/rdb_vanished_layer.inc`).  Production
+      !! code calls the included copy directly; this exists so
+      !! `tests/test_ocean_remap_vanished.F90` can assert the rule's own
+      !! properties without a second transcription of it.
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
+      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
+      call rdb_vl_merge_content(nz, h_col, q_col)
+   end subroutine ocean_remap_merge_vanished_content
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_remap

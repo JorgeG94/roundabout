@@ -1117,7 +1117,8 @@ downstream (every consumer falls back to h_old via the mask).</p></td>
                  <td>Subroutine</td>
                  <td><p>Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer
 content + pre-remap thicknesses, for the VCOORD_RHO density inversion.
-Guarded against H_VANISHED (sub-floor layer ⇒ c = 0). Flat-impl,
+Per-layer <code>rdb_vl_conc</code> (a filler reads <code>hTr/h</code>, its donor&rsquo;s
+concentration by I1′; a zero-thickness layer reads 0). Flat-impl,
 explicit-shape; one cadence-bounded launch per remap.</p></td>
                </tr>
 			   <tr>
@@ -1709,6 +1710,17 @@ namelist group the user actually edited.</p></td>
                  <td><a href='../module/rdb_nml_schema.html'>rdb_nml_schema</a></td>
                  <td>Subroutine</td>
                  <td><p>Flag unsupported namelist syntax embedded in a bare token.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/check_vanished_invariant_or_die.html'>check_vanished_invariant_or_die</a></td>
+                 <td><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fail-loud TRIPWIRE for invariant I1′ — <code>h_layer &lt;= H_VANISHED ⇒
+hTr = h_layer·c_live</code> (the donor live layer&rsquo;s concentration; <code>hTr = 0</code>
+in a column with no live layer) for every registered tracer.  Gated on
+<code>&amp;vcoord_nml check_vanished_content</code> (default <code>.false.</code>), which is
+the knob the stability suite turns on for the cases that actually
+have vanishing layers.</p><a href="../proc/check_vanished_invariant_or_die.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/chksum_active.html'>chksum_active</a></td>
@@ -3690,6 +3702,13 @@ byte-identical to the pre-budget format.  <code>label</code> is a 4-char tag
                  <td></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/enforce_vanished_one_impl.html'>enforce_vanished_one_impl</a></td>
+                 <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Flat-impl of the I1′ sweep for ONE tracer.  Explicit-shape dummies so
+NVHPC does not walk a descriptor per launch.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/engine_configure_diag.html'>engine_configure_diag</a></td>
                  <td><a href='../module/rdb_ocean_engine.html'>rdb_ocean_engine</a></td>
                  <td>Subroutine</td>
@@ -4758,7 +4777,7 @@ ice-equivalent freshwater) — see <code>melt_m_per_yr_factor</code>.</p></td>
 toward the bed; first layer whose ρ exceeds (surface ρ +
 MLD_DENSITY_THRESHOLD) marks the MLD as the cumulative h-sum
 above it.  No crossing → MLD = full column depth.  Threshold met
-at the surface itself → MLD = 0.</p></td>
+at the surface itself → MLD = 0.</p><a href="../proc/fill_mld_density_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_mld_epbl.html'>fill_mld_epbl</a></td>
@@ -4788,7 +4807,14 @@ BOTH indices being registered.</p></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Subroutine</td>
                  <td><p>In-situ density per layer — direct read of the EOS slot (driver
-must have run <code>ocean_eos_compute</code> this step; not re-invoked here).</p></td>
+must have run <code>ocean_eos_compute</code> this step; not re-invoked here),
+with the NaN missing-data sentinel on every vanished layer.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/fill_rho_layer_impl.html'>fill_rho_layer_impl</a></td>
+                 <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>buf = rho_layer</code> on live layers, IEEE NaN on vanished ones.</p><a href="../proc/fill_rho_layer_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/fill_salinity.html'>fill_salinity</a></td>
@@ -7848,6 +7874,24 @@ sigma=0 (surface) and sigma &lt;= -1 (ML base); peaks near sigma=-0.5.</p><a hre
 key box (descriptor moves only — see <a href="../proc/schema_add_group.html">schema_add_group</a>).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/multilayer_enforce_vanished_content.html'>multilayer_enforce_vanished_content</a></td>
+                 <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p><strong>THE enforcement point for invariant I1′.</strong></p><a href="../proc/multilayer_enforce_vanished_content.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/multilayer_enforce_vanished_content_host.html'>multilayer_enforce_vanished_content_host</a></td>
+                 <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>HOST twin of <code>enforce_vanished_content</code>, for SETUP only.  The seed
+(<code>ocean_state_seed_land_cells</code>) runs before <code>enter_data</code>, where a
+<code>do concurrent</code> on the offload build would work on device memory
+that is not mapped yet (<code>mem:separate</code>: no implicit copies).  Plain
+host loops over the SAME included <code>rdb_vl_merge_content</code>, so the
+seeded state satisfies I1′ by the one definition.  Never call it on
+a device-resident state.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/multilayer_register_passive_tracer.html'>multilayer_register_passive_tracer</a></td>
                  <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
                  <td>Subroutine</td>
@@ -7860,6 +7904,17 @@ and BEFORE <code>enter_data</code> — and, on the ocean path, before
 <code>hTr</code> once layer thicknesses exist, and may set
 <code>tracers(idx)%standard_name</code> / the pipeline opt-outs directly
 (public components).  S/T/age keep their indices.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/multilayer_scan_vanished_content.html'>multilayer_scan_vanished_content</a></td>
+                 <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Pure I1′ TRIPWIRE scan — counts the vanished cells that do NOT hold
+their donor&rsquo;s concentration (<code>rdb_vl_holds_live_conc</code>: <code>|hTr −
+h·c_live| &gt; 1e-12·|h·c_live|</code>, i.e. <code>hTr ≠ 0</code> in a column with no
+live layer) and reports the largest offending <code>|hTr − h·c_live|</code>,
+without touching anything.  Two device reductions per tracer, two
+scalars out; no H←D copy on the healthy path.</p><a href="../proc/multilayer_scan_vanished_content.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/multilayer_state_bytes.html'>multilayer_state_bytes</a></td>
@@ -8036,15 +8091,15 @@ shape, on the read side.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_get_varid.html'>nc_get_varid</a></td>
-                 <td><a href='../module/rdb_io_netcdf.html'>rdb_io_netcdf</a></td>
-                 <td>Subroutine</td>
-                 <td><p>Get the variable ID for a named variable</p></td>
-               </tr>
-			   <tr>
-                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
                  <td><a href='../module/rdb_ocean_restart_io.html'>rdb_ocean_restart_io</a></td>
                  <td>Subroutine</td>
                  <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
+                 <td><a href='../module/rdb_io_netcdf.html'>rdb_io_netcdf</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Get the variable ID for a named variable</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_open_read.html'>nc_open_read</a></td>
@@ -10407,9 +10462,7 @@ caller must issue <code>!$acc update device(this%b)</code> itself.</p></td>
                  <td><a href='../module/rdb_ocean_pseudo_salt.html'>rdb_ocean_pseudo_salt</a></td>
                  <td>Subroutine</td>
                  <td><p>Diagnostic helper: <code>D(i,j,k) = hTr_ps/h - hTr_s/h</code>, i.e. the
-pseudo-salt concentration minus the salinity concentration.
-Vanishing layers (h &lt;= 0) write zero (not NaN), matching
-<code>fill_tracer_impl</code>&rsquo;s convention.</p></td>
+pseudo-salt concentration minus the salinity concentration.</p><a href="../proc/ocean_pseudo_salt_deviation.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_pseudo_salt_register.html'>ocean_pseudo_salt_register</a></td>
@@ -10487,6 +10540,17 @@ face-shaped (nsurf) coefficient arrays.  Plain host allocation
 (no <code>do concurrent</code> before enter_data).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_remap_merge_vanished_content.html'>ocean_remap_merge_vanished_content</a></td>
+                 <td><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Public test shim over the included <code>rdb_vl_merge_content</code> — the ONE
+definition of the vanished-layer content rule
+(<code>src/shared_module_utilities/rdb_vanished_layer.inc</code>).  Production
+code calls the included copy directly; this exists so
+<code>tests/test_ocean_remap_vanished.F90</code> can assert the rule&rsquo;s own
+properties without a second transcription of it.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_remap_scan_preconditions.html'>ocean_remap_scan_preconditions</a></td>
                  <td><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></td>
                  <td>Subroutine</td>
@@ -10499,8 +10563,10 @@ badly they are missed — the domain-wide counterpart of
                  <td><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></td>
                  <td>Subroutine</td>
                  <td><p>Single-column unit-test entry: wraps <code>remap_column</code> with the
-c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
-<code>ocean_remap_tracer_field</code>.</p></td>
+c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
+vanishing-layer merge the production kernel runs
+(<code>rdb_vl_merge_content</code> + <code>rdb_vl_column_conc</code>), so this entry cannot drift from
+<code>ocean_remap_tracer_field</code>. Production callers go through that one.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_remap_tracer_field.html'>ocean_remap_tracer_field</a></td>
@@ -10510,7 +10576,7 @@ c = hTr/h ↔ hTr_new = c_new·h_new pattern. Production callers go through
 guarded) → per-column remap kernel → hTr_new = c_new·h_new. Conservative.
 <code>budget</code> (optional): when present, the per-cell hTr_new−hTr_old increment
 is accumulated into the slot (heat/salt remap deltas) before overwriting.
-Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.</p></td>
+Flat-arg so GPU codegen doesn&rsquo;t chase the array-of-derived-types pointer.</p><a href="../proc/ocean_remap_tracer_field.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_restart_check_decomp.html'>ocean_restart_check_decomp</a></td>
@@ -14772,6 +14838,16 @@ Boundary cells reconstruct as PCM. nz &lt; 5 falls back to REMAP_PPM
 caller decides what to do about a violation (audit findings V5, V6).</p><a href="../proc/remap_column_preconditions_ok.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/remap_fold_filler_defect.html'>remap_fold_filler_defect</a></td>
+                 <td><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></td>
+                 <td>Subroutine</td>
+                 <td><p>On a column that carries a vanished layer (source or target), make
+the tracer remap conservative EXACTLY, not just on a matched column:
+the content the remap failed to place, <code>Σ q_src − Σ q_new</code>, is
+handed to the topmost live target layer (the donor of any fillers
+above it, so the write-side pool that follows shares it with them).</p><a href="../proc/remap_fold_filler_defect.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/remap_layer_to_density.html'>remap_layer_to_density</a></td>
                  <td><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></td>
                  <td>Subroutine</td>
@@ -14792,7 +14868,7 @@ Public only for the unit-test suite.</p></td>
 Source column TOP-DOWN + layer potential density (EOS at
 <code>rho_ref_p</code>), invert profile to interface depths
 (<code>invert_density_targets</code>), then donor-cell remap.  Cells outside
-the column density range read 0.  Intensive/extensive as the z-remap.</p></td>
+the column density range read 0.  Intensive/extensive as the z-remap.</p><a href="../proc/remap_layer_to_density_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/remap_layer_to_sigma.html'>remap_layer_to_sigma</a></td>
@@ -14829,8 +14905,10 @@ redistributes (sum preserved).</p><a href="../proc/remap_layer_to_vcoord_impl.ht
 redistributed across targets, Σ preserved when the z-grid spans H).
 <code>z_out(:)</code> = target INTERFACE depths (m, positive-down, shallow→deep,
 implicit 0 surface); output cell m spans <code>[z_out(m-1), z_out(m)]</code>.
-Thicknesses clipped to column total H = Σ h_layer (exact
-conservation); below-seafloor cells read 0.  k=1 bed, k=nz surface.
+Thicknesses clipped to column total H = Σ h_layer over the LIVE
+layers (exact conservation; a vanished layer carries zero weight —
+see <code>remap_layer_to_vcoord_impl</code>); below-seafloor cells read 0.
+k=1 bed, k=nz surface.
 Public only for the unit-test suite.</p></td>
                </tr>
 			   <tr>
@@ -15252,6 +15330,15 @@ saved by the caller via copy_field_3d (the registry has to
 be walked on the host).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/scan_vanished_one_impl.html'>scan_vanished_one_impl</a></td>
+                 <td><a href='../module/rdb_multilayer_state.html'>rdb_multilayer_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Flat-impl of the I1′ scan for ONE tracer.  Per column: find the
+topmost live layer, then walk DOWN carrying the nearest live layer
+above — the donor map <code>rdb_vl_merge_content</code> / <code>rdb_vl_column_conc</code>
+use — and test each filler against its donor&rsquo;s <code>hTr/h</code>.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/schema_add_external_group.html'>schema_add_external_group</a></td>
                  <td><a href='../module/rdb_nml_schema.html'>rdb_nml_schema</a></td>
                  <td>Subroutine</td>
@@ -15515,14 +15602,6 @@ the full ocean state) to avoid a circular dependency.</p></td>
 lin_ds_dz*z</code> (<code>z</code> positive UP, zero at the <code>z = 0</code> datum),
 sampled at each layer centre&rsquo;s TRUE geopotential depth and
 written as <code>hTr = value * h_layer</code>.</p><a href="../proc/seed_ts_linear_z.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
-               </tr>
-			   <tr>
-                 <td><a href='../proc/seed_vanished_tracer_hold_impl.html'>seed_vanished_tracer_hold_impl</a></td>
-                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
-                 <td>Subroutine</td>
-                 <td><p>Zero the extensive tracer content <code>hTr</code> on any layer the target
-grid seeded as an INERT FILLER (<code>h_layer &lt;= H_VANISHED</code>),
-whether or not the column is wet.</p><a href="../proc/seed_vanished_tracer_hold_impl.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/seed_wet_mask_impl.html'>seed_wet_mask_impl</a></td>
@@ -17128,7 +17207,7 @@ degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p></td>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 23:55 +0000             </p>
+ on 2026-09-24 02:37 +0000             </p>
           </div>
         </div>
         <br>

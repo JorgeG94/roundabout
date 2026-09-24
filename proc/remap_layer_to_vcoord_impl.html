@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">75 statements</a>
+                 title=" 0.2% of total for procedures.">80 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -135,23 +135,23 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-col_h">col_h</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz~7">dz</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_new~8">dz_new</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_old~8">dz_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz">dz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_new">dz_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_old">dz_old</a>
             <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-href">href</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-i~525">i</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-j~462">j</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-k~328">k</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-i~9">i</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-j~9">j</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-k~7">k</a>
             <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-lvl_scale">lvl_scale</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-m~23">m</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-n~39">n</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nx~460">nx</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-ny~460">ny</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz~386">nz</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz_out~2">nz_out</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_new~7">q_new</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_old~7">q_old</a>
-            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-zf~2">zf</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-m">m</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-n">n</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nx~9">nx</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-ny~9">ny</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz~6">nz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz_out">nz_out</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_new">q_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_old">q_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-zf">zf</a>
             <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-zf_prev">zf_prev</a>
         </div>
       </div>
@@ -212,6 +212,16 @@ depth (a per-column scale hoisted out of the inner loop):
     col_h == H_ref the grid is the reference grid).  Identical to
     SIGMA under uniform levels; differs only with a non-uniform
     (e.g. fine-near-surface) reference.</p>
+<p><strong>Vanished source layers carry ZERO WEIGHT, not a value.</strong>  A
+source layer that is not live (<code>rdb_vl_is_live</code>) enters the
+overlap integral with <code>dz = 0</code> and <code>q = 0</code>, and its thickness is
+left out of the column total the targets are clipped to.  Its
+<code>layer_buf</code> value is never read: for a concentration it is the
+NaN missing-data sentinel (<code>fill_tracer_impl</code>), which the
+donor-cell reconstruction would otherwise smear into every target
+cell of the column; for content it is <code>h·c_live</code> by I1′, a copy of
+the donor layer the remap already counts.  A column with
+no vanished layer is bit-identical.</p>
 <p>Fixed-size <code>NZ_STACK_MAX</code> stack locals via <code>local(...)</code> — automatic
 arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
 
@@ -229,7 +239,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-coord_type~7"></span>
+              <span class="anchor" id="variable-coord_type"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -244,7 +254,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~101"></span>
+              <span class="anchor" id="variable-h_layer~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -259,7 +269,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-levels~4"></span>
+              <span class="anchor" id="variable-levels~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -274,7 +284,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-layer_buf~5"></span>
+              <span class="anchor" id="variable-layer_buf~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -289,7 +299,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-output_buf~5"></span>
+              <span class="anchor" id="variable-output_buf~4"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -304,7 +314,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-is_extensive~7"></span>
+              <span class="anchor" id="variable-is_extensive~4"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -319,7 +329,7 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-method~12"></span>
+              <span class="anchor" id="variable-method~3"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -385,8 +395,8 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
 <!-- proc~remap_layer_to_vcoord_impl -->
 <g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node1" class="node">
 <title>proc~remap_layer_to_vcoord_impl</title>
-<polygon fill="none" stroke="black" points="166,-329 0,-329 0,-305 166,-305 166,-329"/>
-<text text-anchor="middle" x="83" y="-314.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_impl</text>
+<polygon fill="none" stroke="black" points="166,-308 0,-308 0,-284 166,-284 166,-308"/>
+<text text-anchor="middle" x="83" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_impl</text>
 </g>
 <!-- local -->
 <g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node2" class="node">
@@ -397,8 +407,8 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
 <!-- proc~remap_layer_to_vcoord_impl&#45;&gt;local -->
 <g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge1" class="edge">
 <title>proc~remap_layer_to_vcoord_impl&#45;&gt;local</title>
-<path fill="none" stroke="#ff0000" d="M166.46,-327.62C182.03,-329.63 197.56,-331.63 210.77,-333.33"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="210.45,-336.82 220.82,-334.63 211.35,-329.88 210.45,-336.82"/>
+<path fill="none" stroke="#ff0000" d="M130.71,-308.04C156.11,-314.58 187.07,-322.56 210.65,-328.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="210.04,-332.09 220.6,-331.2 211.79,-325.31 210.04,-332.09"/>
 </g>
 <!-- proc~remap_column -->
 <g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node3" class="node">
@@ -412,221 +422,233 @@ arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
 <!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
 <g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge2" class="edge">
 <title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
-<path fill="none" stroke="#ff0000" d="M166.46,-306.38C175.01,-305.28 183.54,-304.18 191.69,-303.13"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="192.3,-306.58 201.77,-301.83 191.4,-299.63 192.3,-306.58"/>
+<path fill="none" stroke="#ff0000" d="M166.46,-296C175.01,-296 183.54,-296 191.69,-296"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.77,-299.5 201.77,-296 191.77,-292.5 191.77,-299.5"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node4" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="289,-266 207,-266 207,-242 289,-242 289,-266"/>
+<text text-anchor="middle" x="248" y="-251.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M130.71,-283.96C151.5,-278.61 176.01,-272.29 197.15,-266.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.11,-270.21 206.92,-264.33 196.36,-263.43 198.11,-270.21"/>
 </g>
 <!-- proc~remap_column_pcm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node4" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5" class="node">
 <title>proc~remap_column_pcm</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node4"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
 <polygon fill="#d9534f" stroke="#d9534f" points="451,-388 330,-388 330,-364 451,-364 451,-388"/>
 <text text-anchor="middle" x="390.5" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge3" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge4" class="edge">
 <title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
-<path fill="none" stroke="#00ffff" d="M278.28,-308.07C283.67,-310.73 289.13,-313.74 294,-317 312.04,-329.06 311.81,-338.16 330,-350 335.39,-353.51 341.34,-356.75 347.33,-359.66"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="346.14,-362.97 356.69,-363.96 349.07,-356.61 346.14,-362.97"/>
+<path fill="none" stroke="#00ff00" d="M278.28,-308.07C283.67,-310.73 289.13,-313.74 294,-317 312.04,-329.06 311.81,-338.16 330,-350 335.39,-353.51 341.34,-356.75 347.33,-359.66"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="346.14,-362.97 356.69,-363.96 349.07,-356.61 346.14,-362.97"/>
 </g>
 <!-- proc~remap_column_plm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6" class="node">
 <title>proc~remap_column_plm</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
 <polygon fill="#d9534f" stroke="#d9534f" points="804,-348 686,-348 686,-324 804,-324 804,-348"/>
 <text text-anchor="middle" x="745" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge4" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge5" class="edge">
 <title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
-<path fill="none" stroke="#00ffff" d="M294.28,-304.72C305.89,-306.71 318.38,-308.63 330,-310 451.23,-324.24 593.42,-331.02 675.67,-333.98"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="675.77,-337.48 685.88,-334.34 676.01,-330.49 675.77,-337.48"/>
+<path fill="none" stroke="#00ff00" d="M294.28,-304.72C305.89,-306.71 318.38,-308.63 330,-310 451.23,-324.24 593.42,-331.02 675.67,-333.98"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="675.77,-337.48 685.88,-334.34 676.01,-330.49 675.77,-337.48"/>
 </g>
 <!-- proc~remap_column_ppm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7" class="node">
 <title>proc~remap_column_ppm</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
 <polygon fill="#d9534f" stroke="#d9534f" points="624.5,-226 503.5,-226 503.5,-202 624.5,-202 624.5,-226"/>
 <text text-anchor="middle" x="564" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge5" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge6" class="edge">
 <title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
-<path fill="none" stroke="#00ffff" d="M294.32,-284.16C350.55,-269.48 446.4,-244.45 507.12,-228.59"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="508.13,-231.95 516.92,-226.03 506.36,-225.17 508.13,-231.95"/>
+<path fill="none" stroke="#00ff00" d="M294.32,-284.16C350.55,-269.48 446.4,-244.45 507.12,-228.59"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="508.13,-231.95 516.92,-226.03 506.36,-225.17 508.13,-231.95"/>
 </g>
 <!-- proc~remap_column_ppm_h4 -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8" class="node">
 <title>proc~remap_column_ppm_h4</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
 <polygon fill="#d9534f" stroke="#d9534f" points="634,-308 494,-308 494,-284 634,-284 634,-308"/>
 <text text-anchor="middle" x="564" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge6" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge7" class="edge">
 <title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
-<path fill="none" stroke="#00ffff" d="M294.32,-296C343.77,-296 423.87,-296 483.76,-296"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="483.94,-299.5 493.94,-296 483.94,-292.5 483.94,-299.5"/>
+<path fill="none" stroke="#00ff00" d="M294.32,-296C343.77,-296 423.87,-296 483.76,-296"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="483.94,-299.5 493.94,-296 483.94,-292.5 483.94,-299.5"/>
 </g>
 <!-- proc~remap_column_pqm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9" class="node">
 <title>proc~remap_column_pqm</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
 <polygon fill="#d9534f" stroke="#d9534f" points="451,-106 330,-106 330,-82 451,-82 451,-106"/>
 <text text-anchor="middle" x="390.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge7" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge8" class="edge">
 <title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
-<path fill="none" stroke="#00ffff" d="M257.37,-283.97C280.59,-250.58 346.06,-156.45 375.2,-114.56"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="378.16,-116.43 381,-106.22 372.41,-112.43 378.16,-116.43"/>
+<path fill="none" stroke="#00ff00" d="M281.62,-283.93C286.09,-281.41 290.38,-278.45 294,-275 319.19,-251.01 361.71,-157.83 380.32,-115.34"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="383.53,-116.72 384.31,-106.16 377.12,-113.93 383.53,-116.72"/>
 </g>
 <!-- proc~boundary_half_jump -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10" class="node">
 <title>proc~boundary_half_jump</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
 <polygon fill="#d9534f" stroke="#d9534f" points="976.5,-225 855.5,-225 855.5,-201 976.5,-201 976.5,-225"/>
 <text text-anchor="middle" x="916" y="-210.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge8" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge9" class="edge">
 <title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
 <path fill="none" stroke="#cbff00" d="M784.81,-323.89C794.38,-320.12 804.36,-315.48 813,-310 847.07,-288.39 879.61,-254.32 898.43,-232.84"/>
 <polygon fill="#cbff00" stroke="#cbff00" points="901.3,-234.87 905.17,-225.01 896,-230.3 901.3,-234.87"/>
 </g>
 <!-- proc~plm_slope_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11" class="node">
 <title>proc~plm_slope_nonuniform</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
 <polygon fill="#d9534f" stroke="#d9534f" points="983,-348 849,-348 849,-324 983,-324 983,-348"/>
 <text text-anchor="middle" x="916" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge9" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge10" class="edge">
 <title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
 <path fill="none" stroke="#cbff00" d="M804.16,-336C815.31,-336 827.14,-336 838.76,-336"/>
 <polygon fill="#cbff00" stroke="#cbff00" points="838.9,-339.5 848.9,-336 838.9,-332.5 838.9,-339.5"/>
 </g>
 <!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge14" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge15" class="edge">
 <title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
 <path fill="none" stroke="#00ff66" d="M582.82,-226.14C614.58,-247.79 681.11,-293.14 717.99,-318.27"/>
 <polygon fill="#00ff66" stroke="#00ff66" points="716.02,-321.17 726.25,-323.91 719.96,-315.38 716.02,-321.17"/>
 </g>
 <!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge10" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge11" class="edge">
 <title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
 <path fill="none" stroke="#00ff66" d="M580.55,-201.78C601.2,-186.41 639.45,-160.84 677,-151 735.47,-135.68 754.8,-134.7 813,-151 843.25,-159.47 873.43,-179.65 893.03,-194.69"/>
 <polygon fill="#00ff66" stroke="#00ff66" points="890.98,-197.54 901,-200.98 895.32,-192.04 890.98,-197.54"/>
 </g>
 <!-- proc~ppm_edge_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12" class="node">
 <title>proc~ppm_edge_nonuniform</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
 <polygon fill="#d9534f" stroke="#d9534f" points="813,-226 677,-226 677,-202 813,-202 813,-226"/>
 <text text-anchor="middle" x="745" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge11" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge12" class="edge">
 <title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
 <path fill="none" stroke="#00ff66" d="M624.6,-214C638.11,-214 652.64,-214 666.75,-214"/>
 <polygon fill="#00ff66" stroke="#00ff66" points="666.94,-217.5 676.94,-214 666.94,-210.5 666.94,-217.5"/>
 </g>
 <!-- proc~ppm_edge_two_cell -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13" class="node">
 <title>proc~ppm_edge_two_cell</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
 <polygon fill="#d9534f" stroke="#d9534f" points="803.5,-184 686.5,-184 686.5,-160 803.5,-160 803.5,-184"/>
 <text text-anchor="middle" x="745" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge12" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge13" class="edge">
 <title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
 <path fill="none" stroke="#00ff66" d="M616.29,-201.96C637.08,-197.09 661.25,-191.42 682.93,-186.33"/>
 <polygon fill="#00ff66" stroke="#00ff66" points="683.76,-189.73 692.7,-184.04 682.16,-182.91 683.76,-189.73"/>
 </g>
 <!-- proc~ppm_jump_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14" class="node">
 <title>proc~ppm_jump_nonuniform</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
 <polygon fill="#d9534f" stroke="#d9534f" points="813,-268 677,-268 677,-244 813,-244 813,-268"/>
 <text text-anchor="middle" x="745" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge13" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge14" class="edge">
 <title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
 <path fill="none" stroke="#00ff66" d="M616.29,-226.04C637.08,-230.91 661.25,-236.58 682.93,-241.67"/>
 <polygon fill="#00ff66" stroke="#00ff66" points="682.16,-245.09 692.7,-243.96 683.76,-238.27 682.16,-245.09"/>
 </g>
 <!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge16" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge17" class="edge">
 <title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
 <path fill="none" stroke="#0066ff" d="M618.71,-308C638,-312.31 659.95,-317.22 680.03,-321.7"/>
 <polygon fill="#0066ff" stroke="#0066ff" points="679.5,-325.17 690.02,-323.94 681.03,-318.34 679.5,-325.17"/>
 </g>
 <!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge15" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge16" class="edge">
 <title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
 <path fill="none" stroke="#0066ff" d="M634.09,-299.47C684.83,-299.94 754.76,-296.2 813,-277 842.92,-267.14 872.96,-246.71 892.61,-231.57"/>
 <polygon fill="#0066ff" stroke="#0066ff" points="894.94,-234.19 900.62,-225.25 890.6,-228.7 894.94,-234.19"/>
 </g>
 <!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge20" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge21" class="edge">
 <title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
 <path fill="none" stroke="#cc00ff" d="M408.89,-106.17C439.27,-127.42 502.14,-171.41 537.47,-196.14"/>
 <polygon fill="#cc00ff" stroke="#cc00ff" points="535.62,-199.11 545.82,-201.98 539.63,-193.38 535.62,-199.11"/>
 </g>
 <!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge17" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge18" class="edge">
 <title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
 <path fill="none" stroke="#cc00ff" d="M451.09,-90.04C534.94,-86.63 691.1,-88.3 813,-136 845.87,-148.86 877.28,-175.47 896.34,-193.78"/>
 <polygon fill="#cc00ff" stroke="#cc00ff" points="893.91,-196.29 903.5,-200.81 898.82,-191.31 893.91,-196.29"/>
 </g>
 <!-- proc~pqm_end_value_h4 -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15" class="node">
 <title>proc~pqm_end_value_h4</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
 <polygon fill="#d9534f" stroke="#d9534f" points="621.5,-66 506.5,-66 506.5,-42 621.5,-42 621.5,-66"/>
 <text text-anchor="middle" x="564" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge18" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge19" class="edge">
 <title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
 <path fill="none" stroke="#cc00ff" d="M442.96,-82C461.36,-77.71 482.28,-72.83 501.44,-68.36"/>
 <polygon fill="#cc00ff" stroke="#cc00ff" points="502.34,-71.74 511.28,-66.06 500.75,-64.92 502.34,-71.74"/>
 </g>
 <!-- proc~pqm_solve_diag_dominant -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15" class="node">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node16" class="node">
 <title>proc~pqm_solve_diag_dominant</title>
-<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node16"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
 <polygon fill="#d9534f" stroke="#d9534f" points="641,-24 487,-24 487,0 641,0 641,-24"/>
 <text text-anchor="middle" x="564" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
 </a>
 </g>
 </g>
 <!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
-<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge19" class="edge">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge20" class="edge">
 <title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
 <path fill="none" stroke="#cc00ff" d="M407.22,-81.85C425.49,-68.25 456.99,-46.37 487,-33 491.65,-30.93 496.55,-29.02 501.53,-27.26"/>
 <polygon fill="#cc00ff" stroke="#cc00ff" points="502.77,-30.54 511.17,-24.08 500.57,-23.89 502.77,-30.54"/>
@@ -902,7 +924,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz~7"></span>
+              <span class="anchor" id="variable-dz"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -919,7 +941,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_new~8"></span>
+              <span class="anchor" id="variable-dz_new"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -936,7 +958,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-dz_old~8"></span>
+              <span class="anchor" id="variable-dz_old"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -970,7 +992,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~525"></span>
+              <span class="anchor" id="variable-i~9"></span>
               integer,
             </td>
               <td>private</td>
@@ -987,7 +1009,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~462"></span>
+              <span class="anchor" id="variable-j~9"></span>
               integer,
             </td>
               <td>private</td>
@@ -1004,7 +1026,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~328"></span>
+              <span class="anchor" id="variable-k~7"></span>
               integer,
             </td>
               <td>private</td>
@@ -1038,7 +1060,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-m~23"></span>
+              <span class="anchor" id="variable-m"></span>
               integer,
             </td>
               <td>private</td>
@@ -1055,7 +1077,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-n~39"></span>
+              <span class="anchor" id="variable-n"></span>
               integer,
             </td>
               <td>private</td>
@@ -1072,7 +1094,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~460"></span>
+              <span class="anchor" id="variable-nx~9"></span>
               integer,
             </td>
               <td>private</td>
@@ -1089,7 +1111,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~460"></span>
+              <span class="anchor" id="variable-ny~9"></span>
               integer,
             </td>
               <td>private</td>
@@ -1106,7 +1128,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~386"></span>
+              <span class="anchor" id="variable-nz~6"></span>
               integer,
             </td>
               <td>private</td>
@@ -1123,7 +1145,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz_out~2"></span>
+              <span class="anchor" id="variable-nz_out"></span>
               integer,
             </td>
               <td>private</td>
@@ -1140,7 +1162,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_new~7"></span>
+              <span class="anchor" id="variable-q_new"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1157,7 +1179,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-q_old~7"></span>
+              <span class="anchor" id="variable-q_old"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1174,7 +1196,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-zf~2"></span>
+              <span class="anchor" id="variable-zf"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1247,6 +1269,17 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!     SIGMA under uniform levels; differs only with a non-uniform</span>
 <span class="w">      </span><span class="c">!!     (e.g. fine-near-surface) reference.</span>
 <span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Vanished source layers carry ZERO WEIGHT, not a value.**  A</span>
+<span class="w">      </span><span class="c">!! source layer that is not live (`rdb_vl_is_live`) enters the</span>
+<span class="w">      </span><span class="c">!! overlap integral with `dz = 0` and `q = 0`, and its thickness is</span>
+<span class="w">      </span><span class="c">!! left out of the column total the targets are clipped to.  Its</span>
+<span class="w">      </span><span class="c">!! `layer_buf` value is never read: for a concentration it is the</span>
+<span class="w">      </span><span class="c">!! NaN missing-data sentinel (`fill_tracer_impl`), which the</span>
+<span class="w">      </span><span class="c">!! donor-cell reconstruction would otherwise smear into every target</span>
+<span class="w">      </span><span class="c">!! cell of the column; for content it is `h·c_live` by I1′, a copy of</span>
+<span class="w">      </span><span class="c">!! the donor layer the remap already counts.  A column with</span>
+<span class="w">      </span><span class="c">!! no vanished layer is bit-identical.</span>
+<span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! Fixed-size `NZ_STACK_MAX` stack locals via `local(...)` — automatic</span>
 <span class="w">      </span><span class="c">!! arrays sized from a dummy crash NVHPC stdpar device codegen.</span>
 <span class="w">      </span><span class="c">! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);</span>
@@ -1273,11 +1306,17 @@ large graphs.</div>
 <span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
 <span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">col_h</span><span class="p">,</span><span class="w"> </span><span class="n">zf_prev</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">lvl_scale</span><span class="p">)</span>
 <span class="w">         </span><span class="c">! --- source column TOP-DOWN: work index k = state index nz-k+1 ---</span>
+<span class="w">         </span><span class="c">! A vanished layer gets zero weight (see the docstring).</span>
 <span class="w">         </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
 <span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">            </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
-<span class="w">            </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
-<span class="w">            </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
 <span class="w">         </span><span class="k">end do</span>
 <span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
@@ -1356,7 +1395,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-23 23:55 +0000             </p>
+ on 2026-09-24 02:37 +0000             </p>
           </div>
         </div>
         <br>
