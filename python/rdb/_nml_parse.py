@@ -131,7 +131,14 @@ def parse_namelist_text(text: str) -> dict:
     {key: value, ...}, ...}``, group name WITHOUT the leading `&` or the
     trailing `_nml`. Later blocks for the same group MERGE (later keys
     win) rather than replace -- matches how a repeated namelist block
-    behaves under Fortran's own reader."""
+    behaves under Fortran's own reader.
+
+    Comments are stripped from the WHOLE text first: a comment that names
+    a group (``! see &ocean_zinit_nml source = "file"``) is prose, not a
+    group start, exactly as Fortran's reader treats it -- searching the
+    raw text for ``&name`` used to open a phantom group inside the
+    comment and fail on the next token."""
+    text = _strip_comments(text)
     out = {}
     pos = 0
     n = len(text)
