@@ -68,7 +68,8 @@ module rdb_ocean_state
 #endif
    use rdb_decomp, only: decomp_t
    use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
-                               ocean_vcoord_z_fixed_target
+                               ocean_vcoord_z_fixed_target, &
+                               ocean_vcoord_z_fixed_target_uniform
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_cavity, only: parse_cavity_draft_config, parse_cavity_draft_source, &
                                CAVITY_DRAFT_NONE, CAVITY_DRAFT_FLAT, CAVITY_DRAFT_LINEAR, &
@@ -1394,10 +1395,22 @@ contains
             ! initialised.
             h_min_seed = cfg%zstar_h_min
             if (state%vcoord%is_init) h_min_seed = state%vcoord%zstar_h_min
-            call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_rest, &
-                                             state%metrics%z_draft, nx, ny, nz_ml, &
-                                             cfg%ocean%topo%max_depth/real(nz_ml, wp), &
-                                             h_min_seed)
+            ! A stretched nominal profile (`&vcoord_nml z_fixed_profile`)
+            ! is installed on the slot by `engine_setup` before this seed,
+            ! for the same one-source-of-truth reason as `zstar_h_min`.
+            if (state%vcoord%is_init .and. state%vcoord%z_fixed_use_profile) then
+               call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_rest, &
+                                                state%metrics%z_draft, nx, ny, nz_ml, &
+                                                cfg%ocean%topo%max_depth/real(nz_ml, wp), &
+                                                .true., state%vcoord%z_fixed_zi, &
+                                                state%vcoord%z_fixed_dz, h_min_seed)
+            else
+               call ocean_vcoord_z_fixed_target_uniform(state%multilayer%h_layer, water, &
+                                                        eta_rest, state%metrics%z_draft, &
+                                                        nx, ny, nz_ml, &
+                                                        cfg%ocean%topo%max_depth/real(nz_ml, wp), &
+                                                        h_min_seed)
+            end if
             deallocate (eta_rest)
          end block
       else

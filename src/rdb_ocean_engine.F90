@@ -119,6 +119,7 @@ module rdb_ocean_engine
                               configure_ocean_reference_density, &
                               configure_ocean_pgf, configure_ocean_bt, &
                               configure_ocean_bt_split, configure_ocean_bc, &
+                              configure_ocean_z_fixed_profile, &
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
                               configure_ocean_closed_faces, &
@@ -376,6 +377,9 @@ contains
          engine%state%vcoord%remap_method = parse_remap_method(cfg%remap_method)
          engine%state%vcoord%zstar_h_surf_target = cfg%zstar_h_surf_target
          engine%state%vcoord%zstar_h_min = cfg%zstar_h_min
+         ! `z_fixed` nominal layering (uniform or a stretched profile): the
+         ! cavity z_fixed seed below lays `h_layer` from the target builder.
+         call configure_ocean_z_fixed_profile(cfg, engine%state, rank, log_it=.true.)
       end if
 
       ! Analytical IC from cfg scalars — or, when P2.5 geometry injection

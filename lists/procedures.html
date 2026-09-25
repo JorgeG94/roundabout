@@ -911,6 +911,22 @@ leaving the effective 2-D CFL at ~0.92 for cfl_bt_safety=0.65 — on the
 edge of the forward-backward scheme&rsquo;s stability).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/bt_auto_n_inner_from_dt.html'>bt_auto_n_inner_from_dt</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p>Smallest <code>n_inner &gt;= 1</code> with <code>dt_outer/n_inner &lt;= dt_bt_safe</code>,
+for an ALREADY-LIMITED safe barotropic substep <code>dt_bt_safe</code> (s) —
+the per-wet-cell minimum <code>bt_cfl_dt_wet</code> returns, reduced across
+ranks.  <code>bt_auto_n_inner</code> is this with <code>dt_bt_safe</code> formed from a
+single <code>(c_ext, l_cfl)</code> pair.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/bt_cfl_dt_wet.html'>bt_cfl_dt_wet</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Per-WET-CELL external-gravity-wave CFL limit (MOM6 <code>set_dtbt</code>):</p><a href="../proc/bt_cfl_dt_wet.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/bt_halo_auto_exclusion.html'>bt_halo_auto_exclusion</a></td>
                  <td><a href='../module/rdb_config.html'>rdb_config</a></td>
                  <td>Subroutine</td>
@@ -2516,6 +2532,18 @@ Must run BEFORE the restart read (so <code>wd_wet_dyn</code> is allocated
 overwrites the seed with the saved front state) and BEFORE
 <code>ocean_state_enter_data</code> (host seeding; the enter_data walk
 attaches whatever is allocated).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/configure_ocean_z_fixed_profile.html'>configure_ocean_z_fixed_profile</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Resolve the <code>VCOORD_Z_FIXED</code> nominal layering onto the vcoord slot:
+<code>z_fixed_h_ref = &amp;ocean_topo_nml max_depth</code> (the uniform
+<code>max_depth/nz</code> spacing — the default, byte-identical), or, under
+<code>&amp;vcoord_nml z_fixed_profile = "list" | "tanh"</code>, the stretched
+per-layer tables <code>z_fixed_zi</code> / <code>z_fixed_dz</code> built by
+<code>rdb_vcoord :: z_fixed_nominal_dz</code> (<code>z_fixed_h_ref</code> then becomes
+the profile&rsquo;s total depth).</p><a href="../proc/configure_ocean_z_fixed_profile.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/configure_rho_target.html'>configure_rho_target</a></td>
@@ -8109,15 +8137,15 @@ shape, on the read side.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_get_varid.html'>nc_get_varid</a></td>
-                 <td><a href='../module/rdb_io_netcdf.html'>rdb_io_netcdf</a></td>
-                 <td>Subroutine</td>
-                 <td><p>Get the variable ID for a named variable</p></td>
-               </tr>
-			   <tr>
-                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
                  <td><a href='../module/rdb_ocean_restart_io.html'>rdb_ocean_restart_io</a></td>
                  <td>Subroutine</td>
                  <td></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
+                 <td><a href='../module/rdb_io_netcdf.html'>rdb_io_netcdf</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Get the variable ID for a named variable</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_open_read.html'>nc_open_read</a></td>
@@ -11002,12 +11030,12 @@ always fires (every rank must agree the config is broken).</p></td>
                  <td><a href='../proc/ocean_stability_min_cell.html'>ocean_stability_min_cell</a></td>
                  <td><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></td>
                  <td>Subroutine</td>
-                 <td><p>Smallest actual cell edge over the PHYSICAL domain (excludes
-ghosts), taken over BOTH <code>dxT</code> and <code>dyT</code>, with its (i,j)
+                 <td><p>Smallest actual cell edge over the WET PHYSICAL domain (excludes
+ghosts and land), taken over BOTH <code>dxT</code> and <code>dyT</code>, with its (i,j)
 location and which axis (<code>is_x</code>) it came from — for actionable
 messages (&ldquo;near j=110&rdquo;). Host-side, configure time; the grid
 sizes here are at most a few 10^5 cells (a global tripolar
-config), trivial to scan once.</p></td>
+config), trivial to scan once.</p><a href="../proc/ocean_stability_min_cell.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_state_build_restart_registry.html'>ocean_state_build_restart_registry</a></td>
@@ -11937,6 +11965,17 @@ dummy — no derived-type component and no <code>associate</code> reaches the
 project rule for <code>!$acc routine seq</code> callees of a <code>do concurrent</code>).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/ocean_vcoord_set_z_fixed_profile.html'>ocean_vcoord_set_z_fixed_profile</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Install a stretched <code>VCOORD_Z_FIXED</code> nominal profile: flip the
+surface-first thicknesses into the bottom-up <code>z_fixed_dz</code>, build
+the interface table <code>z_fixed_zi</code> by accumulating from the surface
+(<code>z_fixed_zi(nz) = 0</code> exactly), set <code>z_fixed_h_ref</code> to the total
+and raise <code>z_fixed_use_profile</code>.  Setup-time host code; must run
+BEFORE <code>enter_data</code> (the copyin captures the tables).</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/ocean_vcoord_z_fixed_target.html'>ocean_vcoord_z_fixed_target</a></td>
                  <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
                  <td>Subroutine</td>
@@ -11946,6 +11985,16 @@ ends (Yung, Hallberg, Adcroft &amp; Morrison 2026, JAMES, Fig. 1b:
 quasi-z layers are geopotential and VANISH where they outcrop
 into the ice base; Asay-Davis et al. 2016 §3.1.5: z-level models
 use both partial top and bottom cells).</p><a href="../proc/ocean_vcoord_z_fixed_target.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/ocean_vcoord_z_fixed_target_uniform.html'>ocean_vcoord_z_fixed_target_uniform</a></td>
+                 <td><a href='../module/rdb_ocean_vcoord.html'>rdb_ocean_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p><code>ocean_vcoord_z_fixed_target</code> on the UNIFORM nominal spacing
+<code>h_nominal</code> — the historical signature, for callers (tests,
+setup code without a vcoord slot) that have no profile tables.
+Same kernel, <code>use_profile = .false.</code>, so the arithmetic is the
+uniform branch&rsquo;s exactly; the two tables are never read.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/ocean_vdiff_bytes.html'>ocean_vdiff_bytes</a></td>
@@ -12680,6 +12729,13 @@ with no run-time symptom at all.</p></td>
                  <td><p>Convert a namelist string to a <code>VCOORD_*</code> constant (shared by coastal
 and ocean backends). Unrecognised ⇒ <code>default_code</code> if given, else
 <code>VCOORD_SIGMA</code>. Ocean callers pass <code>default_code = VCOORD_EULERIAN_Z</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/parse_z_fixed_profile.html'>parse_z_fixed_profile</a></td>
+                 <td><a href='../module/rdb_vcoord.html'>rdb_vcoord</a></td>
+                 <td>Function</td>
+                 <td><p><code>&amp;vcoord_nml z_fixed_profile</code> string -&gt; <code>ZFIXED_PROFILE_*</code> code
+(<code>ZFIXED_PROFILE_INVALID</code> for anything else — the caller fails loud).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/path_to_c_string.html'>path_to_c_string</a></td>
@@ -17228,6 +17284,15 @@ is polymorphic).</p></td>
 <code>short_only</code>, skip default-valued keys (and leave wrote_any).</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/z_fixed_nominal_dz.html'>z_fixed_nominal_dz</a></td>
+                 <td><a href='../module/rdb_vcoord.html'>rdb_vcoord</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Nominal layer thicknesses of a <code>VCOORD_Z_FIXED</code> column, SURFACE
+FIRST (<code>dz(1)</code> is the top layer) — the order MOM6 writes
+<code>ALE_COORDINATE_CONFIG = "PARAM:..."</code> lists and <code>vgrid</code> files in.
+The caller flips to the bottom-up state convention.</p><a href="../proc/z_fixed_nominal_dz.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/zero3_impl.html'>zero3_impl</a></td>
                  <td><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></td>
                  <td>Subroutine</td>
@@ -17294,7 +17359,7 @@ degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p></td>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 05:24 +0000             </p>
+ on 2026-09-25 15:13 +0000             </p>
           </div>
         </div>
         <br>

@@ -74,6 +74,8 @@ module rdb_ocean_vcoord
    public :: parse_ocean_vcoord_type
    public :: invert_density_targets
    public :: ocean_vcoord_z_fixed_target
+   public :: ocean_vcoord_z_fixed_target_uniform
+   public :: ocean_vcoord_set_z_fixed_profile
    public :: ocean_vcoord_closed_face_masks
    public :: ocean_vcoord_k_top_from_target
    public :: ocean_vcoord_count_ledges
@@ -306,6 +308,27 @@ module rdb_ocean_vcoord
          !! When 0 (default) the `compute_target_h` Z_FIXED branch falls
          !! back to a uniform `H · dsig(k)` target so the path stays
          !! sane in tests that don't explicitly set this knob.
+         !! Under a stretched profile (`z_fixed_use_profile`) it is the
+         !! profile's total depth, `z_fixed_zi(0)`, and the nominal
+         !! interfaces come from `z_fixed_zi` instead of `h_ref/nz`.
+      logical :: z_fixed_use_profile = .false.
+         !! `&vcoord_nml z_fixed_profile /= "uniform"`: the `VCOORD_Z_FIXED`
+         !! nominal interfaces come from `z_fixed_zi` / `z_fixed_dz` (set by
+         !! `ocean_vcoord_set_z_fixed_profile`) rather than from the uniform
+         !! `z_fixed_h_ref/nz_ml`.  Scalar, rides `copyin(this)`.  Default
+         !! `.false.` ⇒ the uniform arithmetic, byte-identical.
+      real(wp), allocatable :: z_fixed_zi(:)
+         !! `VCOORD_Z_FIXED` nominal interface depths (m, positive down,
+         !! below `z = 0`), shape `0:nz_ml`, BOTTOM-UP like the state:
+         !! `z_fixed_zi(k)` is the TOP interface of layer `k`, so
+         !! `z_fixed_zi(nz_ml) = 0` (the surface) and `z_fixed_zi(0)` is the
+         !! profile's total depth.  Allocated at init (zeros), so it is never
+         !! a placeholder; read only when `z_fixed_use_profile`.
+      real(wp), allocatable :: z_fixed_dz(:)
+         !! `VCOORD_Z_FIXED` nominal layer thicknesses (m), shape `nz_ml`,
+         !! bottom-up: `z_fixed_zi(k-1) - z_fixed_zi(k)`, stored separately
+         !! so the partial-top-cell threshold uses the exact namelist
+         !! value.  Read only when `z_fixed_use_profile`.
       real(wp) :: regrid_time_scale = 0.0_wp
          !! Grid time-filter timescale τ (s) for the ALE regrid.  After
          !! `compute_target_h` builds the new target grid, the remap step
@@ -462,6 +485,13 @@ contains
       ! Z_FIXED kernel never sees a placeholder-sized array.
       allocate (this%z_top(grid%nx_total, grid%ny_total), source=0.0_wp)
 
+      ! `VCOORD_Z_FIXED` stretched nominal profile — allocated
+      ! unconditionally (zeros) so the target kernel's explicit-shape
+      ! dummies never see a placeholder; filled by
+      ! `ocean_vcoord_set_z_fixed_profile` only when a profile is set.
+      allocate (this%z_fixed_zi(0:nz_local), source=0.0_wp)
+      allocate (this%z_fixed_dz(nz_local), source=0.0_wp)
+
       ! Isopycnal target densities — sized `0:nz_ml`, populated by the
       ! setup wiring only when `coord_type == VCOORD_RHO`.  Default is a
       ! benign monotone ramp (1020..1030 kg/m³) so the slot is always
@@ -492,6 +522,9 @@ contains
       if (allocated(this%target_h)) deallocate (this%target_h)
       if (allocated(this%z_ref)) deallocate (this%z_ref)
       if (allocated(this%z_top)) deallocate (this%z_top)
+      if (allocated(this%z_fixed_zi)) deallocate (this%z_fixed_zi)
+      if (allocated(this%z_fixed_dz)) deallocate (this%z_fixed_dz)
+      this%z_fixed_use_profile = .false.
       if (allocated(this%rho_target)) deallocate (this%rho_target)
       if (allocated(this%remap_total_h)) deallocate (this%remap_total_h)
       if (allocated(this%remap_h_ref)) deallocate (this%remap_h_ref)
@@ -518,6 +551,7 @@ contains
       if (.not. this%is_init) return
       !$acc enter data copyin(this%dsig, this%z_ref_global, this%target_h, this%z_ref)
       !$acc enter data copyin(this%z_top)
+      !$acc enter data copyin(this%z_fixed_zi, this%z_fixed_dz)
       !$acc enter data copyin(this%rho_target)
       !$acc enter data copyin(this%remap_total_h, this%remap_h_ref, this%remap_h_old)
       !$acc enter data copyin(this%remap_conc_t, this%remap_conc_s)
@@ -537,6 +571,7 @@ contains
       !$acc exit data delete(this%remap_conc_t, this%remap_conc_s)
       !$acc exit data delete(this%remap_h_old, this%remap_h_ref, this%remap_total_h)
       !$acc exit data delete(this%rho_target)
+      !$acc exit data delete(this%z_fixed_zi, this%z_fixed_dz)
       !$acc exit data delete(this%z_top)
       !$acc exit data delete(this%z_ref, this%target_h, this%z_ref_global, this%dsig)
    end subroutine ocean_vcoord_exit_data_impl
@@ -770,14 +805,20 @@ contains
          ! `(H + η) · dsig(k)` so tests that omit the knob still get
          ! something sensible: the SIGMA branch of the geometric kernel
          ! evaluates exactly that expression.
+         !
+         ! A stretched nominal profile (`z_fixed_use_profile`) replaces
+         ! `h_nominal` with the per-layer `z_fixed_zi` / `z_fixed_dz`
+         ! tables; the uniform path below is untouched.
          h_nominal = 0.0_wp
          if (this%z_fixed_h_ref > 0.0_wp) then
             h_nominal = this%z_fixed_h_ref/real(this%nz_ml, wp)
          end if
-         if (h_nominal > 0.0_wp) then
+         if (this%z_fixed_use_profile .or. h_nominal > 0.0_wp) then
             call ocean_vcoord_z_fixed_target(this%target_h, total_h, eta, this%z_top, &
                                              this%nx_total, this%ny_total, this%nz_ml, &
-                                             h_nominal, this%zstar_h_min)
+                                             h_nominal, this%z_fixed_use_profile, &
+                                             this%z_fixed_zi, this%z_fixed_dz, &
+                                             this%zstar_h_min)
             return
          end if
          call ocean_vcoord_geometric_target(VCOORD_SIGMA, this%nx_total, this%ny_total, &
@@ -982,8 +1023,67 @@ contains
 
    end subroutine ocean_vcoord_geometric_target
 
+   pure subroutine ocean_vcoord_set_z_fixed_profile(this, dz_surface_first)
+      !! Install a stretched `VCOORD_Z_FIXED` nominal profile: flip the
+      !! surface-first thicknesses into the bottom-up `z_fixed_dz`, build
+      !! the interface table `z_fixed_zi` by accumulating from the surface
+      !! (`z_fixed_zi(nz) = 0` exactly), set `z_fixed_h_ref` to the total
+      !! and raise `z_fixed_use_profile`.  Setup-time host code; must run
+      !! BEFORE `enter_data` (the copyin captures the tables).
+      type(ocean_vcoord_t), intent(inout) :: this
+      real(wp), intent(in) :: dz_surface_first(:)
+         !! Nominal thicknesses (m), `dz_surface_first(1)` = top layer;
+         !! size must be `nz_ml`.
+      integer :: k, nz
+      if (.not. this%is_init) return
+      nz = this%nz_ml
+      if (size(dz_surface_first) /= nz) return
+      do k = 1, nz
+         this%z_fixed_dz(k) = dz_surface_first(nz - k + 1)
+      end do
+      this%z_fixed_zi(nz) = 0.0_wp
+      do k = nz, 1, -1
+         this%z_fixed_zi(k - 1) = this%z_fixed_zi(k) + this%z_fixed_dz(k)
+      end do
+      this%z_fixed_h_ref = this%z_fixed_zi(0)
+      this%z_fixed_use_profile = .true.
+   end subroutine ocean_vcoord_set_z_fixed_profile
+
+   pure subroutine ocean_vcoord_z_fixed_target_uniform(target_h, total_h, eta, z_top, &
+                                                       nx, ny, nz, h_nominal, h_min)
+      !! `ocean_vcoord_z_fixed_target` on the UNIFORM nominal spacing
+      !! `h_nominal` — the historical signature, for callers (tests,
+      !! setup code without a vcoord slot) that have no profile tables.
+      !! Same kernel, `use_profile = .false.`, so the arithmetic is the
+      !! uniform branch's exactly; the two tables are never read.
+      integer, intent(in) :: nx
+         !! i-extent of every array (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of every array (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      real(wp), intent(out) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m).
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference thickness `H` (m).
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly `η` (m).
+      real(wp), intent(in) :: z_top(nx, ny)
+         !! Geopotential depth of the column top (m, positive down).
+      real(wp), intent(in) :: h_nominal
+         !! Nominal layer spacing (m), `> 0`.
+      real(wp), intent(in) :: h_min
+         !! Inert-filler thickness.
+      real(wp) :: zi_unused(0:nz), dz_unused(nz)
+      zi_unused = 0.0_wp
+      dz_unused = 0.0_wp
+      call ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, nx, ny, nz, &
+                                       h_nominal, .false., zi_unused, dz_unused, h_min)
+   end subroutine ocean_vcoord_z_fixed_target_uniform
+
    pure subroutine ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, &
-                                               nx, ny, nz, h_nominal, h_min)
+                                               nx, ny, nz, h_nominal, use_profile, &
+                                               zi, dz_nom, h_min)
       !! `VCOORD_Z_FIXED` target grid — quasi-geopotential interfaces
       !! under a rigid top, with inert fillers and a partial cell at BOTH
       !! ends (Yung, Hallberg, Adcroft & Morrison 2026, JAMES, Fig. 1b:
@@ -1021,6 +1121,18 @@ contains
       !!     filler (`k_live_top` moves down one) — the mirror of the
       !!     bed's own sliver rule.
       !!
+      !! ### Stretched nominal profile
+      !!
+      !! With `use_profile` the nominal interface above layer `k` sits at
+      !! `zi(k)` (bottom-up table, `zi(nz) = 0`) instead of
+      !! `(nz − k)·h_nominal`, its bottom interface at `zi(k − 1)`, and the
+      !! partial-top threshold is the straddling layer's OWN nominal
+      !! thickness, `max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*dz_nom(k))`.
+      !! Everything else — the bed rule, the top filler debt, the closing
+      !! rule — is shared.  Each branch keeps its whole expression
+      !! (`a*b − c` stays one expression in the uniform branch) so an
+      !! FMA-contracting build contracts exactly what it did before.
+      !!
       !! `Σ_k target_h = total_h + eta` is closed by construction: every
       !! branch assigns exactly what it subtracts from `z_below_loc`, so
       !! each END pays for its own fillers and there is ONE closing rule
@@ -1054,7 +1166,16 @@ contains
          !! Geopotential depth of the column top (m, positive down,
          !! `>= 0`).  `0` ⇒ the pre-cavity arithmetic, bit-for-bit.
       real(wp), intent(in) :: h_nominal
-         !! Nominal layer spacing `z_fixed_h_ref/nz` (m), `> 0`.
+         !! Nominal layer spacing `z_fixed_h_ref/nz` (m), `> 0`.  Unused
+         !! when `use_profile`.
+      logical, intent(in) :: use_profile
+         !! Take the nominal interfaces from `zi` / `dz_nom`.
+      real(wp), intent(in) :: zi(0:nz)
+         !! Nominal interface depths (m), bottom-up, `zi(k)` = top of
+         !! layer `k`, `zi(nz) = 0`.  Read only when `use_profile`.
+      real(wp), intent(in) :: dz_nom(nz)
+         !! Nominal layer thicknesses (m), bottom-up.  Read only when
+         !! `use_profile`.
       real(wp), intent(in) :: h_min
          !! Inert-filler thickness (`zstar_h_min`, `<= H_VANISHED`).
       integer :: i, j, k, k_live_top
@@ -1077,8 +1198,15 @@ contains
          if (z_top_loc > 0.0_wp) then
             k_live_top = 1
             do k = 1, nz
-               if (real(nz - k + 1, wp)*h_nominal - z_top_loc > partial_min) then
-                  k_live_top = k
+               if (use_profile) then
+                  if (zi(k - 1) - z_top_loc > &
+                      max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*dz_nom(k))) then
+                     k_live_top = k
+                  end if
+               else
+                  if (real(nz - k + 1, wp)*h_nominal - z_top_loc > partial_min) then
+                     k_live_top = k
+                  end if
                end if
             end do
          end if
@@ -1093,7 +1221,11 @@ contains
                z_above_nominal_loc = real(nz - k, wp)*h_min
                vanish_loc = z_above_nominal_loc > z_below_loc - h_min
             else
-               z_above_nominal_loc = real(nz - k, wp)*h_nominal - z_top_loc
+               if (use_profile) then
+                  z_above_nominal_loc = zi(k) - z_top_loc
+               else
+                  z_above_nominal_loc = real(nz - k, wp)*h_nominal - z_top_loc
+               end if
                ! Bed side: a LIVE partial bottom cell must clear the
                ! REMAP's vanish marker, not merely `h_min`.  `>=` (not
                ! `>`) because the marker itself reads as vanished — the
@@ -1978,6 +2110,8 @@ contains
                + arr_bytes(this%target_h) &
                + arr_bytes(this%z_ref) &
                + arr_bytes(this%z_top) &
+               + arr_bytes(this%z_fixed_zi) &
+               + arr_bytes(this%z_fixed_dz) &
                + arr_bytes(this%rho_target) &
                + arr_bytes(this%remap_total_h) &
                + arr_bytes(this%remap_h_ref) &

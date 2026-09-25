@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.1% of total for procedures.">46 statements</a>
+                 title=" 0.1% of total for procedures.">59 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -135,9 +135,9 @@
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
             <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-bed_partial_min">bed_partial_min</a>
-            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-i~193">i</a>
-            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-j~187">j</a>
-            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-k~135">k</a>
+            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-i~314">i</a>
+            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-j~277">j</a>
+            <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-k~189">k</a>
             <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-k_live_top">k_live_top</a>
             <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-partial_min">partial_min</a>
             <a class="list-group-item" href="../proc/ocean_vcoord_z_fixed_target.html#variable-vanish_loc">vanish_loc</a>
@@ -179,7 +179,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public pure subroutine ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, nx, ny, nz, h_nominal, h_min)  
+    <h2>public pure subroutine ocean_vcoord_z_fixed_target(target_h, total_h, eta, z_top, nx, ny, nz, h_nominal, use_profile, zi, dz_nom, h_min)  
 </h2>
     
 
@@ -218,6 +218,16 @@ bottom interface of the layer being laid:</p>
     filler (<code>k_live_top</code> moves down one) — the mirror of the
     bed&rsquo;s own sliver rule.</li>
 </ul>
+<h3 id="stretched-nominal-profile">Stretched nominal profile</h3>
+<p>With <code>use_profile</code> the nominal interface above layer <code>k</code> sits at
+<code>zi(k)</code> (bottom-up table, <code>zi(nz) = 0</code>) instead of
+<code>(nz − k)·h_nominal</code>, its bottom interface at <code>zi(k − 1)</code>, and the
+partial-top threshold is the straddling layer&rsquo;s OWN nominal
+thickness, <code>max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*dz_nom(k))</code>.
+Everything else — the bed rule, the top filler debt, the closing
+rule — is shared.  Each branch keeps its whole expression
+(<code>a*b − c</code> stays one expression in the uniform branch) so an
+FMA-contracting build contracts exactly what it did before.</p>
 <p><code>Σ_k target_h = total_h + eta</code> is closed by construction: every
 branch assigns exactly what it subtracts from <code>z_below_loc</code>, so
 each END pays for its own fillers and there is ONE closing rule
@@ -248,7 +258,7 @@ rounds <code>a·b</code> once).  Pinned by
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-target_h~4"></span>
+              <span class="anchor" id="variable-target_h~5"></span>
               real(kind=wp),
             </td>
 <td>intent(out)</td>
@@ -263,7 +273,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-total_h~5"></span>
+              <span class="anchor" id="variable-total_h~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -293,7 +303,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-z_top~3"></span>
+              <span class="anchor" id="variable-z_top~4"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -309,7 +319,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~179"></span>
+              <span class="anchor" id="variable-nx~266"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -324,7 +334,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~179"></span>
+              <span class="anchor" id="variable-ny~266"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -339,7 +349,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~143"></span>
+              <span class="anchor" id="variable-nz~222"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -354,7 +364,7 @@ rounds <code>a·b</code> once).  Pinned by
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_nominal~2"></span>
+              <span class="anchor" id="variable-h_nominal~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -364,12 +374,60 @@ rounds <code>a·b</code> once).  Pinned by
             <td>::</td>
             <td><strong>h_nominal</strong></td>
             <td>
-                <p>Nominal layer spacing <code>z_fixed_h_ref/nz</code> (m), <code>&gt; 0</code>.</p>
+                <p>Nominal layer spacing <code>z_fixed_h_ref/nz</code> (m), <code>&gt; 0</code>.  Unused
+when <code>use_profile</code>.</p>
             </td>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min~10"></span>
+              <span class="anchor" id="variable-use_profile"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_profile</strong></td>
+            <td>
+                <p>Take the nominal interfaces from <code>zi</code> / <code>dz_nom</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zi"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zi</strong>(0:nz)</td>
+            <td>
+                <p>Nominal interface depths (m), bottom-up, <code>zi(k)</code> = top of
+layer <code>k</code>, <code>zi(nz) = 0</code>.  Read only when <code>use_profile</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_nom"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_nom</strong>(nz)</td>
+            <td>
+                <p>Nominal layer thicknesses (m), bottom-up.  Read only when
+<code>use_profile</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~22"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -514,253 +572,274 @@ large graphs.</div>
 <!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: proc~~ocean_vcoord_z_fixed_target~~CalledByGraph Pages: 1 -->
-<svg id="prococean_vcoord_z_fixed_targetCalledByGraph" width="641pt" height="104pt"
- viewBox="0.00 0.00 641.00 104.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 206)">
+<svg id="prococean_vcoord_z_fixed_targetCalledByGraph" width="641pt" height="112pt"
+ viewBox="0.00 0.00 641.00 111.64" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph" class="graph" transform="scale(0.47 0.47) rotate(0) translate(4 232)">
 <title>proc~~ocean_vcoord_z_fixed_target~~CalledByGraph</title>
-<polygon fill="white" stroke="transparent" points="-4,4 -4,-206 1288,-206 1288,4 -4,4"/>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-232 1351,-232 1351,4 -4,4"/>
 <!-- proc~ocean_vcoord_z_fixed_target -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node1" class="node">
 <title>proc~ocean_vcoord_z_fixed_target</title>
-<polygon fill="none" stroke="black" points="1284,-118 1117,-118 1117,-94 1284,-94 1284,-118"/>
-<text text-anchor="middle" x="1200.5" y="-103.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_vcoord_z_fixed_target</text>
+<polygon fill="none" stroke="black" points="1347,-127 1180,-127 1180,-103 1347,-103 1347,-127"/>
+<text text-anchor="middle" x="1263.5" y="-112.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_vcoord_z_fixed_target</text>
 </g>
 <!-- proc~configure_ocean_closed_faces -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node2" class="node">
 <title>proc~configure_ocean_closed_faces</title>
 <g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
-<polygon fill="#d9534f" stroke="#d9534f" points="1059.5,-181 884.5,-181 884.5,-157 1059.5,-157 1059.5,-181"/>
-<text text-anchor="middle" x="972" y="-166.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+<polygon fill="#d9534f" stroke="#d9534f" points="1122.5,-205 947.5,-205 947.5,-181 1122.5,-181 1122.5,-205"/>
+<text text-anchor="middle" x="1035" y="-190.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
 </a>
 </g>
 </g>
 <!-- proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge1" class="edge">
 <title>proc~configure_ocean_closed_faces&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
-<path fill="none" stroke="#ff0000" d="M1043.07,-156.95C1055.77,-154.32 1068.84,-151.32 1081,-148 1107.72,-140.71 1137.06,-130.33 1159.86,-121.71"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="1161.11,-124.98 1169.21,-118.14 1158.61,-118.44 1161.11,-124.98"/>
+<path fill="none" stroke="#ff0000" d="M1094.27,-180.97C1110.53,-177.07 1128.1,-172.36 1144,-167 1173.57,-157.04 1205.93,-142.59 1229.35,-131.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1230.99,-134.53 1238.49,-127.05 1227.96,-128.23 1230.99,-134.53"/>
 </g>
 <!-- proc~configure_ocean_k_top -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node3" class="node">
 <title>proc~configure_ocean_k_top</title>
 <g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node3"><a xlink:href="../proc/configure_ocean_k_top.html" xlink:title="configure_ocean_k_top">
-<polygon fill="#d9534f" stroke="#d9534f" points="1039.5,-139 904.5,-139 904.5,-115 1039.5,-115 1039.5,-139"/>
-<text text-anchor="middle" x="972" y="-124.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_top</text>
+<polygon fill="#d9534f" stroke="#d9534f" points="816,-165 681,-165 681,-141 816,-141 816,-165"/>
+<text text-anchor="middle" x="748.5" y="-150.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_k_top</text>
 </a>
 </g>
 </g>
 <!-- proc~configure_ocean_k_top&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge2" class="edge">
 <title>proc~configure_ocean_k_top&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
-<path fill="none" stroke="#ff0000" d="M1039.73,-120.81C1060.67,-118.87 1084.17,-116.69 1106.57,-114.62"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="1107.14,-118.08 1116.78,-113.67 1106.5,-111.11 1107.14,-118.08"/>
+<path fill="none" stroke="#ff0000" d="M816.21,-149.32C894.7,-144.82 1028.92,-136.62 1144,-127 1152.37,-126.3 1161.06,-125.52 1169.77,-124.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1170.36,-128.16 1179.98,-123.73 1169.69,-121.2 1170.36,-128.16"/>
 </g>
 <!-- proc~ocean_state_seed_from_cfg -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node4" class="node">
 <title>proc~ocean_state_seed_from_cfg</title>
 <g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node4"><a xlink:href="../proc/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
-<polygon fill="#d9534f" stroke="#d9534f" points="1052,-97 892,-97 892,-73 1052,-73 1052,-97"/>
-<text text-anchor="middle" x="972" y="-82.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+<polygon fill="#d9534f" stroke="#d9534f" points="828.5,-123 668.5,-123 668.5,-99 828.5,-99 828.5,-123"/>
+<text text-anchor="middle" x="748.5" y="-108.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge3" class="edge">
 <title>proc~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
-<path fill="none" stroke="#ff0000" d="M1052.22,-92.34C1069.87,-93.98 1088.74,-95.73 1106.88,-97.41"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="1106.59,-100.9 1116.87,-98.34 1107.23,-93.93 1106.59,-100.9"/>
+<path fill="none" stroke="#ff0000" d="M828.53,-111.62C920.55,-112.33 1072.35,-113.52 1169.84,-114.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1169.95,-117.78 1179.98,-114.36 1170.01,-110.78 1169.95,-117.78"/>
+</g>
+<!-- proc~ocean_vcoord_z_fixed_target_uniform -->
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node6" class="node">
+<title>proc~ocean_vcoord_z_fixed_target_uniform</title>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node6"><a xlink:href="../proc/ocean_vcoord_z_fixed_target_uniform.html" xlink:title="ocean_vcoord_z_fixed_target_uniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1142,-87 928,-87 928,-63 1142,-63 1142,-87"/>
+<text text-anchor="middle" x="1035" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_z_fixed_target_uniform</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_vcoord_z_fixed_target_uniform -->
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_vcoord_z_fixed_target_uniform</title>
+<path fill="none" stroke="#cc00ff" d="M828.75,-100.97C859.74,-97.05 895.73,-92.5 928.84,-88.31"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="929.54,-91.75 939.02,-87.02 928.66,-84.8 929.54,-91.75"/>
 </g>
 <!-- proc~ocean_vcoord_compute_target_h_impl -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node5" class="node">
 <title>proc~ocean_vcoord_compute_target_h_impl</title>
 <g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node5"><a xlink:href="../proc/ocean_vcoord_compute_target_h_impl.html" xlink:title="ocean_vcoord_compute_target_h_impl">
-<polygon fill="#d9534f" stroke="#d9534f" points="1081,-55 863,-55 863,-31 1081,-31 1081,-55"/>
-<text text-anchor="middle" x="972" y="-40.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_compute_target_h_impl</text>
+<polygon fill="#d9534f" stroke="#d9534f" points="1144,-45 926,-45 926,-21 1144,-21 1144,-45"/>
+<text text-anchor="middle" x="1035" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_compute_target_h_impl</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_vcoord_compute_target_h_impl&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
 <g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge4" class="edge">
 <title>proc~ocean_vcoord_compute_target_h_impl&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
-<path fill="none" stroke="#ff0000" d="M1043.07,-55.05C1055.77,-57.68 1068.84,-60.68 1081,-64 1107.72,-71.29 1137.06,-81.67 1159.86,-90.29"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="1158.61,-93.56 1169.21,-93.86 1161.11,-87.02 1158.61,-93.56"/>
+<path fill="none" stroke="#ff0000" d="M1112.25,-45.01C1123.04,-47.52 1133.89,-50.5 1144,-54 1176.42,-65.24 1211.05,-83.93 1234.45,-97.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1232.76,-100.73 1243.14,-102.85 1236.34,-94.72 1232.76,-100.73"/>
+</g>
+<!-- proc~ocean_vcoord_z_fixed_target_uniform&#45;&gt;proc~ocean_vcoord_z_fixed_target -->
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_vcoord_z_fixed_target_uniform&#45;&gt;proc~ocean_vcoord_z_fixed_target</title>
+<path fill="none" stroke="#ff0000" d="M1103.96,-87C1129.26,-91.47 1158.18,-96.58 1184.33,-101.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1183.74,-104.65 1194.2,-102.94 1184.96,-97.75 1183.74,-104.65"/>
 </g>
 <!-- proc~engine_setup -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node6" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node7" class="node">
 <title>proc~engine_setup</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node6"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
-<polygon fill="#d9534f" stroke="#d9534f" points="727.5,-139 643.5,-139 643.5,-115 727.5,-115 727.5,-139"/>
-<text text-anchor="middle" x="685.5" y="-124.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node7"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="520,-165 436,-165 436,-141 520,-141 520,-165"/>
+<text text-anchor="middle" x="478" y="-150.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
 </a>
 </g>
 </g>
 <!-- proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge5" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge6" class="edge">
 <title>proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces</title>
-<path fill="none" stroke="#ff0000" d="M727.56,-133.06C767.09,-138.9 828.23,-147.92 879.35,-155.47"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="879.03,-158.96 889.43,-156.96 880.05,-152.04 879.03,-158.96"/>
+<path fill="none" stroke="#ff0000" d="M520.05,-161C545.08,-165.56 577.77,-170.96 607,-174 720.06,-185.75 850.71,-190.24 937.41,-191.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="937.43,-195.45 947.5,-192.14 937.57,-188.45 937.43,-195.45"/>
 </g>
 <!-- proc~engine_setup&#45;&gt;proc~configure_ocean_k_top -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge6" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge7" class="edge">
 <title>proc~engine_setup&#45;&gt;proc~configure_ocean_k_top</title>
-<path fill="none" stroke="#7fff00" d="M727.56,-127C771.01,-127 840.55,-127 894.21,-127"/>
-<polygon fill="#7fff00" stroke="#7fff00" points="894.37,-130.5 904.37,-127 894.37,-123.5 894.37,-130.5"/>
+<path fill="none" stroke="#cbff00" d="M520.07,-153C559.98,-153 621.57,-153 670.6,-153"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="670.86,-156.5 680.86,-153 670.85,-149.5 670.86,-156.5"/>
 </g>
 <!-- proc~engine_setup&#45;&gt;proc~ocean_state_seed_from_cfg -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge7" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge8" class="edge">
 <title>proc~engine_setup&#45;&gt;proc~ocean_state_seed_from_cfg</title>
-<path fill="none" stroke="#00ffff" d="M727.56,-120.94C767.67,-115.02 830.02,-105.81 881.58,-98.2"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="882.36,-101.62 891.74,-96.7 881.34,-94.7 882.36,-101.62"/>
+<path fill="none" stroke="#00ff66" d="M520.19,-146.09C545.27,-141.92 577.97,-136.55 607,-132 623.6,-129.4 641.32,-126.69 658.38,-124.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="658.96,-127.58 668.33,-122.63 657.92,-120.65 658.96,-127.58"/>
 </g>
 <!-- proc~ocean_vcoord_compute_target_h -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node7" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node8" class="node">
 <title>proc~ocean_vcoord_compute_target_h</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node7"><a xlink:href="../proc/ocean_vcoord_compute_target_h.html" xlink:title="ocean_vcoord_t%ocean_vcoord_compute_target_h">
-<polygon fill="#d9534f" stroke="#d9534f" points="827,-55 544,-55 544,-31 827,-31 827,-55"/>
-<text text-anchor="middle" x="685.5" y="-40.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_t%ocean_vcoord_compute_target_h</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node8"><a xlink:href="../proc/ocean_vcoord_compute_target_h.html" xlink:title="ocean_vcoord_t%ocean_vcoord_compute_target_h">
+<polygon fill="#d9534f" stroke="#d9534f" points="890,-45 607,-45 607,-21 890,-21 890,-45"/>
+<text text-anchor="middle" x="748.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_t%ocean_vcoord_compute_target_h</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_vcoord_compute_target_h&#45;&gt;proc~ocean_vcoord_compute_target_h_impl -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge8" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge9" class="edge">
 <title>proc~ocean_vcoord_compute_target_h&#45;&gt;proc~ocean_vcoord_compute_target_h_impl</title>
-<path fill="none" stroke="#7f00ff" d="M827.08,-43C835.64,-43 844.21,-43 852.66,-43"/>
-<polygon fill="#7f00ff" stroke="#7f00ff" points="852.9,-46.5 862.9,-43 852.9,-39.5 852.9,-46.5"/>
+<path fill="none" stroke="#0066ff" d="M890.08,-33C898.64,-33 907.21,-33 915.66,-33"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="915.9,-36.5 925.9,-33 915.9,-29.5 915.9,-36.5"/>
 </g>
 <!-- proc~complete_ocean_create -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node8" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node9" class="node">
 <title>proc~complete_ocean_create</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node8"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
-<polygon fill="#d9534f" stroke="#d9534f" points="485,-160 345,-160 345,-136 485,-136 485,-160"/>
-<text text-anchor="middle" x="415" y="-145.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node9"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-186 209,-186 209,-162 349,-162 349,-186"/>
+<text text-anchor="middle" x="279" y="-171.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
 </a>
 </g>
 </g>
 <!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge9" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge11" class="edge">
 <title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
-<path fill="none" stroke="#ff0000" d="M485.15,-142.59C531.37,-138.98 591.17,-134.3 633.18,-131.01"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="633.49,-134.5 643.19,-130.23 632.94,-127.52 633.49,-134.5"/>
+<path fill="none" stroke="#ff0000" d="M349.18,-166.63C374.38,-163.94 402.41,-160.95 425.78,-158.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="426.25,-161.93 435.82,-157.39 425.51,-154.97 426.25,-161.93"/>
 </g>
 <!-- proc~driver_run_ocean -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node9" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node10" class="node">
 <title>proc~driver_run_ocean</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node9"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
-<polygon fill="#d9534f" stroke="#d9534f" points="468,-118 362,-118 362,-94 468,-94 468,-118"/>
-<text text-anchor="middle" x="415" y="-103.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-144 226,-144 226,-120 332,-120 332,-144"/>
+<text text-anchor="middle" x="279" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge10" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge12" class="edge">
 <title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
-<path fill="none" stroke="#ff0000" d="M468.09,-110.07C515.68,-113.8 585.67,-119.27 633.06,-122.98"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="632.87,-126.47 643.11,-123.76 633.41,-119.49 632.87,-126.47"/>
+<path fill="none" stroke="#ff0000" d="M332.02,-137.54C360.95,-140.63 396.83,-144.45 425.66,-147.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="425.62,-151.04 435.93,-148.62 426.36,-144.08 425.62,-151.04"/>
 </g>
 <!-- proc~ocean_apply_ale_remap_centres -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node10" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node11" class="node">
 <title>proc~ocean_apply_ale_remap_centres</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node10"><a xlink:href="../proc/ocean_apply_ale_remap_centres.html" xlink:title="ocean_apply_ale_remap_centres">
-<polygon fill="#d9534f" stroke="#d9534f" points="508,-66 322,-66 322,-42 508,-42 508,-66"/>
-<text text-anchor="middle" x="415" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_centres</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node11"><a xlink:href="../proc/ocean_apply_ale_remap_centres.html" xlink:title="ocean_apply_ale_remap_centres">
+<polygon fill="#d9534f" stroke="#d9534f" points="571,-66 385,-66 385,-42 571,-42 571,-66"/>
+<text text-anchor="middle" x="478" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_centres</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_vcoord_compute_target_h -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge11" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge13" class="edge">
 <title>proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_vcoord_compute_target_h</title>
-<path fill="none" stroke="#00ffff" d="M508.03,-50.23C516.32,-49.89 524.85,-49.54 533.48,-49.19"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="533.79,-52.68 543.64,-48.77 533.5,-45.68 533.79,-52.68"/>
+<path fill="none" stroke="#00ffff" d="M571.03,-46.8C579.32,-46.15 587.85,-45.49 596.48,-44.81"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="596.94,-48.29 606.64,-44.02 596.39,-41.31 596.94,-48.29"/>
 </g>
 <!-- proc~ocean_apply_ale_remap_step -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node11" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node12" class="node">
 <title>proc~ocean_apply_ale_remap_step</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node11"><a xlink:href="../proc/ocean_apply_ale_remap_step.html" xlink:title="ocean_apply_ale_remap_step">
-<polygon fill="#d9534f" stroke="#d9534f" points="499.5,-24 330.5,-24 330.5,0 499.5,0 499.5,-24"/>
-<text text-anchor="middle" x="415" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_step</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node12"><a xlink:href="../proc/ocean_apply_ale_remap_step.html" xlink:title="ocean_apply_ale_remap_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="562.5,-24 393.5,-24 393.5,0 562.5,0 562.5,-24"/>
+<text text-anchor="middle" x="478" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_step</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge12" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge14" class="edge">
 <title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_vcoord_compute_target_h</title>
-<path fill="none" stroke="#00ffff" d="M499.85,-21.68C522.2,-24.26 546.73,-27.09 570.4,-29.83"/>
-<polygon fill="#00ffff" stroke="#00ffff" points="570.15,-33.32 580.49,-30.99 570.96,-26.37 570.15,-33.32"/>
+<path fill="none" stroke="#00ffff" d="M562.85,-18.56C573.68,-19.41 585.02,-20.29 596.53,-21.19"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="596.43,-24.7 606.68,-21.99 596.98,-17.72 596.43,-24.7"/>
 </g>
 <!-- proc~driver_run -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node12" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node13" class="node">
 <title>proc~driver_run</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node12"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
-<polygon fill="#d9534f" stroke="#d9534f" points="233,-118 166,-118 166,-94 233,-94 233,-118"/>
-<text text-anchor="middle" x="199.5" y="-103.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node13"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-144 53,-144 53,-120 120,-120 120,-144"/>
+<text text-anchor="middle" x="86.5" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
 </a>
 </g>
 </g>
 <!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge15" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge17" class="edge">
 <title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
-<path fill="none" stroke="#7fff00" d="M233.39,-106C264.85,-106 313.1,-106 351.82,-106"/>
-<polygon fill="#7fff00" stroke="#7fff00" points="351.95,-109.5 361.95,-106 351.95,-102.5 351.95,-109.5"/>
+<path fill="none" stroke="#7fff00" d="M120.25,-132C146.45,-132 183.96,-132 215.83,-132"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="215.95,-135.5 225.95,-132 215.95,-128.5 215.95,-135.5"/>
 </g>
 <!-- proc~ocean_dyn_step_split -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node13" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node14" class="node">
 <title>proc~ocean_dyn_step_split</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node13"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
-<polygon fill="#d9534f" stroke="#d9534f" points="262,-24 137,-24 137,0 262,0 262,-24"/>
-<text text-anchor="middle" x="199.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node14"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="341.5,-24 216.5,-24 216.5,0 341.5,0 341.5,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
 </a>
 </g>
 </g>
 <!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge16" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge18" class="edge">
 <title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step</title>
-<path fill="none" stroke="#7f00ff" d="M262.25,-12C280.29,-12 300.43,-12 319.99,-12"/>
-<polygon fill="#7f00ff" stroke="#7f00ff" points="320.15,-15.5 330.15,-12 320.15,-8.5 320.15,-15.5"/>
+<path fill="none" stroke="#7f00ff" d="M341.52,-12C354.69,-12 368.9,-12 382.98,-12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="383.2,-15.5 393.2,-12 383.2,-8.5 383.2,-15.5"/>
 </g>
 <!-- proc~rdb_ocean_create_finalize -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node14" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node15" class="node">
 <title>proc~rdb_ocean_create_finalize</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node14"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
-<polygon fill="#d94e8f" stroke="#d94e8f" points="275,-202 124,-202 124,-178 275,-178 275,-202"/>
-<text text-anchor="middle" x="199.5" y="-187.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node15"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-228 11,-228 11,-204 162,-204 162,-228"/>
+<text text-anchor="middle" x="86.5" y="-213.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
 </a>
 </g>
 </g>
 <!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge13" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge15" class="edge">
 <title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
-<path fill="none" stroke="#ff0000" d="M261.68,-177.96C287.03,-172.98 316.6,-167.16 342.9,-161.99"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="343.67,-165.4 352.81,-160.04 342.32,-158.53 343.67,-165.4"/>
+<path fill="none" stroke="#ff0000" d="M142.09,-203.96C164.41,-199.04 190.39,-193.31 213.63,-188.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-191.61 223.4,-186.04 212.88,-184.77 214.39,-191.61"/>
 </g>
 <!-- proc~rdb_ocean_create_from_string -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node15" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node16" class="node">
 <title>proc~rdb_ocean_create_from_string</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node15"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
-<polygon fill="#d94e8f" stroke="#d94e8f" points="286,-160 113,-160 113,-136 286,-136 286,-160"/>
-<text text-anchor="middle" x="199.5" y="-145.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-186 0,-186 0,-162 173,-162 173,-186"/>
+<text text-anchor="middle" x="86.5" y="-171.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
 </a>
 </g>
 </g>
 <!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge14" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge16" class="edge">
 <title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
-<path fill="none" stroke="#ff0000" d="M286.11,-148C302.1,-148 318.74,-148 334.54,-148"/>
-<polygon fill="#ff0000" stroke="#ff0000" points="334.77,-151.5 344.77,-148 334.77,-144.5 334.77,-151.5"/>
+<path fill="none" stroke="#ff0000" d="M173.28,-174C181.77,-174 190.37,-174 198.79,-174"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-177.5 208.97,-174 198.97,-170.5 198.97,-177.5"/>
 </g>
 <!-- proc~engine_step -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node16" class="node">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node17" class="node">
 <title>proc~engine_step</title>
-<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node16"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
-<polygon fill="#d9534f" stroke="#d9534f" points="77,-24 0,-24 0,0 77,0 77,-24"/>
-<text text-anchor="middle" x="38.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+<g id="a_proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_node17"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="125,-24 48,-24 48,0 125,0 125,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
 </a>
 </g>
 </g>
 <!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
-<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge17" class="edge">
+<g id="proc~~ocean_vcoord_z_fixed_target~~CalledByGraph_edge19" class="edge">
 <title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
-<path fill="none" stroke="#7fff00" d="M77.18,-12C92.07,-12 109.7,-12 126.84,-12"/>
-<polygon fill="#7fff00" stroke="#7fff00" points="126.85,-15.5 136.85,-12 126.85,-8.5 126.85,-15.5"/>
+<path fill="none" stroke="#7fff00" d="M125.14,-12C148.31,-12 178.78,-12 206.41,-12"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="206.45,-15.5 216.45,-12 206.45,-8.5 206.45,-15.5"/>
 </g>
 </g>
 </svg>
@@ -883,7 +962,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~193"></span>
+              <span class="anchor" id="variable-i~314"></span>
               integer,
             </td>
               <td>private</td>
@@ -900,7 +979,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~187"></span>
+              <span class="anchor" id="variable-j~277"></span>
               integer,
             </td>
               <td>private</td>
@@ -917,7 +996,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~135"></span>
+              <span class="anchor" id="variable-k~189"></span>
               integer,
             </td>
               <td>private</td>
@@ -1051,7 +1130,8 @@ large graphs.</div>
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
     <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_vcoord_z_fixed_target</span><span class="p">(</span><span class="n">target_h</span><span class="p">,</span><span class="w"> </span><span class="n">total_h</span><span class="p">,</span><span class="w"> </span><span class="n">eta</span><span class="p">,</span><span class="w"> </span><span class="n">z_top</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                               </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_nominal</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span>
+<span class="w">                                               </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_nominal</span><span class="p">,</span><span class="w"> </span><span class="n">use_profile</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">zi</span><span class="p">,</span><span class="w"> </span><span class="n">dz_nom</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! `VCOORD_Z_FIXED` target grid — quasi-geopotential interfaces</span>
 <span class="w">      </span><span class="c">!! under a rigid top, with inert fillers and a partial cell at BOTH</span>
 <span class="w">      </span><span class="c">!! ends (Yung, Hallberg, Adcroft &amp; Morrison 2026, JAMES, Fig. 1b:</span>
@@ -1089,6 +1169,18 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!     filler (`k_live_top` moves down one) — the mirror of the</span>
 <span class="w">      </span><span class="c">!!     bed's own sliver rule.</span>
 <span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! ### Stretched nominal profile</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! With `use_profile` the nominal interface above layer `k` sits at</span>
+<span class="w">      </span><span class="c">!! `zi(k)` (bottom-up table, `zi(nz) = 0`) instead of</span>
+<span class="w">      </span><span class="c">!! `(nz − k)·h_nominal`, its bottom interface at `zi(k − 1)`, and the</span>
+<span class="w">      </span><span class="c">!! partial-top threshold is the straddling layer's OWN nominal</span>
+<span class="w">      </span><span class="c">!! thickness, `max(h_min, Z_FIXED_TOP_PARTIAL_FRAC*dz_nom(k))`.</span>
+<span class="w">      </span><span class="c">!! Everything else — the bed rule, the top filler debt, the closing</span>
+<span class="w">      </span><span class="c">!! rule — is shared.  Each branch keeps its whole expression</span>
+<span class="w">      </span><span class="c">!! (`a*b − c` stays one expression in the uniform branch) so an</span>
+<span class="w">      </span><span class="c">!! FMA-contracting build contracts exactly what it did before.</span>
+<span class="w">      </span><span class="c">!!</span>
 <span class="w">      </span><span class="c">!! `Σ_k target_h = total_h + eta` is closed by construction: every</span>
 <span class="w">      </span><span class="c">!! branch assigns exactly what it subtracts from `z_below_loc`, so</span>
 <span class="w">      </span><span class="c">!! each END pays for its own fillers and there is ONE closing rule</span>
@@ -1122,7 +1214,16 @@ large graphs.</div>
 <span class="w">         </span><span class="c">!! Geopotential depth of the column top (m, positive down,</span>
 <span class="w">         </span><span class="c">!! `&gt;= 0`).  `0` ⇒ the pre-cavity arithmetic, bit-for-bit.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_nominal</span>
-<span class="w">         </span><span class="c">!! Nominal layer spacing `z_fixed_h_ref/nz` (m), `&gt; 0`.</span>
+<span class="w">         </span><span class="c">!! Nominal layer spacing `z_fixed_h_ref/nz` (m), `&gt; 0`.  Unused</span>
+<span class="w">         </span><span class="c">!! when `use_profile`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_profile</span>
+<span class="w">         </span><span class="c">!! Take the nominal interfaces from `zi` / `dz_nom`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zi</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Nominal interface depths (m), bottom-up, `zi(k)` = top of</span>
+<span class="w">         </span><span class="c">!! layer `k`, `zi(nz) = 0`.  Read only when `use_profile`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_nom</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Nominal layer thicknesses (m), bottom-up.  Read only when</span>
+<span class="w">         </span><span class="c">!! `use_profile`.</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_min</span>
 <span class="w">         </span><span class="c">!! Inert-filler thickness (`zstar_h_min`, `&lt;= H_VANISHED`).</span>
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">k_live_top</span>
@@ -1145,9 +1246,16 @@ large graphs.</div>
 <span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">z_top_loc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
 <span class="k">            </span><span class="n">k_live_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
 <span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
-<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">h_nominal</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">partial_min</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
-<span class="k">                  </span><span class="n">k_live_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
-<span class="w">               </span><span class="k">end if</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_profile</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  if</span><span class="w"> </span><span class="p">(</span><span class="n">zi</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                      </span><span class="nb">max</span><span class="p">(</span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">Z_FIXED_TOP_PARTIAL_FRAC</span><span class="o">*</span><span class="n">dz_nom</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">k_live_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">               else</span>
+<span class="k">                  if</span><span class="w"> </span><span class="p">(</span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">h_nominal</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">partial_min</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">k_live_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">               end if</span>
 <span class="k">            end do</span>
 <span class="k">         end if</span>
 <span class="k">         </span><span class="n">z_below_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total_h</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">eta</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
@@ -1161,7 +1269,11 @@ large graphs.</div>
 <span class="w">               </span><span class="n">z_above_nominal_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">h_min</span>
 <span class="w">               </span><span class="n">vanish_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_above_nominal_loc</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">z_below_loc</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_min</span>
 <span class="w">            </span><span class="k">else</span>
-<span class="k">               </span><span class="n">z_above_nominal_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">h_nominal</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">use_profile</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">z_above_nominal_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zi</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">z_above_nominal_loc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">h_nominal</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_top_loc</span>
+<span class="w">               </span><span class="k">end if</span>
 <span class="w">               </span><span class="c">! Bed side: a LIVE partial bottom cell must clear the</span>
 <span class="w">               </span><span class="c">! REMAP's vanish marker, not merely `h_min`.  `&gt;=` (not</span>
 <span class="w">               </span><span class="c">! `&gt;`) because the marker itself reads as vanished — the</span>
@@ -1203,7 +1315,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 05:24 +0000             </p>
+ on 2026-09-25 15:13 +0000             </p>
           </div>
         </div>
         <br>

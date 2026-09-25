@@ -31,8 +31,10 @@ module rdb_ocean_setup
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
                                ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_k_top_from_target, &
+                               ocean_vcoord_set_z_fixed_profile, &
                                ocean_vcoord_count_ledges
-   use rdb_vcoord, only: parse_remap_method
+   use rdb_vcoord, only: parse_remap_method, parse_z_fixed_profile, z_fixed_nominal_dz, &
+                         ZFIXED_PROFILE_UNIFORM, ZFIXED_PROFILE_INVALID, ZFIXED_DZ_OK
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
    use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
                                  top_drag_fill_face_cover_impl
@@ -88,7 +90,7 @@ module rdb_ocean_setup
    use rdb_ocean_dyn, only: ocean_dt_tracer_advect_ratios_ok, &
                             SPLIT_SCHEME_SSP_RK2, SPLIT_SCHEME_PRED_CORR
    use rdb_recon_weno, only: parse_tracer_recon, TRACER_RECON_PPM
-   use rdb_halo, only: halo_allreduce_max, halo_allreduce_min
+   use rdb_halo, only: halo_allreduce_min
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
    use pic_logger, only: logger => global_logger
@@ -122,6 +124,7 @@ module rdb_ocean_setup
    public :: configure_ocean_porous
    public :: configure_ocean_closed_faces
    public :: configure_ocean_k_top
+   public :: configure_ocean_z_fixed_profile
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
    public :: configure_ocean_top_drag
@@ -131,6 +134,8 @@ module rdb_ocean_setup
    public :: configure_ocean_wetdry
    public :: bt_auto_n_inner
    public :: metrics_bt_cfl_length
+   public :: bt_auto_n_inner_from_dt
+   public :: bt_cfl_dt_wet
    public :: configure_ocean_bc
    public :: configure_ocean_sponge
 
@@ -411,8 +416,108 @@ contains
       integer :: n_inner
       real(wp) :: dt_bt_safe
       dt_bt_safe = cfl_safety*l_cfl/c_ext
-      n_inner = max(1, ceiling(dt_outer/dt_bt_safe))
+      n_inner = bt_auto_n_inner_from_dt(dt_outer, dt_bt_safe)
    end function bt_auto_n_inner
+
+   pure function bt_auto_n_inner_from_dt(dt_outer, dt_bt_safe) result(n_inner)
+      !! Smallest `n_inner >= 1` with `dt_outer/n_inner <= dt_bt_safe`,
+      !! for an ALREADY-LIMITED safe barotropic substep `dt_bt_safe` (s) —
+      !! the per-wet-cell minimum `bt_cfl_dt_wet` returns, reduced across
+      !! ranks.  `bt_auto_n_inner` is this with `dt_bt_safe` formed from a
+      !! single `(c_ext, l_cfl)` pair.
+      real(wp), intent(in) :: dt_outer
+         !! Outer (baroclinic) step (s).
+      real(wp), intent(in) :: dt_bt_safe
+         !! Largest stable barotropic substep, safety factor included (s).
+      integer :: n_inner
+      n_inner = max(1, ceiling(dt_outer/dt_bt_safe))
+   end function bt_auto_n_inner_from_dt
+
+   pure subroutine bt_cfl_dt_wet(nx, ny, i0, i1, j0, j1, b, wet, dxT, dyT, &
+                                 cfl_safety, dt_bt, h_at, l_at, n_wet)
+      !! Per-WET-CELL external-gravity-wave CFL limit (MOM6 `set_dtbt`):
+      !!
+      !!     dt_bt = min over wet (i,j) of  cfl_safety * l(i,j) / c(i,j),
+      !!     l(i,j) = 1/sqrt(1/dxT(i,j)^2 + 1/dyT(i,j)^2),
+      !!     c(i,j) = sqrt(g * max(b(i,j), 1 m)),
+      !!
+      !! i.e. the LOCAL depth with the LOCAL cell size, over OCEAN only.
+      !! MOM6 evaluates the same quantity as `gtot*dt^2*(1/dx^2+1/dy^2)`
+      !! per wet point.
+      !!
+      !! **Why per point.** The former estimate combined the deepest depth
+      !! ANYWHERE with the smallest cell ANYWHERE — on the 1° tripolar grid
+      !! that was 6000 m of ocean against a 362 m LAND cell at a
+      !! land-locked bipole, and bought 1930 substeps where ~32 suffice.
+      !! A land cell carries no gravity wave, and a small cell over a
+      !! shallow shelf does not see the abyssal wave speed.
+      !!
+      !! **Bit-identity where the two agree.** Each point's value is
+      !! evaluated with EXACTLY the arithmetic the global-extremes estimate
+      !! used (`1/sqrt(inv_l2)`, `sqrt(g*max(b,1))`, `safety*l/c`, in that
+      !! order).  Every step is monotone under round-to-nearest, so where
+      !! the deepest wet column and the smallest wet cell COINCIDE (a
+      !! flat-bottomed uniform grid, a wall basin with no land) the minimum
+      !! is attained at that point and equals the old number bit-for-bit.
+      !!
+      !! No wet cell in the window ⇒ `dt_bt = huge`, `n_wet = 0` — the
+      !! identity of the cross-rank `min` reduction (a rank that is all
+      !! land does not constrain the others).
+      !!
+      !! Host-side, configure time: plain loops, no `do concurrent`.
+      integer, intent(in) :: nx
+         !! First extent of the centre arrays (ghosts included).
+      integer, intent(in) :: ny
+         !! Second extent of the centre arrays (ghosts included).
+      integer, intent(in) :: i0
+         !! First physical i.
+      integer, intent(in) :: i1
+         !! Last physical i.
+      integer, intent(in) :: j0
+         !! First physical j.
+      integer, intent(in) :: j1
+         !! Last physical j.
+      real(wp), intent(in) :: b(nx, ny)
+         !! Bed depth (m, positive down).
+      real(wp), intent(in) :: wet(nx, ny)
+         !! Static wet (1) / land (0) T-cell mask.
+      real(wp), intent(in) :: dxT(nx, ny)
+         !! T-cell x length (m).
+      real(wp), intent(in) :: dyT(nx, ny)
+         !! T-cell y length (m).
+      real(wp), intent(in) :: cfl_safety
+         !! `&ocean_bt_nml cfl_bt_safety`.
+      real(wp), intent(out) :: dt_bt
+         !! Smallest per-wet-cell safe substep (s); `huge` if no wet cell.
+      real(wp), intent(out) :: h_at
+         !! Bed depth at the limiting cell (m); 0 if no wet cell.
+      real(wp), intent(out) :: l_at
+         !! 2-D CFL length at the limiting cell (m); 0 if no wet cell.
+      integer, intent(out) :: n_wet
+         !! Wet cells scanned.
+      integer :: i, j
+      real(wp) :: inv_l2, l_ij, c_ij, dt_ij
+
+      dt_bt = huge(1.0_wp)
+      h_at = 0.0_wp
+      l_at = 0.0_wp
+      n_wet = 0
+      do j = j0, j1
+         do i = i0, i1
+            if (wet(i, j) <= 0.5_wp) cycle
+            n_wet = n_wet + 1
+            inv_l2 = 1.0_wp/dxT(i, j)**2 + 1.0_wp/dyT(i, j)**2
+            l_ij = 1.0_wp/sqrt(inv_l2)
+            c_ij = sqrt(GRAVITY*max(b(i, j), 1.0_wp))
+            dt_ij = cfl_safety*l_ij/c_ij
+            if (dt_ij < dt_bt) then
+               dt_bt = dt_ij
+               h_at = b(i, j)
+               l_at = l_ij
+            end if
+         end do
+      end do
+   end subroutine bt_cfl_dt_wet
 
    subroutine fill_coriolis_corner(cfg, metrics, grid, f_corner)
       !! Fill a C-grid corner Coriolis array via the single
@@ -1195,7 +1300,7 @@ contains
       ! Eulerian-z (no ALE remap).
       ocean_state%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)
       ocean_state%vcoord%remap_method = parse_remap_method(cfg%remap_method)
-      ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
+      call configure_ocean_z_fixed_profile(cfg, ocean_state, compute_rank, log_it=.false.)
       ! Isopycnal (VCOORD_RHO) target densities: a uniform light->dense
       ! linspace from rho_target_light/dense (MOM6 ALE_COORDINATE_CONFIG=
       ! UNIFORM analogue).  `rho_target(0)` is the lightest (surface)
@@ -2264,6 +2369,52 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
 
+   subroutine configure_ocean_z_fixed_profile(cfg, ocean_state, compute_rank, log_it)
+      !! Resolve the `VCOORD_Z_FIXED` nominal layering onto the vcoord slot:
+      !! `z_fixed_h_ref = &ocean_topo_nml max_depth` (the uniform
+      !! `max_depth/nz` spacing — the default, byte-identical), or, under
+      !! `&vcoord_nml z_fixed_profile = "list" | "tanh"`, the stretched
+      !! per-layer tables `z_fixed_zi` / `z_fixed_dz` built by
+      !! `rdb_vcoord :: z_fixed_nominal_dz` (`z_fixed_h_ref` then becomes
+      !! the profile's total depth).
+      !!
+      !! Idempotent (it rebuilds from `cfg` each call).  Called twice: by
+      !! `engine_setup` BEFORE the IC seed — the cavity `z_fixed` seed lays
+      !! `h_layer` from the same target builder and must see the same
+      !! profile — and from `configure_ocean_lateral`, which has always
+      !! owned `z_fixed_h_ref`.  Both precede `ocean_state_enter_data`, so
+      !! the copyin captures the tables.  `validate_config` has already
+      !! refused a profile that does not build, or one on another family.
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      integer, intent(in) :: compute_rank
+      logical, intent(in) :: log_it
+         !! Log the resolved profile (rank 0).
+      integer :: code, ierr, nz
+      real(wp), allocatable :: dz(:)
+
+      ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
+      ocean_state%vcoord%z_fixed_use_profile = .false.
+      if (.not. ocean_state%vcoord%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      code = parse_z_fixed_profile(cfg%z_fixed_profile)
+      if (code == ZFIXED_PROFILE_UNIFORM .or. code == ZFIXED_PROFILE_INVALID) return
+      nz = ocean_state%vcoord%nz_ml
+      allocate (dz(nz))
+      call z_fixed_nominal_dz(code, nz, cfg%ocean%topo%max_depth, cfg%z_fixed_dz, &
+                              cfg%z_fixed_dz_top, cfg%z_fixed_tanh_center, &
+                              cfg%z_fixed_tanh_width, dz, ierr)
+      if (ierr /= ZFIXED_DZ_OK) return
+      call ocean_vcoord_set_z_fixed_profile(ocean_state%vcoord, dz)
+      if (log_it .and. compute_rank == 0) then
+         call logger%info("z_fixed profile:  "//trim(cfg%z_fixed_profile)// &
+                          " — nominal dz "//to_string(dz(1))//" m (surface) … "// &
+                          to_string(dz(nz))//" m (bed), total "// &
+                          to_string(ocean_state%vcoord%z_fixed_h_ref)//" m over "// &
+                          to_string(nz)//" layers")
+      end if
+   end subroutine configure_ocean_z_fixed_profile
+
    subroutine configure_ocean_k_top(cfg, ocean_state, grid, compute_rank)
       !! Fill `ms%k_top` / `k_top_u` / `k_top_v` — the shared index of
       !! the first LIVE layer counting down from the top, and the field
@@ -2321,7 +2472,10 @@ contains
       allocate (eta0(nx, ny), source=0.0_wp)
       call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
                                        eta0, ocean_state%vcoord%z_top, &
-                                       nx, ny, nz, h_nominal, h_min)
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, h_min)
       call ocean_vcoord_k_top_from_target(ocean_state%multilayer%k_top, &
                                           ocean_state%multilayer%k_top_u, &
                                           ocean_state%multilayer%k_top_v, &
@@ -2518,7 +2672,10 @@ contains
       allocate (eta0(nx, ny), source=0.0_wp)
       call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
                                        eta0, ocean_state%vcoord%z_top, &
-                                       nx, ny, nz, h_nominal, h_min)
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, h_min)
       call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
@@ -3337,48 +3494,59 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
 
-      ! Auto-derive n_inner from the external gravity-wave CFL (MOM6 set_dtbt):
-      ! smallest n_inner with dt_outer/n_inner <= cfl_bt_safety·l_cfl/√(g·H_max),
-      ! where l_cfl = 1/√(1/dx²+1/dy²) is the 2-D CFL length (NOT a single
-      ! grid length — the cross-direction term matters: on square cells it is
-      ! the √2 factor the legacy dx_min/c estimate omitted, which left the
-      ! effective 2-D CFL marginal at fine resolution).
+      ! Auto-derive n_inner from the external gravity-wave CFL (MOM6 set_dtbt),
+      ! evaluated PER WET CELL: the local depth with the local 2-D CFL length
+      ! `l = 1/sqrt(1/dx^2+1/dy^2)` (the cross-direction term matters — on
+      ! square cells it is the sqrt(2) the legacy 1-D estimate omitted), over
+      ! ocean only.  See `bt_cfl_dt_wet` for why the old "deepest anywhere x
+      ! smallest anywhere, land included" combination was wrong on a real
+      ! global grid, and why this reproduces it bit-for-bit wherever the two
+      ! extremes coincide on a wet cell.
+      !
+      ! `multilayer%wet_mask`, not `metrics%wet_T`: the metric mask is built
+      ! later, by `configure_ocean_land_mask`; its interior IS this array.
       if (cfg%ocean%bt%auto_n_inner) then
          block
-            integer :: ng_, n_inner_derived
-            real(wp) :: c_ext_max, l_cfl, l_cfl_local, dt_bt_safe, b_max_interior, b_max_local
+            integer :: ng_, n_inner_derived, n_wet_local
+            real(wp) :: dt_bt_local, dt_bt_safe, h_at, l_at
             ng_ = grid%nghost
-            ! Interior-only max — ghost cells may hold extrapolated values.
-            b_max_local = maxval( &
-                          ocean_state%barotropic%b(ng_ + 1:ng_ + grid%nx_phys, &
-                                                   ng_ + 1:ng_ + grid%ny_phys))
-            ! Reduce to the GLOBAL H_max so every rank derives the same n_inner.
-            ! On a single rank, halo_allreduce_max is an identity (stub returns
-            ! the input unchanged) — byte-identical single-rank path.
-            call halo_allreduce_max(b_max_local, b_max_interior)
-            c_ext_max = sqrt(GRAVITY*max(b_max_interior, 1.0_wp))
-            ! Reduce to the GLOBAL minimum CFL length so every rank derives the
-            ! SAME n_inner.  On a spherical grid dxT = R·cos(lat)·dlon shrinks
-            ! poleward, so a meridional (py>1) decomposition gives each rank a
-            ! DIFFERENT local min length; without this reduction the ranks pick
-            ! different n_inner, run a different number of barotropic substeps,
-            ! and desync their per-substep grouped halo exchanges — the Isend /
-            ! Irecv pairing crosses between substeps and MPI aborts with
-            ! MPI_ERR_TRUNCATE at the first N/S exchange.  Cartesian (uniform
-            ! dxT) and a zonal (px>1) spherical split give every rank the same
-            ! local length, which is why only spherical py>1 exposed it.
-            ! Single-rank: halo_allreduce_min is an identity stub (bit-identical).
-            l_cfl_local = metrics_bt_cfl_length(ocean_state%metrics, grid)
-            call halo_allreduce_min(l_cfl_local, l_cfl)
-            dt_bt_safe = cfg%ocean%bt%cfl_bt_safety*l_cfl/c_ext_max
-            n_inner_derived = bt_auto_n_inner(cfg%dt_fixed, cfg%ocean%bt%cfl_bt_safety, &
-                                              c_ext_max, l_cfl)
+            call bt_cfl_dt_wet(size(ocean_state%barotropic%b, 1), &
+                               size(ocean_state%barotropic%b, 2), &
+                               ng_ + 1, ng_ + grid%nx_phys, &
+                               ng_ + 1, ng_ + grid%ny_phys, &
+                               ocean_state%barotropic%b, &
+                               ocean_state%multilayer%wet_mask, &
+                               ocean_state%metrics%dxT, ocean_state%metrics%dyT, &
+                               cfg%ocean%bt%cfl_bt_safety, &
+                               dt_bt_local, h_at, l_at, n_wet_local)
+            ! Reduce to the GLOBAL per-point minimum so every rank derives the
+            ! SAME n_inner.  Different n_inner per rank means a different
+            ! number of barotropic substeps, which desyncs the per-substep
+            ! grouped halo exchanges (Isend/Irecv pairing crosses between
+            ! substeps -> MPI_ERR_TRUNCATE at the first N/S exchange; seen on
+            ! a spherical py>1 split).  A rank with no wet cell contributes
+            ! `huge`, the identity of min.  Single rank: identity stub.
+            call halo_allreduce_min(dt_bt_local, dt_bt_safe)
+            n_inner_derived = bt_auto_n_inner_from_dt(cfg%dt_fixed, dt_bt_safe)
             if (compute_rank == 0) then
-               call logger%info("Auto n_inner: H_max = "//to_string(b_max_interior)// &
-                                " m, c_ext = "//to_string(c_ext_max)// &
-                                " m/s, dt_bt = "//to_string(dt_bt_safe)// &
-                                " s → n_inner = "//to_string(n_inner_derived)// &
-                                " (was "//to_string(cfg%ocean%bt%n_inner)//")")
+               if (dt_bt_safe >= huge(1.0_wp)) then
+                  call logger%warning("Auto n_inner: no wet cell anywhere — "// &
+                                      "n_inner = 1 (was "// &
+                                      to_string(cfg%ocean%bt%n_inner)//")")
+               else if (dt_bt_local == dt_bt_safe) then
+                  call logger%info("Auto n_inner (per wet cell): limiting cell H = "// &
+                                   to_string(h_at)//" m, l_cfl = "// &
+                                   to_string(l_at)//" m, c_ext = "// &
+                                   to_string(sqrt(GRAVITY*max(h_at, 1.0_wp)))// &
+                                   " m/s, dt_bt = "//to_string(dt_bt_safe)// &
+                                   " s → n_inner = "//to_string(n_inner_derived)// &
+                                   " (was "//to_string(cfg%ocean%bt%n_inner)//")")
+               else
+                  call logger%info("Auto n_inner (per wet cell): dt_bt = "// &
+                                   to_string(dt_bt_safe)//" s (limited on another "// &
+                                   "rank) → n_inner = "//to_string(n_inner_derived)// &
+                                   " (was "//to_string(cfg%ocean%bt%n_inner)//")")
+               end if
             end if
             cfg%ocean%bt%n_inner = n_inner_derived
          end block
@@ -3399,8 +3567,8 @@ contains
       ! re-wraps + halo-exchanges `bt_H_ref` right after, alongside both
       ! of its sources.
       !
-      ! NOTE on `auto_n_inner` above: it derives the external gravity-wave
-      ! speed from `max(b)`, the BED depth, not from `max(b − z_draft)`.
+      ! NOTE on `auto_n_inner` above: it derives each wet cell's external
+      ! gravity-wave speed from `b`, the BED depth, not from `b − z_draft`.
       ! Under a shelf that OVERESTIMATES `c_ext` and so buys more
       ! barotropic substeps than the CFL needs — conservative, never
       ! unstable, and at a calving front (where the draft is 0) it is
