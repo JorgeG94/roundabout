@@ -3958,6 +3958,14 @@ class OceanPgf(Group):
         vmax=2,
     )
 
+    insitu_density = Bool(
+        'insitu_density',
+        doc='FV_MOM6 constant-by-layer density at its in-situ pressure (MOM6 PCM parity); .false. = legacy potential density at &ocean_eos_nml p_ref. Inert for the linear EOS',
+        units='',
+        required=False,
+        default=True,
+    )
+
     p_top_in_bc = Bool(
         'p_top_in_bc',
         doc='FV_MOM6: add the top-of-column load ms%p_top to the pressure-stack surface boundary condition pa(nz+1) = rho_ref*g*eta + p_top',
@@ -6229,4 +6237,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 682
+N_KNOBS = 683

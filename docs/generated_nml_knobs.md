@@ -741,6 +741,7 @@ Pressure-gradient-force kernel selector + knobs.
 | `mass_weight` | `.false.` |  | FV_MOM6 shelf-break hWght mass-weighting at unequal-depth faces |
 | `reconstruct_for_pressure` | `.false.` |  | FV_MOM6 in-layer PLM/PPM T/S reconstruction for the density integral |
 | `recon_scheme` | `1` |  | In-layer reconstruction scheme: 1=PLM, 2=PPM |
+| `insitu_density` | `.true.` |  | FV_MOM6 constant-by-layer density at its in-situ pressure (MOM6 PCM parity); .false. = legacy potential density at &ocean_eos_nml p_ref. Inert for the linear EOS |
 | `p_top_in_bc` | `.false.` |  | FV_MOM6: add the top-of-column load ms%p_top to the pressure-stack surface boundary condition pa(nz+1) = rho_ref*g*eta + p_top |
 
 ### &ocean_eos_nml

@@ -904,6 +904,19 @@ module rdb_config
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM.  Mirrors
          !! MOM6 `Recon_Scheme`.  Only consulted when
          !! `reconstruct_for_pressure = .true.`.
+      logical :: insitu_density = .true.
+         !! FV_MOM6 constant-by-layer (PCM) density at its IN-SITU pressure
+         !! `p = -g*rho0*z` (MOM6 `int_density_dz_generic_pcm`; MOM6
+         !! parity, default).  `.false.` = the legacy integral of the
+         !! POTENTIAL density `ms%rho_layer` at the uniform
+         !! `&ocean_eos_nml p_ref`, which loses the pressure dependence of
+         !! the horizontal density gradient away from `p_ref` (on the global
+         !! 1-degree spin-up: Drake Passage ~80 Sv against MOM6's ~155 Sv).
+         !! Consulted only by `form = "fv_mom6"` with
+         !! `reconstruct_for_pressure = .false.` and a PRESSURE-DEPENDENT
+         !! EOS (`wright`, `roquet_spv`); for `linear` in-situ and
+         !! potential density coincide and the legacy path runs,
+         !! bit-identical.
       logical :: p_top_in_bc = .false.
          !! Add the top-of-column load `multilayer_state_t%p_top` (Pa) to
          !! the FV_MOM6 pressure-stack surface boundary condition:
@@ -5244,6 +5257,19 @@ contains
                               "— boole_dpa_intz_layer builds the EOS pressure as "// &
                               "p = -g*rho0*z from the surface-relative interface "// &
                               "height; not yet ported to p_top")
+            has_error = .true.
+         end if
+         if (trim(adjustl(cfg%ocean%pgf%form)) == "fv_mom6" .and. &
+             .not. cfg%ocean%pgf%reconstruct_for_pressure .and. &
+             cfg%ocean%pgf%insitu_density .and. &
+             trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+            call logger%error("&ocean_psurf_nml in_eos=.true. is not supported "// &
+                              "with the FV_MOM6 in-situ PCM density (&ocean_pgf_nml "// &
+                              "insitu_density=.true., the default, under a "// &
+                              "pressure-dependent EOS) — boole_dpa_intz_layer builds "// &
+                              "the EOS pressure as p = -g*rho0*z; not yet ported to "// &
+                              "p_top.  Set insitu_density=.false. for the legacy "// &
+                              "potential-density integral")
             has_error = .true.
          end if
          if (cfg%ocean%ice%enable) then
@@ -9966,6 +9992,11 @@ contains
       pi => cfg%ocean%pgf%recon_scheme
       call g%add(nml_int("recon_scheme", pi, &
                          "In-layer reconstruction scheme: 1=PLM, 2=PPM", min=1, max=2))
+      pl => cfg%ocean%pgf%insitu_density
+      call g%add(nml_logical("insitu_density", pl, &
+                             "FV_MOM6 constant-by-layer density at its in-situ pressure "// &
+                             "(MOM6 PCM parity); .false. = legacy potential density at "// &
+                             "&ocean_eos_nml p_ref. Inert for the linear EOS"))
       pl => cfg%ocean%pgf%p_top_in_bc
       call g%add(nml_logical("p_top_in_bc", pl, &
                              "FV_MOM6: add the top-of-column load ms%p_top to "// &

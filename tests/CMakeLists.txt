@@ -126,6 +126,7 @@ set(RDB_TESTS
     "test_ocean_pgf_mont|test_ocean_pgf_mont|collect_ocean_pgf_mont_tests|ocean_pgf_mont|ocean"
     "test_ocean_pgf_fv_mom6|test_ocean_pgf_fv_mom6|collect_ocean_pgf_fv_mom6_tests|ocean_pgf_fv_mom6|ocean"
     "test_ocean_pgf_reconstruct|test_ocean_pgf_reconstruct|collect_ocean_pgf_reconstruct_tests|ocean_pgf_reconstruct|ocean"
+    "test_ocean_pgf_insitu|test_ocean_pgf_insitu|collect_ocean_pgf_insitu_tests|ocean_pgf_insitu|ocean"
     "test_ocean_pgf_sigma_rest|test_ocean_pgf_sigma_rest|collect_ocean_pgf_sigma_rest_tests|ocean_pgf_sigma_rest|ocean"
     "test_ocean_pgf_p_top_bc|test_ocean_pgf_p_top_bc|collect_ocean_pgf_p_top_bc_tests|ocean_pgf_p_top_bc|ocean"
     "test_ocean_cavity_draft|test_ocean_cavity_draft|collect_ocean_cavity_draft_tests|ocean_cavity_draft|ocean"
