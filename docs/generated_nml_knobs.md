@@ -677,6 +677,7 @@ Split-explicit barotropic substep controls.
 | `renorm_visc_rem` | `.false.` |  | gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem) |
 | `forcing_visc_rem` | `.false.` |  | MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop (requires correction_visc_rem) |
 | `correction_bc_pgf` | `.false.` |  | Per-layer baroclinic-PGF retro-correction for the eta change |
+| `bc_pgf_forcing` | `.true.` |  | Force the BT substep with the depth mean of the full slow layer PGF, shedding only the free-surface term the PGF itself carries (MOM6 BT_force/eta_PF); .false. = legacy split that discarded the depth-mean baroclinic PGF (no JEBAR) |
 | `substep_drag` | `.false.` |  | Apply a per-substep BT velocity damping factor |
 | `substep_zeta_ke` | `.true.` |  | Integrate live zeta_bt + KE-gradient in the BT fast loop (.false. = MOM6 parity: planetary Coriolis only, zeta/KE frozen in the slow forcing) |
 | `wave_drag` | `.false.` |  | Barotropic linear wave drag master switch (MOM6 BT_LINEAR_WAVE_DRAG) |

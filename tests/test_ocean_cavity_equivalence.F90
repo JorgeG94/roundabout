@@ -622,9 +622,22 @@ contains
       ! `spacing(h) = 1.42e-14` for the 83 m layers, so on its own it
       ! demanded bit-identical thickness.  That is not the claim, and it is
       ! not something rounding can promise (module header), so floor it.
+      !
+      ! The COLUMN-thickness and eta bounds keep one term of the unloaded
+      ! size.  `pa(nz+1) = rho_ref*g*eta_geo + p_top` cancels `C` between
+      ! two products that each round at `eps*C`, and that residue is the
+      ! SAME in every layer.  The MOM6 split (`&ocean_bt_nml
+      ! bc_pgf_forcing`, default) forces the barotropic substep with the
+      ! depth mean of the full layer PGF, so a depth-uniform residue now
+      ! reaches `eta` — the legacy split discarded it with the rest of the
+      ! depth mean.  Measured: dh = 8 ulp of the 83 m layer after 6 steps
+      ! (1.14e-13 m against the 6-ulp floor), deta at its floor, du
+      ! unchanged at the gw_response of that dh.
       tol_h = max(bound_accel_loaded()*DT*real(N_STEPS, wp)*BED/DX, &
+                  bound_accel()*DT*real(N_STEPS, wp)*BED/DX, &
                   thickness_floor(maxval(abs(h_b))))
-      tol_eta = max(bound_accel_loaded()*DT*real(N_STEPS, wp)*BED/DX, eta_floor())
+      tol_eta = max(bound_accel_loaded()*DT*real(N_STEPS, wp)*BED/DX, &
+                    bound_accel()*DT*real(N_STEPS, wp)*BED/DX, eta_floor())
       tol_u = bound_accel_loaded() + gw_response(max(dh, deta))
 
       signal = maxval(abs(u_a))

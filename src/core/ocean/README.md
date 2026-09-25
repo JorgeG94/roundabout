@@ -507,24 +507,28 @@ resolves to 0 (psurf is in `bt_halo_auto_exclusion`, alongside the tide that
 shares the seam).
 
 **The partition rule (what belongs on this seam and what does not).** The seam
-owns the **barotropic** response to a surface load, and owns it *alone*. The
-reason is structural, not conventional: `run_stage_split` subtracts the depth
-mean of the layer PGF from the barotropic forcing
-(`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`, `rdb_ocean_dyn.F90`) and then folds the
-barotropic solution back over the layers, so the column-integrated FV pressure
-force is *discarded* and the substep's `−G·∇(η − eta_forcing)` is the only
-barotropic term there is. Two consequences you must carry into any load work:
+owns the barotropic response to a surface load that is NOT in the layer PGF.
+Under the default split (`&ocean_bt_nml bc_pgf_forcing`, MOM6 `BT_force` +
+`eta_PF`) `run_stage_split` forces the substep with the depth mean of the FULL
+layer PGF and sheds only the free-surface term that PGF itself carries at the
+stage-entry η (`set_fast_forcing_eta_pf`; zero for the surface-relative
+MONT/FV_LITE/FV_WRIGHT forms, `g·∇η_PF` for FV_MOM6), so the column-integrated
+pressure force — its baroclinic part included, i.e. the bottom-pressure
+gradient that drives JEBAR — reaches the barotropic mode. Two consequences you
+must carry into any load work:
 
-- A **depth-uniform** contribution to the layer PGF is annihilated — it does not
-  reach the baroclinic modes (its deviation from the depth mean is zero) and it
-  does not reach the barotropic mode (the depth mean is replaced). So putting a
-  depth-uniform top load into the PGF boundary condition
-  (`&ocean_pgf_nml p_top_in_bc`, see the `p_top` contract below) is **not** a
-  double count of this seam: the two are orthogonal by construction, and each
-  covers what the other cannot. (Exactly true for the default uniform-Δu BT
-  corrector; under `&ocean_bt_nml correction_h_weighted` the redistribution
-  leaves a residual `−dt·δPFu·(w_k − 1)` whose depth mean is still zero by
-  `⟨w⟩_h = 1`, i.e. a shear-only redistribution of an already-cancelled force.)
+- A **depth-uniform** contribution to the layer PGF reaches the barotropic
+  mode (not the baroclinic modes: its deviation from the depth mean is zero).
+  So a load that is BOTH in the PGF boundary condition (`&ocean_pgf_nml
+  p_top_in_bc`, see the `p_top` contract below) AND on this seam would be
+  counted twice; `ocean_dyn_step_split` therefore hands `run_stage_split`
+  `eta_pf_seam = eta_ib` in exactly that case and the forcing sheds
+  `g·∇η_ib`, so the seam keeps it once. (The LEGACY split,
+  `bc_pgf_forcing = .false.`, subtracted the whole depth mean instead: there
+  a depth-uniform PGF contribution was annihilated and the two routes were
+  orthogonal — and so was every baroclinic bottom-pressure gradient, which is
+  the defect the knob fixes: ~0 Sv through Drake Passage on the global
+  1-degree spin-up.)
 - A load a future **datum** absorbs (an ice draft moved into `bt_H_ref`, so that
   `η ≈ 0` at rest) must **NOT** also be added to `sf%p_surf`, because `eta_ib` is
   built from the assembled total and would re-inject it. Only the load
@@ -592,9 +596,11 @@ Rules for a builder that joins this seam:
   **disjunction** so neither can read a p_top the configure seed left stale.
   Adding the load at `pa(nz+1)` does **not** double-count the `eta_forcing` seam:
   a depth-uniform `p_top` perturbs every layer's `PFu` by the same
-  `−(1/ρ₀)∇p_top` (theorem in `compute_fv_mom6_impl`'s docstring) and the split's
-  depth-mean replacement annihilates exactly that — see the partition rule in the
-  `eta_forcing` contract above. What it buys under a large load is that `pa`, an
+  `−(1/ρ₀)∇p_top` (theorem in `compute_fv_mom6_impl`'s docstring); its `p_surf`
+  part is shed from the barotropic forcing as `g·∇η_ib` (the seam carries it)
+  and its static `p_ice_ref` part cancels inside `pa(nz+1)` against the
+  datum-shifted `η_geo` — see the partition rule in the `eta_forcing` contract
+  above. What it buys under a large load is that `pa`, an
   anomaly stack about `rho_ref*g*z`, stays `O(1e4 Pa)` instead of `O(5e6 Pa)`,
   shrinking the `h_neglect` face-divisor leak by the same factor. FV_WRIGHT's
   `p_edge(nz+1) = 0` and FV_LITE's are still untouched — a separate follow-up.
@@ -688,7 +694,7 @@ assembly and `apply_bt_correction` in `run_stage_split`:
 | applied tendency | in `F_slow`? | why |
 |---|---|---|
 | `cor%pv_flux_x/y` | yes | + its fast double-count removed by `subtract_fast_cor_ref` |
-| `pgf%dpdx/dpdy_face` | yes | + `F_bt_*_fast = F_bt − ⟨PGF⟩` removes the substep's own `−g∇η` |
+| `pgf%dpdx/dpdy_face` | yes | + `F_bt_*_fast = F_bt + g_pf·∇(η_PF − η_ib)` sheds ONLY the free-surface term the slow PGF carries (the substep's own `−g∇η` replaces it); the depth-mean baroclinic PGF stays (`bc_pgf_forcing`, MOM6 `BT_force`/`eta_PF`) |
 | `hv%du_visc/dv_visc` | yes | MEKE backscatter rides inside it (it edits `ah_face_*`, not a new buffer) |
 | `bd%du_drag/dv_drag` | yes | stays summed even when `&ocean_vdiff_nml implicit_drag` skips the explicit apply |
 | `bd%lambda_side_u/v` (channel drag) | **no** | multiplicative backward-Euler `u ← u/(1+dt·λ)` — no `du/dt` buffer exists to sum |
@@ -786,27 +792,30 @@ expressible with and without the load.
 
 Rules for anything that joins this seam:
 
-- **The datum is the whole dynamical effect of a STATIC load.** The split
-  solver replaces the depth mean of the layer PGF with the barotropic
-  solution, so the column-integrated pressure force is discarded and
-  `−G·∇(η − η_forcing)` is the only barotropic term there is. A static
-  surface load therefore reaches the barotropic mode through the datum (or
-  the seam) and through nothing else — putting it only in the PGF would be
-  silently inert. The converse is the reason `p_top_in_bc` is a refusal
-  and not a blow-up guard: a MISSING load is also annihilated there, so
-  the split path loses conditioning (5.4 decades, measured) rather than
-  stability. What it protects is the raw `pa` stack, the unsplit driver,
-  and `&ocean_bt_nml correction_h_weighted`, where the uniform piece is
-  redistributed as a real per-layer shear.
+- **The datum and the PGF boundary condition must carry the SAME static
+  load.** Under the default split (`&ocean_bt_nml bc_pgf_forcing`) the depth
+  mean of the layer PGF forces the barotropic mode, so the static load
+  reaches it twice over and must cancel: `bt_H_ref = b − z_draft` puts the
+  column's free surface at `η_geo = −z_draft`, and `p_ice_ref` in `pa(nz+1)`
+  (`p_top_in_bc`, REQUIRED for a varying draft) balances exactly that. A
+  MISSING load is therefore no longer annihilated: without `p_top_in_bc` the
+  barotropic mode would feel `g·∇z_draft`. (Under the legacy split,
+  `bc_pgf_forcing = .false.`, the depth mean was discarded and a missing
+  load only cost conditioning.)
 - **The isostatic load is `ρ₀·g·z_draft`, and it is not the true weight.**
   A stratified column's real overburden is `g∫ρ̂`, which differs by
   `−g∫(ρ̂ − ρ₀)`; the gradient of that difference is a residual
   `N²·z_draft·∇z_draft` in the raw PGF (`5.8e-6 m/s²` at `N² = 1e-5`,
   `z_draft = 280 m`, slope `2e-3` — measured, `test_ocean_cavity_load`).
-  It is chosen anyway, because `ρ₀·g·z_draft` is the load that makes the
-  DISCRETE BAROTROPIC state exactly at rest, and it is what ISOMIP+
-  prescribes. The residual is depth-uniform, so the split annihilates it
-  too; `draft_source="in_situ"` (the true isostatic solve) is deferred
+  It is chosen because it is what ISOMIP+ prescribes and it cancels
+  bit-exactly against the datum in a uniform-density column. The residual
+  is depth-uniform, and under the default split it is a real bottom-pressure
+  gradient the barotropic mode adjusts to — a gravity-wave adjustment to a
+  surface tilt `N²·z_draft·s/g` (`4.5e-4 m/s` on the
+  `test_ocean_cavity_load` case,
+  `cavity_sloping_lid_load_shortfall_drives_bt`). A model that trims the
+  initial surface to the ACTUAL column density (MOM6 `trim_for_ice`) starts
+  balanced; `draft_source="in_situ"` (the true isostatic solve) is deferred
   and fails loud.
 - **`bt_H_ref` is the reference WATER-COLUMN thickness, not the bed.**
   Anything that re-derives it (the API's bathymetry re-injection, a future
@@ -1236,8 +1245,11 @@ freezing point exactly as the ice load does, with no extra wiring.
   ALSO integrates live is double-counted unless its value at the
   stage-entry BT state is subtracted from the forcing.  Two subtractions
   exist today, both in the `F_slow` assembly in
-  `run_stage_split`: the PGF projection (`F_bt_u_fast = F_bt_u −
-  depth_mean(PGF)`; the substep's own `−G·∇η` replaces it) and the
+  `run_stage_split`: the PGF free-surface term (`F_bt_u_fast = F_bt_u +
+  g_pf·∇η_PF`, `set_fast_forcing_eta_pf`; the substep's own `−G·∇η`
+  replaces it — and ONLY it: subtracting the whole depth-mean PGF, as the
+  legacy `bc_pgf_forcing = .false.` split does, also throws away the
+  baroclinic bottom-pressure gradient, JEBAR) and the
   Coriolis/advection reference (`subtract_fast_cor_ref` — MOM6
   `Cor_ref_u/v`; without it the barotropic Coriolis is integrated twice
   and the Δu corrector hands every layer an extra `dt·f·v̄` rotation per

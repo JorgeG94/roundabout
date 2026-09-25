@@ -200,6 +200,7 @@ set(RDB_TESTS
     "test_ocean_cor_ref_seiche|test_ocean_cor_ref_seiche|collect_ocean_cor_ref_seiche_tests|ocean_cor_ref_seiche|ocean"
     "test_ocean_step_bt_mode|test_ocean_step_bt_mode|collect_ocean_step_bt_mode_tests|ocean_step_bt_mode|ocean"
     "test_ocean_bt_slow_forcing|test_ocean_bt_slow_forcing|collect_ocean_bt_slow_forcing_tests|ocean_bt_slow_forcing|ocean"
+    "test_ocean_bt_baroclinic_forcing|test_ocean_bt_baroclinic_forcing|collect_ocean_bt_baroclinic_forcing_tests|ocean_bt_baroclinic_forcing|ocean"
     "test_ocean_bt_cfl|test_ocean_bt_cfl|collect_ocean_bt_cfl_tests|ocean_bt_cfl|ocean"
     "test_ocean_bt_corrector_hweight|test_ocean_bt_corrector_hweight|collect_bt_corrector_hweight_tests|ocean_bt_corrector_hweight|ocean"
     "test_ocean_bt_cont_type|test_ocean_bt_cont_type|collect_ocean_bt_cont_type_tests|ocean_bt_cont_type|ocean"

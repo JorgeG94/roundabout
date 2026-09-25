@@ -41,6 +41,7 @@ module rdb_ocean_dyn
                                       face_depth_mean_rem_u, face_depth_mean_rem_v, &
                                       apply_bt_correction, &
                                       snapshot_eta_PF, compute_pbce, &
+                                      set_fast_forcing_eta_pf, pgf_free_surface_gravity, &
                                       compute_gtot_faces, compute_e_anom, &
                                       compute_bt_rem, reset_bt_rem, &
                                       compute_bt_rem_wave_drag, mask_bt_rem, &
@@ -3062,7 +3063,19 @@ contains
       ! previous 4-branch cartesian-product dispatch (vcoord × bc)
       ! into a single stage loop.
       do stage = 1, 2
-         if (psurf_on) then
+         if (psurf_on .and. pgf%p_top_in_bc) then
+            ! The load reaches the slow PGF too (`ms%p_top` in the FV_MOM6
+            ! top BC), so its depth mean is already in `F_bt`: hand the
+            ! stage `eta_ib` so the MOM6-split forcing counts it once
+            ! (`set_fast_forcing_eta_pf`).
+            call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
+                                 va, hd, vd, vmix, ms, dt, n_inner, &
+                                 sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
+                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
+                                 redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
+                                 eta_forcing=psurf%eta_seam, td=td, cav=cav, &
+                                 eta_pf_seam=psurf%eta_ib)
+         else if (psurf_on) then
             ! `eta_seam` already includes the tide when it is on (folded in
             ! p_surf_update_seam above), so this single branch subsumes the
             ! tide-on case; the two branches below are the pre-PR-17 code.
@@ -3953,7 +3966,7 @@ contains
    subroutine run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                               va, hd, vd, vmix, ms, dt, n_inner, sf, geo, stage, vcoord, bc, sp, t, &
                               lateral_mix, epbl, kshear, mle, gm, redi, varmix, vmix_tidal, meke, &
-                              eta_forcing, td, cav)
+                              eta_forcing, td, cav, eta_pf_seam)
       !! One FE stage of the split-explicit step.  See the
       !! `ocean_dyn_step_split` header for the design.
       type(hgrid_t), intent(in) :: grid
@@ -4051,6 +4064,11 @@ contains
          !! `ocean_lateral_mix_compute` (the energy-return seam, Gap 2).
          !! Absent / `backscatter` off ⇒ bit-identical.
       real(wp), intent(in), optional :: eta_forcing(grid%nx_total, grid%ny_total)
+      real(wp), intent(in), optional :: eta_pf_seam(grid%nx_total, grid%ny_total)
+         !! The part of the `eta_forcing` seam that ALSO reaches the slow PGF
+         !! (`eta_ib` when `&ocean_pgf_nml p_top_in_bc` puts `p_surf` in the
+         !! FV_MOM6 top BC).  Absent ⇒ the slow PGF carries no seam load.
+         !! Read only under `&ocean_bt_nml bc_pgf_forcing`.
          !! Equilibrium-tide elevation (C1), held static across the inner
          !! substep loop.  Forwarded to `barotropic_substep_nonlinear`'s
          !! PGF; absent ⇒ bit-identical.
@@ -4468,11 +4486,26 @@ contains
          call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
          call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
       end if
-      ! Subtract the bt projection of the PGF: the barotropic substep has
-      ! its own `-G·∂η/∂x` term, so without this subtraction the
-      ! bt mode would integrate the PGF twice and √(gH) inflates to
-      ! √(2gH).
-      if (dyn%bt_work%bt_forcing_visc_rem) then
+      ! Remove from the forcing the part of the slow PGF the barotropic
+      ! substep re-represents with its own live `-G·∂η/∂x`, or the bt
+      ! mode integrates it twice and √(gH) inflates to √(2gH).
+      !
+      ! `bc_pgf_forcing` (default, MOM6 `BT_force` + `eta_PF`): that part
+      ! is the free-surface term the slow PGF carries, `-g_pf·∇η_PF` at the
+      ! η it was built on (`g_pf = 0` for the surface-relative MONT/FV_LITE/
+      ! FV_WRIGHT forms) — so the depth-mean BAROCLINIC PGF stays in the
+      ! forcing.  Legacy (`.false.`): the WHOLE depth-mean PGF is
+      ! subtracted, which also throws away its baroclinic part (the JEBAR /
+      ! bottom-pressure forcing of the barotropic mode).
+      if (dyn%bt_work%bt_bc_pgf_forcing) then
+         if (present(eta_pf_seam)) then
+            call set_fast_forcing_eta_pf(grid, metrics, dyn%bt_work, grid%nx_total, grid%ny_total, &
+                                         pgf_free_surface_gravity(pgf), eta_pf_seam, .true.)
+         else
+            call set_fast_forcing_eta_pf(grid, metrics, dyn%bt_work, grid%nx_total, grid%ny_total, &
+                                         pgf_free_surface_gravity(pgf), dyn%bt_work%bt_eta, .false.)
+         end if
+      else if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, pgf%dpdx_face%data, ms%h_layer, &
                                     dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
          call face_depth_mean_rem_v(grid, pgf%dpdy_face%data, ms%h_layer, &
@@ -4481,12 +4514,14 @@ contains
          call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
          call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
       end if
-      do concurrent(j=1:ny_uface, i=1:nx_face)
-         dyn%bt_work%F_bt_u_fast(i, j) = dyn%bt_work%F_bt_u(i, j) - dyn%bt_work%F_bt_u_fast(i, j)
-      end do
-      do concurrent(j=1:ny_face, i=1:nx_vface)
-         dyn%bt_work%F_bt_v_fast(i, j) = dyn%bt_work%F_bt_v(i, j) - dyn%bt_work%F_bt_v_fast(i, j)
-      end do
+      if (.not. dyn%bt_work%bt_bc_pgf_forcing) then
+         do concurrent(j=1:ny_uface, i=1:nx_face)
+            dyn%bt_work%F_bt_u_fast(i, j) = dyn%bt_work%F_bt_u(i, j) - dyn%bt_work%F_bt_u_fast(i, j)
+         end do
+         do concurrent(j=1:ny_face, i=1:nx_vface)
+            dyn%bt_work%F_bt_v_fast(i, j) = dyn%bt_work%F_bt_v(i, j) - dyn%bt_work%F_bt_v_fast(i, j)
+         end do
+      end if
       ! Subtract the fast-loop Coriolis + advection evaluated at the
       ! stage-entry bt state — the Coriolis/advection analogue of the PGF
       ! projection subtraction just above (MOM6 `Cor_ref_u/v`).  Without

@@ -66,8 +66,8 @@
 ! WHAT TO EXPECT, derived.  Flat bed + sigma makes the interface gap
 ! between two columns `De(K) = sigma_K*D`, with `D` the draft step across
 ! the face, and the FV-MOM6 Pass-3 numerator telescopes into a trapezoid
-! error `G(K) = -(De(K)^3/12)*rho_0*N^2`.  What survives the split solver's
-! depth-mean replacement is
+! error `G(K) = -(De(K)^3/12)*rho_0*N^2`.  Its deviation from the depth
+! mean (what the legacy split, which replaced the depth mean, left) is
 !
 !     PFu(k) - <PFu>_h = N^2 * D^3 * (3*sigma_k^2 - 1) / (12*dx*Hbar)
 !
@@ -90,6 +90,21 @@
 !   ssp_rk2 (the automatic __ssp_rk2 twin):
 !     day 10   1.660E-09      day 15   4.617E-06      day 30   1.652E-04
 !     day 11   1.981E-09      day 20   4.217E-05
+!
+!   The tables above predate the MOM6 barotropic split and are what
+!   `&ocean_bt_nml bc_pgf_forcing = .false.` (the legacy split) still gives.
+!   Under the default split the depth-mean layer PGF forces the barotropic
+!   mode, so the Boussinesq-isostatic load's REFERENCE-density shortfall
+!   (a depth-uniform N^2*z_draft*grad(z_draft), see the README) is no
+!   longer annihilated: the barotropic mode adjusts to it on day 1 and the
+!   same late mode then grows from that larger seed (gfortran 15.1,
+!   2026-09-25, pred_corr):
+!     day  1   1.061E-06      day 20   4.371E-09      day 40   1.730E-06
+!     day  5   2.108E-07      day 30   1.316E-07      day 60   5.466E-06
+!     day 10   1.020E-08
+!   The day-1 transient exceeds the REST_1MM_S bar (energy:rest); the
+!   remedy is an initial surface balanced against the actual column
+!   density (MOM6 `trim_for_ice`, here the deferred draft_source="in_situ").
 !
 ! Cross-toolchain: the GPU build (nvfortran 26.5, -stdpar=gpu, cc70, one
 ! Tesla V100-DGXS, 4320 steps in 74.6 s) reads 3.043E-08 at day 30 — every

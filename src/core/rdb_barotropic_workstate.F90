@@ -110,6 +110,17 @@ module rdb_barotropic_workstate
          !! h-weighted Δu.  Requires `ocean_pgf_form = "fv_mom6"` and
          !! the `pbce` / `gtot_*` / `e_anom` / `eta_PF` fields filled.
 
+      logical :: bt_bc_pgf_forcing = .true.
+         !! `&ocean_bt_nml bc_pgf_forcing` (default `.true.`, MOM6
+         !! parity).  When `.true.` the fast forcing is
+         !! `F_bt_*_fast = F_bt + g_pf·∇(η_PF − η_seam)` — the depth
+         !! mean of the FULL slow PGF stays in the forcing and only the
+         !! free-surface term the slow PGF itself carries (`g_pf`,
+         !! `pgf_free_surface_gravity`: 0 for MONT/FV_LITE/FV_WRIGHT) at
+         !! the stage-entry η it was evaluated on is removed.  `.false.` =
+         !! legacy `F_bt − ⟨PGF⟩`, which discarded the depth-mean
+         !! baroclinic PGF.  See `set_fast_forcing_eta_pf`.
+
       logical :: bt_correction_h_weighted = .false.
          !! When `.true.`, `apply_bt_correction` distributes the
          !! per-face Δu across layers proportional to
