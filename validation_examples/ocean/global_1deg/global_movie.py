@@ -3,9 +3,10 @@
 Renders a two-panel frame (surface speed over sea-surface height) of the
 tripolar model grid on a regular longitude-latitude image, writes it as a
 binary PPM, and encodes a frame directory to MP4 (H.264, yuv420p) and GIF
-with ``ffmpeg``.  No numpy / matplotlib: the projection is a nearest-cell
-lookup table built once, the colour maps are anchor tables, and the labels
-use a built-in 5x7 bitmap font.
+with ``ffmpeg``.  No numpy / matplotlib: the projection is a lookup table
+built once (nearest model cell, or bilinear in the model's index space with
+``interp="bilinear"``), the colour maps are anchor tables, and the labels use
+a built-in 5x7 bitmap font.
 
 Used two ways:
 
@@ -13,7 +14,12 @@ Used two ways:
   running model through the ``rdb`` Python interface), and
 * offline on the ``rdb`` executable's diagnostic file
   (``python3 global_movie.py DIAG.nc OUTDIR``; the NetCDF-4 file is first
-  flattened to NetCDF-3 with ``nccopy -u -k 64-bit-offset``).
+  flattened to NetCDF-3 with ``nccopy -u -k 64-bit-offset``).  This is how
+  the wind-forced case (``global_1deg_wind.nml``) is rendered:
+
+      python3 global_movie.py RUN/output/global_1deg_wind_rank_000000.nc OUT \\
+          --interp bilinear --speed-max 1.0 --stem global_1deg_wind \\
+          --title "ROUNDABOUT  GLOBAL 1 DEG  JRA55-DO WIND 1958"
 """
 
 import collections
@@ -212,6 +218,101 @@ class LatLonMap:
             canvas.px[off:off + 3 * self.w] = row
 
 
+class BilinearLatLonMap(LatLonMap):
+    """Bilinear (in the model's index space) lookup for every lon-lat pixel.
+
+    Starts from the nearest-cell owner of ``LatLonMap`` (which also decides
+    land: a pixel whose nearest cell is land stays grey, so the coastline is
+    the same as the nearest-cell map), then inverts the local grid map
+    around that cell: with ``P(i, j)`` the unit-sphere position of T-cell
+    ``(i, j)`` and ``e_i``, ``e_j`` its centred index-space derivatives, the
+    pixel's offset ``d`` is solved as ``d = a e_i + b e_j`` (least squares on
+    the tangent plane, so the Arctic cap and the pole need no special case),
+    and the value is the bilinear blend of the four cells around
+    ``(i + a, j + b)`` -- periodic in i, clamped at the south and north rows.
+    Land corners get zero weight and the rest are renormalised, so coastal
+    pixels never mix in land values.
+    """
+
+    def __init__(self, lon, lat, wet, width=1080, lon0=20.0, lat_s=-80.0, lat_n=90.0):
+        super().__init__(lon, lat, wet, width, lon0, lat_s, lat_n)
+        ny, nx = len(lon), len(lon[0])
+
+        def xyz(i, j):
+            la, lo = math.radians(lat[j][i]), math.radians(lon[j][i])
+            return (math.cos(la) * math.cos(lo), math.cos(la) * math.sin(lo), math.sin(la))
+
+        pos = [[xyz(i, j) for i in range(nx)] for j in range(ny)]
+        self.idx, self.wgt = [], []
+        for p, o in enumerate(self.owner):
+            if o < 0:
+                self.idx.append(None)
+                self.wgt.append(None)
+                continue
+            j, i = divmod(o, nx)
+            y, x = divmod(p, self.w)
+            plat = math.radians(lat_n - (y + 0.5) / self.ppd)
+            plon = math.radians(lon0 + (x + 0.5) / self.ppd)
+            q = (math.cos(plat) * math.cos(plon), math.cos(plat) * math.sin(plon), math.sin(plat))
+            c = pos[j][i]
+            ie, iw = pos[j][(i + 1) % nx], pos[j][(i - 1) % nx]
+            jn, js = pos[min(j + 1, ny - 1)][i], pos[max(j - 1, 0)][i]
+            sj = 1.0 if 0 < j < ny - 1 else 2.0
+            ei = [(ie[k] - iw[k]) * 0.5 for k in range(3)]
+            ej = [(jn[k] - js[k]) * 0.5 * sj for k in range(3)]
+            d = [q[k] - c[k] for k in range(3)]
+            a11 = sum(v * v for v in ei)
+            a22 = sum(v * v for v in ej)
+            a12 = sum(u * v for u, v in zip(ei, ej))
+            b1 = sum(u * v for u, v in zip(ei, d))
+            b2 = sum(u * v for u, v in zip(ej, d))
+            det = a11 * a22 - a12 * a12
+            if det <= 0.0:
+                a = b = 0.0
+            else:
+                a = max(-1.0, min(1.0, (b1 * a22 - b2 * a12) / det))
+                b = max(-1.0, min(1.0, (a11 * b2 - a12 * b1) / det))
+            i0 = i + math.floor(a)
+            fx = a - math.floor(a)
+            jj = j + b
+            j0 = min(max(int(math.floor(jj)), 0), ny - 2)
+            fy = min(max(jj - j0, 0.0), 1.0)
+            cells = ((j0, i0 % nx), (j0, (i0 + 1) % nx), (j0 + 1, i0 % nx), (j0 + 1, (i0 + 1) % nx))
+            ws = ((1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy)
+            keep = [(cj * nx + ci, w) for (cj, ci), w in zip(cells, ws) if wet[cj * nx + ci] > 0]
+            tot = sum(w for _, w in keep)
+            if tot <= 1e-12:
+                keep, tot = [(o, 1.0)], 1.0
+            self.idx.append(tuple(k for k, _ in keep))
+            self.wgt.append(tuple(w / tot for _, w in keep))
+
+    def draw(self, canvas, x0, y0, values, lut, vmin, vmax, gamma=1.0):
+        n = len(lut) - 1
+        scale = n / (vmax - vmin)
+        rng = vmax - vmin
+        land = bytes(LAND)
+        row = bytearray(3 * self.w)
+        for y in range(self.h):
+            base = y * self.w
+            for x in range(self.w):
+                ids = self.idx[base + x]
+                if ids is None:
+                    row[3 * x:3 * x + 3] = land
+                    continue
+                v = 0.0
+                for k, w in zip(ids, self.wgt[base + x]):
+                    v += w * values[k]
+                if v != v:
+                    s = 0
+                else:
+                    if gamma != 1.0:
+                        v = ((max(v - vmin, 0.0) / rng) ** gamma) * rng + vmin
+                    s = int((v - vmin) * scale)
+                row[3 * x:3 * x + 3] = lut[0 if s < 0 else (n if s > n else s)]
+            off = 3 * ((y0 + y) * canvas.w + x0)
+            canvas.px[off:off + 3 * self.w] = row
+
+
 def colorbar(canvas, x0, y0, width, height, lut, vmin, vmax, ticks, fmt, gamma=1.0):
     n = len(lut) - 1
     for x in range(width):
@@ -237,20 +338,24 @@ class FrameRenderer:
     HEADER = 44
     BAR = 44
 
-    def __init__(self, hgrid_path, bathy_path, width=1080):
+    def __init__(self, hgrid_path, bathy_path, width=1080, interp="nearest",
+                 speed_max=SPEED_MAX, title="ROUNDABOUT  GLOBAL 1 DEG TRIPOLAR  UNFORCED"):
         nx, ny, lon, lat = model_tpoints(hgrid_path)
         depth = NC3(bathy_path).read("depth")
         self.nx, self.ny = nx, ny
         self.wet = [1 if d > 0.0 else 0 for d in depth]
-        self.map = LatLonMap(lon, lat, self.wet, width=width)
+        cls = BilinearLatLonMap if interp == "bilinear" else LatLonMap
+        self.map = cls(lon, lat, self.wet, width=width)
+        self.speed_max, self.title = speed_max, title
         self.w = self.map.w
         self.h = self.HEADER + 2 * (self.map.h + self.BAR)
         self.h += self.h % 2
         self.speed_lut = make_lut(INFERNO)
         self.ssh_lut = make_lut(BALANCE)
 
-    def render(self, day, speed, ssh, title="ROUNDABOUT  GLOBAL 1 DEG TRIPOLAR  UNFORCED"):
+    def render(self, day, speed, ssh, title=None):
         """`speed`, `ssh`: flat j-major lists of nx*ny values (land ignored)."""
+        title = title or self.title
         c = Canvas(self.w, self.h)
         c.text(12, 12, title, scale=3)
         label = f"DAY {day:5.1f}"
@@ -259,11 +364,13 @@ class FrameRenderer:
         mean = sum(wet_ssh) / max(len(wet_ssh), 1)
         anom = [s - mean for s in ssh]
         y = self.HEADER
-        self.map.draw(c, 0, y, speed, self.speed_lut, 0.0, SPEED_MAX, SPEED_GAMMA)
+        self.map.draw(c, 0, y, speed, self.speed_lut, 0.0, self.speed_max, SPEED_GAMMA)
         y += self.map.h
         c.text(12, y + 10, "SURFACE SPEED  (M/S, TOP 10 M)")
-        colorbar(c, self.w - 36 - 420, y + 6, 420, 12, self.speed_lut, 0.0, SPEED_MAX,
-                 [0.0, 0.02, 0.1, 0.2, 0.3, 0.5], lambda t: f"{t:g}", SPEED_GAMMA)
+        ticks = [t for t in (0.0, 0.02, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0)
+                 if t <= self.speed_max + 1e-9]
+        colorbar(c, self.w - 36 - 420, y + 6, 420, 12, self.speed_lut, 0.0, self.speed_max,
+                 ticks, lambda t: f"{t:g}", SPEED_GAMMA)
         y += self.BAR
         self.map.draw(c, 0, y, anom, self.ssh_lut, -SSH_MAX, SSH_MAX)
         y += self.map.h
@@ -297,15 +404,18 @@ def encode(frame_dir, out_stem, fps=24, gif_width=540, gif_fps=12):
 # ----------------------------------------------------------------------------
 # Offline: frames from the rdb executable's diagnostic file
 # ----------------------------------------------------------------------------
-def frames_from_diag(diag_nc, out_dir, data_dir, every=1):
+def frames_from_diag(diag_nc, out_dir, data_dir, every=1, interp="nearest",
+                     speed_max=SPEED_MAX, title=None):
     """Render every `every`-th daily frame of `diag_nc` into `out_dir`."""
     os.makedirs(out_dir, exist_ok=True)
     flat = os.path.join(out_dir, "diag_nc3.nc")
     subprocess.run([shutil.which("nccopy") or "nccopy", "-u", "-k", "64-bit-offset", "-V",
                     "time_SSH,SSH,time_u,u,time_v,v", diag_nc, flat], check=True)
     nc = NC3(flat)
+    kw = {"title": title} if title else {}
     r = FrameRenderer(os.path.join(data_dir, "ocean_hgrid.nc"),
-                      os.path.join(data_dir, "bathy_om1deg.nc"))
+                      os.path.join(data_dir, "bathy_om1deg.nc"),
+                      interp=interp, speed_max=speed_max, **kw)
     nt, nyg, nxg = nc.shape("SSH")
     ng = (nxg - r.nx) // 2
     t_ssh = nc.read("time_SSH")
@@ -334,7 +444,12 @@ if __name__ == "__main__":
     ap.add_argument("--data", default=os.path.join(os.environ.get("RDB_DATA_DIR", ""), "OM_1deg"))
     ap.add_argument("--every", type=int, default=1)
     ap.add_argument("--stem", default="global_1deg")
+    ap.add_argument("--interp", choices=("nearest", "bilinear"), default="nearest",
+                    help="tripolar -> lon-lat remap (bilinear is smoother, ~2x slower)")
+    ap.add_argument("--speed-max", type=float, default=SPEED_MAX,
+                    help="speed colour-scale top (m/s)")
+    ap.add_argument("--title", default=None, help="frame title (5x7 font: A-Z 0-9 . , - + ( ) / : |)")
     a = ap.parse_args()
-    nfr = frames_from_diag(a.diag_nc, a.out_dir, a.data, a.every)
+    nfr = frames_from_diag(a.diag_nc, a.out_dir, a.data, a.every, a.interp, a.speed_max, a.title)
     print(f"{nfr} frames in {a.out_dir}")
     print("encoded:", *encode(a.out_dir, os.path.join(a.out_dir, a.stem)))
