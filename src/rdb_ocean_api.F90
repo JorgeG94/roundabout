@@ -710,7 +710,7 @@ contains
    function rdb_ocean_get_total_mass(c_handle, m_out) result(status) &
       bind(c, name="rdb_ocean_get_total_mass")
       !! One scalar diagnostic — total water mass over the physical domain
-      !! (`sum(h_layer) * dx * dy * RHO0_DIAG`) — so a caller can prove the
+      !! (`sum(h_layer * areaT) * RHO0_DIAG`) — so a caller can prove the
       !! solver actually advanced (and, in a closed quiescent/wall basin,
       !! that it is conserving mass) without any state-array accessor (P2).
       !! `!$acc update self` on the leaf array via `associate` (never the
@@ -730,11 +730,47 @@ contains
       associate (hlayer => h%state%multilayer%h_layer, ng => h%grid%nghost, &
                  nxp => h%grid%nx_phys, nyp => h%grid%ny_phys)
          !$acc update self(hlayer)
-         total = sum(hlayer(ng + 1:ng + nxp, ng + 1:ng + nyp, :))
+         if (handle_has_area(h)) then
+            ! Curvilinear (spherical / supergrid / tripolar) cells differ
+            ! in area, and `grid%dx*grid%dy` is a placeholder there (1 m^2
+            ! on a supergrid), so weight each column by its own `areaT`.
+            total = cell_area_weighted_sum(hlayer, h%state%metrics%areaT, ng, nxp, nyp)
+         else
+            total = sum(hlayer(ng + 1:ng + nxp, ng + 1:ng + nyp, :))*h%grid%dx*h%grid%dy
+         end if
       end associate
 
-      m_out = real(total*h%grid%dx*h%grid%dy*RHO0_DIAG, c_double)
+      m_out = real(total*RHO0_DIAG, c_double)
    end function rdb_ocean_get_total_mass
+
+   function handle_has_area(h) result(has_area)
+      !! True when the handle's metrics carry a full ghosted `areaT` (every
+      !! grid the engine builds does); anything else falls back to
+      !! `grid%dx*grid%dy`.
+      type(ocean_handle_t), pointer, intent(in) :: h
+      logical :: has_area
+      has_area = .false.
+      if (.not. allocated(h%state%metrics%areaT)) return
+      has_area = size(h%state%metrics%areaT, 1) == size(h%state%multilayer%h_layer, 1) &
+                 .and. size(h%state%metrics%areaT, 2) == size(h%state%multilayer%h_layer, 2)
+   end function handle_has_area
+
+   pure function cell_area_weighted_sum(f, area, ng, nxp, nyp) result(total)
+      !! `sum_k sum_ij f(i,j,k)*area(i,j)` over the physical interior.
+      ! assumed-shape-ok: host-side scalar diagnostic, not a device kernel.
+      real(wp), intent(in) :: f(:, :, :), area(:, :)
+      integer, intent(in) :: ng, nxp, nyp
+      real(wp) :: total
+      integer :: i, j, k
+      total = 0.0_wp
+      do k = 1, size(f, 3)
+         do j = ng + 1, ng + nyp
+            do i = ng + 1, ng + nxp
+               total = total + f(i, j, k)*area(i, j)
+            end do
+         end do
+      end do
+   end function cell_area_weighted_sum
 
    function rdb_working_precision() result(bytes) &
       bind(c, name="rdb_working_precision")
@@ -1700,10 +1736,11 @@ contains
       !! Total kinetic energy (J, up to the Boussinesq reference-density
       !! factor — matches `rdb_ocean_get_total_mass`'s convention of
       !! leaving `rho0` out) over the physical interior:
-      !! `sum(0.5 * h_layer * (u_centre^2 + v_centre^2)) * dx * dy`, faces
+      !! `sum(0.5 * h_layer * (u_centre^2 + v_centre^2) * areaT)`, faces
       !! averaged to centres — same formula as
-      !! `rdb_ocean_budgets::budget_total_ke`, computed inline (cartesian
-      !! `dx`/`dy` only; P2.5 generalises to curvilinear `areaT`). Unlike
+      !! `rdb_ocean_budgets::budget_total_ke`, computed inline (weighted by
+      !! the metrics' `areaT`, so it is right on spherical / supergrid /
+      !! tripolar grids too; `grid%dx*grid%dy` is only the fallback). Unlike
       !! the raw-pointer getters above, this refreshes the host itself —
       !! it hands back a NUMBER, not a pointer a caller could otherwise
       !! defer syncing for.
@@ -1714,12 +1751,14 @@ contains
       type(ocean_handle_t), pointer :: h
       real(wp) :: total, uc, vc
       integer :: i, j, k, ng, nxp, nyp
+      logical :: use_area
 
       ke_out = 0.0_c_double
       status = resolve_ocean(c_handle, h)
       if (status /= OCEAN_STATUS_OK) return
 
       call ocean_handle_refresh_host(h)
+      use_area = handle_has_area(h)
       ng = h%grid%nghost
       nxp = h%grid%nx_phys
       nyp = h%grid%ny_phys
@@ -1732,12 +1771,21 @@ contains
                                ms%u_face_x_layer(ng + i + 1, ng + j, k))
                   vc = 0.5_wp*(ms%v_face_y_layer(ng + i, ng + j, k) + &
                                ms%v_face_y_layer(ng + i, ng + j + 1, k))
-                  total = total + ms%h_layer(ng + i, ng + j, k)*0.5_wp*(uc*uc + vc*vc)
+                  if (use_area) then
+                     total = total + ms%h_layer(ng + i, ng + j, k)*0.5_wp*(uc*uc + vc*vc)* &
+                             h%state%metrics%areaT(ng + i, ng + j)
+                  else
+                     total = total + ms%h_layer(ng + i, ng + j, k)*0.5_wp*(uc*uc + vc*vc)
+                  end if
                end do
             end do
          end do
       end associate
-      ke_out = real(total*h%grid%dx*h%grid%dy, c_double)
+      if (use_area) then
+         ke_out = real(total, c_double)
+      else
+         ke_out = real(total*h%grid%dx*h%grid%dy, c_double)
+      end if
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_get_kinetic_energy
 
