@@ -31,6 +31,7 @@ module rdb_ocean_metrics
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
                             nc_get_dim_len, nc_get_varid, nc_get_var_2d
+   use netcdf, only: nf90_inq_varid, nf90_noerr
 #endif
    use rdb_ocean_bipolar, only: bipolar_corner_latlon
    use rdb_ocean_fold, only: fold_north_centre, fold_north_corner
@@ -46,7 +47,7 @@ module rdb_ocean_metrics
    use pic_strings, only: to_string
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
-   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IO
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IO, OCEAN_STATUS_ERR_SETUP
    implicit none
    private
 
@@ -58,6 +59,10 @@ module rdb_ocean_metrics
    public :: metrics_fill_from_supergrid
    public :: metrics_assemble_from_supergrid_arrays
    public :: metrics_fill_tripolar
+   public :: metrics_fold_periodic_ghosts
+   public :: supergrid_top_row_folds
+   public :: supergrid_angle_dx_from_geography
+   public :: tripolar_supergrid_arrays
    public :: metrics_fill_coriolis
    public :: metrics_porous_alloc
    public :: metrics_closed_faces_alloc
@@ -85,6 +90,7 @@ module rdb_ocean_metrics
       !! `f = 2*omega*sin(geolat)` at the respective stagger.
 
    real(wp), parameter :: DEG2RAD = 3.14159265358979323846_wp/180.0_wp
+   real(wp), parameter :: PI_WP = 3.14159265358979323846_wp
       !! Degrees -> radians.
 
    type :: ocean_metrics_t
@@ -315,6 +321,27 @@ module rdb_ocean_metrics
          !! Latitude / longitude at T points (degrees), `(nx,ny)`.
       real(wp), allocatable :: geolatBu(:, :), geolonBu(:, :)
          !! Latitude / longitude at Bu corners (degrees), `(nx+1,ny+1)`.
+      real(wp), allocatable :: angle_dx(:, :)
+         !! Grid ROTATION at T points (RADIANS), `(nx,ny)`: the angle of the
+         !! grid's +i axis measured COUNTER-CLOCKWISE from true east — MOM6's
+         !! `angle_dx` convention (the mosaic stores it in degrees at every
+         !! supergrid node; the T value is node `(2i,2j)`).  It rotates a
+         !! geographic (east, north) vector onto the grid axes:
+         !!
+         !!     u_grid =  cos(angle_dx)*u_east + sin(angle_dx)*v_north
+         !!     v_grid = -sin(angle_dx)*u_east + cos(angle_dx)*v_north
+         !!
+         !! and back with the transpose.  This is how lat-lon vector forcing
+         !! (e.g. wind stress on a reanalysis grid) is put on a curvilinear
+         !! grid — MOM6 does the same with `G%cos_rot` / `G%sin_rot`.
+         !! Zero on Cartesian and spherical grids (the axes ARE east/north).
+         !! Supergrid: read from the file's `angle_dx`, else (and on the
+         !! analytic tripolar) derived from the node geography by
+         !! `supergrid_angle_dx_from_geography`.  Ghosts: extrapolated,
+         !! then wrapped / folded like every other metric — across the fold
+         !! the conjugate cell's +i axis points the OTHER way, so the folded
+         !! ghost rows carry `angle + pi`.  Static; no kernel reads it yet
+         !! (the forcing regridder will).
 
       ! ---- hvisc ratio bundle (dimensionless / m; filled in finalize) ----
       real(wp), allocatable :: dy_dxT(:, :)
@@ -459,6 +486,7 @@ contains
       allocate (this%geolonT(nx, ny), source=0.0_wp)
       allocate (this%geolatBu(nx + 1, ny + 1), source=0.0_wp)
       allocate (this%geolonBu(nx + 1, ny + 1), source=0.0_wp)
+      allocate (this%angle_dx(nx, ny), source=0.0_wp)
       ! hvisc ratio bundle
       allocate (this%dy_dxT(nx, ny), source=0.0_wp)
       allocate (this%dx_dyT(nx, ny), source=0.0_wp)
@@ -523,6 +551,7 @@ contains
       if (allocated(this%geolonT)) deallocate (this%geolonT)
       if (allocated(this%geolatBu)) deallocate (this%geolatBu)
       if (allocated(this%geolonBu)) deallocate (this%geolonBu)
+      if (allocated(this%angle_dx)) deallocate (this%angle_dx)
       if (allocated(this%dy_dxT)) deallocate (this%dy_dxT)
       if (allocated(this%dx_dyT)) deallocate (this%dx_dyT)
       if (allocated(this%dy_dxBu)) deallocate (this%dy_dxBu)
@@ -629,6 +658,7 @@ contains
       !$acc enter data copyin(this%idxCv, this%idyCv)
       !$acc enter data copyin(this%iareaT, this%iareaBu, this%iareaCu, this%iareaCv)
       !$acc enter data copyin(this%geolatT, this%geolonT, this%geolatBu, this%geolonBu)
+      !$acc enter data copyin(this%angle_dx)
       !$acc enter data copyin(this%dy_dxT, this%dx_dyT, this%dy_dxBu, this%dx_dyBu)
       !$acc enter data copyin(this%dx2h, this%dy2h, this%dx2q, this%dy2q)
    end subroutine ocean_metrics_enter_data_impl
@@ -645,6 +675,7 @@ contains
       type(ocean_metrics_t), intent(inout) :: this
       !$acc exit data delete(this%dx2h, this%dy2h, this%dx2q, this%dy2q)
       !$acc exit data delete(this%dy_dxT, this%dx_dyT, this%dy_dxBu, this%dx_dyBu)
+      !$acc exit data delete(this%angle_dx)
       !$acc exit data delete(this%geolatT, this%geolonT, this%geolatBu, this%geolonBu)
       !$acc exit data delete(this%iareaT, this%iareaBu, this%iareaCu, this%iareaCv)
       !$acc exit data delete(this%idxCv, this%idyCv)
@@ -1101,7 +1132,7 @@ contains
    ! Ghost rows/columns are filled by constant extrapolation of the nearest
    ! physical value.  Periodic/fold ghost metric fill is the M4 exchange job.
 
-   subroutine metrics_fill_from_supergrid(this, grid, supergrid_file, ierr)
+   subroutine metrics_fill_from_supergrid(this, grid, supergrid_file, ierr, periodic_x, north_fold)
       !! Load an MOM6 supergrid (mosaic) NetCDF file and fill all metric
       !! arrays.  After this call the caller must invoke `metrics_finalize`
       !! to compute the inverses + hvisc ratio bundle.
@@ -1111,7 +1142,24 @@ contains
       !! shape `(2*ni+1, 2*nj)`), and `area` (m^2, shape `(2*ni, 2*nj)`),
       !! where `ni = grid%nx_phys`, `nj = grid%ny_phys`.  Dimensions must
       !! be named `nxp`/`nyp` (size 2ni+1 / 2nj+1) and `nx`/`ny` (size
-      !! 2ni / 2nj).  Ghost rows are filled by constant extrapolation.
+      !! 2ni / 2nj).  Ghost rows are filled by constant extrapolation,
+      !! then — on a periodic-x and/or tripolar-fold grid — replaced by the
+      !! periodic / fold images through `metrics_fold_periodic_ghosts`, the
+      !! routine the analytic tripolar generator uses.
+      !!
+      !! Topology cross-check (fail-loud, `OCEAN_STATUS_ERR_SETUP`): whether
+      !! the file IS tripolar is read off the file itself
+      !! (`supergrid_top_row_folds`), and must agree with `north_fold`
+      !! (the `&ocean_bc_nml north = "tripolar_fold"` tag) — a folded grid
+      !! with a north wall, or a fold tag on a grid whose top row does not
+      !! fold, would silently exchange the wrong cells.  `periodic_x`
+      !! requires the east and west node columns to lie on the same
+      !! latitudes (`y`), which every periodic supergrid satisfies.
+      !!
+      !! The optional variable `angle_dx` (degrees, MOM6's grid rotation,
+      !! counter-clockwise from true east) is read when present; absent, it
+      !! is derived from the node geography
+      !! (`supergrid_angle_dx_from_geography`).
       type(ocean_metrics_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
          !! Grid metadata — supplies `nx_phys`, `ny_phys`, `nghost`.
@@ -1119,17 +1167,30 @@ contains
          !! Path to the MOM6 mosaic supergrid NetCDF file.
       integer, intent(out), optional :: ierr
          !! Non-zero on a dimension mismatch, an unreadable/missing file,
-         !! or a missing NetCDF build when present; absent behaves as
-         !! today (`error stop`).
+         !! a topology mismatch, or a missing NetCDF build when present;
+         !! absent behaves as today (`error stop`).
+      logical, intent(in), optional :: periodic_x
+         !! The run is periodic east-west.  Absent ⇒ `.false.`.
+      logical, intent(in), optional :: north_fold
+         !! The run closes the north edge with the tripolar fold.  Absent ⇒
+         !! `.false.`.
 #ifndef RDB_NO_NETCDF
 
       integer :: ncid
       integer :: ni, nj, ng
       integer :: sg_nxp, sg_nyp, sg_nx, sg_ny
-      integer :: varid_x, varid_y, varid_dx, varid_dy, varid_area
+      integer :: varid_x, varid_y, varid_dx, varid_dy, varid_area, varid_angle
       integer :: local_ierr
+      logical :: per_x, fold, file_folds, has_angle
+      real(wp) :: y_seam_err, y_scale
       real(wp), allocatable :: sg_x(:, :), sg_y(:, :)
       real(wp), allocatable :: sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      real(wp), allocatable :: sg_angle(:, :)
+
+      per_x = .false.
+      if (present(periodic_x)) per_x = periodic_x
+      fold = .false.
+      if (present(north_fold)) fold = north_fold
 
       ni = grid%nx_phys
       nj = grid%ny_phys
@@ -1206,15 +1267,60 @@ contains
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
       call nc_get_var_2d(ncid, varid_area, sg_area, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
+      ! Optional grid rotation.  Probed with the raw inquiry so an absent
+      ! variable is not logged as an error.
+      has_angle = nf90_inq_varid(ncid, "angle_dx", varid_angle) == nf90_noerr
+      allocate (sg_angle(sg_nxp, sg_nyp))
+      if (has_angle) then
+         call nc_get_var_2d(ncid, varid_angle, sg_angle, ierr=local_ierr)
+         if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
+      else
+         sg_angle = supergrid_angle_dx_from_geography(sg_x, sg_y)
+         call logger%info("Supergrid has no angle_dx: grid rotation derived "// &
+                          "from the node geography")
+      end if
       call nc_close(ncid)
+
+      ! ---- Topology: the file must agree with the run's edge tags ----
+      file_folds = supergrid_top_row_folds(sg_x, sg_y)
+      if (file_folds .and. .not. fold) then
+         call fail("Supergrid "//trim(supergrid_file)//" is TRIPOLAR (its top node row "// &
+                   "folds onto itself, m <-> 2ni+2-m) but &ocean_bc_nml north is not "// &
+                   "'tripolar_fold': the fold row would be treated as an ordinary edge", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (fold .and. .not. file_folds) then
+         call fail("&ocean_bc_nml north = 'tripolar_fold' but the top node row of "// &
+                   trim(supergrid_file)//" does not fold onto itself (m <-> 2ni+2-m): "// &
+                   "this is not a tripolar grid", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (per_x) then
+         y_scale = max(maxval(abs(sg_y)), 1.0_wp)
+         y_seam_err = maxval(abs(sg_y(1, :) - sg_y(sg_nxp, :)))
+         if (y_seam_err > 1.0e-9_wp*y_scale) then
+            call fail("&ocean_bc_nml west/east = 'periodic' but the west and east node "// &
+                      "columns of "//trim(supergrid_file)//" are not the same line "// &
+                      "(max |y(1,:) - y(nxp,:)| = "//to_string(y_seam_err)//")", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
 
       ! Assemble model metrics from the supergrid node/segment arrays via
       ! the shared even/odd index-sum logic (also used by the tripolar
       ! analytic generator).
       call metrics_assemble_from_supergrid_arrays(this, grid, &
-                                                  sg_x, sg_y, sg_dx, sg_dy, sg_area)
+                                                  sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                  periodic_x=per_x, sg_angle_dx=sg_angle)
+      ! Replace the constant-extrapolated seam ghosts with the periodic /
+      ! fold images — the same treatment as the analytic tripolar.
+      if (per_x .or. fold) then
+         call metrics_fold_periodic_ghosts(this, grid, periodic_x=per_x, north_fold=fold)
+      end if
 
-      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area, sg_angle)
       call logger%info("Supergrid metrics loaded for "// &
                        to_string(ni)//"x"//to_string(nj)//" physical grid")
       if (present(ierr)) ierr = OCEAN_STATUS_OK
@@ -1262,7 +1368,8 @@ contains
    ! =================================================================
 
    subroutine metrics_assemble_from_supergrid_arrays(this, grid, &
-                                                     sg_x, sg_y, sg_dx, sg_dy, sg_area)
+                                                     sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                     periodic_x, sg_angle_dx)
       !! Fill all model metric arrays from an in-memory MOM6-style
       !! supergrid (2x-refined corner geography + edge segments +
       !! sub-cell areas), using the even/odd index sums.  This is the
@@ -1279,17 +1386,32 @@ contains
       !!   sg_dx(m,n): along-i segment node (m,n)->(m+1,n), shape (2ni,2nj+1).
       !!   sg_dy(m,n): along-j segment node (m,n)->(m,n+1), shape (2ni+1,2nj).
       !!   sg_area(m,n): sub-cell area SW at node (m,n), shape (2ni,2nj).
-      !! Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation.
+      !! Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation —
+      !! EXCEPT the east-west seam when `periodic_x`: there the face lies
+      !! between the last and the first column, and its along-i span is
+      !! the real one, `sg_dx(2ni) + sg_dx(1)`, not a copy of the
+      !! neighbouring face's.
       !! Ghost rows by constant extrapolation of the nearest physical value
-      !! (periodic / fold ghost fill is the M4c exchange job).
+      !! (periodic / fold ghost fill is `metrics_fold_periodic_ghosts`).
       type(ocean_metrics_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in) :: sg_x(:, :), sg_y(:, :)
       real(wp), intent(in) :: sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+      logical, intent(in), optional :: periodic_x
+         !! The i-direction is periodic (node column `2ni+1` IS column 1):
+         !! build the seam-face Cu / Bu spans across the seam.  Absent ⇒
+         !! `.false.` (extrapolated, byte-identical to the previous path).
+      real(wp), intent(in), optional :: sg_angle_dx(:, :)
+         !! Supergrid-node grid rotation in DEGREES, `(2ni+1, 2nj+1)` (the
+         !! mosaic's `angle_dx`); the T value is node `(2i, 2j)`.  Absent ⇒
+         !! `angle_dx` stays zero (the axes are taken as east/north).
 
       integer :: ni, nj, ng, sg_nxp, sg_nyp
       integer :: i, j, si, sj, si1, sj1
+      logical :: per_x
 
+      per_x = .false.
+      if (present(periodic_x)) per_x = periodic_x
       ni = grid%nx_phys
       nj = grid%ny_phys
       ng = grid%nghost
@@ -1405,12 +1527,55 @@ contains
       end do
       this%areaBu(ng + 1, ng + 1) = this%areaBu(ng + 2, ng + 2)
 
+      ! ---- Periodic east-west seam: the faces at i=1 and i=ni+1 are ONE
+      ! face, between column ni and column 1.  Its along-i span is the two
+      ! half-cell segments either side of it, which on a periodic grid are
+      ! `sg_dx(2ni, .)` (east half of column ni) and `sg_dx(1, .)` (west
+      ! half of column 1).  The across-face spans (dyCu, dyBu) already come
+      ! from the seam node column itself and need nothing.
+      !
+      ! The seam CORNER area is the mean of the two corners either side of
+      ! the seam (columns 2 and ni), the symmetric form of the one-sided
+      ! copy the extrapolated edge uses — NOT `dxBu*dyBu`: on a bipolar cap
+      ! whose pole meridian is the seam, the seam node column collapses onto
+      ! the pole (`dyBu = 0`), and a zero corner area there is a zero
+      ! vorticity cell the Coriolis/viscosity stencils cannot live with
+      ! (measured: the analytic-tripolar cross-seam test blows up).
+      if (per_x) then
+         do j = 1, nj
+            sj = 2*j
+            this%dxCu(ng + 1, ng + j) = sg_dx(2*ni, sj) + sg_dx(1, sj)
+            this%dxCu(ng + ni + 1, ng + j) = this%dxCu(ng + 1, ng + j)
+            this%areaCu(ng + 1, ng + j) = this%dxCu(ng + 1, ng + j)*this%dyCu(ng + 1, ng + j)
+            this%areaCu(ng + ni + 1, ng + j) = this%dxCu(ng + ni + 1, ng + j)* &
+                                               this%dyCu(ng + ni + 1, ng + j)
+         end do
+         do j = 1, nj + 1
+            sj = 2*j - 1
+            this%dxBu(ng + 1, ng + j) = sg_dx(2*ni, sj) + sg_dx(1, sj)
+            this%dxBu(ng + ni + 1, ng + j) = this%dxBu(ng + 1, ng + j)
+            this%areaBu(ng + 1, ng + j) = 0.5_wp*(this%areaBu(ng + 2, ng + j) + &
+                                                  this%areaBu(ng + ni, ng + j))
+            this%areaBu(ng + ni + 1, ng + j) = this%areaBu(ng + 1, ng + j)
+         end do
+      end if
+
+      ! ---- Grid rotation at T points (degrees in the mosaic -> radians) ----
+      if (present(sg_angle_dx)) then
+         do j = 1, nj
+            do i = 1, ni
+               this%angle_dx(ng + i, ng + j) = sg_angle_dx(2*i, 2*j)*DEG2RAD
+            end do
+         end do
+      end if
+
       ! ---- Ghost extrapolation: constant copy from nearest physical cell ----
       call supergrid_ghost_fill_2d(this%dxT, grid)
       call supergrid_ghost_fill_2d(this%dyT, grid)
       call supergrid_ghost_fill_2d(this%areaT, grid)
       call supergrid_ghost_fill_2d(this%geolatT, grid)
       call supergrid_ghost_fill_2d(this%geolonT, grid)
+      call supergrid_ghost_fill_2d(this%angle_dx, grid)
       call supergrid_ghost_fill_cu(this%dxCu, grid)
       call supergrid_ghost_fill_cu(this%dyCu, grid)
       call supergrid_ghost_fill_cu(this%areaCu, grid)
@@ -1456,9 +1621,47 @@ contains
       real(wp), intent(in) :: lon_west, lat_south, dlon_deg, dlat_deg
       real(wp), intent(in) :: rad_earth, phi_join, lon_pole
 
-      integer :: ni, nj, sg_nxp, sg_nyp, m, n
       real(wp), allocatable :: sg_x(:, :), sg_y(:, :)
       real(wp), allocatable :: sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
+
+      call tripolar_supergrid_arrays(grid, lon_west, lat_south, dlat_deg, rad_earth, &
+                                     phi_join, lon_pole, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+
+      call metrics_assemble_from_supergrid_arrays(this, grid, &
+                                                  sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                  periodic_x=.true., &
+                                                  sg_angle_dx=supergrid_angle_dx_from_geography(sg_x, sg_y))
+
+      ! Replace the assembler's constant-extrapolation ghosts on the seam
+      ! edges with the physically-correct fold (north) + periodic (east-west)
+      ! values.  Every metric/geography array is a SCALAR under the fold
+      ! reflection (lengths/areas invariant; geography reads the conjugate
+      ! point's stored coordinate), so all fold ops use negate=.false.
+      call metrics_fold_periodic_ghosts(this, grid)
+
+      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area)
+   end subroutine metrics_fill_tripolar
+
+   subroutine tripolar_supergrid_arrays(grid, lon_west, lat_south, dlat_deg, rad_earth, &
+                                        phi_join, lon_pole, sg_x, sg_y, sg_dx, sg_dy, sg_area)
+      !! The in-memory MOM6-style supergrid of the analytic tripolar grid
+      !! (node geography, great-circle edge lengths, spherical sub-cell
+      !! areas) that `metrics_fill_tripolar` assembles.  Public so a test
+      !! can write the very same grid as a mosaic file and check that the
+      !! NetCDF reader reproduces the generator's metrics, ghosts included.
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: lon_west, lat_south, dlat_deg
+      real(wp), intent(in) :: rad_earth, phi_join, lon_pole
+      real(wp), allocatable, intent(out) :: sg_x(:, :), sg_y(:, :)
+         !! Node longitude / latitude (degrees), `(2ni+1, 2nj+1)`.
+      real(wp), allocatable, intent(out) :: sg_dx(:, :)
+         !! Along-i segment lengths (m), `(2ni, 2nj+1)`.
+      real(wp), allocatable, intent(out) :: sg_dy(:, :)
+         !! Along-j segment lengths (m), `(2ni+1, 2nj)`.
+      real(wp), allocatable, intent(out) :: sg_area(:, :)
+         !! Sub-cell areas (m^2), `(2ni, 2nj)`.
+
+      integer :: ni, nj, sg_nxp, sg_nyp, m, n
       real(wp) :: lat_top, dlam, dlat_sg
 
       ni = grid%nx_phys
@@ -1521,39 +1724,68 @@ contains
                                                 sg_y(m, n + 1), sg_x(m, n + 1))
          end do
       end do
+   end subroutine tripolar_supergrid_arrays
 
-      call metrics_assemble_from_supergrid_arrays(this, grid, &
-                                                  sg_x, sg_y, sg_dx, sg_dy, sg_area)
-
-      ! Replace the assembler's constant-extrapolation ghosts on the seam
-      ! edges with the physically-correct fold (north) + periodic (east-west)
-      ! values.  Every metric/geography array is a SCALAR under the fold
-      ! reflection (lengths/areas invariant; geography reads the conjugate
-      ! point's stored coordinate), so all fold ops use negate=.false.
-      call metrics_fold_periodic_ghosts(this, grid)
-
-      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area)
-   end subroutine metrics_fill_tripolar
-
-   subroutine metrics_fold_periodic_ghosts(this, grid)
+   subroutine metrics_fold_periodic_ghosts(this, grid, periodic_x, north_fold)
       !! Tripolar ghost-metric fill (M4c): periodic-x wrap of the
       !! east/west ghost columns + north-fold of the north ghost rows,
       !! for EVERY metric + geography array.  Replaces the constant
-      !! extrapolation the supergrid assembler left on those edges.
+      !! extrapolation the supergrid assembler left on those edges.  The
+      !! ONE routine both the analytic tripolar generator and the MOM6
+      !! mosaic reader (`metrics_fill_from_supergrid`) use.
       !!
       !! Composition (Appendix A): periodic-x FIRST so the fold reads the
       !! cyclically-wrapped corner columns.  All arrays fold as scalars
       !! (negate=.false.) — lengths/areas are reflection-invariant and
-      !! geography reads the conjugate point's stored lat/lon.
+      !! geography reads the conjugate point's stored lat/lon — except the
+      !! grid rotation `angle_dx`, which gains `pi` across the fold (the
+      !! conjugate cell's +i axis points the other way).
       type(ocean_metrics_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
-      integer :: ng, ni, nj
+      logical, intent(in), optional :: periodic_x
+         !! Wrap the east/west ghost columns.  Absent ⇒ `.true.`.
+      logical, intent(in), optional :: north_fold
+         !! Fold the north ghost rows.  Absent ⇒ `.true.`.
+      integer :: ng, ni, nj, i, j
+      logical :: do_x, do_fold
 
       ng = grid%nghost
       ni = grid%nx_phys
       nj = grid%ny_phys
+      do_x = .true.
+      if (present(periodic_x)) do_x = periodic_x
+      do_fold = .true.
+      if (present(north_fold)) do_fold = north_fold
 
       ! ---- (1) Periodic-x wrap of east/west ghost columns ----
+      if (do_x) call metrics_periodic_x_all(this, grid)
+
+      ! ---- (2) North fold of the north ghost rows (scalars: negate=.false.) ----
+      if (.not. do_fold) return
+      ! T-stagger (centre).
+      call fold_north_centre(this%dxT, grid%nx_total, grid%ny_total, ni, nj, ng)
+      call fold_north_centre(this%dyT, grid%nx_total, grid%ny_total, ni, nj, ng)
+      call fold_north_centre(this%areaT, grid%nx_total, grid%ny_total, ni, nj, ng)
+      call fold_north_centre(this%geolatT, grid%nx_total, grid%ny_total, ni, nj, ng)
+      call fold_north_centre(this%geolonT, grid%nx_total, grid%ny_total, ni, nj, ng)
+      ! Grid rotation: the conjugate's +i axis is reversed => angle + pi,
+      ! folded back into (-pi, pi].
+      call fold_north_centre(this%angle_dx, grid%nx_total, grid%ny_total, ni, nj, ng)
+      do j = ng + nj + 1, grid%ny_total
+         do i = 1, grid%nx_total
+            this%angle_dx(i, j) = this%angle_dx(i, j) + PI_WP
+            if (this%angle_dx(i, j) > PI_WP) this%angle_dx(i, j) = this%angle_dx(i, j) - 2.0_wp*PI_WP
+         end do
+      end do
+      call metrics_fold_north_faces(this, grid)
+   end subroutine metrics_fold_periodic_ghosts
+
+   subroutine metrics_periodic_x_all(this, grid)
+      !! Periodic-x wrap of the east/west ghost columns of every metric,
+      !! geography and rotation array (the first half of
+      !! `metrics_fold_periodic_ghosts`).
+      type(ocean_metrics_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
       call metrics_periodic_x_2d(this%dxT, grid)
       call metrics_periodic_x_2d(this%dyT, grid)
       call metrics_periodic_x_2d(this%areaT, grid)
@@ -1572,14 +1804,20 @@ contains
       call metrics_periodic_x_bu(this%areaBu, grid)
       call metrics_periodic_x_bu(this%geolatBu, grid)
       call metrics_periodic_x_bu(this%geolonBu, grid)
+      call metrics_periodic_x_2d(this%angle_dx, grid)
+   end subroutine metrics_periodic_x_all
 
-      ! ---- (2) North fold of the north ghost rows (scalars: negate=.false.) ----
-      ! T-stagger (centre).
-      call fold_north_centre(this%dxT, grid%nx_total, grid%ny_total, ni, nj, ng)
-      call fold_north_centre(this%dyT, grid%nx_total, grid%ny_total, ni, nj, ng)
-      call fold_north_centre(this%areaT, grid%nx_total, grid%ny_total, ni, nj, ng)
-      call fold_north_centre(this%geolatT, grid%nx_total, grid%ny_total, ni, nj, ng)
-      call fold_north_centre(this%geolonT, grid%nx_total, grid%ny_total, ni, nj, ng)
+   subroutine metrics_fold_north_faces(this, grid)
+      !! North fold of the face and corner metric arrays (the Cu / Cv / Bu
+      !! part of `metrics_fold_periodic_ghosts`; the T arrays are folded
+      !! there).
+      type(ocean_metrics_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      integer :: ng, ni, nj
+
+      ng = grid%nghost
+      ni = grid%nx_phys
+      nj = grid%ny_phys
       ! u-stagger (Cu) — scalar copy.  fold_north_u_face NEGATES (it is
       ! built for the vector u-component), so metrics use a local scalar-copy
       ! variant with the same (nx+1,ny) index map.
@@ -1603,7 +1841,7 @@ contains
                              ni, nj, ng, negate=.false.)
       call fold_north_corner(this%geolonBu, grid%nx_total + 1, grid%ny_total + 1, &
                              ni, nj, ng, negate=.false.)
-   end subroutine metrics_fold_periodic_ghosts
+   end subroutine metrics_fold_north_faces
 
    ! Scalar north-fold for Cu-shaped (nx+1,ny) metric arrays.  The reusable
    ! fold_north_u_face NEGATES (vector); metrics are scalars, so we
@@ -1746,6 +1984,74 @@ contains
          call bipolar_corner_latlon(lam, s, phi_join, lon_pole, lat, lon)
       end if
    end subroutine tripolar_node_latlon
+
+   pure function supergrid_top_row_folds(sg_x, sg_y) result(folds)
+      !! `.true.` iff the supergrid's top node row is a TRIPOLAR FOLD LINE:
+      !! every node `m` coincides geographically with its mirror
+      !! `nxp + 1 - m` (MOM6's fold pairing, `T(i, nj+1) = T(ni+1-i, nj)`).
+      !! Points are compared as unit vectors on the sphere, so longitude is
+      !! modulo 360 and irrelevant at the geographic pole (the OM_1deg fold
+      !! row crosses 90N with its two copies stored at longitudes 180 deg
+      !! apart).  A lon-lat top row fails this everywhere except at the
+      !! self-conjugate middle node, so the test cannot be passed by
+      !! accident.  Tolerance: a 1e-7 chord (~0.6 m on the Earth; MOM6
+      !! mosaics pair to round-off).
+      real(wp), intent(in) :: sg_x(:, :)
+         !! Node longitude (degrees), `(nxp, nyp)`.
+      real(wp), intent(in) :: sg_y(:, :)
+         !! Node latitude (degrees), `(nxp, nyp)`.
+      logical :: folds
+      integer :: nxp, nyp, m, mm
+      real(wp) :: p(3), q(3)
+      real(wp), parameter :: TOL_CHORD = 1.0e-7_wp
+
+      nxp = size(sg_x, 1)
+      nyp = size(sg_x, 2)
+      folds = nxp >= 3
+      do m = 1, nxp
+         mm = nxp + 1 - m
+         p = unit_vector(sg_y(m, nyp), sg_x(m, nyp))
+         q = unit_vector(sg_y(mm, nyp), sg_x(mm, nyp))
+         if (norm2(p - q) > TOL_CHORD) then
+            folds = .false.
+            return
+         end if
+      end do
+   contains
+      pure function unit_vector(lat_deg, lon_deg) result(v)
+         real(wp), intent(in) :: lat_deg, lon_deg
+         real(wp) :: v(3)
+         v = [cos(lat_deg*DEG2RAD)*cos(lon_deg*DEG2RAD), &
+              cos(lat_deg*DEG2RAD)*sin(lon_deg*DEG2RAD), sin(lat_deg*DEG2RAD)]
+      end function unit_vector
+   end function supergrid_top_row_folds
+
+   pure function supergrid_angle_dx_from_geography(sg_x, sg_y) result(angle_deg)
+      !! Grid rotation (DEGREES, counter-clockwise from true east — MOM6's
+      !! `angle_dx` sense) at every T node `(2i, 2j)` of a supergrid, from
+      !! the node geography alone: the direction of the local +i axis is
+      !! the chord from the cell's west-face node `(2i-1, 2j)` to its
+      !! east-face node `(2i+1, 2j)`, projected onto a local east/north
+      !! plane (`dx_east = dlon*cos(lat)`, `dy_north = dlat`).  Other nodes
+      !! are left at zero (nothing reads them).  Used where the mosaic has
+      !! no `angle_dx` and by the analytic tripolar generator.
+      real(wp), intent(in) :: sg_x(:, :)
+         !! Node longitude (degrees), `(nxp, nyp)`.
+      real(wp), intent(in) :: sg_y(:, :)
+         !! Node latitude (degrees), `(nxp, nyp)`.
+      real(wp) :: angle_deg(size(sg_x, 1), size(sg_x, 2))
+      integer :: m, n
+      real(wp) :: dlon, dlat
+
+      angle_deg = 0.0_wp
+      do n = 2, size(sg_x, 2) - 1, 2
+         do m = 2, size(sg_x, 1) - 1, 2
+            dlon = modulo(sg_x(m + 1, n) - sg_x(m - 1, n) + 180.0_wp, 360.0_wp) - 180.0_wp
+            dlat = sg_y(m + 1, n) - sg_y(m - 1, n)
+            angle_deg(m, n) = atan2(dlat, dlon*cos(sg_y(m, n)*DEG2RAD))/DEG2RAD
+         end do
+      end do
+   end function supergrid_angle_dx_from_geography
 
    pure function great_circle(r, lat1, lon1, lat2, lon2) result(d)
       !! Great-circle distance (m) between two geographic points (deg),
@@ -2066,6 +2372,7 @@ contains
                + arr_bytes(this%geolonT) &
                + arr_bytes(this%geolatBu) &
                + arr_bytes(this%geolonBu) &
+               + arr_bytes(this%angle_dx) &
                + arr_bytes(this%dy_dxT) &
                + arr_bytes(this%dx_dyT) &
                + arr_bytes(this%dy_dxBu) &

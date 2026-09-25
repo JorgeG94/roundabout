@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title=" 0.2% of total for procedures.">122 statements</a>
+                 title=" 0.3% of total for procedures.">151 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -134,11 +134,12 @@
       </a>
       <div id="vars-0" class="collapse">
         <div class="list-group list-group-flush">
-            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-i~261">i</a>
-            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-j~232">j</a>
-            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-ng~40">ng</a>
+            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-i~287">i</a>
+            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-j~281">j</a>
+            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-ng~31">ng</a>
             <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-ni~3">ni</a>
             <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-nj~4">nj</a>
+            <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-per_x~7">per_x</a>
             <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-sg_nxp~2">sg_nxp</a>
             <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-sg_nyp~2">sg_nyp</a>
             <a class="list-group-item" href="../proc/metrics_assemble_from_supergrid_arrays.html#variable-si">si</a>
@@ -180,7 +181,7 @@
     </div>
     
     <div class="col-md-9" id='text'>
-    <h2>public  subroutine metrics_assemble_from_supergrid_arrays(this, grid, sg_x, sg_y, sg_dx, sg_dy, sg_area)  
+    <h2>public  subroutine metrics_assemble_from_supergrid_arrays(this, grid, sg_x, sg_y, sg_dx, sg_dy, sg_area, periodic_x, sg_angle_dx)  
 </h2>
     
 
@@ -199,9 +200,13 @@ the physical domain; 2<em>ni+1 nodes in i, 2</em>nj+1 in j):
   sg_dx(m,n): along-i segment node (m,n)-&gt;(m+1,n), shape (2ni,2nj+1).
   sg_dy(m,n): along-j segment node (m,n)-&gt;(m,n+1), shape (2ni+1,2nj).
   sg_area(m,n): sub-cell area SW at node (m,n), shape (2ni,2nj).
-Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation.
+Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation —
+EXCEPT the east-west seam when <code>periodic_x</code>: there the face lies
+between the last and the first column, and its along-i span is
+the real one, <code>sg_dx(2ni) + sg_dx(1)</code>, not a copy of the
+neighbouring face&rsquo;s.
 Ghost rows by constant extrapolation of the nearest physical value
-(periodic / fold ghost fill is the M4c exchange job).</p>
+(periodic / fold ghost fill is <code>metrics_fold_periodic_ghosts</code>).</p>
 
 
     <h3>Arguments</h3>
@@ -217,7 +222,7 @@ Ghost rows by constant extrapolation of the nearest physical value
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-this~252"></span>
+              <span class="anchor" id="variable-this~294"></span>
               type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
             </td>
 <td>intent(inout)</td>
@@ -232,7 +237,7 @@ Ghost rows by constant extrapolation of the nearest physical value
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-grid~127"></span>
+              <span class="anchor" id="variable-grid~169"></span>
               type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
             </td>
 <td>intent(in)</td>
@@ -318,6 +323,40 @@ Ghost rows by constant extrapolation of the nearest physical value
             <td><strong>sg_area</strong>(:,:)</td>
             <td>
                 
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-periodic_x~6"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>periodic_x</strong></td>
+            <td>
+                <p>The i-direction is periodic (node column <code>2ni+1</code> IS column 1):
+build the seam-face Cu / Bu spans across the seam.  Absent ⇒
+<code>.false.</code> (extrapolated, byte-identical to the previous path).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sg_angle_dx"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sg_angle_dx</strong>(:,:)</td>
+            <td>
+                <p>Supergrid-node grid rotation in DEGREES, <code>(2ni+1, 2nj+1)</code> (the
+mosaic&rsquo;s <code>angle_dx</code>); the T value is node <code>(2i, 2j)</code>.  Absent ⇒
+<code>angle_dx</code> stays zero (the axes are taken as east/north).</p>
             </td>
         </tr>
     </tbody>
@@ -762,7 +801,7 @@ large graphs.</div>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~261"></span>
+              <span class="anchor" id="variable-i~287"></span>
               integer,
             </td>
               <td>private</td>
@@ -779,7 +818,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~232"></span>
+              <span class="anchor" id="variable-j~281"></span>
               integer,
             </td>
               <td>private</td>
@@ -796,7 +835,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ng~40"></span>
+              <span class="anchor" id="variable-ng~31"></span>
               integer,
             </td>
               <td>private</td>
@@ -839,6 +878,23 @@ large graphs.</div>
             </td>
             <td>::</td>
             <td><strong>nj</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-per_x~7"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>per_x</strong></td>
                 <td></td>
                 <td></td>
             <td>
@@ -964,7 +1020,8 @@ large graphs.</div>
     <section>
     <h2><span class="anchor" id="src"></span>Source Code</h2>
     <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">metrics_assemble_from_supergrid_arrays</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
-<span class="w">                                                     </span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">sg_area</span><span class="p">)</span>
+<span class="w">                                                     </span><span class="n">sg_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_y</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">,</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">,</span><span class="w"> </span><span class="n">sg_area</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                     </span><span class="n">periodic_x</span><span class="p">,</span><span class="w"> </span><span class="n">sg_angle_dx</span><span class="p">)</span>
 <span class="w">      </span><span class="c">!! Fill all model metric arrays from an in-memory MOM6-style</span>
 <span class="w">      </span><span class="c">!! supergrid (2x-refined corner geography + edge segments +</span>
 <span class="w">      </span><span class="c">!! sub-cell areas), using the even/odd index sums.  This is the</span>
@@ -981,17 +1038,32 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!!   sg_dx(m,n): along-i segment node (m,n)-&gt;(m+1,n), shape (2ni,2nj+1).</span>
 <span class="w">      </span><span class="c">!!   sg_dy(m,n): along-j segment node (m,n)-&gt;(m,n+1), shape (2ni+1,2nj).</span>
 <span class="w">      </span><span class="c">!!   sg_area(m,n): sub-cell area SW at node (m,n), shape (2ni,2nj).</span>
-<span class="w">      </span><span class="c">!! Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation.</span>
+<span class="w">      </span><span class="c">!! Boundary (Cu i=1/ni+1, Cv j=1/nj+1, Bu edges) by extrapolation —</span>
+<span class="w">      </span><span class="c">!! EXCEPT the east-west seam when `periodic_x`: there the face lies</span>
+<span class="w">      </span><span class="c">!! between the last and the first column, and its along-i span is</span>
+<span class="w">      </span><span class="c">!! the real one, `sg_dx(2ni) + sg_dx(1)`, not a copy of the</span>
+<span class="w">      </span><span class="c">!! neighbouring face's.</span>
 <span class="w">      </span><span class="c">!! Ghost rows by constant extrapolation of the nearest physical value</span>
-<span class="w">      </span><span class="c">!! (periodic / fold ghost fill is the M4c exchange job).</span>
+<span class="w">      </span><span class="c">!! (periodic / fold ghost fill is `metrics_fold_periodic_ghosts`).</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
 <span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_x</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_y</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_dy</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">sg_area</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">periodic_x</span>
+<span class="w">         </span><span class="c">!! The i-direction is periodic (node column `2ni+1` IS column 1):</span>
+<span class="w">         </span><span class="c">!! build the seam-face Cu / Bu spans across the seam.  Absent ⇒</span>
+<span class="w">         </span><span class="c">!! `.false.` (extrapolated, byte-identical to the previous path).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sg_angle_dx</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Supergrid-node grid rotation in DEGREES, `(2ni+1, 2nj+1)` (the</span>
+<span class="w">         </span><span class="c">!! mosaic's `angle_dx`); the T value is node `(2i, 2j)`.  Absent ⇒</span>
+<span class="w">         </span><span class="c">!! `angle_dx` stays zero (the axes are taken as east/north).</span>
 
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">nj</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nxp</span><span class="p">,</span><span class="w"> </span><span class="n">sg_nyp</span>
 <span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">si</span><span class="p">,</span><span class="w"> </span><span class="n">sj</span><span class="p">,</span><span class="w"> </span><span class="n">si1</span><span class="p">,</span><span class="w"> </span><span class="n">sj1</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">per_x</span>
 
+<span class="w">      </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">periodic_x</span><span class="p">))</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">periodic_x</span>
 <span class="w">      </span><span class="n">ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span>
 <span class="w">      </span><span class="n">nj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span>
 <span class="w">      </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
@@ -1107,12 +1179,55 @@ large graphs.</div>
 <span class="w">      </span><span class="k">end do</span>
 <span class="k">      </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
 
+<span class="w">      </span><span class="c">! ---- Periodic east-west seam: the faces at i=1 and i=ni+1 are ONE</span>
+<span class="w">      </span><span class="c">! face, between column ni and column 1.  Its along-i span is the two</span>
+<span class="w">      </span><span class="c">! half-cell segments either side of it, which on a periodic grid are</span>
+<span class="w">      </span><span class="c">! `sg_dx(2ni, .)` (east half of column ni) and `sg_dx(1, .)` (west</span>
+<span class="w">      </span><span class="c">! half of column 1).  The across-face spans (dyCu, dyBu) already come</span>
+<span class="w">      </span><span class="c">! from the seam node column itself and need nothing.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! The seam CORNER area is the mean of the two corners either side of</span>
+<span class="w">      </span><span class="c">! the seam (columns 2 and ni), the symmetric form of the one-sided</span>
+<span class="w">      </span><span class="c">! copy the extrapolated edge uses — NOT `dxBu*dyBu`: on a bipolar cap</span>
+<span class="w">      </span><span class="c">! whose pole meridian is the seam, the seam node column collapses onto</span>
+<span class="w">      </span><span class="c">! the pole (`dyBu = 0`), and a zero corner area there is a zero</span>
+<span class="w">      </span><span class="c">! vorticity cell the Coriolis/viscosity stencils cannot live with</span>
+<span class="w">      </span><span class="c">! (measured: the analytic-tripolar cross-seam test blows up).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">per_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nj</span>
+<span class="w">            </span><span class="n">sj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">j</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">sj</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">sj</span><span class="p">)</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">areaCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">dyCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">areaCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">this</span><span class="p">%</span><span class="n">dyCu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nj</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">sj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">dxBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">sj</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sg_dx</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">sj</span><span class="p">)</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">dxBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">dxBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">areaBu</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Grid rotation at T points (degrees in the mosaic -&gt; radians) ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">sg_angle_dx</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nj</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ni</span>
+<span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">angle_dx</span><span class="p">(</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sg_angle_dx</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+
 <span class="w">      </span><span class="c">! ---- Ghost extrapolation: constant copy from nearest physical cell ----</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">dxT</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">dyT</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">geolatT</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">geolonT</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_2d</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">angle_dx</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_cu</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">dxCu</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_cu</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">dyCu</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
 <span class="w">      </span><span class="k">call </span><span class="n">supergrid_ghost_fill_cu</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">areaCu</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
@@ -1150,7 +1265,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 02:29 +0000             </p>
+ on 2026-09-25 05:24 +0000             </p>
           </div>
         </div>
         <br>

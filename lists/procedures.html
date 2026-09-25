@@ -7726,13 +7726,23 @@ Adcroft reciprocal (D4).  No kernel ever recomputes these.</p></td>
                  <td></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/metrics_fold_north_faces.html'>metrics_fold_north_faces</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Subroutine</td>
+                 <td><p>North fold of the face and corner metric arrays (the Cu / Cv / Bu
+part of <code>metrics_fold_periodic_ghosts</code>; the T arrays are folded
+there).</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/metrics_fold_periodic_ghosts.html'>metrics_fold_periodic_ghosts</a></td>
                  <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
                  <td>Subroutine</td>
                  <td><p>Tripolar ghost-metric fill (M4c): periodic-x wrap of the
 east/west ghost columns + north-fold of the north ghost rows,
 for EVERY metric + geography array.  Replaces the constant
-extrapolation the supergrid assembler left on those edges.</p><a href="../proc/metrics_fold_periodic_ghosts.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+extrapolation the supergrid assembler left on those edges.  The
+ONE routine both the analytic tripolar generator and the MOM6
+mosaic reader (<code>metrics_fill_from_supergrid</code>) use.</p><a href="../proc/metrics_fold_periodic_ghosts.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/metrics_periodic_x_2d.html'>metrics_periodic_x_2d</a></td>
@@ -7740,6 +7750,14 @@ extrapolation the supergrid assembler left on those edges.</p><a href="../proc/m
                  <td>Subroutine</td>
                  <td><p>West/east ghost columns of a T-array (nx_total,ny_total) by
 periodic wrap (column i &lt;= ng ← i+ni; i &gt; ng+ni ← i-ni).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/metrics_periodic_x_all.html'>metrics_periodic_x_all</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Periodic-x wrap of the east/west ghost columns of every metric,
+geography and rotation array (the first half of
+<code>metrics_fold_periodic_ghosts</code>).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/metrics_periodic_x_bu.html'>metrics_periodic_x_bu</a></td>
@@ -8091,15 +8109,15 @@ shape, on the read side.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_get_varid.html'>nc_get_varid</a></td>
-                 <td><a href='../module/rdb_ocean_restart_io.html'>rdb_ocean_restart_io</a></td>
-                 <td>Subroutine</td>
-                 <td></td>
-               </tr>
-			   <tr>
-                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
                  <td><a href='../module/rdb_io_netcdf.html'>rdb_io_netcdf</a></td>
                  <td>Subroutine</td>
                  <td><p>Get the variable ID for a named variable</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/nc_get_varid~2.html'>nc_get_varid</a></td>
+                 <td><a href='../module/rdb_ocean_restart_io.html'>rdb_ocean_restart_io</a></td>
+                 <td>Subroutine</td>
+                 <td></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/nc_open_read.html'>nc_open_read</a></td>
@@ -15616,6 +15634,14 @@ seed passes <code>land_cutoff = -land_margin</code> so intertidal columns
 and the dynamic wd_wet_dyn gate handles their wetting/drying.</p></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/seed_wrap_static_2d.html'>seed_wrap_static_2d</a></td>
+                 <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
+                 <td>Subroutine</td>
+                 <td><p>Fill the seam ghosts of a static, cell-centred 2-D geometry field
+(bathymetry, ice draft, cover fraction) from their periodic /
+north-fold images, on the host, at seed time.</p><a href="../proc/seed_wrap_static_2d.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/seed_zinit_overlay.html'>seed_zinit_overlay</a></td>
                  <td><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></td>
                  <td>Subroutine</td>
@@ -16017,6 +16043,19 @@ all already at the matching u-face / v-face shape.  Each
 kernel must have run its compute step before this is called.</p><a href="../proc/sum_slow_tendencies_into_f_slow.html" class="pull-right"><emph>Read more&hellip;</emph></a></td>
                </tr>
 			   <tr>
+                 <td><a href='../proc/supergrid_angle_dx_from_geography.html'>supergrid_angle_dx_from_geography</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Function</td>
+                 <td><p>Grid rotation (DEGREES, counter-clockwise from true east — MOM6&rsquo;s
+<code>angle_dx</code> sense) at every T node <code>(2i, 2j)</code> of a supergrid, from
+the node geography alone: the direction of the local +i axis is
+the chord from the cell&rsquo;s west-face node <code>(2i-1, 2j)</code> to its
+east-face node <code>(2i+1, 2j)</code>, projected onto a local east/north
+plane (<code>dx_east = dlon*cos(lat)</code>, <code>dy_north = dlat</code>).  Other nodes
+are left at zero (nothing reads them).  Used where the mosaic has
+no <code>angle_dx</code> and by the analytic tripolar generator.</p></td>
+               </tr>
+			   <tr>
                  <td><a href='../proc/supergrid_ghost_fill_2d.html'>supergrid_ghost_fill_2d</a></td>
                  <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
                  <td>Subroutine</td>
@@ -16060,6 +16099,21 @@ the SAME generic text <code>nc_check</code> itself would have used had the
 caller&rsquo;s <code>ierr</code> never been threaded through — this is what keeps
 the legacy (no <code>ierr</code>) behaviour byte-identical while unblocking
 the <code>ierr</code>-present return path (F1/F2 of the P0.1 review).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/supergrid_top_row_folds.html'>supergrid_top_row_folds</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Function</td>
+                 <td><p><code>.true.</code> iff the supergrid&rsquo;s top node row is a TRIPOLAR FOLD LINE:
+every node <code>m</code> coincides geographically with its mirror
+<code>nxp + 1 - m</code> (MOM6&rsquo;s fold pairing, <code>T(i, nj+1) = T(ni+1-i, nj)</code>).
+Points are compared as unit vectors on the sphere, so longitude is
+modulo 360 and irrelevant at the geographic pole (the OM_1deg fold
+row crosses 90N with its two copies stored at longitudes 180 deg
+apart).  A lon-lat top row fails this everywhere except at the
+self-conjugate middle node, so the test cannot be passed by
+accident.  Tolerance: a 1e-7 chord (~0.6 m on the Earth; MOM6
+mosaics pair to round-off).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/surfstress_apply_impl.html'>surfstress_apply_impl</a></td>
@@ -16119,6 +16173,20 @@ the EPBL in-layer PE-cost ledger all consume it, so the three
 consumers cannot disagree about where the sunlight went.  Marked
 <code>!$acc routine seq</code> so it inlines into same-module device kernels
 and is callable from cross-module <code>do concurrent</code> kernels.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/tags_north_fold.html'>tags_north_fold</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p><code>.true.</code> iff <code>&amp;ocean_bc_nml north = "tripolar_fold"</code>.</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/tags_periodic_x.html'>tags_periodic_x</a></td>
+                 <td><a href='../module/rdb_ocean_setup.html'>rdb_ocean_setup</a></td>
+                 <td>Function</td>
+                 <td><p><code>.true.</code> iff <code>&amp;ocean_bc_nml</code> tags BOTH west and east <code>periodic</code> —
+the rule <code>ocean_bc_state_init</code> applies, for callers that run before
+<code>configure_ocean_bc</code> (the grid metrics).</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/tdrag_variant_is_implemented.html'>tdrag_variant_is_implemented</a></td>
@@ -16457,6 +16525,16 @@ decision is unit-testable without triggering error stop.</p><a href="../proc/tra
                  <td><p>Geographic (lat, lon) of supergrid node (m,n).  Below the join
 (lon-lat corner latitude &lt;= phi_join) it is plain lon-lat; above,
 the bipolar cap map (s = fraction of the cap row span).</p></td>
+               </tr>
+			   <tr>
+                 <td><a href='../proc/tripolar_supergrid_arrays.html'>tripolar_supergrid_arrays</a></td>
+                 <td><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></td>
+                 <td>Subroutine</td>
+                 <td><p>The in-memory MOM6-style supergrid of the analytic tripolar grid
+(node geography, great-circle edge lengths, spherical sub-cell
+areas) that <code>metrics_fill_tripolar</code> assembles.  Public so a test
+can write the very same grid as a mosaic file and check that the
+NetCDF reader reproduces the generator&rsquo;s metrics, ghosts included.</p></td>
                </tr>
 			   <tr>
                  <td><a href='../proc/try_get_bathymetry_var.html'>try_get_bathymetry_var</a></td>
@@ -17216,7 +17294,7 @@ degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p></td>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 02:29 +0000             </p>
+ on 2026-09-25 05:24 +0000             </p>
           </div>
         </div>
         <br>

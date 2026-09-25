@@ -100,8 +100,11 @@ module rdb_ocean_engine
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
-   use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology
-   use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize
+   use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
+                                       ocean_bc_type_from_string, OBC_PERIODIC, &
+                                       OBC_TRIPOLAR_FOLD
+   use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
+                                metrics_fold_periodic_ghosts
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
@@ -378,7 +381,33 @@ contains
       ! Analytical IC from cfg scalars — or, when P2.5 geometry injection
       ! staged a bathymetry array (rdb_ocean_stage_bathymetry), that
       ! array overrides cfg%ocean%topo%topo_config entirely.
-      if (allocated(engine%staged_bathymetry)) then
+      !
+      ! The seed makes the static geometry seam-consistent (periodic wrap +
+      ! north fold) the moment it exists, so it needs the grid topology NOW
+      ! — before `configure_ocean_bc` below derives it.  A staged topology
+      ! overrides the tags axis-by-axis exactly as
+      ! `ocean_bc_state_set_topology` will (an axis it marks periodic is
+      ! periodic; one it does not keeps the namelist's edges).
+      if (engine%has_staged_topology) then
+         block
+            logical :: per_x, per_y
+            per_x = engine%staged_periodic_x .or. &
+                    (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &
+                     ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC)
+            per_y = engine%staged_periodic_y .or. &
+                    (ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_PERIODIC .and. &
+                     ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC)
+            if (allocated(engine%staged_bathymetry)) then
+               call ocean_state_seed_from_cfg(engine%state, engine%grid, cfg, ierr=ierr, &
+                                              injected_b=engine%staged_bathymetry, &
+                                              injected_b_convention=engine%staged_bathymetry_convention, &
+                                              periodic_x=per_x, periodic_y=per_y)
+            else
+               call ocean_state_seed_from_cfg(engine%state, engine%grid, cfg, ierr=ierr, &
+                                              periodic_x=per_x, periodic_y=per_y)
+            end if
+         end block
+      else if (allocated(engine%staged_bathymetry)) then
          call ocean_state_seed_from_cfg(engine%state, engine%grid, cfg, ierr=ierr, &
                                         injected_b=engine%staged_bathymetry, &
                                         injected_b_convention=engine%staged_bathymetry_convention)
@@ -539,10 +568,26 @@ contains
                       ","//to_string(2*engine%grid%ny_phys + 1)//")", ierr, OCEAN_STATUS_ERR_BAD_SHAPE)
             return
          end if
-         call metrics_assemble_from_supergrid_arrays(engine%state%metrics, engine%grid, &
-                                                     engine%staged_metrics_x, engine%staged_metrics_y, &
-                                                     engine%staged_metrics_dx, engine%staged_metrics_dy, &
-                                                     engine%staged_metrics_area)
+         ! Same ghost-metric topology as the NetCDF mosaic reader: seam
+         ! faces across a periodic seam, then the periodic / fold ghost
+         ! images (`metrics_fold_periodic_ghosts`).  Periodicity is the
+         ! staged topology's or the tags', as for the seed above; the fold
+         ! is the north tag's.  No grid rotation is staged (`angle_dx` = 0).
+         block
+            logical :: per_x, fold
+            per_x = (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &
+                     ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC)
+            if (engine%has_staged_topology) per_x = per_x .or. engine%staged_periodic_x
+            fold = ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD
+            call metrics_assemble_from_supergrid_arrays(engine%state%metrics, engine%grid, &
+                                                        engine%staged_metrics_x, engine%staged_metrics_y, &
+                                                        engine%staged_metrics_dx, engine%staged_metrics_dy, &
+                                                        engine%staged_metrics_area, periodic_x=per_x)
+            if (per_x .or. fold) then
+               call metrics_fold_periodic_ghosts(engine%state%metrics, engine%grid, &
+                                                 periodic_x=per_x, north_fold=fold)
+            end if
+         end block
          call metrics_finalize(engine%state%metrics)
          if (rank == 0) then
             call logger%info("Grid config:      injected (in-memory supergrid arrays)")
@@ -726,6 +771,20 @@ contains
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
+
+      ! The PGF keeps its OWN copy of the bathymetry (FV-MOM6 and gprime
+      ! place the bottom interface from it at every face).  Take it HERE,
+      ! from the wrapped + halo-exchanged `b`, not in `configure_ocean_pgf`:
+      ! a copy taken before this point froze whatever the seam ghosts held
+      ! then — constant-extrapolated edge columns for a file/staged
+      ! bathymetry, which on a periodic edge is the B2 seam jet.  Before
+      ! `enter_data` (the device copy is taken from the host values).
+      call engine%state%pressure_force%set_bathymetry(engine%state%barotropic%b)
+      ! Same for the ZSTAR_FULL per-column reference table the seed built
+      ! from `b`: rebuilt from the halo-exchanged field so a DECOMPOSED
+      ! axis's seam ghost columns are right too (a pure function of `b` —
+      ! identical wherever the seed already saw the right ghosts).
+      call engine%state%vcoord%build_zref_full(engine%state%barotropic%b)
 
       ! Static land masking: derive the C-grid face/corner masks from the
       ! seeded wet_mask + zero the 6 face metrics at land faces.

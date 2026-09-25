@@ -191,16 +191,24 @@ contains
          ! reaching its own `error stop` (specific dimension-mismatch /
          ! NetCDF-failure text) rather than the generic wrapper message
          ! below (P0.1 review F2).
+         !
+         ! The edge tags decide the ghost-metric topology (periodic-x wrap,
+         ! tripolar fold) exactly as they do for the analytic tripolar; the
+         ! reader cross-checks the fold against the file's own top row.
          if (present(ierr)) then
             call metrics_fill_from_supergrid(ocean_state%metrics, grid, &
-                                             cfg%ocean%grid%supergrid_file, ierr=local_ierr)
+                                             cfg%ocean%grid%supergrid_file, ierr=local_ierr, &
+                                             periodic_x=tags_periodic_x(cfg), &
+                                             north_fold=tags_north_fold(cfg))
             if (local_ierr /= 0) then
                ierr = local_ierr
                return
             end if
          else
             call metrics_fill_from_supergrid(ocean_state%metrics, grid, &
-                                             cfg%ocean%grid%supergrid_file)
+                                             cfg%ocean%grid%supergrid_file, &
+                                             periodic_x=tags_periodic_x(cfg), &
+                                             north_fold=tags_north_fold(cfg))
          end if
          if (compute_rank == 0) then
             call logger%info("Grid config:      supergrid (mosaic) from "// &
@@ -254,6 +262,23 @@ contains
       call metrics_finalize(ocean_state%metrics)
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_metrics
+
+   pure function tags_periodic_x(cfg) result(per_x)
+      !! `.true.` iff `&ocean_bc_nml` tags BOTH west and east `periodic` —
+      !! the rule `ocean_bc_state_init` applies, for callers that run before
+      !! `configure_ocean_bc` (the grid metrics).
+      type(config_t), intent(in) :: cfg
+      logical :: per_x
+      per_x = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &
+              ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC
+   end function tags_periodic_x
+
+   pure function tags_north_fold(cfg) result(fold)
+      !! `.true.` iff `&ocean_bc_nml north = "tripolar_fold"`.
+      type(config_t), intent(in) :: cfg
+      logical :: fold
+      fold = ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD
+   end function tags_north_fold
 
    subroutine configure_ocean_land_mask(cfg, ocean_state, grid, compute_rank)
       !! Derive the static C-grid land masks from the seeded T-cell
@@ -3109,9 +3134,10 @@ contains
                    "stack the reconstruction replaces.", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      ! Bathymetry into the PGF so the gprime kernel recovers ∇η = ∇(Σh) - ∇b.
-      ! Must precede enter_data so the device copy is correct.
-      call ocean_state%pressure_force%set_bathymetry(ocean_state%barotropic%b)
+      ! The PGF's bathymetry copy (gprime recovers ∇η = ∇(Σh) - ∇b, FV-MOM6
+      ! places the bottom interface from it) is NOT taken here: `engine_setup`
+      ! takes it after the init-time periodic/fold wrap + halo exchange of
+      ! `b`, so the seam ghosts it copies are the right ones.
       ! gprime: run the BT fast loop at the reduced free-surface gravity g_FS,
       ! else the BT correction cancels the gprime reduced-gravity tendency.
       if (ocean_state%pressure_force%variant == OPGF_VARIANT_GPRIME) then
