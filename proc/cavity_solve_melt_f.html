@@ -1,0 +1,1648 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>cavity_solve_melt_f &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>cavity_solve_melt_f
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">109 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_cavity_melt.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_cavity_melt.f90.html'>rdb_ocean_cavity_melt.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></li>
+            <li class="breadcrumb-item active" aria-current="page">cavity_solve_melt_f</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-s_b~11">S_b</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-t_b~11">T_b</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-b_flux~6">b_flux</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-converged~3">converged</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-g_hi">g_hi</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-g_lo">g_lo</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-g_mid">g_mid</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-gamma_s~14">gamma_s</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-gamma_t~15">gamma_t</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-hi~4">hi</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-it~57">it</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-l_plus~9">l_plus</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-lo~3">lo</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-lp_new~3">lp_new</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-m_mass~10">m_mass</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-mid">mid</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-settled">settled</a>
+            <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#variable-xstar">xstar</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/cavity_solve_melt_f.html#src">cavity_solve_melt_f</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine cavity_solve_melt_f(T_w, S_w, p_b, u_star, S_i, par, f_cor, ice, eos, const, sol, ierr)  
+</h2>
+    
+
+    <p>Solve the three-equation system with any implemented exchange
+law, and return the full interface state plus the fluxes a
+coupling seam will consume.</p>
+<p>For an EXPLICIT law (<code>const_gamma</code>) this is one call to the
+closed-form quadratic.</p>
+<p>For a STRATIFICATION-DEPENDENT law (<code>hj99</code>, <code>yung25</code>) the system
+is implicit — the exchange coefficients depend on the interfacial
+buoyancy flux, which depends on the melt rate they produce — and
+the outer iteration is BISECTION on <code>x = ln(L+)</code> over
+<code>[CAVITY_LP_X_LO, CAVITY_LP_X_HI]</code>.  It is guaranteed convergent
+because the residual <code>G(x) = ln(L+_new(x)) - x</code> provably changes
+sign across that bracket:</p>
+<ul>
+<li><code>x -&gt; x_lo</code> (maximal suppression): <code>gamma -&gt; 0</code>, so
+    <code>|B_b| -&gt; 0</code> and <code>L+_new -&gt; +infinity</code>, giving <code>G &gt; 0</code>;</li>
+<li><code>x -&gt; x_hi</code> (neutral): <code>gamma</code> sits at its cap, <code>|B_b|</code> is
+    maximal and <code>L+_new</code> is finite, giving <code>G &lt; 0</code>.</li>
+</ul>
+<p>UNLESS the interface is DESTABILISING (<code>B_b &gt;= 0</code>, i.e. freezing
+or a strongly cooling interface), in which case <code>L+_new</code> is
+<code>+infinity</code> everywhere and the neutral limit IS the fixed point —
+short-circuited, not iterated.  That is the branch KINK: H&amp;J99
+sets <code>eta* := 1</code> there (p. 1792) and Yung et al. (2025) falls
+back to the ConstCoeff values (pp. 5832-5833).  The melt rate is
+continuous across it; its derivative is not, which is exactly why
+this is bisection and not Newton.</p>
+<p>After convergence the whole column is re-evaluated ONCE at the
+converged scalar, so the returned exchange velocities and the
+returned <code>(T_b, S_b, m_mass)</code> belong to ONE value of <code>L+</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_w~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_w</strong></td>
+            <td>
+                <p>Far-field temperature (degC).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_w~10"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_w</strong></td>
+            <td>
+                <p>Far-field salinity (g/kg).  Must exceed <code>S_i</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_b~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_b</strong></td>
+            <td>
+                <p>Interface pressure (Pa).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_star~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_star</strong></td>
+            <td>
+                <p>Friction velocity (m/s), strictly positive — from
+<code>cavity_ustar</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_i~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_i</strong></td>
+            <td>
+                <p>Ice salinity (g/kg), &gt;= 0.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-par~13"></span>
+              type(<a href='../type/ocean_cavity_exchange_t.html'>ocean_cavity_exchange_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>par</strong></td>
+            <td>
+                <p>Exchange-law bundle (its <code>f_cor</code> member is NOT read).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_cor~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_cor</strong></td>
+            <td>
+                <p>Coriolis parameter (1/s) for this column; <code>hj99</code> only.  See
+<code>cavity_exchange_velocities_f</code> for why it is not <code>par%f_cor</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice~22"></span>
+              type(<a href='../type/ocean_cavity_ice_t.html'>ocean_cavity_ice_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ice</strong></td>
+            <td>
+                <p>Ice-conduction bundle.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~59"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                <p>Shared EOS handle — the liquidus.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-const~17"></span>
+              type(<a href='../type/ocean_cavity_const_t.html'>ocean_cavity_const_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>const</strong></td>
+            <td>
+                <p>Constants bundle.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sol~5"></span>
+              type(<a href='../type/ocean_cavity_solution_t.html'>ocean_cavity_solution_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sol</strong></td>
+            <td>
+                <p>Interface state, fluxes and solver diagnostics.  On any non-OK
+status this carries the safe state (<code>m_mass</code> exactly zero).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~115"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                <p><code>CAVITY_MELT_*</code> status.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~cavity_solve_melt_f~~CallsGraph Pages: 1 -->
+<svg id="proccavity_solve_melt_fCallsGraph" width="641pt" height="341pt"
+ viewBox="0.00 0.00 641.00 341.18" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_solve_melt_f~~CallsGraph" class="graph" transform="scale(0.76 0.76) rotate(0) translate(4 442.57)">
+<title>proc~~cavity_solve_melt_f~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-442.57 835,-442.57 835,4 -4,4"/>
+<!-- proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node1" class="node">
+<title>proc~cavity_solve_melt_f</title>
+<polygon fill="none" stroke="black" points="115,-170 0,-170 0,-146 115,-146 115,-170"/>
+<text text-anchor="middle" x="57.5" y="-155.6" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_solve_melt_f</text>
+</g>
+<!-- proc~cavity_heat_fluxes -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node2" class="node">
+<title>proc~cavity_heat_fluxes</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node2"><a xlink:href="../proc/cavity_heat_fluxes.html" xlink:title="cavity_heat_fluxes">
+<polygon fill="#d9534f" stroke="#d9534f" points="459,-394 349,-394 349,-370 459,-370 459,-394"/>
+<text text-anchor="middle" x="404" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_heat_fluxes</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_heat_fluxes -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge1" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_heat_fluxes</title>
+<path fill="none" stroke="#ff0000" d="M67.82,-170.1C83.53,-190 116.92,-230.19 151,-258 219.44,-313.86 239.55,-326.78 321,-361 326.78,-363.43 332.91,-365.63 339.11,-367.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="338.3,-371.02 348.88,-370.55 340.31,-364.32 338.3,-371.02"/>
+</g>
+<!-- proc~cavity_law_is_implicit -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node3" class="node">
+<title>proc~cavity_law_is_implicit</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node3"><a xlink:href="../proc/cavity_law_is_implicit.html" xlink:title="cavity_law_is_implicit">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="280.5,-108 155.5,-108 155.5,-84 280.5,-84 280.5,-108"/>
+<text text-anchor="middle" x="218" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_law_is_implicit</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_law_is_implicit -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge2" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_law_is_implicit</title>
+<path fill="none" stroke="#ff0000" d="M83.71,-145.93C102.13,-137.33 127.84,-125.79 151,-117 156.13,-115.05 161.53,-113.13 166.93,-111.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="168.23,-114.55 176.62,-108.08 166.03,-107.91 168.23,-114.55"/>
+</g>
+<!-- proc~cavity_obukhov_length -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node4" class="node">
+<title>proc~cavity_obukhov_length</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node4"><a xlink:href="../proc/cavity_obukhov_length.html" xlink:title="cavity_obukhov_length">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="285,-66 151,-66 151,-42 285,-42 285,-66"/>
+<text text-anchor="middle" x="218" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_obukhov_length</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_obukhov_length -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge3" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_obukhov_length</title>
+<path fill="none" stroke="#ff0000" d="M68.94,-145.8C84.9,-127.85 117.1,-94.39 151,-75 154.22,-73.16 157.61,-71.46 161.1,-69.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="162.57,-73.07 170.49,-66.04 159.91,-66.6 162.57,-73.07"/>
+</g>
+<!-- proc~cavity_outer_residual -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node5" class="node">
+<title>proc~cavity_outer_residual</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node5"><a xlink:href="../proc/cavity_outer_residual.html" xlink:title="cavity_outer_residual">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="280.5,-150 155.5,-150 155.5,-126 280.5,-126 280.5,-150"/>
+<text text-anchor="middle" x="218" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_outer_residual</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_outer_residual -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge4" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_outer_residual</title>
+<path fill="none" stroke="#ff0000" d="M115.27,-150.84C125,-149.61 135.22,-148.32 145.28,-147.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="145.77,-150.52 155.25,-145.79 144.89,-143.57 145.77,-150.52"/>
+</g>
+<!-- proc~cavity_safe_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node6" class="node">
+<title>proc~cavity_safe_state</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node6"><a xlink:href="../proc/cavity_safe_state.html" xlink:title="cavity_safe_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="642.5,-253 539.5,-253 539.5,-229 642.5,-229 642.5,-253"/>
+<text text-anchor="middle" x="591" y="-238.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_safe_state</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge5" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M115.13,-166.84C215.95,-182.59 425.71,-215.34 529.36,-231.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="528.93,-235.01 539.35,-233.09 530.01,-228.09 528.93,-235.01"/>
+</g>
+<!-- proc~cavity_solution_reset -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node7" class="node">
+<title>proc~cavity_solution_reset</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node7"><a xlink:href="../proc/cavity_solution_reset.html" xlink:title="cavity_solution_reset">
+<polygon fill="#d9534f" stroke="#d9534f" points="279.5,-24 156.5,-24 156.5,0 279.5,0 279.5,-24"/>
+<text text-anchor="middle" x="218" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solution_reset</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_solution_reset -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge6" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_solution_reset</title>
+<path fill="none" stroke="#ff0000" d="M64.27,-145.69C76.6,-120.7 107.96,-63.78 151,-33 153.22,-31.42 155.56,-29.95 157.98,-28.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="159.64,-31.67 167.07,-24.12 156.55,-25.39 159.64,-31.67"/>
+</g>
+<!-- proc~cavity_state_at_x -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node8" class="node">
+<title>proc~cavity_state_at_x</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node8"><a xlink:href="../proc/cavity_state_at_x.html" xlink:title="cavity_state_at_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="269.5,-249 166.5,-249 166.5,-225 269.5,-225 269.5,-249"/>
+<text text-anchor="middle" x="218" y="-234.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_state_at_x</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge7" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x</title>
+<path fill="none" stroke="#ff0000" d="M82.92,-170.17C109.87,-183.61 153.43,-205.31 183.55,-220.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="182.3,-223.62 192.81,-224.95 185.43,-217.35 182.3,-223.62"/>
+</g>
+<!-- proc~eos_freezing_point -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node9" class="node">
+<title>proc~eos_freezing_point</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node9"><a xlink:href="../proc/eos_freezing_point.html" xlink:title="eos_freezing_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="819,-312 707,-312 707,-288 819,-288 819,-312"/>
+<text text-anchor="middle" x="763" y="-297.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_freezing_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge8" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M62.92,-170.15C73.83,-198.71 104.59,-271.07 151,-315 212.78,-373.49 238.34,-382.87 321,-403 466.96,-438.54 520.21,-460.49 659,-403 699.16,-386.37 731.83,-345.63 748.96,-320.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="751.93,-322.52 754.55,-312.25 746.1,-318.64 751.93,-322.52"/>
+</g>
+<!-- proc~cavity_ice_terms -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node12" class="node">
+<title>proc~cavity_ice_terms</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node12"><a xlink:href="../proc/cavity_ice_terms.html" xlink:title="cavity_ice_terms">
+<polygon fill="#d9534f" stroke="#d9534f" points="641.5,-352 540.5,-352 540.5,-328 641.5,-328 641.5,-352"/>
+<text text-anchor="middle" x="591" y="-337.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_ice_terms</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_heat_fluxes&#45;&gt;proc~cavity_ice_terms -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge9" class="edge">
+<title>proc~cavity_heat_fluxes&#45;&gt;proc~cavity_ice_terms</title>
+<path fill="none" stroke="#ff0000" d="M458.01,-369.96C480.72,-364.81 507.32,-358.77 530.68,-353.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="531.49,-356.87 540.47,-351.24 529.94,-350.05 531.49,-356.87"/>
+</g>
+<!-- proc~cavity_t_ice -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node15" class="node">
+<title>proc~cavity_t_ice</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node15"><a xlink:href="../proc/cavity_t_ice.html" xlink:title="cavity_t_ice">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="628,-394 554,-394 554,-370 628,-370 628,-394"/>
+<text text-anchor="middle" x="591" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_t_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_heat_fluxes&#45;&gt;proc~cavity_t_ice -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge10" class="edge">
+<title>proc~cavity_heat_fluxes&#45;&gt;proc~cavity_t_ice</title>
+<path fill="none" stroke="#ff0000" d="M459.01,-382C485.82,-382 517.87,-382 543.57,-382"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="543.79,-385.5 553.79,-382 543.79,-378.5 543.79,-385.5"/>
+</g>
+<!-- proc~cavity_l_plus_is_neutral -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node14" class="node">
+<title>proc~cavity_l_plus_is_neutral</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node14"><a xlink:href="../proc/cavity_l_plus_is_neutral.html" xlink:title="cavity_l_plus_is_neutral">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="831,-150 695,-150 695,-126 831,-126 831,-150"/>
+<text text-anchor="middle" x="763" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_l_plus_is_neutral</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_outer_residual&#45;&gt;proc~cavity_l_plus_is_neutral -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge11" class="edge">
+<title>proc~cavity_outer_residual&#45;&gt;proc~cavity_l_plus_is_neutral</title>
+<path fill="none" stroke="#00ff3f" d="M267.2,-125.98C284.1,-122.33 303.28,-118.8 321,-117 470.45,-101.78 509.54,-101.92 659,-117 673.53,-118.47 689.04,-121.07 703.5,-123.95"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="702.82,-127.38 713.32,-125.98 704.24,-120.53 702.82,-127.38"/>
+</g>
+<!-- proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge12" class="edge">
+<title>proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#00ffff" d="M626.81,-253.08C653.05,-262.19 689.24,-274.75 717.57,-284.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="716.64,-287.96 727.23,-287.93 718.93,-281.35 716.64,-287.96"/>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge16" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#7f00ff" d="M269.58,-235.81C285.98,-235.48 304.26,-235.16 321,-235 394.77,-234.28 413.25,-232.85 487,-235 500.63,-235.4 515.25,-236.09 529.08,-236.86"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="529.28,-240.38 539.47,-237.47 529.69,-233.39 529.28,-240.38"/>
+</g>
+<!-- proc~cavity_buoyancy_flux -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node10" class="node">
+<title>proc~cavity_buoyancy_flux</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node10"><a xlink:href="../proc/cavity_buoyancy_flux.html" xlink:title="cavity_buoyancy_flux">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="467,-310 341,-310 341,-286 467,-286 467,-310"/>
+<text text-anchor="middle" x="404" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_buoyancy_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_buoyancy_flux -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge13" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_buoyancy_flux</title>
+<path fill="none" stroke="#7f00ff" d="M247.24,-249.16C267.53,-257.62 295.66,-268.82 321,-277 327.83,-279.2 335.03,-281.33 342.22,-283.33"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="341.41,-286.74 351.98,-285.97 343.24,-279.98 341.41,-286.74"/>
+</g>
+<!-- proc~cavity_exchange_velocities_f -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node11" class="node">
+<title>proc~cavity_exchange_velocities_f</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node11"><a xlink:href="../proc/cavity_exchange_velocities_f.html" xlink:title="cavity_exchange_velocities_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="487,-150 321,-150 321,-126 487,-126 487,-150"/>
+<text text-anchor="middle" x="404" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_exchange_velocities_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_exchange_velocities_f -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge14" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_exchange_velocities_f</title>
+<path fill="none" stroke="#7f00ff" d="M241.56,-224.86C274.21,-207.3 334.74,-174.73 371.69,-154.85"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="373.39,-157.9 380.54,-150.08 370.08,-151.74 373.39,-157.9"/>
+</g>
+<!-- proc~cavity_l_plus_from_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node13" class="node">
+<title>proc~cavity_l_plus_from_state</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node13"><a xlink:href="../proc/cavity_l_plus_from_state.html" xlink:title="cavity_l_plus_from_state">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="474.5,-268 333.5,-268 333.5,-244 474.5,-244 474.5,-268"/>
+<text text-anchor="middle" x="404" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_l_plus_from_state</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_l_plus_from_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge15" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_l_plus_from_state</title>
+<path fill="none" stroke="#7f00ff" d="M269.77,-242.24C286.37,-243.96 305.23,-245.9 323.44,-247.78"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="323.15,-251.27 333.46,-248.82 323.87,-244.31 323.15,-251.27"/>
+</g>
+<!-- proc~cavity_three_equation -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node16" class="node">
+<title>proc~cavity_three_equation</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node16"><a xlink:href="../proc/cavity_three_equation.html" xlink:title="cavity_three_equation">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-352 339,-352 339,-328 469,-328 469,-352"/>
+<text text-anchor="middle" x="404" y="-337.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_three_equation</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge17" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation</title>
+<path fill="none" stroke="#7f00ff" d="M230.66,-249.25C248.46,-267.23 284.22,-300.6 321,-319 325.03,-321.01 329.26,-322.85 333.6,-324.51"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="332.63,-327.88 343.23,-327.9 334.96,-321.28 332.63,-327.88"/>
+</g>
+<!-- proc~cavity_gamma_hj99 -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node17" class="node">
+<title>proc~cavity_gamma_hj99</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node17"><a xlink:href="../proc/cavity_gamma_hj99.html" xlink:title="cavity_gamma_hj99">
+<polygon fill="#d9534f" stroke="#d9534f" points="650.5,-150 531.5,-150 531.5,-126 650.5,-126 650.5,-150"/>
+<text text-anchor="middle" x="591" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_gamma_hj99</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_exchange_velocities_f&#45;&gt;proc~cavity_gamma_hj99 -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge18" class="edge">
+<title>proc~cavity_exchange_velocities_f&#45;&gt;proc~cavity_gamma_hj99</title>
+<path fill="none" stroke="#ffda00" d="M487.22,-138C498.6,-138 510.19,-138 521.29,-138"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="521.32,-141.5 531.32,-138 521.32,-134.5 521.32,-141.5"/>
+</g>
+<!-- proc~cavity_gamma_yung25 -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_node18" class="node">
+<title>proc~cavity_gamma_yung25</title>
+<g id="a_proc~~cavity_solve_melt_f~~CallsGraph_node18"><a xlink:href="../proc/cavity_gamma_yung25.html" xlink:title="cavity_gamma_yung25">
+<polygon fill="#d9534f" stroke="#d9534f" points="659,-192 523,-192 523,-168 659,-168 659,-192"/>
+<text text-anchor="middle" x="591" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_gamma_yung25</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_exchange_velocities_f&#45;&gt;proc~cavity_gamma_yung25 -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge19" class="edge">
+<title>proc~cavity_exchange_velocities_f&#45;&gt;proc~cavity_gamma_yung25</title>
+<path fill="none" stroke="#ffda00" d="M458.01,-150.04C479.59,-154.93 504.7,-160.63 527.19,-165.74"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="526.45,-169.16 536.98,-167.96 528,-162.34 526.45,-169.16"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge21" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff00da" d="M466.29,-327.89C473.47,-325.43 480.54,-322.5 487,-319 506.09,-308.66 505.94,-299.42 523,-286 535.32,-276.31 549.66,-266.49 561.91,-258.52"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="563.88,-261.41 570.4,-253.06 560.09,-255.52 563.88,-261.41"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge23" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff00da" d="M466.07,-327.97C484.33,-324.69 504.43,-321.39 523,-319 581.46,-311.49 648.38,-306.48 696.51,-303.49"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="697.02,-306.97 706.79,-302.87 696.59,-299.98 697.02,-306.97"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~cavity_ice_terms -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge20" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~cavity_ice_terms</title>
+<path fill="none" stroke="#ff00da" d="M469.18,-340C488.91,-340 510.54,-340 529.98,-340"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="530.22,-343.5 540.22,-340 530.22,-336.5 530.22,-343.5"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~cavity_t_ice -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge22" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~cavity_t_ice</title>
+<path fill="none" stroke="#ff00da" d="M458.01,-352.04C485.16,-358.2 517.89,-365.63 543.97,-371.55"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="543.45,-375.02 553.97,-373.82 545,-368.19 543.45,-375.02"/>
+</g>
+<!-- proc~cavity_gamma_hj99&#45;&gt;proc~cavity_l_plus_is_neutral -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge24" class="edge">
+<title>proc~cavity_gamma_hj99&#45;&gt;proc~cavity_l_plus_is_neutral</title>
+<path fill="none" stroke="#ff0000" d="M650.5,-138C661.57,-138 673.31,-138 684.85,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="684.92,-141.5 694.92,-138 684.92,-134.5 684.92,-141.5"/>
+</g>
+<!-- proc~cavity_gamma_yung25&#45;&gt;proc~cavity_l_plus_is_neutral -->
+<g id="proc~~cavity_solve_melt_f~~CallsGraph_edge25" class="edge">
+<title>proc~cavity_gamma_yung25&#45;&gt;proc~cavity_l_plus_is_neutral</title>
+<path fill="none" stroke="#00ffff" d="M640.72,-167.96C660.28,-163.13 682.99,-157.52 703.44,-152.47"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="704.41,-155.83 713.28,-150.04 702.73,-149.04 704.41,-155.83"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccavity_solve_melt_fCallsGraph = svgPanZoom('#proccavity_solve_melt_fCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~cavity_solve_melt_f~~CalledByGraph Pages: 1 -->
+<svg id="proccavity_solve_melt_fCalledByGraph" width="641pt" height="90pt"
+ viewBox="0.00 0.00 641.00 89.79" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph" class="graph" transform="scale(0.66 0.66) rotate(0) translate(4 133)">
+<title>proc~~cavity_solve_melt_f~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-133 974,-133 974,4 -4,4"/>
+<!-- proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node1" class="node">
+<title>proc~cavity_solve_melt_f</title>
+<polygon fill="none" stroke="black" points="970,-45 855,-45 855,-21 970,-21 970,-45"/>
+<text text-anchor="middle" x="912.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_solve_melt_f</text>
+</g>
+<!-- proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node2" class="node">
+<title>proc~cavity_melt_point_gamma_f</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node2"><a xlink:href="../proc/cavity_melt_point_gamma_f.html" xlink:title="cavity_melt_point_gamma_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="819,-66 658,-66 658,-42 819,-42 819,-66"/>
+<text text-anchor="middle" x="738.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge1" class="edge">
+<title>proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f</title>
+<path fill="none" stroke="#ff0000" d="M819.21,-44.27C827.7,-43.23 836.28,-42.18 844.61,-41.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="845.12,-44.63 854.62,-39.94 844.27,-37.68 845.12,-44.63"/>
+</g>
+<!-- proc~cavity_solve_melt -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node3" class="node">
+<title>proc~cavity_solve_melt</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node3"><a xlink:href="../proc/cavity_solve_melt.html" xlink:title="cavity_solve_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="791.5,-24 685.5,-24 685.5,0 791.5,0 791.5,-24"/>
+<text text-anchor="middle" x="738.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solve_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt&#45;&gt;proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge2" class="edge">
+<title>proc~cavity_solve_melt&#45;&gt;proc~cavity_solve_melt_f</title>
+<path fill="none" stroke="#ff0000" d="M791.57,-18.36C808.27,-20.4 827,-22.68 844.6,-24.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="844.46,-28.34 854.81,-26.08 845.31,-21.39 844.46,-28.34"/>
+</g>
+<!-- proc~cavity_melt_columns_2d -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node4" class="node">
+<title>proc~cavity_melt_columns_2d</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node4"><a xlink:href="../proc/cavity_melt_columns_2d.html" xlink:title="cavity_melt_columns_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="617,-108 475,-108 475,-84 617,-84 617,-108"/>
+<text text-anchor="middle" x="546" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge3" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f</title>
+<path fill="none" stroke="#ff0000" d="M601.59,-83.96C623.91,-79.04 649.89,-73.31 673.13,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="673.89,-71.61 682.9,-66.04 672.38,-64.77 673.89,-71.61"/>
+</g>
+<!-- proc~cavity_melt_point -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node5" class="node">
+<title>proc~cavity_melt_point</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node5"><a xlink:href="../proc/cavity_melt_point.html" xlink:title="cavity_melt_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="599,-24 493,-24 493,0 599,0 599,-24"/>
+<text text-anchor="middle" x="546" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge5" class="edge">
+<title>proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt</title>
+<path fill="none" stroke="#00ffff" d="M599.05,-12C622.48,-12 650.32,-12 674.88,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="675.18,-15.5 685.18,-12 675.18,-8.5 675.18,-15.5"/>
+</g>
+<!-- proc~cavity_melt_point_gamma -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node6" class="node">
+<title>proc~cavity_melt_point_gamma</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node6"><a xlink:href="../proc/cavity_melt_point_gamma.html" xlink:title="cavity_melt_point_gamma">
+<polygon fill="#d9534f" stroke="#d9534f" points="622,-66 470,-66 470,-42 622,-42 622,-66"/>
+<text text-anchor="middle" x="546" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge4" class="edge">
+<title>proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_melt_point_gamma_f</title>
+<path fill="none" stroke="#ff0000" d="M622.02,-54C630.47,-54 639.15,-54 647.77,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="647.85,-57.5 657.85,-54 647.85,-50.5 647.85,-57.5"/>
+</g>
+<!-- proc~cavity_melt_columns -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node7" class="node">
+<title>proc~cavity_melt_columns</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node7"><a xlink:href="../proc/cavity_melt_columns.html" xlink:title="cavity_melt_columns">
+<polygon fill="#d9534f" stroke="#d9534f" points="428.5,-24 304.5,-24 304.5,0 428.5,0 428.5,-24"/>
+<text text-anchor="middle" x="366.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge7" class="edge">
+<title>proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point</title>
+<path fill="none" stroke="#00ff00" d="M428.59,-12C446.11,-12 465.22,-12 482.81,-12"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="482.96,-15.5 492.96,-12 482.96,-8.5 482.96,-15.5"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node8" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node8"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="434,-108 299,-108 299,-84 434,-84 434,-108"/>
+<text text-anchor="middle" x="366.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d</title>
+<path fill="none" stroke="#ff0000" d="M434.1,-96C444.06,-96 454.42,-96 464.63,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="464.76,-99.5 474.76,-96 464.76,-92.5 464.76,-99.5"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node9" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node9"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="263,-108 142,-108 142,-84 263,-84 263,-108"/>
+<text text-anchor="middle" x="202.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ffff" d="M263.36,-96C271.56,-96 280.08,-96 288.53,-96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="288.79,-99.5 298.79,-96 288.79,-92.5 288.79,-99.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node10" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-129 0,-129 0,-105 106,-105 106,-129"/>
+<text text-anchor="middle" x="53" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M106,-109.6C114.35,-108.41 123.1,-107.16 131.78,-105.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.5,-109.36 141.91,-104.48 131.51,-102.43 132.5,-109.36"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_node11" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~cavity_solve_melt_f~~CalledByGraph_node11"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-87 4.5,-87 4.5,-63 101.5,-63 101.5,-87"/>
+<text text-anchor="middle" x="53" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~cavity_solve_melt_f~~CalledByGraph_edge10" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M101.89,-81.82C111.48,-83.18 121.74,-84.64 131.89,-86.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.58,-89.58 141.98,-87.53 132.57,-82.65 131.58,-89.58"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccavity_solve_melt_fCalledByGraph = svgPanZoom('#proccavity_solve_melt_fCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_b~11"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_b~11"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b_flux~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b_flux</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-converged~3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>converged</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_mid"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gamma_s~14"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gamma_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gamma_t~15"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gamma_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hi~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~57"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-l_plus~9"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>l_plus</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lo~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lp_new~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lp_new</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_mass~10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_mass</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mid"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-settled"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>settled</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xstar"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xstar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">cavity_solve_melt_f</span><span class="p">(</span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">S_i</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">f_cor</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Solve the three-equation system with any implemented exchange</span>
+<span class="w">      </span><span class="c">!! law, and return the full interface state plus the fluxes a</span>
+<span class="w">      </span><span class="c">!! coupling seam will consume.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! For an EXPLICIT law (`const_gamma`) this is one call to the</span>
+<span class="w">      </span><span class="c">!! closed-form quadratic.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! For a STRATIFICATION-DEPENDENT law (`hj99`, `yung25`) the system</span>
+<span class="w">      </span><span class="c">!! is implicit — the exchange coefficients depend on the interfacial</span>
+<span class="w">      </span><span class="c">!! buoyancy flux, which depends on the melt rate they produce — and</span>
+<span class="w">      </span><span class="c">!! the outer iteration is BISECTION on `x = ln(L+)` over</span>
+<span class="w">      </span><span class="c">!! `[CAVITY_LP_X_LO, CAVITY_LP_X_HI]`.  It is guaranteed convergent</span>
+<span class="w">      </span><span class="c">!! because the residual `G(x) = ln(L+_new(x)) - x` provably changes</span>
+<span class="w">      </span><span class="c">!! sign across that bracket:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   * `x -&gt; x_lo` (maximal suppression): `gamma -&gt; 0`, so</span>
+<span class="w">      </span><span class="c">!!     `|B_b| -&gt; 0` and `L+_new -&gt; +infinity`, giving `G &gt; 0`;</span>
+<span class="w">      </span><span class="c">!!   * `x -&gt; x_hi` (neutral): `gamma` sits at its cap, `|B_b|` is</span>
+<span class="w">      </span><span class="c">!!     maximal and `L+_new` is finite, giving `G &lt; 0`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! UNLESS the interface is DESTABILISING (`B_b &gt;= 0`, i.e. freezing</span>
+<span class="w">      </span><span class="c">!! or a strongly cooling interface), in which case `L+_new` is</span>
+<span class="w">      </span><span class="c">!! `+infinity` everywhere and the neutral limit IS the fixed point —</span>
+<span class="w">      </span><span class="c">!! short-circuited, not iterated.  That is the branch KINK: H&amp;J99</span>
+<span class="w">      </span><span class="c">!! sets `eta* := 1` there (p. 1792) and Yung et al. (2025) falls</span>
+<span class="w">      </span><span class="c">!! back to the ConstCoeff values (pp. 5832-5833).  The melt rate is</span>
+<span class="w">      </span><span class="c">!! continuous across it; its derivative is not, which is exactly why</span>
+<span class="w">      </span><span class="c">!! this is bisection and not Newton.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! After convergence the whole column is re-evaluated ONCE at the</span>
+<span class="w">      </span><span class="c">!! converged scalar, so the returned exchange velocities and the</span>
+<span class="w">      </span><span class="c">!! returned `(T_b, S_b, m_mass)` belong to ONE value of `L+`.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_w</span>
+<span class="w">         </span><span class="c">!! Far-field temperature (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">S_w</span>
+<span class="w">         </span><span class="c">!! Far-field salinity (g/kg).  Must exceed `S_i`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_b</span>
+<span class="w">         </span><span class="c">!! Interface pressure (Pa).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_star</span>
+<span class="w">         </span><span class="c">!! Friction velocity (m/s), strictly positive — from</span>
+<span class="w">         </span><span class="c">!! `cavity_ustar`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">S_i</span>
+<span class="w">         </span><span class="c">!! Ice salinity (g/kg), &gt;= 0.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_cavity_exchange_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">par</span>
+<span class="w">         </span><span class="c">!! Exchange-law bundle (its `f_cor` member is NOT read).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_cor</span>
+<span class="w">         </span><span class="c">!! Coriolis parameter (1/s) for this column; `hj99` only.  See</span>
+<span class="w">         </span><span class="c">!! `cavity_exchange_velocities_f` for why it is not `par%f_cor`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_cavity_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<span class="w">         </span><span class="c">!! Ice-conduction bundle.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">         </span><span class="c">!! Shared EOS handle — the liquidus.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_cavity_const_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">const</span>
+<span class="w">         </span><span class="c">!! Constants bundle.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_cavity_solution_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sol</span>
+<span class="w">         </span><span class="c">!! Interface state, fluxes and solver diagnostics.  On any non-OK</span>
+<span class="w">         </span><span class="c">!! status this carries the safe state (`m_mass` exactly zero).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">         </span><span class="c">!! `CAVITY_MELT_*` status.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_s</span><span class="p">,</span><span class="w"> </span><span class="n">b_flux</span><span class="p">,</span><span class="w"> </span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">l_plus</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lo</span><span class="p">,</span><span class="w"> </span><span class="n">hi</span><span class="p">,</span><span class="w"> </span><span class="n">mid</span><span class="p">,</span><span class="w"> </span><span class="n">xstar</span><span class="p">,</span><span class="w"> </span><span class="n">g_lo</span><span class="p">,</span><span class="w"> </span><span class="n">g_hi</span><span class="p">,</span><span class="w"> </span><span class="n">g_mid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">it</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">converged</span><span class="p">,</span><span class="w"> </span><span class="n">settled</span>
+
+<span class="w">      </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_MELT_OK</span>
+<span class="w">      </span><span class="k">call </span><span class="n">cavity_solution_reset</span><span class="p">(</span><span class="n">sol</span><span class="p">)</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">u_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_star</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">l_plus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_L_PLUS_NEUTRAL</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">L_obukhov</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_L_PLUS_NEUTRAL</span>
+<span class="w">      </span><span class="k">call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">T_w</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">S_w</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">p_b</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">u_star</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">S_i</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_MELT_NONFINITE_INPUT</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">u_star</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_MELT_BAD_INPUT</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">converged</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">l_plus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_L_PLUS_NEUTRAL</span>
+
+<span class="w">      </span><span class="c">! The neutral evaluation is both the answer for an explicit law and</span>
+<span class="w">      </span><span class="c">! the upper bracket for an implicit one.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">cavity_state_at_x</span><span class="p">(</span><span class="n">CAVITY_LP_X_HI</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">f_cor</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_i</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_s</span><span class="p">,</span><span class="w"> </span><span class="n">b_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">CAVITY_MELT_OK</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      </span><span class="n">l_plus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lp_new</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cavity_law_is_implicit</span><span class="p">(</span><span class="n">par</span><span class="p">%</span><span class="n">law</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">g_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cavity_outer_residual</span><span class="p">(</span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">CAVITY_LP_X_HI</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! `cavity_l_plus_is_neutral(lp_new)` is the destabilising</span>
+<span class="w">         </span><span class="c">! short-circuit and makes `g_hi = +huge &gt;= 0`; the explicit</span>
+<span class="w">         </span><span class="c">! `g_hi &gt;= 0` test below therefore covers both accept branches.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">g_hi</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">cavity_state_at_x</span><span class="p">(</span><span class="n">CAVITY_LP_X_LO</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">f_cor</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_i</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">b_flux</span><span class="p">,</span><span class="w"> </span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">CAVITY_MELT_OK</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">               </span><span class="k">return</span>
+<span class="k">            end if</span>
+<span class="k">            </span><span class="n">g_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cavity_outer_residual</span><span class="p">(</span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">CAVITY_LP_X_LO</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">g_lo</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! The bracket argument failed — refuse rather than return</span>
+<span class="w">               </span><span class="c">! whichever end happens to look plausible.</span>
+<span class="w">               </span><span class="k">call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">               </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_MELT_NOT_CONVERGED</span>
+<span class="w">               </span><span class="k">return</span>
+<span class="k">            end if</span>
+
+<span class="k">            </span><span class="n">lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_LP_X_LO</span>
+<span class="w">            </span><span class="n">hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_LP_X_HI</span>
+<span class="w">            </span><span class="n">converged</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">            </span><span class="k">do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">CAVITY_MAX_ITER</span>
+<span class="w">               </span><span class="n">mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hi</span><span class="p">)</span>
+<span class="w">               </span><span class="n">settled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">mid</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">lo</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">mid</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">hi</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">settled</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  call </span><span class="n">cavity_state_at_x</span><span class="p">(</span><span class="n">mid</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">f_cor</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_i</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">b_flux</span><span class="p">,</span><span class="w"> </span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">CAVITY_MELT_OK</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">                     </span><span class="k">return</span>
+<span class="k">                  end if</span>
+<span class="k">                  </span><span class="n">g_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cavity_outer_residual</span><span class="p">(</span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">mid</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">g_mid</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">settled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">                  </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">g_mid</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mid</span>
+<span class="w">                  </span><span class="k">else</span>
+<span class="k">                     </span><span class="n">hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mid</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">                  if</span><span class="w"> </span><span class="p">((.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">settled</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lo</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">CAVITY_LP_X_TOL</span><span class="p">))</span><span class="w"> </span><span class="n">settled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">settled</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">converged</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">                  </span><span class="k">exit</span>
+<span class="k">               end if</span>
+<span class="k">            end do</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">converged</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">               </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CAVITY_MELT_NOT_CONVERGED</span>
+<span class="w">               </span><span class="k">return</span>
+<span class="k">            end if</span>
+
+<span class="w">            </span><span class="c">! One final evaluation at the converged scalar, so the</span>
+<span class="w">            </span><span class="c">! returned gammas and the returned interface state belong to</span>
+<span class="w">            </span><span class="c">! the SAME `L+`.</span>
+<span class="w">            </span><span class="n">xstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hi</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">cavity_state_at_x</span><span class="p">(</span><span class="n">xstar</span><span class="p">,</span><span class="w"> </span><span class="n">par</span><span class="p">,</span><span class="w"> </span><span class="n">f_cor</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">S_i</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_s</span><span class="p">,</span><span class="w"> </span><span class="n">b_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">lp_new</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">CAVITY_MELT_OK</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">               </span><span class="k">return</span>
+<span class="k">            end if</span>
+<span class="k">            </span><span class="n">l_plus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">exp</span><span class="p">(</span><span class="n">xstar</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">sol</span><span class="p">%</span><span class="n">T_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_b</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">S_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">S_b</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">m_mass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_mass</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">gamma_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gamma_t</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">gamma_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gamma_s</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">b_flux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b_flux</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">l_plus</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">l_plus</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">L_obukhov</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cavity_obukhov_length</span><span class="p">(</span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="n">u_star</span><span class="p">,</span><span class="w"> </span><span class="n">b_flux</span><span class="p">)</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">T_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_w</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">eos_freezing_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">)</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">S_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">S_w</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">S_b</span>
+<span class="w">      </span><span class="k">call </span><span class="n">cavity_heat_fluxes</span><span class="p">(</span><span class="n">T_w</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">,</span><span class="w"> </span><span class="n">gamma_t</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">const</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">sol</span><span class="p">%</span><span class="n">q_ocean</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">q_ice</span><span class="p">,</span><span class="w"> </span><span class="n">sol</span><span class="p">%</span><span class="n">q_latent</span><span class="p">)</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">n_iter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">it</span>
+<span class="w">      </span><span class="n">sol</span><span class="p">%</span><span class="n">converged</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">converged</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">cavity_solve_melt_f</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-09-25 17:52 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
