@@ -25,7 +25,110 @@ closures make of it.
 | Output | daily: SSH, and the top-10 m means of u, v, T, S (one conservative `z_fixed` output level), single precision |
 | Cost | 11 s per simulated day on one V100 (a year in 67 min), 10.4 GB of device memory |
 
-## 1. Inputs (not in the repository)
+## 1. Reproduce it — one command
+
+Given a roundabout build (the `rdb` executable; for `--python` also
+`librdb_core.so`, i.e. configured with `-DRDB_BUILD_SHARED=ON`):
+
+```bash
+validation_examples/ocean/global_1deg/reproduce.sh \
+    --data-dir /somewhere/with/4GB --build-dir /path/to/build --gpu 0
+```
+
+That fetches the inputs, prepares them, runs the year, renders the movie and
+checks the run against the committed reference. `--quick` runs 10 days
+instead and checks them against the reference's first 10 days — about
+two and a half minutes on one V100 including the movie, the way to check a
+new machine or toolchain.
+
+| option | |
+|---|---|
+| `--data-dir DIR` | data root; the inputs land in `DIR/OM_1deg` (default `$RDB_DATA_DIR`, else it stops and says so). About 4 GB, all re-downloadable. |
+| `--build-dir DIR` | the build tree holding `rdb` and `librdb_core.so` (default `$RDB_BUILD_DIR`) |
+| `--run-dir DIR` | where the run happens (default `./global_1deg_run`) |
+| `--days N` / `--quick` | simulated days (default 365) / 10 days |
+| `--python` | drive the run through the Python interface (`run_global_1deg.py`) instead of the executable |
+| `--movie` / `--no-movie` | require / skip the movie (default: made when `ffmpeg` — and, for the executable path, NetCDF-C's `nccopy` — is on `PATH`, otherwise skipped with a note) |
+| `--gpu N` | `CUDA_VISIBLE_DEVICES=N` |
+| `--skip-fetch` | the data are already in place |
+| `--no-check` | do not compare against the reference |
+
+Both paths make the movie: the executable path renders it afterwards from
+the diagnostic file (`global_movie.py`), the Python path in-process as the
+run goes. It prints where everything went: the run directory holds
+`global_1deg_unforced.nml` (with `t_end` set from `--days`), the `INPUT`
+symlink to the data, `run.log` (the console), `output/` (the diagnostic
+file; with `--python` also `daily.txt`, the frames and the movie),
+`movie/` (the executable path's frames and movie) and `check.txt`.
+
+**On a machine without NetCDF:** this case needs a build with
+NetCDF-Fortran (and NetCDF-C) — the bathymetry and initial-condition
+readers and the diagnostic file use it. Where the system has neither,
+`tools/build_netcdf.sh` builds both from source against an existing HDF5;
+see the docs on building NetCDF from source
+(`docs/howto/deploy_without_netcdf.md`, both arriving with the
+`feat/netcdf-bootstrap` branch). The scripts here are standard-library
+Python and never need it (only the executable path's movie uses
+NetCDF-C's `nccopy`).
+
+## 2. The check against the reference
+
+`reference_daily.csv` is the executable's year: En, MaxCFL and the mass /
+salt / heat `Error` of every day, measured on one V100 with nvfortran 26.5
+(`-gpu=cc70,mem:separate`, double precision); the header records the
+commit. `check_against_reference.py RUN.log [--days N | --quick]` parses a
+new run's console and prints a day-by-day table and PASS/FAIL (exit status
+0/1). The executable's console carries everything; the Python driver's
+`[py] day` line carries En and the mass drift only — the Python API does
+not expose MaxCFL or the salt and heat totals — so a `--python` run is
+checked on those two (the two runs are bit-identical, so the executable's
+check covers the rest). The two kinds of number are checked differently,
+because another toolchain does not produce the same bits and round-off
+grows:
+
+* **Energy — a relative band that widens with time.** En is a global
+  integral of a smooth, large-scale adjustment, so it stays close across
+  toolchains long after individual features decorrelate, but it does
+  decorrelate:
+
+  | days | En band | why |
+  |---:|---:|---|
+  | 1–10 (`--quick`) | 0.5 % | deterministic geostrophic adjustment; the console prints En to 4 digits (rounding alone is up to 0.2 %) |
+  | 11–30 | 2 % | spin-up; the one-cell features (Celebes overflow, Gibraltar) begin to decorrelate |
+  | 31–90 | 5 % | En peaks (day 65); the eddying part of the flow has decorrelated |
+  | 91–365 | 10 % | slow spin-down of a decorrelated flow, still pinned by the initial state and the closures |
+
+  MaxCFL, a pointwise maximum and far more sensitive to where one fast cell
+  sits, gets twice En's band and must stay below 0.5 (the reference peaks
+  at 0.16). On the reference toolchain the run is deterministic and matches
+  every printed digit (all 365 days re-run at the reference commit: identical)
+  — the bands exist for the others. gfortran 15.1 on the CPU (serial) also
+  matches En and MaxCFL to every printed digit over the 10 quick days
+  (a 5550 s run). The bands after day 10 are not yet measured across toolchains
+  (a CPU year is days of wall time); they follow from how the flow evolves.
+* **Budgets — round-off in this run, not equality with the reference.** The
+  `Error` of a closed domain is accumulated round-off, which is
+  toolchain-specific. Each series must stay under the envelope
+  `|Error(d)| ≤ floor + rate · d` and must not accelerate (the mean daily
+  increment of the second half of the run at most 4× that of the first
+  half, plus 1e-12/day of jitter). `rate` is the per-step round-off that
+  accumulates: 1e-13/day for mass and 1e-14/day for salt and heat — a few
+  machine epsilons per step at 48 steps a day, 5× and 25× above the
+  reference's own rates. `floor` = 1e-11 is the round-off of the global
+  totals themselves, double sums over 5.8 M cells: the GPU's tree
+  reductions are nearly exact, a serial CPU loop is not — gfortran 15.1
+  measures a flat 1.3–1.5e-12 (mass) and a ±2e-13 jitter (salt, heat) from
+  day 1 on. A real leak is 1e-10 or more in a day.
+
+## 3. What `reproduce.sh` does, step by step
+
+In order: fetch the inputs (idempotent, SHA-256 checked) → prepare the
+model-grid inputs (skipped while `bathy_om1deg.nc` and `ic_woa13_jan.nc`
+are newer than the files they are made from) → set up the run directory
+(`INPUT` symlink, namelist copy with `t_end` from `--days`) → run → movie →
+`check_against_reference.py`. Each step can be run by hand:
+
+### Inputs (not in the repository)
 
 ```bash
 export RDB_DATA_DIR=/somewhere/with/4GB            # re-downloadable data only
@@ -42,7 +145,7 @@ level by level from the nearest WOA cell with data at the same depth; the
 model interpolates linearly in depth). Both are standard-library Python;
 nothing to install. Takes about 30 s.
 
-## 2. The reference run — the `rdb` executable
+### The reference run — the `rdb` executable
 
 The namelist reads its three input files from `./INPUT/`:
 
@@ -59,7 +162,7 @@ CUDA_VISIBLE_DEVICES=0 /path/to/build/rdb global_1deg_unforced.nml > run.log
 (`Error` = the relative closure residual, `out` = the tracked boundary
 flux, which is round-off in this closed domain).
 
-## 3. The same run through the Python interface
+### The same run through the Python interface
 
 `run_global_1deg.py` builds the same configuration knob by knob with the
 typed `rdb.Config` API (and checks it against the namelist before it
@@ -78,7 +181,7 @@ The Python-driven run is the same computation as the executable's: its
 diagnostic file is bit-identical to the reference run's (checked on the
 year run, every record of SSH, u, v, T and S).
 
-## 4. The movie from the executable's output
+### The movie from the executable's output
 
 ```bash
 module load netcdf-c   # nccopy flattens the NetCDF-4 diag file for the stdlib reader
@@ -92,7 +195,7 @@ no special case), anchor-table colour maps (inferno for speed, a diverging
 map for SSH), a built-in bitmap font, PPM frames, then `ffmpeg` to MP4
 (H.264, yuv420p) and GIF.
 
-## 5. What the year shows
+## 4. What the year shows
 
 Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-24:
 365 days, 17 520 steps, 4013 s wall (11 s per simulated day), 10.4 GB of
@@ -122,7 +225,7 @@ device memory.
   i.e. round-off accumulating, not a leak; the tracked boundary fluxes
   (`out`) stay at round-off size in this closed domain (mass ≤ 1e2 kg of
   1.4e21, heat ≤ 7e10 J of 5.0e21).
-* The fastest water all year is the Celebes Sea overflow (§6) and the
+* The fastest water all year is the Celebes Sea overflow (§5) and the
   Gibraltar exchange (1–2 m/s through a one-cell, 600 m channel — the
   Mediterranean outflow, the right order of magnitude). The surface
   (top-10 m daily mean) never exceeds 0.50 m/s: the equatorial current
@@ -139,7 +242,7 @@ device memory.
   (43.5 M values per field, ghosts included) is equal, and so are En and
   the mass drift each day.
 
-## 6. Known limits of this configuration
+## 5. Known limits of this configuration
 
 * **Unforced, and 1°.** The surface circulation is the adjustment of the
   WOA January density field, slowly spinning down; there is no wind-driven
