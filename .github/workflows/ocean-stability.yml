@@ -99,14 +99,22 @@ jobs:
           cmake --version | head -1
           nproc
 
-      # Cache the build tree so the sweep, not the compile, dominates the job.
+      # Cache the build tree so a re-run of the SAME sources skips the compile.
+      #
+      # EXACT-KEY ONLY -- no `restore-keys` prefix fallback.  A fallback
+      # restores a build tree compiled from DIFFERENT sources, and gfortran's
+      # .mod files do not survive that: a test compiled early in the build
+      # read a cached ocean_test_metrics.mod against a freshly rebuilt
+      # rdb_ocean_metrics.mod and failed with "Mismatch in components of
+      # derived type" on a PR that never touched either module.  The key
+      # therefore hashes EVERY build input: all Fortran sources (src/, tests/,
+      # app/, benchmarks/), the #include'd .inc bodies, and every
+      # CMakeLists.txt.  A cold build is quick; a false red is not.
       - name: Cache build tree
         uses: actions/cache@v4
         with:
           path: build_ci
-          key: build_ci-${{ runner.os }}-gcc15-${{ hashFiles('CMakeLists.txt', 'src/**/*.F90', 'cmake/**') }}
-          restore-keys: |
-            build_ci-${{ runner.os }}-gcc15-
+          key: build_ci-${{ runner.os }}-gcc15-${{ hashFiles('**/CMakeLists.txt', 'cmake/**', '**/*.F90', '**/*.f90', '**/*.inc') }}
 
       - name: Configure
         run: |
