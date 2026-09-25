@@ -121,6 +121,20 @@ module test_ocean_cavity_load
    !! refusal therefore protects the raw stack, the unsplit driver and
    !! `&ocean_bt_nml correction_h_weighted`, not the default path's
    !! stability.
+   !!
+   !! ### Under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`, default)
+   !!
+   !! Everything in the previous paragraph that says "the split solver
+   !! replaces the depth mean" describes the LEGACY split
+   !! (`bc_pgf_forcing = .false.`).  The default now forces the barotropic
+   !! mode with the depth mean of the full layer PGF, as MOM6 does, so the
+   !! load's reference-density shortfall (control (b), `N^2 z_draft s`)
+   !! is no longer annihilated: it is a real depth-mean bottom-pressure
+   !! gradient the initial state does not balance, and the barotropic mode
+   !! adjusts to it (`cavity_sloping_lid_load_shortfall_drives_bt`,
+   !! 4.5e-4 m/s).  The truncation gate `cavity_resting_sloping_lid_
+   !! stratified` therefore pins the legacy split — the quantity its
+   !! formula describes is the deviation from the depth mean.
    use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -208,6 +222,7 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
                   new_unittest("cavity_resting_sloping_lid_stratified", test_rest_stratified), &
+                  new_unittest("cavity_sloping_lid_load_shortfall_drives_bt", test_load_shortfall_bt), &
                   new_unittest("cavity_resting_uniform_density", test_rest_uniform), &
                   new_unittest("flat_lid_stratified_pfu_is_zero", test_flat_lid_pfu), &
                   new_unittest("sloping_lid_residual_matches_formula", test_slope_formula), &
@@ -219,14 +234,17 @@ contains
    ! End-to-end: the resting loaded cavity
    ! ==================================================================
 
-   function rest_nml() result(nml)
+   function rest_nml(legacy_split) result(nml)
       !! The resting cavity namelist.  No wind, no heat/salt flux, `f = 0`
       !! (so a spurious acceleration integrates cleanly to `a*t` instead of
       !! turning into a geostrophic balance whose amplitude is `a/f`), a
       !! flat bed, a linear ice draft, sigma, `pred_corr`, a pinned
       !! `n_inner`, and the load wired all the way through.
+      logical, intent(in) :: legacy_split
+         !! `&ocean_bt_nml bc_pgf_forcing = .not. legacy_split`.
       character(len=:), allocatable :: nml
       character(len=32) :: t_bot_s
+      character(len=8) :: bcf
 
       ! Ghost columns keep whatever the IC seeds (the interior T is
       ! overwritten from GEOPOTENTIAL depth afterwards, and the API's
@@ -237,6 +255,8 @@ contains
       ! both ends keeps the ghost columns unstratified and the mismatch
       ! trivially small anyway.
       write (t_bot_s, '(F12.4)') T_SURF
+      bcf = ".true."
+      if (legacy_split) bcf = ".false."
       nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
             "&grid_nml nx = 32, ny = 6, nghost = 2, dx = 2000.0, dy = 2000.0 /"// &
             new_line("a")// &
@@ -251,7 +271,7 @@ contains
             "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
             "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
             "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
-            "n_inner = 24 /"//new_line("a")// &
+            "n_inner = 24, bc_pgf_forcing = "//trim(bcf)//" /"//new_line("a")// &
             "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
             "draft_depth = 190.0, draft_slope = 1.0e-3, draft_x0 = -10000.0 /"// &
             new_line("a")// &
@@ -259,7 +279,7 @@ contains
             "&output_nml output_to_file = .false. /"//new_line("a")
    end function rest_nml
 
-   subroutine run_rest_case(stratified, umax, vmax, ok)
+   subroutine run_rest_case(stratified, umax, vmax, ok, ubt_max, ubc_max, legacy_split)
       !! Create the resting cavity, optionally impose FLAT ISOPYCNALS by
       !! setting the interior temperature from the layer centre's
       !! GEOPOTENTIAL height (not from its layer index — under a sloping
@@ -270,6 +290,13 @@ contains
       logical, intent(in) :: stratified
       real(wp), intent(out) :: umax, vmax
       logical, intent(out) :: ok
+      real(wp), intent(out), optional :: ubt_max
+         !! Largest interior thickness-weighted DEPTH-MEAN zonal velocity.
+      real(wp), intent(out), optional :: ubc_max
+         !! Largest interior |u(k) - depth mean| (the baroclinic part).
+      logical, intent(in), optional :: legacy_split
+         !! Run under the legacy split (`bc_pgf_forcing = .false.`), which
+         !! discards the depth-mean layer PGF.  Default: the MOM6 split.
 
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx, ny, nz, gen, nxp, nyp, nzp, ngc
@@ -277,13 +304,16 @@ contains
       real(wp), allocatable :: tval(:, :, :)
       character(len=:), allocatable :: nml
       integer :: i, j, k, ng
-      real(wp) :: e_low, z_ctr
+      real(wp) :: e_low, z_ctr, num, den, hf, ubar, ubt_s, ubc_s
+      logical :: legacy
 
       ok = .false.
       umax = 0.0_wp
       vmax = 0.0_wp
       handle = c_null_ptr
-      nml = rest_nml()
+      legacy = .false.
+      if (present(legacy_split)) legacy = legacy_split
+      nml = rest_nml(legacy)
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       if (status /= OCEAN_STATUS_OK) return
 
@@ -339,6 +369,28 @@ contains
       ! ghost band is not a solution anywhere.
       umax = maxval(abs(u3(ng + 2:ng + int(nxp), ng + 1:ng + int(nyp), :)))
       vmax = maxval(abs(v3(ng + 1:ng + int(nxp), ng + 2:ng + int(nyp), :)))
+      if (present(ubt_max) .or. present(ubc_max)) then
+         status = rdb_ocean_get_h_layer_ptr(handle, ptr, nx, ny, nz, gen)
+         call c_f_pointer(ptr, h3, [int(nx), int(ny), int(nz)])
+         ubt_s = 0.0_wp
+         ubc_s = 0.0_wp
+         do j = ng + 1, ng + int(nyp)
+            do i = ng + 2, ng + int(nxp)
+               num = 0.0_wp
+               den = 0.0_wp
+               do k = 1, int(nzp)
+                  hf = 0.5_wp*(h3(i - 1, j, k) + h3(i, j, k))
+                  num = num + hf*u3(i, j, k)
+                  den = den + hf
+               end do
+               ubar = num/den
+               ubt_s = max(ubt_s, abs(ubar))
+               ubc_s = max(ubc_s, maxval(abs(u3(i, j, 1:int(nzp)) - ubar)))
+            end do
+         end do
+         if (present(ubt_max)) ubt_max = ubt_s
+         if (present(ubc_max)) ubc_max = ubc_s
+      end if
       ok = all(ieee_is_finite(u3)) .and. all(ieee_is_finite(v3))
 
       status = rdb_ocean_destroy(handle)
@@ -349,11 +401,18 @@ contains
       !! THE GATE.  Sloping draft, flat bed, flat isopycnals, at rest, no
       !! forcing: the spurious velocity after `N_STEPS` must stay under
       !! the sigma-PGF truncation bound `REST_SAFETY * A_PEAK * T_TOTAL`.
+      !!
+      !! Run under the LEGACY split (`&ocean_bt_nml bc_pgf_forcing =
+      !! .false.`), because what the bound describes is the part of the
+      !! truncation that survives a depth-mean REPLACEMENT.  Under the
+      !! default MOM6 split the depth-uniform load shortfall reaches the
+      !! barotropic mode and dominates by three decades — that is
+      !! `cavity_sloping_lid_load_shortfall_drives_bt`, below.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: umax, vmax, bound
       logical :: ok
 
-      call run_rest_case(.true., umax, vmax, ok)
+      call run_rest_case(.true., umax, vmax, ok, legacy_split=.true.)
       call check(error, ok, "the resting stratified cavity must run and stay finite")
       if (allocated(error)) return
 
@@ -373,6 +432,58 @@ contains
                  "the truncation residual must be present (a bit-zero result here "// &
                  "means the case stopped exercising the sloping-coordinate PGF)")
    end subroutine test_rest_stratified
+
+   subroutine test_load_shortfall_bt(error)
+      !! The same resting stratified cavity under the DEFAULT split
+      !! (`&ocean_bt_nml bc_pgf_forcing`, MOM6 `BT_force`).  The load
+      !! `p_ice_ref = rho_0*g*z_draft` is the displaced weight at the
+      !! REFERENCE density; the stratified column it floats on is heavier
+      !! by `rho_0*N^2*z_draft^2/(2g)`, so the raw face force is short by
+      !! the depth-UNIFORM
+      !!
+      !!     a_0 = N^2 * z_draft * slope          (module header, control (b))
+      !!
+      !! The legacy split discarded it with the depth mean; the MOM6 split
+      !! hands it to the barotropic mode, which is exactly what it is: a
+      !! bottom-pressure gradient the initial state does not balance.
+      !! The closed basin answers with a gravity-wave adjustment to a
+      !! surface tilt `a_0/g`: starting from `eta = 0` the tilt deficit
+      !! `a_0*L/(2g)` at the ends rings as the gravest seiche, whose
+      !! velocity amplitude is `(c/H)*a_0*L/(2g) = a_0*L/(2c)`.  That is
+      !! the bound (with the deepest draft and the shallowest column, so
+      !! it is the largest the geometry allows) and, since nothing else
+      !! forces the depth mean, a lower bound at a tenth of it keeps the
+      !! case from passing vacuously.  Measured (gfortran 15.1): 4.49e-4
+      !! m/s against the 9.9e-4 m/s bound, after ~8 seiche periods of
+      !! BEBT damping; under the legacy split the same run holds
+      !! 7.1e-8 m/s — the truncation floor of the gate above.
+      !!
+      !! A model whose initial surface is TRIMMED to the actual column
+      !! density (MOM6 `trim_for_ice`) starts balanced and would not show
+      !! this; the static datum here does not do that yet.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: umax, vmax, ubt_max, ubc_max, draft_max, h_min, a_0, bound
+      logical :: ok
+
+      call run_rest_case(.true., umax, vmax, ok, ubt_max, ubc_max)
+      call check(error, ok, "the resting stratified cavity must run and stay finite")
+      if (allocated(error)) return
+
+      draft_max = DRAFT_AT_X0 + DRAFT_SLOPE*(-DRAFT_X0 + real(NX_PHYS, wp)*DXY)
+      h_min = BED - draft_max
+      a_0 = N2_TARGET*draft_max*DRAFT_SLOPE
+      bound = a_0*(real(NX_PHYS, wp)*DXY)/(2.0_wp*sqrt(GRAVITY*h_min))
+      call check(error, ubt_max <= bound, &
+                 "the barotropic response to the load shortfall must stay under the "// &
+                 "gravest-seiche amplitude a_0*L/(2c)")
+      if (allocated(error)) return
+      call check(error, ubt_max >= 0.1_wp*bound, &
+                 "the depth-mean load shortfall must REACH the barotropic mode under "// &
+                 "the MOM6 split (a near-zero depth-mean response means it was discarded)")
+      if (allocated(error)) return
+      call check(error, vmax <= 1.0e-6_wp*bound, &
+                 "the draft varies in x only: no meridional response")
+   end subroutine test_load_shortfall_bt
 
    subroutine test_rest_uniform(error)
       !! `N^2 = 0` kills every `G(K)`, so the truncation residual is not

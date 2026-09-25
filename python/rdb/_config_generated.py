@@ -3622,6 +3622,14 @@ class OceanBt(Group):
         default=False,
     )
 
+    bc_pgf_forcing = Bool(
+        'bc_pgf_forcing',
+        doc='Force the BT substep with the depth mean of the full slow layer PGF, shedding only the free-surface term the PGF itself carries (MOM6 BT_force/eta_PF); .false. = legacy split that discarded the depth-mean baroclinic PGF (no JEBAR)',
+        units='',
+        required=False,
+        default=True,
+    )
+
     substep_drag = Bool(
         'substep_drag',
         doc='Apply a per-substep BT velocity damping factor',
@@ -6213,4 +6221,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 680
+N_KNOBS = 681

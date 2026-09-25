@@ -104,6 +104,8 @@ program rdb_tests
                                         collect_ocean_cor_ref_seiche_tests
    use test_ocean_bt_slow_forcing, only: ocean_bt_slow_forcing_collect => &
                                          collect_ocean_bt_slow_forcing_tests
+   use test_ocean_bt_baroclinic_forcing, only: ocean_bt_baroclinic_forcing_collect => &
+                                               collect_ocean_bt_baroclinic_forcing_tests
    use test_ocean_tides_astronomy, only: ocean_tides_astronomy_collect => collect_ocean_tides_astronomy_tests
    use test_ocean_tides_disabled_bitident, only: ocean_tides_bitident_collect => &
                                                  collect_ocean_tides_disabled_bitident_tests
@@ -297,6 +299,7 @@ program rdb_tests
                 new_testsuite("ocean_barotropic_substep", ocean_barotropic_substep_collect), &
                 new_testsuite("ocean_cor_ref_seiche", ocean_cor_ref_seiche_collect), &
                 new_testsuite("ocean_bt_slow_forcing", ocean_bt_slow_forcing_collect), &
+                new_testsuite("ocean_bt_baroclinic_forcing", ocean_bt_baroclinic_forcing_collect), &
                 new_testsuite("ocean_tides_astronomy", ocean_tides_astronomy_collect), &
                 new_testsuite("ocean_tides_disabled_bitident", ocean_tides_bitident_collect), &
                 new_testsuite("ocean_tidal_forcing", ocean_tidal_forcing_collect), &

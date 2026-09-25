@@ -12,7 +12,8 @@ module rdb_barotropic_coupling
    use rdb_barotropic_workstate, only: barotropic_workstate_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_coriolis_adv, only: coriolis_adv_t
-   use rdb_ocean_pressure_force, only: ocean_pressure_force_t, OPGF_VARIANT_FV_MOM6
+   use rdb_ocean_pressure_force, only: ocean_pressure_force_t, OPGF_VARIANT_FV_MOM6, &
+                                       OPGF_VARIANT_GPRIME
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
    use rdb_ocean_top_drag, only: ocean_top_drag_t
@@ -33,6 +34,8 @@ module rdb_barotropic_coupling
    public :: face_depth_mean_rem_v
    public :: apply_bt_correction
    public :: snapshot_eta_PF
+   public :: set_fast_forcing_eta_pf
+   public :: pgf_free_surface_gravity
    public :: compute_pbce
    public :: compute_gtot_faces
    public :: compute_e_anom
@@ -486,9 +489,9 @@ contains
       !! stage-entry state.  The substep then integrates its own LIVE
       !! `(ζ+f)·v − ∇KE` on top, so without this subtraction the
       !! barotropic Coriolis/advection is integrated TWICE — the exact
-      !! analogue of the PGF double-count the `F_bt_u_fast = F_bt_u −
-      !! depth_mean(PGF)` subtraction already guards against ("√(gH)
-      !! inflates to √(2gH)").  The Coriolis double-count is what pumps
+      !! analogue of the PGF double-count `set_fast_forcing_eta_pf`
+      !! already guards against by shedding the free-surface term the
+      !! slow PGF carries ("√(gH) inflates to √(2gH)").  The Coriolis double-count is what pumps
       !! the exponential wall/corner barotropic mode on shelf rims under
       !! `VCOORD_LAGRANGIAN` (600² double-gyre h-guard trap).  MOM6
       !! removes it with a reference Coriolis/advection (`Cor_ref_u/v`)
@@ -1367,6 +1370,103 @@ contains
          bt_work%eta_PF(i, j) = bt_work%bt_eta(i, j)
       end do
    end subroutine snapshot_eta_PF
+
+   pure function pgf_free_surface_gravity(pgf) result(g_pf)
+      !! The gravity of the free-surface term the slow layer PGF CARRIES,
+      !! i.e. `−∂⟨PGF⟩/∂(∇η)` for a uniform-density column (m/s²):
+      !!
+      !! * MONT, FV_LITE, FV_WRIGHT are built from the FREE SURFACE down
+      !!   (`M(nz) ≡ 0`, `p_edge(nz+1) = 0`, surface-relative `z`), so they
+      !!   carry NO `−g·∇η` at all — 0.  Their layer PGF is purely
+      !!   baroclinic.
+      !! * FV_MOM6 closes its anomaly stack with `pa(nz+1) = ρ_ref·g·η_geo`
+      !!   (MOM6 `PressureForce_FV`) and the MOM6 `GFS_scale` correction
+      !!   removes `(1 − gfs_scale)·g·ρ_surf/ρ₀·∇η` — so, with the
+      !!   surface density at `ρ_ref`, `gfs_scale·g·ρ_ref/ρ₀`.
+      !! * GPRIME's top layer is `−g_FS·∇η` by construction — `g_FS`.
+      !!
+      !! This is what the barotropic substep's own `−g_bt·∇η` duplicates,
+      !! and therefore the only part of `⟨PGF⟩` the fast forcing may shed
+      !! (`set_fast_forcing_eta_pf`).
+      type(ocean_pressure_force_t), intent(in) :: pgf
+      real(wp) :: g_pf
+      select case (pgf%variant)
+      case (OPGF_VARIANT_FV_MOM6)
+         g_pf = pgf%gfs_scale*GRAVITY*pgf%rho_ref/pgf%rho0
+      case (OPGF_VARIANT_GPRIME)
+         g_pf = pgf%gprime_gfs
+      case default
+         g_pf = 0.0_wp
+      end select
+   end function pgf_free_surface_gravity
+
+   pure subroutine set_fast_forcing_eta_pf(grid, metrics, bt_work, nx, ny, g_pf, eta_seam, use_seam)
+      !! The barotropic substep's frozen forcing under the MOM6 split
+      !! (`&ocean_bt_nml bc_pgf_forcing`, default on):
+      !!
+      !!     F_bt_u_fast = F_bt_u + g_pf·(η_PF(i) − η_PF(i−1))·idxCu
+      !!
+      !! `F_bt` holds the depth mean of the FULL slow layer PGF.  The
+      !! substep integrates `−g_bt·∇η` live, so the one thing the forcing
+      !! must shed is the free-surface term the slow PGF itself carries,
+      !! `−g_pf·∇η_PF` (`pgf_free_surface_gravity`: 0 for the
+      !! surface-relative MONT/FV_LITE/FV_WRIGHT forms, ≈ `g_bt` for
+      !! FV_MOM6/GPRIME), evaluated at `η_PF = bt_eta` at stage entry —
+      !! the free surface the slow PGF of this stage was built on
+      !! (`derive_bt_from_layers` fills it from the same `h_layer`).  The
+      !! substep then sees `⟨PGF_bc⟩ − g_bt·∇η`: the depth-mean BAROCLINIC
+      !! pressure gradient plus its own free surface.  MOM6: `BT_force`
+      !! (Σ wt·bc_accel, PFu included) with `btloop_find_PF`'s
+      !! `−gtot·∇(η − eta_PF)`.
+      !!
+      !! The legacy split (`F_bt − ⟨PGF⟩`) shed the WHOLE depth-mean PGF —
+      !! its baroclinic part too, which is the bottom-pressure gradient of
+      !! a sloping density field (JEBAR).  Because `apply_bt_correction`
+      !! subtracts `dt·F_bt` from every layer, the layers lost it as well:
+      !! the depth mean ended every stage at `u_bt^end`, which never felt
+      !! it.
+      !!
+      !! `eta_seam`/`use_seam`: when the surface-pressure load ALSO enters
+      !! the slow PGF (`&ocean_pgf_nml p_top_in_bc` with the psurf seam on),
+      !! `⟨PGF⟩` carries `−∇p_surf/ρ₀ = +g·∇η_ib` and the substep carries
+      !! it again through `eta_forcing`; shedding `g_pf·∇η_ib` here counts
+      !! it once.  Otherwise pass any full-size array and `.false.`.
+      !!
+      !! Array-edge faces (`i = 1`, `nx + 1`; `j = 1`, `ny + 1`) have no
+      !! η on one side; the substep never reads their forcing (they are
+      !! overwritten by the boundary dispatch / halo), so they take `F_bt`.
+      integer, intent(in) :: nx, ny
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      real(wp), intent(in) :: g_pf
+      real(wp), intent(in) :: eta_seam(nx, ny)
+      logical, intent(in) :: use_seam
+      integer :: i, j, nu, nv
+      real(wp) :: d_eta
+
+      if (.false.) nu = grid%nx_total
+      nu = nx + 1
+      nv = ny + 1
+      do concurrent(j=1:ny, i=1:nu) local(d_eta)
+         if (i == 1 .or. i == nu) then
+            bt_work%F_bt_u_fast(i, j) = bt_work%F_bt_u(i, j)
+         else
+            d_eta = bt_work%bt_eta(i, j) - bt_work%bt_eta(i - 1, j)
+            if (use_seam) d_eta = d_eta - (eta_seam(i, j) - eta_seam(i - 1, j))
+            bt_work%F_bt_u_fast(i, j) = bt_work%F_bt_u(i, j) + g_pf*d_eta*metrics%idxCu(i, j)
+         end if
+      end do
+      do concurrent(j=1:nv, i=1:nx) local(d_eta)
+         if (j == 1 .or. j == nv) then
+            bt_work%F_bt_v_fast(i, j) = bt_work%F_bt_v(i, j)
+         else
+            d_eta = bt_work%bt_eta(i, j) - bt_work%bt_eta(i, j - 1)
+            if (use_seam) d_eta = d_eta - (eta_seam(i, j) - eta_seam(i, j - 1))
+            bt_work%F_bt_v_fast(i, j) = bt_work%F_bt_v(i, j) + g_pf*d_eta*metrics%idyCv(i, j)
+         end if
+      end do
+   end subroutine set_fast_forcing_eta_pf
 
    pure subroutine compute_pbce(grid, bt_work, pgf, ms)
       !! Per-layer pressure-anomaly gravity coefficient (m/s²): the response of

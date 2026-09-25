@@ -18,10 +18,13 @@ module rdb_ocean_pressure_force
    !! layer of uniform density — by a vertical recursion, and takes ONE
    !! horizontal difference of `M`.  See the OPGF_VARIANT_* constants below.
    !!
-   !! EVERY variant is measured from the FREE SURFACE (z = 0 at the surface,
-   !! negative below), so none of them carries the barotropic `-g*grad(eta)`
-   !! term: the split-explicit barotropic substep owns that.  Using an
-   !! absolute (geoid-referenced) z here would double-count it.
+   !! MONT, FV_LITE and FV_WRIGHT are measured from the FREE SURFACE (z = 0
+   !! at the surface, negative below), so they carry no barotropic
+   !! `-g*grad(eta)` term: the split-explicit barotropic substep owns that.
+   !! FV_MOM6 (`pa(nz+1) = rho_ref*g*eta_geo`) and GPRIME (`-g_FS*grad(eta)`
+   !! in the top layer) DO carry it; the split sheds exactly that term from
+   !! the barotropic forcing (`pgf_free_surface_gravity`,
+   !! `set_fast_forcing_eta_pf`) and keeps the rest of the depth mean.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS
 #else
@@ -1172,17 +1175,19 @@ contains
       !! to the `h_neglect` divisor (a relative `h_n/h_k ≈ 1e-10` for a
       !! metre-thick layer, `≈7e-7` for one at `H_VANISHED`).
       !!
-      !! Consequence for the SPLIT solver: the depth mean of the layer PGF
-      !! is subtracted from the barotropic forcing
-      !! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`, `rdb_ocean_dyn.F90`) and the
-      !! barotropic solution is then folded back over the layers, so a
-      !! depth-uniform `δPFu` cancels identically and only the
-      !! `eta_forcing` seam carries the load's barotropic response. Adding
-      !! `p_top` here therefore does NOT double-count that seam — the two
-      !! are orthogonal by construction. The UNSPLIT driver has neither
-      !! the depth-mean replacement nor the seam, so there this term is
-      !! the load's only path into the momentum, and it is a correction,
-      !! not a duplicate.
+      !! Consequence for the SPLIT solver (`&ocean_bt_nml bc_pgf_forcing`,
+      !! default, MOM6 `BT_force`): the depth mean of the layer PGF FORCES
+      !! the barotropic substep, so a depth-uniform `δPFu` reaches the
+      !! barotropic mode.  The part of `p_top` that is the atmospheric /
+      !! anomaly load `sf%p_surf` is ALSO on the `eta_forcing` seam, and
+      !! `set_fast_forcing_eta_pf` sheds `g·∇η_ib` from the forcing so it
+      !! is counted once; the static ice load `p_ice_ref` cancels inside
+      !! `pa(nz+1)` against the datum-shifted `η_geo`, and what survives
+      !! of it is the physical reference-density shortfall.  (The legacy
+      !! split, `bc_pgf_forcing = .false.`, subtracted the whole depth
+      !! mean, so there a depth-uniform `δPFu` cancelled identically.)
+      !! The UNSPLIT driver has no seam, so there this term is the load's
+      !! only path into the momentum.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: rho_layer(nx, ny, nz)

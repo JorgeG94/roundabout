@@ -22,12 +22,14 @@ module rdb_ocean_cavity
    !! absorbs must not also be handed to the `eta_forcing` seam.  The
    !! two halves of "once" are:
    !!
-   !!   * BAROTROPIC — the datum (D), and nothing else.  The split solver
-   !!     replaces the depth mean of the layer PGF with the barotropic
-   !!     solution, so the column-integrated pressure force is discarded
-   !!     and `-G*grad(eta - eta_forcing)` is the only barotropic term
-   !!     there is.  `p_ice_ref` therefore never joins `sf%p_surf`, out of
-   !!     which `eta_ib` — and hence `eta_forcing` — is built.
+   !!   * BAROTROPIC — the datum (D), and nothing else on the seam.  The
+   !!     datum puts the free surface the PGF sees at `eta_geo = -z_draft`
+   !!     and `p_ice_ref` in the `pa(nz+1)` BC cancels exactly that, so
+   !!     under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`, where the
+   !!     depth-mean layer PGF forces the barotropic mode) the static load
+   !!     is balanced, and under the legacy split it was discarded with the
+   !!     depth mean.  Either way `p_ice_ref` never joins `sf%p_surf`, out
+   !!     of which `eta_ib` — and hence `eta_forcing` — is built.
    !!   * PRESSURE — `p_ice_ref` (P), assembled into
    !!     `multilayer_state_t%p_top = p_ice_ref + sf%p_surf` and read by
    !!     the FV_MOM6 `pa(nz+1)` top BC and the in-situ EOS.  Only the

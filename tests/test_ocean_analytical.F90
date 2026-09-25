@@ -1605,7 +1605,16 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
       type(eos_t) :: eos
       type(ocean_dyn_t) :: dyn
       integer, parameter :: NX = 100, NY = 4, NZ = 2
-      integer, parameter :: N_INNER = 1
+      integer, parameter :: N_INNER = 2
+         !! A real split (was 1).  The lock's depth-mean baroclinic PGF,
+         !! `-(g/rho0)(H/2)*d(rho)/dx`, forces the barotropic mode (MOM6
+         !! `BT_force`, `&ocean_bt_nml bc_pgf_forcing`): the physical
+         !! response is a surface gravity-wave pair with
+         !! `u_bt ~ c*(drho/rho0)/4 = 1.2 cm/s`, measured 1.4 cm/s at
+         !! N_INNER = 2 or 8.  At N_INNER = 1 (one forward-backward substep
+         !! per outer step, i.e. no subcycling at all) that mode grew
+         !! ~0.5 %/step to 1.5 m/s by step 1500; the legacy split never
+         !! excited it, because it discarded the depth-mean baroclinic PGF.
       integer, parameter :: N_STEPS = 1500           ! ≈ 8.3 h at dt=20 s, ~18 km front travel
       real(wp), parameter :: DX = 1.0e3_wp, DY = 1.0e3_wp
       real(wp), parameter :: H0 = 100.0_wp
