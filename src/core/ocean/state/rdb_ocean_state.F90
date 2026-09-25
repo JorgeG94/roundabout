@@ -1657,7 +1657,6 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine ocean_state_seed_from_cfg
 
-#ifndef RDB_NO_NETCDF
    pure subroutine seed_wrap_static_2d(fld, grid, per_x, per_y, north_fold)
       !! Fill the seam ghosts of a static, cell-centred 2-D geometry field
       !! (bathymetry, ice draft, cover fraction) from their periodic /
@@ -1698,6 +1697,7 @@ contains
       end if
    end subroutine seed_wrap_static_2d
 
+#ifndef RDB_NO_NETCDF
    subroutine seed_zinit_overlay(state, grid, cfg, ierr)
       !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
       !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
