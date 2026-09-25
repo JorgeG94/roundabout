@@ -153,6 +153,12 @@ tools/build_netcdf_fortran.sh --fc nvfortran
 ~30 seconds. It fetches a pinned, checksummed release, builds against the
 netcdf-c it finds, smoke-tests it, and prints the `cmake` line to use.
 
+If the machine has HDF5 but **no netcdf-c at all** (for example NERSC
+Perlmutter with `cray-hdf5`), use `tools/build_netcdf.sh`. It builds netcdf-c
+and netcdf-fortran into one prefix against your HDF5, in a few minutes, and
+can fetch on a login node and build offline. See
+[`docs/howto/deploy_without_netcdf.md`](docs/howto/deploy_without_netcdf.md).
+
 Roundabout needs neither parallel NetCDF (I/O is per-rank serial with an
 offline merge) nor HDF5's Fortran bindings (`use netcdf` is the only import) —
 which is most of what makes a NetCDF stack slow to build. `environments/spack.yaml`
