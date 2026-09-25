@@ -2172,7 +2172,7 @@ contains
 
    pure subroutine cavity_melt_point_gamma_f(T_w, S_w, p_b, u_star, S_i, par, f_cor, ice, &
                                              eos, const, T_b, S_b, m_mass, q_ocean, &
-                                           gamma_t, gamma_s, ierr)
+                                             gamma_t, gamma_s, ierr)
       !! `cavity_melt_point_gamma` with the Coriolis parameter passed as a
       !! per-column SCALAR — what `cavity_melt_columns_2d` calls, so no
       !! device code has to build a modified `ocean_cavity_exchange_t`
