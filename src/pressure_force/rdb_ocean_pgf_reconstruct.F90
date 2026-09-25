@@ -52,6 +52,7 @@ module rdb_ocean_pgf_reconstruct
    public :: ppm_edges_column
    public :: boole_dpa_intz_layer
    public :: boole_dpa_face
+   public :: boole_dpa_face_pcm
 
    ! Reconstruction-scheme tags (mirror MOM6 Recon_Scheme; only consulted
    ! when reconstruct_for_pressure is on).
@@ -485,5 +486,66 @@ contains
       end do
       dpa_face = acc/90.0_wp
    end subroutine boole_dpa_face
+
+   pure subroutine boole_dpa_face_pcm(eos, rho0, rho_ref, &
+                                      e_top_l, e_top_r, dz_l, dz_r, &
+                                      t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
+                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl, dpa_face)
+      !$acc routine seq
+      !! The cross-face Boole quadrature of `boole_dpa_face` for a
+      !! CONSTANT-BY-LAYER (PCM) T/S column, with MOM6's near-bottom
+      !! mass-weighting of the interpolated T/S (MOM6
+      !! `int_density_dz_generic_pcm`, `intx_dpa`).
+      !!
+      !! The two end points are the columns' own vertical integrals
+      !! `dpa_l` / `dpa_r` (the caller's `boole_dpa_intz_layer` results).
+      !! The three interior sub-columns interpolate the interface height
+      !! and thickness LINEARLY in the cross-face fraction, and T/S with
+      !! the mass-weighted fractions
+      !! `wtT_L = wl*hwt_ll + wr*hwt_rl`, `wtT_R = wl*hwt_lr + wr*hwt_rr`;
+      !! `hwt_ll = hwt_rr = 1`, `hwt_lr = hwt_rl = 0` is plain linear
+      !! interpolation (no mass weighting).  Each sub-column is integrated
+      !! in the vertical at its own IN-SITU pressure `p = -g*rho0*z`.
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in)  :: rho0
+         !! Boussinesq reference density used in the pressure estimate.
+      real(wp), intent(in)  :: rho_ref
+         !! Anomaly reference subtracted from the EOS density.
+      real(wp), intent(in)  :: e_top_l, e_top_r
+         !! Height of the SHALLOWER interface of the layer in the left /
+         !! right column (m, geopotential, negative below the datum).
+      real(wp), intent(in)  :: dz_l, dz_r
+         !! Layer thicknesses in the left / right columns (m, >= 0).
+      real(wp), intent(in)  :: t_l, t_r, s_l, s_r
+         !! Layer-mean temperature / salinity in the left / right column.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The columns' own `g * int rho' dz` over the layer (Pa).
+      real(wp), intent(in)  :: hwt_ll, hwt_lr, hwt_rr, hwt_rl
+         !! MOM6 `hWt_LL/LR/RR/RL` mass-weighting fractions.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, wtt_l, wtt_r, tm, sm, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      do m = 2, N_BOOLE - 1
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         wtt_l = wl*hwt_ll + wr*hwt_rl
+         wtt_r = wl*hwt_lr + wr*hwt_rr
+         tm = wtt_l*t_l + wtt_r*t_r
+         sm = wtt_l*s_l + wtt_r*s_r
+         call boole_dpa_intz_layer(eos, rho0, rho_ref, &
+                                   wl*e_top_l + wr*e_top_r, &
+                                   wl*dz_l + wr*dz_r, &
+                                   tm, tm, tm, sm, sm, sm, &
+                                   .false., dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine boole_dpa_face_pcm
 
 end module rdb_ocean_pgf_reconstruct

@@ -552,7 +552,8 @@ a physics bug with no symptom.**
 
 The third row is the trap. `ms%rho_layer` is a **potential** density and its
 consumers difference it **along a layer** (the Montgomery PGF's
-`rho_layer(i) − rho_layer(i−1)`, the FV-lite / FV-MOM6-PCM integrands) and
+`rho_layer(i) − rho_layer(i−1)`, the FV-lite integrand, the FV-MOM6-PCM one
+under the linear EOS or `insitu_density = .false.`) and
 **vertically** (the vmix N² builders). Give it a reference pressure that varies
 with `(i,j)` — a sloping ice draft, say — and two columns holding *identical*
 water at the *same* geopotential depth come out with densities differing by
@@ -560,6 +561,15 @@ water at the *same* geopotential depth come out with densities differing by
 entirely fabricated along-layer density gradient, and therefore a fabricated
 pressure gradient force — the exact cavity pathology the seam exists to avoid.
 So the load goes into **in-situ** pressures only, never into `p_ref`.
+The flip side is that a POTENTIAL density at one reference pressure is the
+wrong input for a pressure GRADIENT far from that pressure: its horizontal
+difference is the one at `p_ref`, and Wright's `α` roughly doubles between the
+surface and 4000 dbar.  That is why FV-MOM6's constant-by-layer branch no longer
+reads `rho_layer` for a pressure-dependent EOS (`&ocean_pgf_nml insitu_density`,
+default on, MOM6 `int_density_dz_generic_pcm` parity): it evaluates
+`EOS(T, S, −g·ρ₀·z)` itself, by the same Boole rules as the reconstruction
+branch.  With `p_ref = 0` the legacy integral held the global 1° Drake Passage
+transport at about half of MOM6's (`docs/CLOSURE_MATRIX.md`, PGF section).
 `test_ocean_eos_p_top`'s `rho_layer_independent_of_p_top` is the standing guard
 (it ramps `p_top` across the domain over uniform water and demands the density
 come out exactly uniform); `p_top_gate_off_leaves_p_top_zero` is its end-to-end
