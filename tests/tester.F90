@@ -96,6 +96,8 @@ program rdb_tests
    use test_ocean_data_forcing, only: ocean_data_forcing_collect => collect_ocean_data_forcing_tests
    use test_ocean_cavity_draft_file, only: ocean_cavity_draft_file_collect => &
                                            collect_ocean_cavity_draft_file_tests
+   use test_ocean_periodic_seam_file, only: ocean_periodic_seam_file_collect => &
+                                            collect_ocean_periodic_seam_file_tests
 #endif
    use test_ocean_barotropic_substep, only: ocean_barotropic_substep_collect => collect_ocean_barotropic_substep_tests
    use test_ocean_cor_ref_seiche, only: ocean_cor_ref_seiche_collect => &
@@ -160,8 +162,6 @@ program rdb_tests
                                         collect_ocean_remap_vanished_tests
    use test_ocean_vanished_constancy, only: ocean_vanished_constancy_collect => &
                                             collect_ocean_vanished_constancy_tests
-   use test_ocean_periodic_seam_file, only: ocean_periodic_seam_file_collect => &
-                                            collect_ocean_periodic_seam_file_tests
    use test_ocean_regrid_refine, only: ocean_regrid_refine_collect => collect_ocean_regrid_refine_tests
    use test_ocean_remap_e2e, only: ocean_remap_e2e_collect => collect_ocean_remap_e2e_tests
    use test_ocean_ppm_h4_remap, only: ocean_ppm_h4_remap_collect => collect_ocean_ppm_h4_remap_tests
@@ -289,6 +289,7 @@ program rdb_tests
 #ifndef RDB_NO_NETCDF
                 new_testsuite("ocean_supergrid", ocean_supergrid_collect), &
                 new_testsuite("ocean_cavity_draft_file", ocean_cavity_draft_file_collect), &
+                new_testsuite("ocean_periodic_seam_file", ocean_periodic_seam_file_collect), &
                 new_testsuite("ocean_zinit", ocean_zinit_collect), &
                 new_testsuite("ocean_data_input", ocean_data_input_collect), &
                 new_testsuite("ocean_data_forcing", ocean_data_forcing_collect), &
@@ -339,7 +340,6 @@ program rdb_tests
                 new_testsuite("ocean_remap", ocean_remap_collect), &
                 new_testsuite("ocean_remap_vanished", ocean_remap_vanished_collect), &
                 new_testsuite("ocean_vanished_constancy", ocean_vanished_constancy_collect), &
-                new_testsuite("ocean_periodic_seam_file", ocean_periodic_seam_file_collect), &
                 new_testsuite("ocean_regrid_refine", ocean_regrid_refine_collect), &
                 new_testsuite("ocean_remap_e2e", ocean_remap_e2e_collect), &
                 new_testsuite("ocean_ppm_h4_remap", ocean_ppm_h4_remap_collect), &
