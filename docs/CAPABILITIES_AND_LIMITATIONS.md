@@ -495,6 +495,15 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (log-layer, MOM6/ROMS default `Cd ≈ 2.5e-3`). Both have an
   HBBL-distributed mode that spreads the stress across the bottom
   `hbbl` metres rather than the bed-most layer alone.
+  **Limit:** the bed-only mode (`hbbl = 0`) drags layer `k = 1`, which
+  on a coordinate whose bed-side layers vanish (`z_fixed`,
+  `zstar_full`) is an inert filler in every column shallower than the
+  deepest nominal layer — those columns get no bottom drag at all.
+  Configure warns; use `hbbl > 0` there (it accumulates thickness from
+  the bed up, skips the fillers and reaches the live bottom layer; the
+  global 1° case uses MOM6's OM_1deg `HBBL = 10 m`, `bg_vel = 0.1`).
+  Making the bed-only kernel find the first live layer per face is
+  open.
 - **Side-wall (channel) drag** (`&ocean_bdrag_nml channel_drag`,
   `cdrag_side`; default off ⇒ bit-identical): a per-layer lateral
   Rayleigh rate at every face whose cross-stream perimeter is blocked by

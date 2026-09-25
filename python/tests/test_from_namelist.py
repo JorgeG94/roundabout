@@ -155,3 +155,19 @@ def test_from_namelist_unknown_group_raises():
             rdb.Model.from_namelist(path, defer=True)
     finally:
         os.unlink(path)
+
+
+def test_from_namelist_ignores_group_names_inside_comments(tmp_path):
+    # A header comment that names a group and quotes a value (as
+    # validation_examples/ocean/global_1deg/global_1deg_unforced.nml does)
+    # is prose: it must neither open a phantom group nor set a knob.
+    p = tmp_path / "commented.nml"
+    p.write_text(
+        '! The IC comes from &ocean_zinit_nml source = "file" (see README).\n'
+        "! Apostrophes too: the model's grid.\n"
+        '&sim_nml sim_type = "ocean" /  ! trailing &grid_nml nx = 99\n'
+        "&grid_nml nx = 8, ny = 6 /\n")
+    model = rdb.Model.from_namelist(str(p), defer=True)
+    assert model.config.grid.nx == 8
+    assert model.config.ocean_zinit.source is MISSING
+    model.close()
