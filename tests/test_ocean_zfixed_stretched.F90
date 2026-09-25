@@ -76,7 +76,11 @@ contains
                   new_unittest("stretched_top_sliver_merges", test_top_sliver), &
                   new_unittest("stretched_closed_faces_staircase", test_closed_faces), &
                   new_unittest("list_of_equal_dz_matches_uniform", test_list_matches_uniform), &
+#ifndef RDB_NO_NETCDF
+                  ! Seeds through &ocean_zinit_nml, whose reader (rdb_ocean_z_init) is
+                  ! only compiled with RDB_ENABLE_NETCDF=ON -- even source="linear".
                   new_unittest("flat_lid_rest_is_exact_zero", test_flat_lid_rest), &
+#endif
                   new_unittest("refuses_list_of_wrong_length", test_refuses_list_length), &
                   new_unittest("refuses_profile_off_z_fixed", test_refuses_off_z_fixed) &
                   ]
