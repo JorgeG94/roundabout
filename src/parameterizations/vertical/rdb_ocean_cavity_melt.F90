@@ -103,6 +103,18 @@
 !!   * Yung, C. K. et al. (2025): "Sensitivity of Antarctic ice shelf melt
 !!     to the ice-ocean boundary layer parameterisation."  The Cryosphere
 !!     19, 5827-5861.
+!!
+!! **No device code in this module may build an `ocean_cavity_exchange_t`
+!! (or any other default-initialised type)** — as a function result, an
+!! `intent(out)` dummy or a local.  nvfortran 23.9-26.5 `fort2` SIGSEGVs
+!! under `-acc=gpu` on such an instantiation inside an `!$acc routine seq`
+!! procedure once `2*len(file stem) + len(module name)` is long enough (the
+!! device default-init template is named
+!! `common._st_<hex(filename)>__<module>_NN`); this file's own name is past
+!! the threshold.  That is why the per-column Coriolis parameter travels as
+!! a scalar through the `*_f` variants (`cavity_exchange_velocities_f`,
+!! `cavity_solve_melt_f`, `cavity_melt_point_gamma_f`) instead of through a
+!! modified copy of the exchange bundle.
 module rdb_ocean_cavity_melt
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
@@ -127,7 +139,6 @@ module rdb_ocean_cavity_melt
    public :: cavity_melt_point_gamma
    public :: cavity_melt_columns
    public :: cavity_melt_columns_2d
-   public :: cavity_exchange_with_f
    public :: cavity_heat_fluxes
    public :: cavity_salt_fluxes
    public :: cavity_buoyancy_flux
@@ -809,7 +820,7 @@ contains
                    .or. (l_plus >= CAVITY_L_PLUS_NEUTRAL)
    end function cavity_l_plus_is_neutral
 
-   pure subroutine cavity_gamma_hj99(u_star, l_plus, par, const, gamma_t, gamma_s, ierr)
+   pure subroutine cavity_gamma_hj99(u_star, l_plus, f_cor, const, gamma_t, gamma_s, ierr)
       !! Holland & Jenkins (1999) eqs. (14)-(18) p. 1792:
       !!
       !!   `gamma_{T,S} = u* / (Gamma_Turb + Gamma_Mole^{T,S})`        (14)
@@ -843,8 +854,9 @@ contains
          !! Friction velocity (m/s), > 0.
       real(wp), intent(in) :: l_plus
          !! Trial viscous Obukhov scale, or `CAVITY_L_PLUS_NEUTRAL`.
-      type(ocean_cavity_exchange_t), intent(in) :: par
-         !! Exchange bundle; reads `f_cor` only.
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter (1/s), used as `|f|`.  A SCALAR, not the
+         !! exchange bundle: see `cavity_exchange_velocities_f`.
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle.
       real(wp), intent(out) :: gamma_t
@@ -859,11 +871,11 @@ contains
       gamma_t = 0.0_wp
       gamma_s = 0.0_wp
 
-      if (.not. ieee_is_finite(par%f_cor)) then
+      if (.not. ieee_is_finite(f_cor)) then
          ierr = CAVITY_MELT_NONFINITE_INPUT
          return
       end if
-      fa = abs(par%f_cor)
+      fa = abs(f_cor)
       if (fa <= 0.0_wp) then
          ierr = CAVITY_MELT_NO_CORIOLIS
          return
@@ -984,6 +996,39 @@ contains
 
    pure subroutine cavity_exchange_velocities(par, const, u_star, l_plus, &
                                               T_w, S_w, T_b, S_b, gamma_t, gamma_s, ierr)
+      !! Exchange-velocity dispatch with the Coriolis parameter taken from
+      !! the bundle (`par%f_cor`).  Thin wrapper over
+      !! `cavity_exchange_velocities_f`, which holds the dispatch.
+      !$acc routine seq
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Law selector + parameters.
+      type(ocean_cavity_const_t), intent(in) :: const
+         !! Constants bundle.
+      real(wp), intent(in) :: u_star
+         !! Friction velocity (m/s), strictly positive.
+      real(wp), intent(in) :: l_plus
+         !! Trial viscous Obukhov scale, or `CAVITY_L_PLUS_NEUTRAL`.
+      real(wp), intent(in) :: T_w
+         !! Far-field temperature (degC) — reserved-law argument.
+      real(wp), intent(in) :: S_w
+         !! Far-field salinity (g/kg) — reserved-law argument.
+      real(wp), intent(in) :: T_b
+         !! Trial interface temperature (degC) — reserved-law argument.
+      real(wp), intent(in) :: S_b
+         !! Trial interface salinity (g/kg) — reserved-law argument.
+      real(wp), intent(out) :: gamma_t
+         !! Heat exchange velocity (m/s).  Zero on any non-OK status.
+      real(wp), intent(out) :: gamma_s
+         !! Salt exchange velocity (m/s).  Zero on any non-OK status.
+      integer, intent(out) :: ierr
+         !! `CAVITY_MELT_*` status.
+
+      call cavity_exchange_velocities_f(par, par%f_cor, const, u_star, l_plus, &
+                                        T_w, S_w, T_b, S_b, gamma_t, gamma_s, ierr)
+   end subroutine cavity_exchange_velocities
+
+   pure subroutine cavity_exchange_velocities_f(par, f_cor, const, u_star, l_plus, &
+                                                T_w, S_w, T_b, S_b, gamma_t, gamma_s, ierr)
       !! Exchange-velocity dispatch — ONE argument list for every law, so
       !! a later `do concurrent` kernel dispatches with a single
       !! `select case` and no reshaping.  `l_plus` is the viscous Obukhov
@@ -997,9 +1042,22 @@ contains
       !! interface state; every law that ships ignores them.  They are
       !! carried now precisely so that adding MK18 later does not
       !! re-signature this seam or any kernel that calls it.
+      !!
+      !! `f_cor` is a SEPARATE scalar rather than `par%f_cor` so the 2-D
+      !! driver can give each column its own Coriolis parameter WITHOUT
+      !! building a modified copy of `ocean_cavity_exchange_t` in device
+      !! code.  That type has default initialisers, and instantiating one
+      !! inside an `!$acc routine seq` procedure makes nvfortran (23.9 to
+      !! 26.5, `-acc=gpu`) emit a device default-init template whose
+      !! generated name embeds the hex-encoded source filename — long
+      !! enough names SIGSEGV the compiler's `fort2` pass.  The public
+      !! `cavity_exchange_velocities` passes `par%f_cor`; the bundle's
+      !! member is otherwise ignored here.
       !$acc routine seq
       type(ocean_cavity_exchange_t), intent(in) :: par
-         !! Law selector + parameters.
+         !! Law selector + parameters (its `f_cor` member is NOT read).
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter (1/s) for this column; `hj99` only.
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle.
       real(wp), intent(in) :: u_star
@@ -1046,7 +1104,7 @@ contains
          gamma_t = par%gamma_t_coeff*u_star
          gamma_s = par%gamma_s_coeff*u_star
       case (CAVITY_LAW_HJ99)
-         call cavity_gamma_hj99(u_star, l_plus, par, const, gamma_t, gamma_s, ierr)
+         call cavity_gamma_hj99(u_star, l_plus, f_cor, const, gamma_t, gamma_s, ierr)
       case (CAVITY_LAW_YUNG25)
          call cavity_gamma_yung25(u_star, l_plus, gamma_t, gamma_s, ierr)
       case (CAVITY_LAW_JENKINS91, CAVITY_LAW_ROSEVEAR22, CAVITY_LAW_VT19, &
@@ -1058,7 +1116,7 @@ contains
       case default
          ierr = CAVITY_MELT_LAW_INVALID
       end select
-   end subroutine cavity_exchange_velocities
+   end subroutine cavity_exchange_velocities_f
 
    ! ======================================================================
    ! The three-equation system
@@ -1705,8 +1763,9 @@ contains
       end if
    end function cavity_outer_residual
 
-   pure subroutine cavity_state_at_x(x, par, ice, eos, const, u_star, T_w, S_w, p_b, S_i, &
-                                     T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, lp_new, ierr)
+   pure subroutine cavity_state_at_x(x, par, f_cor, ice, eos, const, u_star, T_w, S_w, p_b, &
+                                     S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
+                                     lp_new, ierr)
       !! Evaluate the whole interface at a trial `x = ln(L+)`: exchange
       !! velocities at that stratification, the closed-form three-equation
       !! solve, the buoyancy flux the answer implies and the `L+` it
@@ -1717,7 +1776,9 @@ contains
          !! Trial `ln(L+)`.  At or above `CAVITY_LP_X_HI` the trial `L+`
          !! is the neutral sentinel.
       type(ocean_cavity_exchange_t), intent(in) :: par
-         !! Exchange-law bundle.
+         !! Exchange-law bundle (its `f_cor` member is NOT read).
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter (1/s) for this column.
       type(ocean_cavity_ice_t), intent(in) :: ice
          !! Ice-conduction bundle.
       type(eos_t), intent(in) :: eos
@@ -1763,8 +1824,8 @@ contains
       ! `T_b`/`S_b` are the RESERVED-law arguments here (only MK18 reads
       ! them); the trial interface state is not known yet, so the
       ! prototype's convention of passing `(0, S_w)` is kept.
-      call cavity_exchange_velocities(par, const, u_star, l_plus, T_w, S_w, &
-                                      0.0_wp, S_w, gamma_t, gamma_s, ierr)
+      call cavity_exchange_velocities_f(par, f_cor, const, u_star, l_plus, T_w, S_w, &
+                                        0.0_wp, S_w, gamma_t, gamma_s, ierr)
       if (ierr /= CAVITY_MELT_OK) then
          call cavity_safe_state(eos, S_w, p_b, T_b, S_b, m_mass)
          return
@@ -1780,6 +1841,41 @@ contains
 
    pure subroutine cavity_solve_melt(T_w, S_w, p_b, u_star, S_i, par, ice, eos, const, &
                                      sol, ierr)
+      !! `cavity_solve_melt_f` with the Coriolis parameter taken from the
+      !! bundle (`par%f_cor`) — the scalar entry point every host caller
+      !! and the kernel suite use.
+      !$acc routine seq
+      real(wp), intent(in) :: T_w
+         !! Far-field temperature (degC).
+      real(wp), intent(in) :: S_w
+         !! Far-field salinity (g/kg).  Must exceed `S_i`.
+      real(wp), intent(in) :: p_b
+         !! Interface pressure (Pa).
+      real(wp), intent(in) :: u_star
+         !! Friction velocity (m/s), strictly positive — from
+         !! `cavity_ustar`.
+      real(wp), intent(in) :: S_i
+         !! Ice salinity (g/kg), >= 0.
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Exchange-law bundle.
+      type(ocean_cavity_ice_t), intent(in) :: ice
+         !! Ice-conduction bundle.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle — the liquidus.
+      type(ocean_cavity_const_t), intent(in) :: const
+         !! Constants bundle.
+      type(ocean_cavity_solution_t), intent(out) :: sol
+         !! Interface state, fluxes and solver diagnostics.  On any non-OK
+         !! status this carries the safe state (`m_mass` exactly zero).
+      integer, intent(out) :: ierr
+         !! `CAVITY_MELT_*` status.
+
+      call cavity_solve_melt_f(T_w, S_w, p_b, u_star, S_i, par, par%f_cor, ice, eos, &
+                               const, sol, ierr)
+   end subroutine cavity_solve_melt
+
+   pure subroutine cavity_solve_melt_f(T_w, S_w, p_b, u_star, S_i, par, f_cor, ice, eos, &
+                                       const, sol, ierr)
       !! Solve the three-equation system with any implemented exchange
       !! law, and return the full interface state plus the fluxes a
       !! coupling seam will consume.
@@ -1825,7 +1921,10 @@ contains
       real(wp), intent(in) :: S_i
          !! Ice salinity (g/kg), >= 0.
       type(ocean_cavity_exchange_t), intent(in) :: par
-         !! Exchange-law bundle.
+         !! Exchange-law bundle (its `f_cor` member is NOT read).
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter (1/s) for this column; `hj99` only.  See
+         !! `cavity_exchange_velocities_f` for why it is not `par%f_cor`.
       type(ocean_cavity_ice_t), intent(in) :: ice
          !! Ice-conduction bundle.
       type(eos_t), intent(in) :: eos
@@ -1866,7 +1965,7 @@ contains
 
       ! The neutral evaluation is both the answer for an explicit law and
       ! the upper bracket for an implicit one.
-      call cavity_state_at_x(CAVITY_LP_X_HI, par, ice, eos, const, u_star, T_w, S_w, &
+      call cavity_state_at_x(CAVITY_LP_X_HI, par, f_cor, ice, eos, const, u_star, T_w, S_w, &
                              p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
                              lp_new, ierr)
       if (ierr /= CAVITY_MELT_OK) then
@@ -1881,7 +1980,7 @@ contains
          ! short-circuit and makes `g_hi = +huge >= 0`; the explicit
          ! `g_hi >= 0` test below therefore covers both accept branches.
          if (g_hi < 0.0_wp) then
-            call cavity_state_at_x(CAVITY_LP_X_LO, par, ice, eos, const, u_star, T_w, &
+            call cavity_state_at_x(CAVITY_LP_X_LO, par, f_cor, ice, eos, const, u_star, T_w, &
                                    S_w, p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, &
                                    b_flux, lp_new, ierr)
             if (ierr /= CAVITY_MELT_OK) then
@@ -1904,7 +2003,7 @@ contains
                mid = 0.5_wp*(lo + hi)
                settled = (mid <= lo) .or. (mid >= hi)
                if (.not. settled) then
-                  call cavity_state_at_x(mid, par, ice, eos, const, u_star, T_w, S_w, &
+                  call cavity_state_at_x(mid, par, f_cor, ice, eos, const, u_star, T_w, S_w, &
                                          p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, &
                                          b_flux, lp_new, ierr)
                   if (ierr /= CAVITY_MELT_OK) then
@@ -1936,7 +2035,7 @@ contains
             ! returned gammas and the returned interface state belong to
             ! the SAME `L+`.
             xstar = 0.5_wp*(lo + hi)
-            call cavity_state_at_x(xstar, par, ice, eos, const, u_star, T_w, S_w, p_b, &
+            call cavity_state_at_x(xstar, par, f_cor, ice, eos, const, u_star, T_w, S_w, p_b, &
                                    S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
                                    lp_new, ierr)
             if (ierr /= CAVITY_MELT_OK) then
@@ -1961,7 +2060,7 @@ contains
                               sol%q_ocean, sol%q_ice, sol%q_latent)
       sol%n_iter = it
       sol%converged = converged
-   end subroutine cavity_solve_melt
+   end subroutine cavity_solve_melt_f
 
    pure subroutine cavity_melt_point(T_w, S_w, p_b, u_star, S_i, par, ice, eos, const, &
                                      T_b, S_b, m_mass, q_ocean, ierr)
@@ -2065,16 +2164,65 @@ contains
          !! Haline exchange velocity (m/s) of the converged solve.
       integer, intent(out) :: ierr
          !! `CAVITY_MELT_*` status.
+
+      call cavity_melt_point_gamma_f(T_w, S_w, p_b, u_star, S_i, par, par%f_cor, ice, eos, &
+                                     const, T_b, S_b, m_mass, q_ocean, gamma_t, gamma_s, &
+                                     ierr)
+   end subroutine cavity_melt_point_gamma
+
+   pure subroutine cavity_melt_point_gamma_f(T_w, S_w, p_b, u_star, S_i, par, f_cor, ice, &
+                                             eos, const, T_b, S_b, m_mass, q_ocean, &
+                                           gamma_t, gamma_s, ierr)
+      !! `cavity_melt_point_gamma` with the Coriolis parameter passed as a
+      !! per-column SCALAR — what `cavity_melt_columns_2d` calls, so no
+      !! device code has to build a modified `ocean_cavity_exchange_t`
+      !! (see `cavity_exchange_velocities_f`).
+      !$acc routine seq
+      real(wp), intent(in) :: T_w
+         !! Far-field temperature (degC).
+      real(wp), intent(in) :: S_w
+         !! Far-field salinity (g/kg).
+      real(wp), intent(in) :: p_b
+         !! Interface pressure (Pa).
+      real(wp), intent(in) :: u_star
+         !! Friction velocity (m/s).
+      real(wp), intent(in) :: S_i
+         !! Ice salinity (g/kg).
+      type(ocean_cavity_exchange_t), intent(in) :: par
+         !! Exchange-law bundle (its `f_cor` member is NOT read).
+      real(wp), intent(in) :: f_cor
+         !! Coriolis parameter (1/s) for this column; `hj99` only.
+      type(ocean_cavity_ice_t), intent(in) :: ice
+         !! Ice-conduction bundle.
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle — the liquidus.
+      type(ocean_cavity_const_t), intent(in) :: const
+         !! Constants bundle.
+      real(wp), intent(out) :: T_b
+         !! Interface temperature (degC).
+      real(wp), intent(out) :: S_b
+         !! Interface salinity (g/kg).
+      real(wp), intent(out) :: m_mass
+         !! Melt mass flux (kg/m^2/s), > 0 melting.
+      real(wp), intent(out) :: q_ocean
+         !! Turbulent heat flux ocean -> interface (W/m^2).
+      real(wp), intent(out) :: gamma_t
+         !! Thermal exchange velocity (m/s) of the converged solve.
+      real(wp), intent(out) :: gamma_s
+         !! Haline exchange velocity (m/s) of the converged solve.
+      integer, intent(out) :: ierr
+         !! `CAVITY_MELT_*` status.
       type(ocean_cavity_solution_t) :: sol
 
-      call cavity_solve_melt(T_w, S_w, p_b, u_star, S_i, par, ice, eos, const, sol, ierr)
+      call cavity_solve_melt_f(T_w, S_w, p_b, u_star, S_i, par, f_cor, ice, eos, const, sol, &
+                               ierr)
       T_b = sol%T_b
       S_b = sol%S_b
       m_mass = sol%m_mass
       q_ocean = sol%q_ocean
       gamma_t = sol%gamma_t
       gamma_s = sol%gamma_s
-   end subroutine cavity_melt_point_gamma
+   end subroutine cavity_melt_point_gamma_f
 
    pure subroutine cavity_melt_columns(n, T_w, S_w, p_b, u_star, S_i, par, ice, eos, &
                                        const, T_b, S_b, m_mass, q_ocean, ierr_col)
@@ -2149,32 +2297,6 @@ contains
       end do
    end subroutine cavity_melt_columns
 
-   pure function cavity_exchange_with_f(par, f_cor) result(par_out)
-      !! Copy of an exchange bundle with `f_cor` replaced — the seam that
-      !! lets a 2-D kernel give EVERY COLUMN its own Coriolis parameter
-      !! while `ocean_cavity_exchange_t` keeps its scalar member.
-      !!
-      !! It is a FUNCTION, not a `do concurrent` `local(...)` variable,
-      !! and deliberately: `ocean_cavity_exchange_t` carries default
-      !! initialisers, and gfortran 15 refuses a `local(...)` of a derived
-      !! type that has any ("LOCAL specifier ... not yet supported") —
-      !! the same constraint that shaped `ocean_cavity_solution_t`.  A
-      !! function result used directly as an actual argument is a
-      !! per-iteration compiler temporary, which is exactly what is
-      !! wanted and needs no locality clause at all.
-      !!
-      !! Only `CAVITY_LAW_HJ99` reads `f_cor`; for every other law this
-      !! is an inert copy, so the 2-D driver dispatches on ONE code path.
-      !$acc routine seq
-      type(ocean_cavity_exchange_t), intent(in) :: par
-         !! Exchange bundle to clone.
-      real(wp), intent(in) :: f_cor
-         !! Coriolis parameter for THIS column (1/s); used as `|f|`.
-      type(ocean_cavity_exchange_t) :: par_out
-      par_out = par
-      par_out%f_cor = f_cor
-   end function cavity_exchange_with_f
-
    pure subroutine cavity_melt_columns_2d(nx, ny, cover, T_w, S_w, p_b, u_far, v_far, &
                                           S_i, f_cor, cd, u_tide, ustar_min, &
                                           par, ice, eos, const, &
@@ -2214,7 +2336,7 @@ contains
       !! `CAVITY_LAW_HJ99` divides by `|f|` and takes `ln(.../|f| h_nu)`,
       !! so on a beta plane or a spherical sector the law's domain is a
       !! property of the COLUMN, not of the namelist.
-      !! `cavity_exchange_with_f` substitutes it per iteration, and
+      !! It reaches the law as a scalar (`cavity_melt_point_gamma_f`), and
       !! `CAVITY_MELT_NO_CORIOLIS` comes back for any covered column at
       !! `f = 0` instead of a plausible number.  `S_i` stays SCALAR: the
       !! ice salinity is a namelist constant in v1 (`s_ice`, 0 by the
@@ -2289,11 +2411,11 @@ contains
             call cavity_ustar(u_far(i, j), v_far(i, j), cd, u_tide, ustar_min, us, ie)
             u_star(i, j) = us
             if (ie == CAVITY_MELT_OK) then
-               call cavity_melt_point_gamma(T_w(i, j), S_w(i, j), p_b(i, j), us, S_i, &
-                                            cavity_exchange_with_f(par, f_cor(i, j)), &
-                                            ice, eos, const, T_b(i, j), S_b(i, j), &
-                                            m_mass(i, j), q_ocean(i, j), &
-                                            gamma_t(i, j), gamma_s(i, j), ierr_col(i, j))
+               call cavity_melt_point_gamma_f(T_w(i, j), S_w(i, j), p_b(i, j), us, S_i, &
+                                              par, f_cor(i, j), ice, eos, const, &
+                                              T_b(i, j), S_b(i, j), m_mass(i, j), &
+                                              q_ocean(i, j), gamma_t(i, j), gamma_s(i, j), &
+                                              ierr_col(i, j))
             else
                T_b(i, j) = 0.0_wp
                S_b(i, j) = 0.0_wp
