@@ -1,0 +1,179 @@
+! Global 1-degree tripolar ocean, WIND-FORCED — global_1deg_unforced.nml
+! plus ONE change: a year of JRA55-do (v1.4.0, 1958) daily-mean bulk wind
+! stress read from a file through &ocean_dataovr_nml, cycled.  Grid,
+! bathymetry, vertical grid, WOA13 initial state, physics, time step and
+! diagnostics are identical to the unforced case, so any difference in the
+! answer is the wind.  See README.md here (§ "Wind-forced") for the inputs,
+! the preprocessing and what the year shows.
+!
+! GRID      MOM6 OM_1deg mosaic supergrid (360 x 320 tracer points,
+!           bipolar Arctic cap), periodic in x, north tripolar fold.
+! BATHY     OM_1deg topog.nc with MOM6's own OM_1deg limits
+!           (MINIMUM_DEPTH 9.5 m, MAXIMUM_DEPTH 6500 m, MASKING_DEPTH 0).
+! VERTICAL  50 z_fixed levels, tanh-stretched from 2 m at the surface to
+!           ~255 m at depth, partial-step faces closed
+!           (zfixed_closed_faces) — the OM4-like z grid.
+! IC        WOA13 decav January potential temperature + salinity,
+!           nearest-neighbour onto the model grid offline, linear in
+!           depth in-model (&ocean_zinit_nml source = "file").
+! FORCING   wind stress only: tau = rho_air * C_d(|U|) * |U| * U from the
+!           3-hourly JRA55-do 10 m wind (Large & Yeager 2004 neutral C_d,
+!           rho_air = 1.22 kg/m3, ocean velocity ignored), bilinear onto the
+!           model's u/v faces, rotated to the grid axes, averaged to daily
+!           means offline by tools/om1deg_prepare_wind.py.  The model
+!           interpolates linearly between the daily records and wraps
+!           Dec 31 -> Jan 1 (time_mode = "cyclic", 365-day period).
+!           NO heat or freshwater flux, NO sea ice: T and S change only by
+!           transport and mixing (no SST feedback, no restoring), so the
+!           heat and salt budgets must close to round-off like the unforced
+!           run's.
+!
+! INPUT FILES are read from ./INPUT/ relative to the run directory —
+! link it to the OM_1deg data directory (tools/fetch_om1deg.py,
+! tools/om1deg_prepare_inputs.py, tools/fetch_om1deg.py --jra-wind,
+! tools/om1deg_prepare_wind.py all write there):
+!
+!     ln -s "$RDB_DATA_DIR/OM_1deg" INPUT
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 360
+   ny     = 320
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   t_end        = 365.0
+   time_unit    = "day"
+   dt_fixed     = 1800.0       ! MOM6 OM_1deg DT
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_dataovr_nml
+   ! JRA55-do 1958 daily-mean wind stress on the model's C-grid faces
+   ! (taux on u faces, 361 x 320; tauy on v faces, 360 x 321), time axis
+   ! "days since 1958-01-01" at 0.5, 1.5, ..., 364.5.  Model t = 0 is
+   ! 1958-01-01 00:00, so no offset; cyclic over the 365-day year.
+   enable       = .true.
+   time_mode    = "cyclic"
+   cycle_period = 31536000.0   ! 365 days
+   t_offset     = 0.0
+   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var    = "taux"
+   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var    = "tauy"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   vcoord_type            = "z_fixed"
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6500.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file = "INPUT/bathy_om1deg.nc"
+   output_dir      = "./output"
+   output_to_file  = .false.
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"
+   north = "tripolar_fold"
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_woa13_jan.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0                ! MOM6 OM_1deg MAXVEL
+/
+
+&ocean_coriolis_nml
+   form = "sadourny_energy"
+/
+
+&ocean_hvisc_nml
+   ! OM_1deg: Smagorinsky Laplacian (0.15) + biharmonic (0.06), bounded.
+   nu_h            = 2000.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   ! Distributed over the bottom 10 m (MOM6 OM_1deg HBBL = 10, DRAG_BG_VEL
+   ! = 0.1).  NOT optional under z_fixed: the bed-only mode (hbbl = 0)
+   ! drags layer k = 1, which is an inert filler in every column shallower
+   ! than the deepest nominal interface (6242 m here) — i.e. almost the
+   ! whole ocean would run with no bottom drag at all.
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.       ! per-wet-cell barotropic CFL (MOM6 set_dtbt)
+/
+
+&ocean_eos_nml
+   eos = "wright"
+/
+
+&ocean_diag_nml
+   ! Daily surface snapshots for the movie: SSH plus the top-10 m mean
+   ! of u, v, T, S (one conservative z_fixed output level, 0-10 m)
+   enabled          = .true.
+   filename         = "global_1deg_wind"
+   dt_out           = 1.0        ! day (time_unit)
+   vgrid            = "z_fixed"
+   z_levels         = 10.0
+   n_z_levels       = 1
+   output_precision = "single"
+   ! + the depth-integrated transport sum_k h*u at cell centres (m2/s),
+   !   for the Drake Passage / ACC transport: not in the unforced case;
+   !   an output-only addition, it does not touch the solution.
+   diags            = "KE:off  transport_x  transport_y"
+/
+
+&logging_nml
+   status_interval = 1.0        ! day (time_unit)
+/
