@@ -40,6 +40,12 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 | [Add a turbulence closure](add_closure.md) | yes — the vmix contributor chain / `LMIX_*` select-case |
 | [Add a boundary condition](add_boundary_condition.md) | yes — the `OBC_*` enum + per-edge dispatch |
 
+## Deployment
+
+| Guide | For |
+|---|---|
+| [Deploy without netcdf-c](deploy_without_netcdf.md) | a machine with a compiler and HDF5 but no usable netcdf-c (e.g. NERSC Perlmutter): `tools/build_netcdf.sh` |
+
 ## Two-minute orientation
 
 - **One regime.** `sim_type` is pinned to `'ocean'` (the only enum value; a
