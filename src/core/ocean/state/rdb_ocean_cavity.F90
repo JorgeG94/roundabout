@@ -97,6 +97,7 @@ module rdb_ocean_cavity
    public :: cavity_count_grounded
    public :: cavity_fill_cover_frac
    public :: cavity_fill_p_ice_ref
+   public :: cavity_trim_eta_linear_impl
    public :: cavity_draft_is_finite_nonneg
    public :: cavity_datum_impl
    public :: cavity_datum_residual
@@ -460,6 +461,112 @@ contains
          end do
       end do
    end subroutine cavity_fill_p_ice_ref
+
+   pure subroutine cavity_trim_eta_linear_impl(eta_trim, ok, z_draft, water, &
+                                               h_min_cavity, rho_ref, rho_surf, &
+                                               drho_dz, nx, ny)
+      !! The TRIMMED initial surface (MOM6 `TRIM_IC_FOR_P_SURF`,
+      !! `trim_for_ice`): the free-surface anomaly `eta_trim` that puts a
+      !! loaded column top exactly where the displaced water's own weight
+      !! equals the load, so the initial state is at rest under the MOM6
+      !! barotropic split (`&ocean_bt_nml bc_pgf_forcing`).
+      !!
+      !! ### Why a trim is needed at all
+      !!
+      !! The load is `p_ice_ref = rho_ref*g*z_draft`, the displaced weight
+      !! at the REFERENCE density.  A stratified column's displaced water
+      !! weighs `g*int_{-z_draft}^{0} rho(z) dz`, which differs by
+      !! `g*I(z_draft)`, `I = int_{-z_draft}^{0} (rho - rho_ref) dz`.  At
+      !! `eta = 0` every level below the ice then sits `-g*I(z_draft)` off
+      !! the open-ocean hydrostatic pressure at the same `z` — depth-
+      !! UNIFORM, so a pure bottom-pressure gradient
+      !! `(g/rho_ref)*(rho(-z_draft) - rho_ref)*grad(z_draft)` that the
+      !! default split hands to the barotropic mode.
+      !!
+      !! ### The trim
+      !!
+      !! MOM6 keeps the load (the ice MASS is what is prescribed) and moves
+      !! the column top: it cuts the initial column at the depth `s` where
+      !! the hydrostatic pressure of the water above equals the load,
+      !!
+      !! ```
+      !!   g * int_{-s}^{0} rho(z) dz  =  p_ice_ref  =  rho_ref*g*z_draft
+      !! ```
+      !!
+      !! The column top lands at `eta_geo = -z_draft + eta` (the cavity
+      !! datum, `rdb_ocean_cavity` header), so `eta_trim = z_draft - s`.
+      !! With the LINEAR equation of state and the affine `&ocean_zinit_nml
+      !! source="linear"` profile, `rho(z) = rho_surf + drho_dz*z` (`z`
+      !! positive UP), the condition is the quadratic
+      !! `(drho_dz/2)*s^2 - rho_surf*s + rho_ref*z_draft = 0`, whose
+      !! physical root (the one that tends to `rho_ref*z_draft/rho_surf`
+      !! as `drho_dz -> 0`) is taken in the cancellation-free form
+      !!
+      !! ```
+      !!   s = 2*rho_ref*z_draft / (rho_surf + sqrt(rho_surf^2 - 2*drho_dz*rho_ref*z_draft))
+      !! ```
+      !!
+      !! The balance holds at the discrete INTERFACES, not merely to first
+      !! order: a linear density is integrated exactly by the layer-mean
+      !! (midpoint) densities the FV pressure stack sums, so every
+      !! trimmed column's interface pressures equal the open ocean's at
+      !! the same `z`.  What is left is the PGF's own truncation — the
+      !! FV_MOM6 in-layer integral treats each layer's density as uniform
+      !! (short by `g*rho_z*h^3/12`, which differs across a face whose
+      !! sigma layers differ in thickness, a DEPTH-UNIFORM
+      !! `~N^2*W*dW/(4*nz^2*dx)`), plus the sloping-interface trapezoid
+      !! error.  Measured on `cavity_sloping_lid_rest`'s own geometry by
+      !! `test_ocean_cavity_load::trim_ic_balances_the_depth_mean_pfu`:
+      !! the depth-mean face force falls from 1.6e-5 to 3.9e-8 m/s^2.
+      !!
+      !! `z_draft = 0` (open ocean) gives `s = 0` and `eta_trim = 0`
+      !! exactly.  A GROUNDED column (`water < h_min_cavity`, the wet-mask
+      !! rule) is not trimmed: it has no water column to move.
+      !!
+      !! `ok = .false.` iff some column has no real, positive root (a
+      !! non-positive `rho_surf`, or an unstable profile whose discriminant
+      !! goes negative) or the trim would empty the column — the caller
+      !! fails loud.
+      !!
+      !! Explicit-shape by the house rule; host-only (setup).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(out) :: eta_trim(nx, ny)
+         !! Initial free-surface anomaly (m, positive UP); `<= 0` wherever
+         !! the displaced water is lighter than `rho_ref`.
+      logical, intent(out) :: ok
+      real(wp), intent(in) :: z_draft(nx, ny)
+         !! Ice-base depth (m, positive down), ghosts included.
+      real(wp), intent(in) :: water(nx, ny)
+         !! Reference water column `b - z_draft` (m) — the grounding test.
+      real(wp), intent(in) :: h_min_cavity
+         !! Grounding cutoff (m), `&ocean_cavity_dyn_nml h_min_cavity`.
+      real(wp), intent(in) :: rho_ref
+         !! The load's reference density (kg/m^3), `eos%rho0`.
+      real(wp), intent(in) :: rho_surf
+         !! Initial in-situ density at `z = 0` (kg/m^3).
+      real(wp), intent(in) :: drho_dz
+         !! d(rho)/dz of the initial profile (kg/m^4, `z` positive UP;
+         !! `< 0` for a stable column).
+      integer :: i, j
+      real(wp) :: disc, s
+
+      ok = .true.
+      do j = 1, ny
+         do i = 1, nx
+            eta_trim(i, j) = 0.0_wp
+            if (z_draft(i, j) <= 0.0_wp) cycle
+            if (water(i, j) < h_min_cavity) cycle
+            disc = rho_surf*rho_surf - 2.0_wp*drho_dz*rho_ref*z_draft(i, j)
+            if (.not. (disc >= 0.0_wp) .or. .not. (rho_surf > 0.0_wp)) then
+               ok = .false.
+               cycle
+            end if
+            s = 2.0_wp*rho_ref*z_draft(i, j)/(rho_surf + sqrt(disc))
+            eta_trim(i, j) = z_draft(i, j) - s
+            if (.not. (water(i, j) + eta_trim(i, j) > 0.0_wp)) ok = .false.
+         end do
+      end do
+   end subroutine cavity_trim_eta_linear_impl
 
    pure function cavity_draft_is_finite_nonneg(z_draft, nx, ny) result(ok)
       !! Configure-time guard: every draft entry is finite and `>= 0`.

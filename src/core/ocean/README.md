@@ -813,10 +813,15 @@ Rules for anything that joins this seam:
   gradient the barotropic mode adjusts to — a gravity-wave adjustment to a
   surface tilt `N²·z_draft·s/g` (`4.5e-4 m/s` on the
   `test_ocean_cavity_load` case,
-  `cavity_sloping_lid_load_shortfall_drives_bt`). A model that trims the
-  initial surface to the ACTUAL column density (MOM6 `trim_for_ice`) starts
-  balanced; `draft_source="in_situ"` (the true isostatic solve) is deferred
-  and fails loud.
+  `cavity_sloping_lid_load_shortfall_drives_bt`). `&ocean_cavity_dyn_nml
+  trim_ic_for_p_surf` (MOM6 `TRIM_IC_FOR_P_SURF`, default off) starts it
+  balanced: the load is kept and each loaded column's initial top moves to
+  the depth whose overlying water weighs it (`η_trim = z_draft − s`,
+  `cavity_trim_eta_linear_impl`; linear EOS + zinit `source="linear"`
+  only), so `bt_eta = η_trim ≠ 0` at t = 0 — the datum is unchanged, the
+  trim is an initial condition. `cavity_sloping_lid_rest` runs with it.
+  `draft_source="in_situ"` (the true isostatic solve) is deferred and fails
+  loud.
 - **`bt_H_ref` is the reference WATER-COLUMN thickness, not the bed.**
   Anything that re-derives it (the API's bathymetry re-injection, a future
   wide-halo BT clone) must re-derive it as `b − z_draft`, or the ice load

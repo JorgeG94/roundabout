@@ -959,6 +959,7 @@ knob list with defaults is in [`docs/generated_nml_knobs.md`](generated_nml_knob
 | `h_min_cavity` | Grounding cutoff (m): less water than this under the ice ⇒ the column is LAND. |
 | `grounded_max_frac` | Fail loud if more than this fraction of the interior columns ground. |
 | `rho_ice` | Ice density, consulted only by `draft_source="thickness"`. |
+| `trim_ic_for_p_surf` | MOM6 `TRIM_IC_FOR_P_SURF` (default `.false.`). The `ρ₀·g·z_draft` load is lighter than the stratified water it displaces by `g∫(ρ−ρ₀)dz`, a depth-uniform bottom-pressure gradient the MOM6 barotropic split adjusts to. With the knob on, the load is kept and each loaded column's initial top moves to the depth `s` where `g∫_{−s}^0 ρ dz = p_ice_ref` (initial `η = z_draft − s`), with T/S evaluated at the trimmed layer centres, so the run starts at rest. Closed form: requires `&ocean_eos_nml eos="linear"` and `&ocean_zinit_nml enable, source="linear"`; fails loud otherwise. |
 
 ### `&ocean_cavity_melt_nml`
 

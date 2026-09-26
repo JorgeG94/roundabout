@@ -2023,6 +2023,14 @@ class OceanCavityDyn(Group):
         default=918.0,
     )
 
+    trim_ic_for_p_surf = Bool(
+        'trim_ic_for_p_surf',
+        doc="Trim the initial column top so the displaced water's weight equals the ice load (MOM6 TRIM_IC_FOR_P_SURF; linear EOS + zinit source='linear' only)",
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class OceanCavityMelt(Group):
     """`&ocean_cavity_melt_nml` -- Ice-shelf basal-melt thermodynamics: the three-equation interface, its exchange law, and the far-field sampling depth."""
@@ -6221,4 +6229,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 681
+N_KNOBS = 682

@@ -2131,6 +2131,23 @@ module rdb_config
       real(wp) :: rho_ice = 918.0_wp
          !! Ice density (kg/m^3), consulted ONLY by
          !! `draft_source = "thickness"`.
+      logical :: trim_ic_for_p_surf = .false.
+         !! Trim the INITIAL column under the ice so it is at rest (MOM6
+         !! `TRIM_IC_FOR_P_SURF`, `trim_for_ice`).  The load
+         !! `p_ice_ref = rho_ref*g*z_draft` is the displaced weight at the
+         !! REFERENCE density; a stratified column's displaced water weighs
+         !! `g*int_{-z_draft}^{0} rho dz`, and the difference is a depth-
+         !! uniform bottom-pressure gradient the MOM6 barotropic split
+         !! (`&ocean_bt_nml bc_pgf_forcing`) adjusts to.  With the knob on,
+         !! the load is kept (the ice MASS is what is prescribed) and each
+         !! loaded column's initial top is moved to the depth `s` where
+         !! `g*int_{-s}^{0} rho dz = p_ice_ref`, i.e. an initial
+         !! `eta = z_draft - s` (a few cm under ISOMIP+ COLD), with T/S
+         !! then evaluated at the trimmed layer centres.  Closed form, exact at
+         !! the discrete FV interfaces: requires `&ocean_eos_nml
+         !! eos="linear"` and `&ocean_zinit_nml enable, source="linear"`
+         !! (the analytic profile is what defines `rho` above the ice
+         !! base); anything else fails loud.  Default off => bit-identical.
    end type ocean_cavity_dyn_config_t
 
    type :: ocean_cavity_melt_config_t
@@ -5316,6 +5333,13 @@ contains
       ! cavity that silently runs outside it looks plausible and is wrong
       ! (a coordinate anchored at z = 0 under 500 m of ice, a second
       ! un-reconciled surface load, a wide-halo BT clone with no draft).
+      if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf .and. &
+          .not. cfg%ocean%cavity_dyn%enable) then
+         call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                           "requires enable=.true. (there is no ice load to "// &
+                           "trim the initial column against)")
+         has_error = .true.
+      end if
       if (cfg%ocean%cavity_dyn%enable) then
          if (trim(cfg%sim_type) /= "ocean") then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
@@ -5410,6 +5434,37 @@ contains
             call logger%error("&ocean_cavity_dyn_nml draft_source='thickness' "// &
                               "requires rho_ice > 0")
             has_error = .true.
+         end if
+         ! MOM6 TRIM_IC_FOR_P_SURF.  The trim depth solves
+         ! g*int_{-s}^{0} rho dz = p_ice_ref in CLOSED FORM, which needs a
+         ! density that is affine in z above the ice base: the linear EOS
+         ! over the analytic linear zinit profile.  A nonlinear EOS or a
+         ! file profile would need a per-column root find against the
+         ! column's own extrapolated T/S (MOM6 cut_off_column_top) and is
+         ! not wired; a uniform_z seed lays interfaces from z = 0, not from
+         ! the (trimmed) ice base.
+         if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf) then
+            if (trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "requires &ocean_eos_nml eos='linear' (the trim "// &
+                                 "depth is the closed-form root for a density "// &
+                                 "affine in z; a nonlinear-EOS trim is not wired)")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%zinit%enable .or. &
+                trim(adjustl(cfg%ocean%zinit%source)) /= "linear") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "requires &ocean_zinit_nml enable=.true., "// &
+                                 "source='linear': the analytic T(z)/S(z) profile "// &
+                                 "is what defines the density of the water the "// &
+                                 "ice displaces")
+               has_error = .true.
+            end if
+            if (trim(cfg%thickness_config) == "uniform_z") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "is incompatible with thickness_config='uniform_z'")
+               has_error = .true.
+            end if
          end if
          ! --- the one atmospheric-forcing path the cover mask does NOT
          !     reach (P2c) ---
@@ -8621,6 +8676,12 @@ contains
       call g%add(nml_real("rho_ice", pr, &
                           "Ice density, consulted only by "// &
                           "draft_source='thickness'", units="kg/m^3"))
+      pl => cfg%ocean%cavity_dyn%trim_ic_for_p_surf
+      call g%add(nml_logical("trim_ic_for_p_surf", pl, &
+                             "Trim the initial column top so the displaced "// &
+                             "water's weight equals the ice load (MOM6 "// &
+                             "TRIM_IC_FOR_P_SURF; linear EOS + zinit "// &
+                             "source='linear' only)"))
 
       call schema%add_group(g)
    end subroutine register_ocean_cavity_dyn

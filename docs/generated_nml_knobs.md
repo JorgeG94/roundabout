@@ -393,6 +393,7 @@ Static ice-shelf cavity geometry: prescribed draft + barotropic datum bt_H_ref =
 | `h_min_cavity` | `0.1000000000E+02` | m | Grounding cutoff: b - z_draft below this is LAND (never a thin film under grounded ice) |
 | `grounded_max_frac` | `0.5000000000E+00` |  | Fail loud if more than this fraction of the interior columns ground |
 | `rho_ice` | `0.9180000000E+03` | kg/m^3 | Ice density, consulted only by draft_source='thickness' |
+| `trim_ic_for_p_surf` | `.false.` |  | Trim the initial column top so the displaced water's weight equals the ice load (MOM6 TRIM_IC_FOR_P_SURF; linear EOS + zinit source='linear' only) |
 
 ### &ocean_cavity_melt_nml
 

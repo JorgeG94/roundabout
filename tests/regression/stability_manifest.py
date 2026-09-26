@@ -737,11 +737,21 @@ STABILITY_CASES = [
           # THE BAR. REST_1MM_S is the sloped-rest family's existing bar and
           # the velocity a resting sub-shelf cavity has no excuse to exceed
           # (real sub-shelf flows are cm/s, so 1 mm/s of spurious current is
-          # already a serious contaminant). Measured day-30 peak 3.043E-08 =>
-          # 2.47e-04 m/s: 16x under it in energy, 4x in velocity.
+          # already a serious contaminant). Measured day-30 peak 2.298E-08 =>
+          # 2.14e-04 m/s: 22x under it in energy, 4.7x in velocity (gfortran
+          # 15.1, 2026-09-25, trimmed IC, MOM6 split).
+          #
+          # THE BALANCED IC. The namelist sets &ocean_cavity_dyn_nml
+          # trim_ic_for_p_surf (MOM6 TRIM_IC_FOR_P_SURF): the rho_ref*g*z_draft
+          # load is lighter than the stratified water it displaces by
+          # g*int(rho - rho_ref), a depth-uniform force up to 1.8e-5 m/s^2 that
+          # the MOM6 split (bc_pgf_forcing) hands the barotropic mode. Without
+          # the trim the day-1 adjustment reads En 1.061E-06 -- over this bar;
+          # with it, 1.117E-09. Do NOT turn the trim off, or bc_pgf_forcing,
+          # to "fix" a failure here: both put the load shortfall back.
           #
           # It does NOT clear the tighter REST_100UM_S (0.5e-08) the Phase-5
-          # design proposed -- day 30 is 6x over -- and that is recorded here
+          # design proposed -- day 30 is 4.6x over -- and that is recorded here
           # rather than legislated away: restoring REST_100UM_S is the
           # Phase-6 acceptance criterion. Do NOT close the gap by widening
           # this bar, by shortening the run, or by putting viscosity back
@@ -751,29 +761,35 @@ STABILITY_CASES = [
           # days (2880 steps, ~24 s). Not a downscale -- 48x6x15 is already
           # CI-sized -- but the LENGTH is load-bearing: ssp_rk2 tracks
           # pred_corr to within 2% for 11 days and only then leaves
-          # (5.27E-08 at day 13, 4.22E-05 at day 20, while pred_corr is still
-          # at 2.07E-09). At the 10 days a naive twin would use, BOTH schemes
-          # read ~1.6E-09 and the twin's energy:rest XFAIL would XPASS
+          # (6.06E-08 at day 13, 4.24E-05 at day 20, while pred_corr is still
+          # at 1.65E-09). At the 10 days a naive twin would use, BOTH schemes
+          # read ~1.9E-09 and the twin's energy:rest XFAIL would XPASS
           # against a case that gates nothing -- the same trap
-          # `resting_stratified_channel` documents.
+          # `resting_stratified_channel` documents. At 20 days the BASE case
+          # ends on its plateau (final 1.645E-09 = 88% of the 1.877E-09
+          # day-10 peak) and SETTLES, so its known_failure is tier-1 only.
           t2_dimensionless={"dx": 2000.0, "dy": 2000.0, "dt": 600.0,
                             "nu_h": 0.0, "nghost": 2,
                             "has_western_boundary": True, "eddying": False},
           known_failure={
+              "tiers": [1],
               "assertions": ["energy:rest-settles"],
               "reason":
                   "OPEN, scoped, and the POINT of the case: this build "
                   "carries none of the sloping-surface PGF corrections, so "
                   "the sigma truncation under a tilted ice base does not "
                   "merely hold a static spurious current -- it seeds a mode "
-                  "that leaves the day-1..20 plateau (En 1.0-2.1E-09, the "
+                  "that leaves the day-1..20 plateau (En 0.9-1.9E-09, the "
                   "derived N^2*D^3/(6*dx*Hbar) scale) on a ~3.2-day "
-                  "e-folding. It is BOUNDED, not runaway: 3.043E-08 at day "
-                  "30, 3.894E-06 at day 60 with the rate visibly decaying, "
-                  "budgets exact to 4e-13 throughout, no CFL truncation and "
+                  "e-folding. It is BOUNDED, not runaway: 2.298E-08 at day "
+                  "30, 3.492E-06 at day 60 with the rate visibly decaying, "
+                  "budgets exact to 8e-13 throughout, no CFL truncation and "
                   "no clamping. So the final sample is the peak at every "
-                  "horizon short of saturation and energy:rest-settles "
-                  "cannot pass. Characterised by substitution: dt 600 -> 300 "
+                  "horizon past day ~22 and short of saturation, and "
+                  "energy:rest-settles cannot pass at tier 1 (the 20-day "
+                  "tier-2 twin ends on the plateau and settles). "
+                  "Characterised by substitution (legacy split, whose curve "
+                  "the trimmed default tracks to 30%): dt 600 -> 300 "
                   "reproduces the curve (3.069E-08 vs 3.043E-08), so it is "
                   "NOT an (omega*dt)^n outer-split mode; ISOMIP+'s own "
                   "nu_h = 6.0 and a dx^4-scaled biharmonic nu_4 = 1e7 each "
@@ -782,7 +798,7 @@ STABILITY_CASES = [
                   "are bit-zero, so the sloping-lid PGF error is the whole "
                   "source. The MAGNITUDE gate energy:rest is deliberately "
                   "NOT excused -- it is what separates the schemes "
-                  "(3.043E-08 vs ssp_rk2's 1.652E-04) and pred_corr passes "
+                  "(2.298E-08 vs ssp_rk2's 1.850E-04) and pred_corr passes "
                   "it with margin. The fix is Yung et al. (2026)'s three "
                   "corrections, not a tolerance.",
               "ref": "validation_examples/ocean/ice_shelf_cavity/README.md",
@@ -794,14 +810,16 @@ STABILITY_CASES = [
                "layer-index profile would tilt them with the sigma "
                "coordinate and give the run real APE to convert). The load "
                "partition -- datum bt_H_ref = b - z_draft, "
-               "p_top = rho_ref*g*z_draft in the pa(nz+1) BC -- makes the "
-               "barotropic state exactly at rest, so what is measured is the "
+               "p_top = rho_ref*g*z_draft in the pa(nz+1) BC -- plus the "
+               "MOM6 trimmed IC (trim_ic_for_p_surf: the column top starts "
+               "where the stratified water above it weighs the load) makes "
+               "the barotropic state at rest, so what is measured is the "
                "FV-MOM6 truncation alone. Yung, Hallberg, Adcroft & Morrison "
                "(2026), JAMES 18, e2025MS005645 report order 1e-9 m/s for "
                "their CORRECTED algorithm (abstract; sigma icemount 1e-7 -> "
                "1e-12, their SS5.1.2) on damped configurations; this build "
                "implements none of their corrections and reads "
-               "|u|_rms = 5.7e-05 m/s at their 10-day horizon with no "
+               "|u|_rms = 6.1e-05 m/s at their 10-day horizon with no "
                "dissipation at all.",
           tags=["cavity", "ice_shelf", "sloping_lid", "calving_front",
                 "vcoord_sigma", "pgf_fv_mom6", "zinit_linear", "rest"]),
@@ -1318,12 +1336,13 @@ SCHEME_AXIS_KNOWN_FAILURE = {
             "truncation keeps forcing the cavity, and the SSP two-stage "
             "average amplifies the resulting waves by "
             "sqrt(1 + (omega dt)^4 / 4) per step. The two schemes are "
-            "indistinguishable for 11 days (En 1.98E-09 vs 2.0E-09), then "
-            "ssp_rk2 leaves: 5.27E-08 (d13), 4.62E-06 (d15), 4.22E-05 (d20), "
-            "1.652E-04 (d30) -- 330x over the 0.5e-06 bar and 5400x the "
-            "default pred_corr's 3.043E-08 on the identical file. The base "
-            "case keeps GATING energy:rest for exactly that reason and is "
-            "excused only on energy:rest-settles. Do NOT close this by "
+            "indistinguishable for 10 days (En 1.875E-09 vs 1.877E-09, "
+            "trimmed IC), then ssp_rk2 leaves: 6.06E-08 (d13), 5.76E-06 "
+            "(d15), 4.24E-05 (d20), 1.850E-04 (d30) -- 370x over the 0.5e-06 "
+            "bar and 8000x the default pred_corr's 2.298E-08 on the "
+            "identical file. The base case keeps GATING energy:rest for "
+            "exactly that reason and is excused only on energy:rest-settles "
+            "(tier 1). Do NOT close this by "
             "raising en_rest_max or by adding viscosity to the namelist "
             "(nu_h = 6 and nu_4 = 1e7 each delay the growth ~10 days and "
             "change nothing about its rate). ssp_rk2 stays supported and "
