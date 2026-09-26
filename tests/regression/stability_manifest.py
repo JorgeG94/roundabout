@@ -136,7 +136,8 @@ def _case(name, nml, regime, t1_steps, t2_steps, **kw):
         # for the wrong reason. Extending them is a separate change with its
         # own measurement.
         for k in ("rest_sigma_max", "matrix_gates", "tracer_slack",
-                  "h_min_floor"):
+                  "h_min_floor", "rest_trend_skip_tiers",
+                  "rest_trend_skip_reason"):
             if k in kw:
                 phys[k] = kw.pop(k)
     elif regime == "adiabatic":

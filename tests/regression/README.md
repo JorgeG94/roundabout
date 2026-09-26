@@ -514,7 +514,8 @@ disk — any cell reproduces by hand with
 python3 tests/regression/stability.py --tier 2 --build-dir build_gcc \
         --jobs 6 --tags vcoord_matrix
 
-# The full matrix, tier 1 (30 simulated days per cell), on EACH toolchain --
+# The full matrix, tier 1 (30 simulated days per cell; 10 for the seamount
+# and rx0 problems), on EACH toolchain --
 # one leg at a time with --tags vcoord_matrix_inviscid / _viscous if wanted:
 python3 tests/regression/stability.py --tier 1 --backend gpu \
         --build-dir build_cc70 --gpus 0 --tags vcoord_matrix \
@@ -1061,7 +1062,7 @@ proposed (fix item 2) would turn both into fail-loud messages.
 |---|---|---|
 | inviscid leg | `flat`, `slope`, `rx0_060` × every family | all 115 cells |
 | viscous leg | `flat`, `slope`, `seamount_steep` (the steepest seamount; the rx0 0.1–0.8 ladder is tier-1 only) × every family | all 90 cells |
-| length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days |
+| length | 480 steps = 3.33 simulated days | 4320 steps = 30 simulated days; 1440 = 10 days for the `seamount_*` and `rx0_*` problems (maintainer decision 2026-09-25: under the MOM6 barotropic split the inviscid sloping-boundary mode MOM6 shares reaches the CFL wall inside 30 days on the steeper rungs, so 30 days only measured when it aborts; `T1_STEPS_SEAMOUNT` in `vcoord_matrix.py`) |
 | rows | 120 (incl. the `__ssp_rk2` twins) | 205 (twins are tier-1-skipped by the curated scheme axis) |
 | measured wall | 443 s on 2 workers of a contended 4-core box (gfortran); 1081 s on one V100 | 3438 s on 3 CPU workers (gfortran); 11 910 s on one V100 (nvfortran 26.5, launch-bound on this box) |
 | the rate gate | `SKIP … TIER 1 ONLY` — the bar is a 20-day e-folding | evaluated |

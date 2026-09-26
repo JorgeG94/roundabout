@@ -177,6 +177,22 @@ def _f(tok):
         raise
 
 
+def _short_trend_window(phys, tier):
+    """The reason a row's TREND gates (`energy:rest-settles`,
+    `energy:rest-growth-rate`) are not asserted at this tier, or "".
+
+    A row opts out per tier with `rest_trend_skip_tiers` + the stated
+    `rest_trend_skip_reason`.  Today only the vertical-coordinate matrix's
+    10-day seamount problems do (`T1_STEPS_SEAMOUNT` in vcoord_matrix.py):
+    the rest adjustment over a seamount is still rising at day 10, so both
+    gates would fail on a case that settles by day 30.  Every LEVEL gate
+    (energy:rest, finite, conservation, tracer bounds, thickness, counters)
+    still runs."""
+    if tier in phys.get("rest_trend_skip_tiers", ()):
+        return phys.get("rest_trend_skip_reason", "run too short for a trend")
+    return ""
+
+
 def _finite(x):
     return x is not None and not math.isnan(x) and not math.isinf(x)
 
@@ -593,8 +609,15 @@ def assert_matrix(series, res, phys, tier):
     """
     out = []
     sig_bar = phys.get("rest_sigma_max")
+    short = _short_trend_window(phys, tier)
     if sig_bar:
-        if tier != 1:
+        if short:
+            out.append(Verdict(
+                "energy:rest-growth-rate", True,
+                "fitted amplitude rate <= {:.3g} 1/s".format(sig_bar),
+                "not asserted at tier {}: {}".format(tier, short),
+                skipped=True))
+        elif tier != 1:
             out.append(Verdict(
                 "energy:rest-growth-rate", True,
                 "fitted amplitude rate <= {:.3g} 1/s".format(sig_bar),
@@ -863,7 +886,15 @@ def assert_energy(series, phys, tier):
         # (|u|_rms ~ 1.4e-6 m/s), still a thousand times below the magnitude
         # bar it complements.
         trend_floor = phys.get("en_rest_trend_floor", 1e-12)
-        if _finite(peak) and _finite(final) and peak > trend_floor:
+        short = _short_trend_window(phys, tier)
+        if short and _finite(peak) and _finite(final) and peak > trend_floor:
+            out.append(Verdict(
+                "energy:rest-settles", True,
+                "spurious motion must EQUILIBRATE: final En below 95% of the "
+                "run's peak",
+                "not asserted at tier {}: {}".format(tier, short),
+                skipped=True))
+        elif _finite(peak) and _finite(final) and peak > trend_floor:
             # "Still at the peak when the clock ran out" == not equilibrated.
             settled = final <= 0.95 * peak
             out.append(Verdict(
@@ -1964,11 +1995,21 @@ def self_test():
           abs(_vcm.VISC_NU_H - 160.0) < 1e-9
           and abs(_vcm.VISC_BDRAG_R - 1.0e-5) < 1e-15)
     # Every runnable cell runs the FIXED configuration v0.1.0 recommends.
-    fixed = ("reconstruct_for_pressure = .true.", "remap_boundary_extrap     = .true.",
+    # The one exception is z_fixed under a cavity, which runs the layer-mean
+    # (PCM) density that `validate_config` requires there until the
+    # filler-aware reconstruction lands.
+    fixed = ("remap_boundary_extrap     = .true.",
              "remap_nonuniform_weights  = .true.", "remap_check_preconditions = .true.")
-    check("every matrix cell runs the fixed configuration (exact FV PGF, "
-          "linear-exact remap, precondition guard, closed z_fixed faces)",
-          all(all(f in open(os.path.join(REPO_ROOT, c["nml"])).read() for f in fixed)
+
+    def _recon(c):
+        want = ".false." if (c["matrix"]["class"] == "cavity"
+                             and c["matrix"]["family"] == "z_fixed") else ".true."
+        return "reconstruct_for_pressure = " + want
+    check("every matrix cell runs the fixed configuration (exact FV PGF -- "
+          "PCM for z_fixed under a cavity --, linear-exact remap, precondition "
+          "guard, closed z_fixed faces)",
+          all(all(f in open(os.path.join(REPO_ROOT, c["nml"])).read()
+                  for f in fixed + (_recon(c),))
               and (c["matrix"]["family"] != "z_fixed"
                    or "zfixed_closed_faces = .true." in open(
                        os.path.join(REPO_ROOT, c["nml"])).read())
@@ -2000,6 +2041,35 @@ def self_test():
     check("the matrix arms the fitted GROWTH-RATE gate on every runnable "
           "cell ({} rows)".format(len(rated)),
           len(rated) == len(vcm) - len(refused))
+    # The 10-day seamount rows skip ONLY the two trend gates, ONLY at tier 1,
+    # and every other runnable row keeps them: a refactor that widened the
+    # skip would quietly stop gating growth everywhere.
+    sm = [c for c in rated
+          if c["matrix"]["class"] in _vcm.T1_SEAMOUNT_CLASSES]
+    check("the 10-day seamount rows run T1_STEPS_SEAMOUNT and skip the trend "
+          "gates at tier 1 only ({} rows)".format(len(sm)),
+          len(sm) > 0
+          and all(c["tier1"]["n_steps"] == _vcm.T1_STEPS_SEAMOUNT
+                  and c["physics"].get("rest_trend_skip_tiers") == [1]
+                  for c in sm)
+          and all(not c["physics"].get("rest_trend_skip_tiers")
+                  and c["tier1"]["n_steps"] == _vcm.T1_STEPS
+                  for c in rated if c not in sm))
+    _rising = {"stats": [{"day": float(d), "En": 1e-8 * (1.0 + 0.1 * d)}
+                         for d in range(11)]}
+    _sk = {"regime": "rest", "en_rest_max": 1.0, "rest_sigma_max": 1e-9,
+           "rest_trend_skip_tiers": [1], "rest_trend_skip_reason": "short"}
+    _v = assert_energy(_rising, _sk, 1) + [
+        x for x in assert_matrix(_rising, None, _sk, 1)
+        if x.name == "energy:rest-growth-rate"]
+    check("...and both skipped trend gates SKIP (never fail) on a "
+          "still-rising 10-day series",
+          all(any(x.name == n and x.skipped and x.ok for x in _v)
+              for n in ("energy:rest-settles", "energy:rest-growth-rate")))
+    _sk_on = dict(_sk, rest_trend_skip_tiers=[])
+    check("...while the same series FAILS them when the skip is off",
+          not all(x.ok for x in assert_energy(_rising, _sk_on, 1)
+                  if x.name == "energy:rest-settles"))
     # The scheme axis must EXIST -- a refactor that quietly stops building it
     # would leave the non-default scheme an untested branch of the dispatcher
     # while every report still said PASS.
