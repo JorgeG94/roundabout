@@ -704,6 +704,17 @@ module rdb_config
       logical :: correction_bc_pgf = .false.
          !! Adds a per-layer baroclinic-PGF retro-correction for the η
          !! change during the BT substep.  Requires `pgf%form = "fv_mom6"`.
+      logical :: bc_pgf_forcing = .true.
+         !! MOM6 split (`BT_force` + `eta_PF`): the barotropic substep is
+         !! forced by the depth mean of the FULL slow PGF — baroclinic
+         !! part included — minus only the free-surface term that PGF
+         !! itself carries at the η it was evaluated on (none for the
+         !! surface-relative MONT/FV_LITE/FV_WRIGHT forms), which the
+         !! substep's own `-g_bt·∇η` replaces.  `.false.` restores the legacy split, which
+         !! subtracted the WHOLE depth-mean PGF and so never let the
+         !! barotropic mode feel the baroclinic bottom-pressure gradient
+         !! (JEBAR; ~0 Sv through Drake Passage on the global 1° case
+         !! against MOM6's ~160 Sv).
       logical :: substep_drag = .false.
          !! Multiplies the per-face BT velocity update by a damping factor
          !! every inner step.
@@ -903,15 +914,16 @@ module rdb_config
          !! WHY IT IS NOT A DOUBLE COUNT.  A depth-uniform `p_top`
          !! perturbs EVERY layer's `PFu` by the same `-(1/rho_0)*grad
          !! p_top` (the theorem in `compute_fv_mom6_impl`'s docstring).
-         !! The split solver subtracts the depth mean of the layer PGF
-         !! from the barotropic forcing and then folds the barotropic
-         !! solution back over the layers, so that uniform piece cancels
-         !! identically and the load's barotropic response is carried by
-         !! the `eta_forcing` seam alone — the two seams are orthogonal,
-         !! not additive.  On the UNSPLIT driver (`n_inner = 0`) there is
-         !! neither a depth-mean replacement nor a seam, so this term is
-         !! the load's ONLY path into the momentum: a correction, not a
-         !! duplicate.
+         !! Under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`,
+         !! default) the depth mean of the layer PGF forces the barotropic
+         !! mode, so the `p_surf` part of `p_top` is shed from that
+         !! forcing as `g*grad(eta_ib)` and the `eta_forcing` seam carries
+         !! it once; the static `p_ice_ref` part cancels inside `pa(nz+1)`
+         !! against the datum-shifted `eta_geo`.  (The legacy split
+         !! subtracted the whole depth mean, so there the uniform piece
+         !! cancelled identically.)  On the UNSPLIT driver (`n_inner = 0`)
+         !! there is no seam, so this term is the load's ONLY path into
+         !! the momentum.
          !!
          !! What it buys where the load is LARGE (an ice-shelf draft,
          !! `5e6 Pa`): `pa` is built as an anomaly about `rho_ref*g*z`,
@@ -2119,6 +2131,23 @@ module rdb_config
       real(wp) :: rho_ice = 918.0_wp
          !! Ice density (kg/m^3), consulted ONLY by
          !! `draft_source = "thickness"`.
+      logical :: trim_ic_for_p_surf = .false.
+         !! Trim the INITIAL column under the ice so it is at rest (MOM6
+         !! `TRIM_IC_FOR_P_SURF`, `trim_for_ice`).  The load
+         !! `p_ice_ref = rho_ref*g*z_draft` is the displaced weight at the
+         !! REFERENCE density; a stratified column's displaced water weighs
+         !! `g*int_{-z_draft}^{0} rho dz`, and the difference is a depth-
+         !! uniform bottom-pressure gradient the MOM6 barotropic split
+         !! (`&ocean_bt_nml bc_pgf_forcing`) adjusts to.  With the knob on,
+         !! the load is kept (the ice MASS is what is prescribed) and each
+         !! loaded column's initial top is moved to the depth `s` where
+         !! `g*int_{-s}^{0} rho dz = p_ice_ref`, i.e. an initial
+         !! `eta = z_draft - s` (a few cm under ISOMIP+ COLD), with T/S
+         !! then evaluated at the trimmed layer centres.  Closed form, exact at
+         !! the discrete FV interfaces: requires `&ocean_eos_nml
+         !! eos="linear"` and `&ocean_zinit_nml enable, source="linear"`
+         !! (the analytic profile is what defines `rho` above the ice
+         !! base); anything else fails loud.  Default off => bit-identical.
    end type ocean_cavity_dyn_config_t
 
    type :: ocean_cavity_melt_config_t
@@ -5304,6 +5333,13 @@ contains
       ! cavity that silently runs outside it looks plausible and is wrong
       ! (a coordinate anchored at z = 0 under 500 m of ice, a second
       ! un-reconciled surface load, a wide-halo BT clone with no draft).
+      if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf .and. &
+          .not. cfg%ocean%cavity_dyn%enable) then
+         call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                           "requires enable=.true. (there is no ice load to "// &
+                           "trim the initial column against)")
+         has_error = .true.
+      end if
       if (cfg%ocean%cavity_dyn%enable) then
          if (trim(cfg%sim_type) /= "ocean") then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires "// &
@@ -5398,6 +5434,37 @@ contains
             call logger%error("&ocean_cavity_dyn_nml draft_source='thickness' "// &
                               "requires rho_ice > 0")
             has_error = .true.
+         end if
+         ! MOM6 TRIM_IC_FOR_P_SURF.  The trim depth solves
+         ! g*int_{-s}^{0} rho dz = p_ice_ref in CLOSED FORM, which needs a
+         ! density that is affine in z above the ice base: the linear EOS
+         ! over the analytic linear zinit profile.  A nonlinear EOS or a
+         ! file profile would need a per-column root find against the
+         ! column's own extrapolated T/S (MOM6 cut_off_column_top) and is
+         ! not wired; a uniform_z seed lays interfaces from z = 0, not from
+         ! the (trimmed) ice base.
+         if (cfg%ocean%cavity_dyn%trim_ic_for_p_surf) then
+            if (trim(adjustl(cfg%ocean%eos%eos)) /= "linear") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "requires &ocean_eos_nml eos='linear' (the trim "// &
+                                 "depth is the closed-form root for a density "// &
+                                 "affine in z; a nonlinear-EOS trim is not wired)")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%zinit%enable .or. &
+                trim(adjustl(cfg%ocean%zinit%source)) /= "linear") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "requires &ocean_zinit_nml enable=.true., "// &
+                                 "source='linear': the analytic T(z)/S(z) profile "// &
+                                 "is what defines the density of the water the "// &
+                                 "ice displaces")
+               has_error = .true.
+            end if
+            if (trim(cfg%thickness_config) == "uniform_z") then
+               call logger%error("&ocean_cavity_dyn_nml trim_ic_for_p_surf=.true. "// &
+                                 "is incompatible with thickness_config='uniform_z'")
+               has_error = .true.
+            end if
          end if
          ! --- the one atmospheric-forcing path the cover mask does NOT
          !     reach (P2c) ---
@@ -8609,6 +8676,12 @@ contains
       call g%add(nml_real("rho_ice", pr, &
                           "Ice density, consulted only by "// &
                           "draft_source='thickness'", units="kg/m^3"))
+      pl => cfg%ocean%cavity_dyn%trim_ic_for_p_surf
+      call g%add(nml_logical("trim_ic_for_p_surf", pl, &
+                             "Trim the initial column top so the displaced "// &
+                             "water's weight equals the ice load (MOM6 "// &
+                             "TRIM_IC_FOR_P_SURF; linear EOS + zinit "// &
+                             "source='linear' only)"))
 
       call schema%add_group(g)
    end subroutine register_ocean_cavity_dyn
@@ -9714,6 +9787,12 @@ contains
       pl => cfg%ocean%bt%correction_bc_pgf
       call g%add(nml_logical("correction_bc_pgf", pl, &
                              "Per-layer baroclinic-PGF retro-correction for the eta change"))
+      pl => cfg%ocean%bt%bc_pgf_forcing
+      call g%add(nml_logical("bc_pgf_forcing", pl, &
+                             "Force the BT substep with the depth mean of the full slow layer "// &
+                             "PGF, shedding only the free-surface term the PGF itself carries "// &
+                             "(MOM6 BT_force/eta_PF); .false. = legacy split that discarded the "// &
+                             "depth-mean baroclinic PGF (no JEBAR)"))
       pl => cfg%ocean%bt%substep_drag
       call g%add(nml_logical("substep_drag", pl, &
                              "Apply a per-substep BT velocity damping factor"))

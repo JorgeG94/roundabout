@@ -3352,6 +3352,15 @@ contains
                           "(MOM6 frhatu pattern)")
       end if
 
+      ! MOM6 BT_force / eta_PF split: the depth-mean baroclinic PGF forces
+      ! the barotropic substep (default on).
+      ocean_state%dyn%bt_work%bt_bc_pgf_forcing = cfg%ocean%bt%bc_pgf_forcing
+      if (compute_rank == 0 .and. .not. cfg%ocean%bt%bc_pgf_forcing) then
+         call logger%warning("&ocean_bt_nml bc_pgf_forcing = .false.: LEGACY split — the "// &
+                             "barotropic mode does not feel the depth-mean baroclinic "// &
+                             "pressure gradient (no JEBAR / bottom-pressure torque)")
+      end if
+
       ! MOM6 btstep_layer_accel — per-layer bc-PGF retro-correction (needs FV_MOM6).
       ocean_state%dyn%bt_work%bt_correction_bc_pgf = cfg%ocean%bt%correction_bc_pgf
       if (compute_rank == 0 .and. cfg%ocean%bt%correction_bc_pgf) then

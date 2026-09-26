@@ -92,7 +92,7 @@
 
             <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
               <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
-                 title="<p> 0.6% of total for derived types.</p>Including implementation: 17 statements,  0.2% of total for derived types.">17 statements</a>
+                 title="<p> 0.6% of total for derived types.</p>Including implementation: 18 statements,  0.2% of total for derived types.">18 statements</a>
             </li>
 
             <li class="list-inline-item" id="source-file">
@@ -145,10 +145,11 @@
             <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-draft_x1">draft_x1</a>
             <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-draft_y0">draft_y0</a>
             <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-draft_y1">draft_y1</a>
-            <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-enable~24">enable</a>
+            <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-enable~35">enable</a>
             <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-grounded_max_frac">grounded_max_frac</a>
-            <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-h_min_cavity">h_min_cavity</a>
+            <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-h_min_cavity~2">h_min_cavity</a>
             <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-rho_ice">rho_ice</a>
+            <a class="list-group-item" href="../type/ocean_cavity_dyn_config_t.html#variable-trim_ic_for_p_surf">trim_ic_for_p_surf</a>
         </div>
       </div>
     </div>
@@ -596,7 +597,7 @@ it the draft is 0 (open ocean).  Default: no eastern limit.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-enable~24"></span>
+              <span class="anchor" id="variable-enable~35"></span>
               logical,
             </td>
               <td>public</td>
@@ -637,7 +638,7 @@ running a domain that is mostly land.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_min_cavity"></span>
+              <span class="anchor" id="variable-h_min_cavity~2"></span>
               real(kind=wp),
             </td>
               <td>public</td>
@@ -675,6 +676,38 @@ restricted, hence 10 m.</p>
             <td>
                 <p>Ice density (kg/m^3), consulted ONLY by
 <code>draft_source = "thickness"</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trim_ic_for_p_surf"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>trim_ic_for_p_surf</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>Trim the INITIAL column under the ice so it is at rest (MOM6
+<code>TRIM_IC_FOR_P_SURF</code>, <code>trim_for_ice</code>).  The load
+<code>p_ice_ref = rho_ref*g*z_draft</code> is the displaced weight at the
+REFERENCE density; a stratified column&rsquo;s displaced water weighs
+<code>g*int_{-z_draft}^{0} rho dz</code>, and the difference is a depth-
+uniform bottom-pressure gradient the MOM6 barotropic split
+(<code>&amp;ocean_bt_nml bc_pgf_forcing</code>) adjusts to.  With the knob on,
+the load is kept (the ice MASS is what is prescribed) and each
+loaded column&rsquo;s initial top is moved to the depth <code>s</code> where
+<code>g*int_{-s}^{0} rho dz = p_ice_ref</code>, i.e. an initial
+<code>eta = z_draft - s</code> (a few cm under ISOMIP+ COLD), with T/S
+then evaluated at the trimmed layer centres.  Closed form, exact at
+the discrete FV interfaces: requires <code>&amp;ocean_eos_nml
+eos="linear"</code> and <code>&amp;ocean_zinit_nml enable, source="linear"</code>
+(the analytic profile is what defines <code>rho</code> above the ice
+base); anything else fails loud.  Default off =&gt; bit-identical.</p>
             </td>
         </tr>
     </tbody>
@@ -820,6 +853,23 @@ restricted, hence 10 m.</p>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_ice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">91</span><span class="mf">8.0_wp</span>
 <span class="w">         </span><span class="c">!! Ice density (kg/m^3), consulted ONLY by</span>
 <span class="w">         </span><span class="c">!! `draft_source = "thickness"`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">trim_ic_for_p_surf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! Trim the INITIAL column under the ice so it is at rest (MOM6</span>
+<span class="w">         </span><span class="c">!! `TRIM_IC_FOR_P_SURF`, `trim_for_ice`).  The load</span>
+<span class="w">         </span><span class="c">!! `p_ice_ref = rho_ref*g*z_draft` is the displaced weight at the</span>
+<span class="w">         </span><span class="c">!! REFERENCE density; a stratified column's displaced water weighs</span>
+<span class="w">         </span><span class="c">!! `g*int_{-z_draft}^{0} rho dz`, and the difference is a depth-</span>
+<span class="w">         </span><span class="c">!! uniform bottom-pressure gradient the MOM6 barotropic split</span>
+<span class="w">         </span><span class="c">!! (`&amp;ocean_bt_nml bc_pgf_forcing`) adjusts to.  With the knob on,</span>
+<span class="w">         </span><span class="c">!! the load is kept (the ice MASS is what is prescribed) and each</span>
+<span class="w">         </span><span class="c">!! loaded column's initial top is moved to the depth `s` where</span>
+<span class="w">         </span><span class="c">!! `g*int_{-s}^{0} rho dz = p_ice_ref`, i.e. an initial</span>
+<span class="w">         </span><span class="c">!! `eta = z_draft - s` (a few cm under ISOMIP+ COLD), with T/S</span>
+<span class="w">         </span><span class="c">!! then evaluated at the trimmed layer centres.  Closed form, exact at</span>
+<span class="w">         </span><span class="c">!! the discrete FV interfaces: requires `&amp;ocean_eos_nml</span>
+<span class="w">         </span><span class="c">!! eos="linear"` and `&amp;ocean_zinit_nml enable, source="linear"`</span>
+<span class="w">         </span><span class="c">!! (the analytic profile is what defines `rho` above the ice</span>
+<span class="w">         </span><span class="c">!! base); anything else fails loud.  Default off =&gt; bit-identical.</span>
 <span class="w">   </span><span class="k">end type </span><span class="n">ocean_cavity_dyn_config_t</span>
 </pre></div>
 
@@ -843,7 +893,7 @@ restricted, hence 10 m.</p>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 22:39 +0000             </p>
+ on 2026-09-26 05:13 +0000             </p>
           </div>
         </div>
         <br>

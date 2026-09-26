@@ -137,13 +137,13 @@
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-dm_coeff">dM_coeff</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-ddm_dx">ddM_dx</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-ddm_dy">ddM_dy</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-denom~27">denom</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-denom">denom</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-dpa_l">dpa_L</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-dpa_r">dpa_R</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-dpa_kk">dpa_kk</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-e_bot_l">e_bot_L</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-e_bot_r">e_bot_R</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-eta~16">eta</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-eta">eta</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-h_l">h_L</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-h_r">h_R</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-hwght">hwght</a>
@@ -153,11 +153,11 @@
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-hwt_lr">hwt_lr</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-hwt_rl">hwt_rl</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-hwt_rr">hwt_rr</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-i~457">i</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-i~16">i</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-idenom_hw">idenom_hw</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-inv_rho0~6">inv_rho0</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-j~428">j</a>
-            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-k~315">k</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-inv_rho0~2">inv_rho0</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-j~13">j</a>
+            <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-k~5">k</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-numer">numer</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-pa_h_intz_l">pa_h_intz_L</a>
             <a class="list-group-item" href="../proc/compute_fv_mom6_impl.html#variable-pa_h_intz_r">pa_h_intz_R</a>
@@ -269,17 +269,19 @@ Pass-3 numerator therefore moves by</p>
 <p>— i.e. exactly <code>−(1/ρ₀)·∂δp/∂x</code>, <strong>the same in every layer</strong>, up
 to the <code>h_neglect</code> divisor (a relative <code>h_n/h_k ≈ 1e-10</code> for a
 metre-thick layer, <code>≈7e-7</code> for one at <code>H_VANISHED</code>).</p>
-<p>Consequence for the SPLIT solver: the depth mean of the layer PGF
-is subtracted from the barotropic forcing
-(<code>F_bt_u_fast = F_bt_u − ⟨PFu⟩_h</code>, <code>rdb_ocean_dyn.F90</code>) and the
-barotropic solution is then folded back over the layers, so a
-depth-uniform <code>δPFu</code> cancels identically and only the
-<code>eta_forcing</code> seam carries the load&rsquo;s barotropic response. Adding
-<code>p_top</code> here therefore does NOT double-count that seam — the two
-are orthogonal by construction. The UNSPLIT driver has neither
-the depth-mean replacement nor the seam, so there this term is
-the load&rsquo;s only path into the momentum, and it is a correction,
-not a duplicate.</p>
+<p>Consequence for the SPLIT solver (<code>&amp;ocean_bt_nml bc_pgf_forcing</code>,
+default, MOM6 <code>BT_force</code>): the depth mean of the layer PGF FORCES
+the barotropic substep, so a depth-uniform <code>δPFu</code> reaches the
+barotropic mode.  The part of <code>p_top</code> that is the atmospheric /
+anomaly load <code>sf%p_surf</code> is ALSO on the <code>eta_forcing</code> seam, and
+<code>set_fast_forcing_eta_pf</code> sheds <code>g·∇η_ib</code> from the forcing so it
+is counted once; the static ice load <code>p_ice_ref</code> cancels inside
+<code>pa(nz+1)</code> against the datum-shifted <code>η_geo</code>, and what survives
+of it is the physical reference-density shortfall.  (The legacy
+split, <code>bc_pgf_forcing = .false.</code>, subtracted the whole depth
+mean, so there a depth-uniform <code>δPFu</code> cancelled identically.)
+The UNSPLIT driver has no seam, so there this term is the load&rsquo;s
+only path into the momentum.</p>
 
 
     <h3>Arguments</h3>
@@ -295,7 +297,7 @@ not a duplicate.</p>
     <tbody>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_layer~111"></span>
+              <span class="anchor" id="variable-h_layer~5"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -310,7 +312,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho_layer~13"></span>
+              <span class="anchor" id="variable-rho_layer"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -325,7 +327,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-b~48"></span>
+              <span class="anchor" id="variable-b~7"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -355,7 +357,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-pa~5"></span>
+              <span class="anchor" id="variable-pa~2"></span>
               real(kind=wp),
             </td>
 <td>intent(inout)</td>
@@ -475,7 +477,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-rho0~38"></span>
+              <span class="anchor" id="variable-rho0~3"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -505,7 +507,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-h_neglect~5"></span>
+              <span class="anchor" id="variable-h_neglect~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -520,7 +522,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-gfs_scale~3"></span>
+              <span class="anchor" id="variable-gfs_scale~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -535,7 +537,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-mass_weight~3"></span>
+              <span class="anchor" id="variable-mass_weight~2"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -550,7 +552,7 @@ not a duplicate.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-p_top~6"></span>
+              <span class="anchor" id="variable-p_top"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -566,7 +568,7 @@ Consulted only when <code>p_top_in_bc</code>; the zero array otherwise.</p>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-p_top_in_bc~3"></span>
+              <span class="anchor" id="variable-p_top_in_bc~2"></span>
               logical,
             </td>
 <td>intent(in)</td>
@@ -584,7 +586,7 @@ bit-identical (same branch-on-a-scalar-knob shape as
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-idxcu~20"></span>
+              <span class="anchor" id="variable-idxcu~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -599,7 +601,7 @@ bit-identical (same branch-on-a-scalar-knob shape as
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-idycv~19"></span>
+              <span class="anchor" id="variable-idycv~2"></span>
               real(kind=wp),
             </td>
 <td>intent(in)</td>
@@ -614,7 +616,7 @@ bit-identical (same branch-on-a-scalar-knob shape as
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nx~426"></span>
+              <span class="anchor" id="variable-nx~17"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -629,7 +631,7 @@ bit-identical (same branch-on-a-scalar-knob shape as
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-ny~426"></span>
+              <span class="anchor" id="variable-ny~17"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -644,7 +646,7 @@ bit-identical (same branch-on-a-scalar-knob shape as
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-nz~372"></span>
+              <span class="anchor" id="variable-nz~13"></span>
               integer,
             </td>
 <td>intent(in)</td>
@@ -1081,7 +1083,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-denom~27"></span>
+              <span class="anchor" id="variable-denom"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1183,7 +1185,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-eta~16"></span>
+              <span class="anchor" id="variable-eta"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1353,7 +1355,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-i~457"></span>
+              <span class="anchor" id="variable-i~16"></span>
               integer,
             </td>
               <td>private</td>
@@ -1387,7 +1389,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-inv_rho0~6"></span>
+              <span class="anchor" id="variable-inv_rho0~2"></span>
               real(kind=wp),
             </td>
               <td>private</td>
@@ -1404,7 +1406,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-j~428"></span>
+              <span class="anchor" id="variable-j~13"></span>
               integer,
             </td>
               <td>private</td>
@@ -1421,7 +1423,7 @@ large graphs.</div>
         </tr>
         <tr>
             <td>
-              <span class="anchor" id="variable-k~315"></span>
+              <span class="anchor" id="variable-k~5"></span>
               integer,
             </td>
               <td>private</td>
@@ -1639,17 +1641,19 @@ large graphs.</div>
 <span class="w">      </span><span class="c">!! to the `h_neglect` divisor (a relative `h_n/h_k ≈ 1e-10` for a</span>
 <span class="w">      </span><span class="c">!! metre-thick layer, `≈7e-7` for one at `H_VANISHED`).</span>
 <span class="w">      </span><span class="c">!!</span>
-<span class="w">      </span><span class="c">!! Consequence for the SPLIT solver: the depth mean of the layer PGF</span>
-<span class="w">      </span><span class="c">!! is subtracted from the barotropic forcing</span>
-<span class="w">      </span><span class="c">!! (`F_bt_u_fast = F_bt_u − ⟨PFu⟩_h`, `rdb_ocean_dyn.F90`) and the</span>
-<span class="w">      </span><span class="c">!! barotropic solution is then folded back over the layers, so a</span>
-<span class="w">      </span><span class="c">!! depth-uniform `δPFu` cancels identically and only the</span>
-<span class="w">      </span><span class="c">!! `eta_forcing` seam carries the load's barotropic response. Adding</span>
-<span class="w">      </span><span class="c">!! `p_top` here therefore does NOT double-count that seam — the two</span>
-<span class="w">      </span><span class="c">!! are orthogonal by construction. The UNSPLIT driver has neither</span>
-<span class="w">      </span><span class="c">!! the depth-mean replacement nor the seam, so there this term is</span>
-<span class="w">      </span><span class="c">!! the load's only path into the momentum, and it is a correction,</span>
-<span class="w">      </span><span class="c">!! not a duplicate.</span>
+<span class="w">      </span><span class="c">!! Consequence for the SPLIT solver (`&amp;ocean_bt_nml bc_pgf_forcing`,</span>
+<span class="w">      </span><span class="c">!! default, MOM6 `BT_force`): the depth mean of the layer PGF FORCES</span>
+<span class="w">      </span><span class="c">!! the barotropic substep, so a depth-uniform `δPFu` reaches the</span>
+<span class="w">      </span><span class="c">!! barotropic mode.  The part of `p_top` that is the atmospheric /</span>
+<span class="w">      </span><span class="c">!! anomaly load `sf%p_surf` is ALSO on the `eta_forcing` seam, and</span>
+<span class="w">      </span><span class="c">!! `set_fast_forcing_eta_pf` sheds `g·∇η_ib` from the forcing so it</span>
+<span class="w">      </span><span class="c">!! is counted once; the static ice load `p_ice_ref` cancels inside</span>
+<span class="w">      </span><span class="c">!! `pa(nz+1)` against the datum-shifted `η_geo`, and what survives</span>
+<span class="w">      </span><span class="c">!! of it is the physical reference-density shortfall.  (The legacy</span>
+<span class="w">      </span><span class="c">!! split, `bc_pgf_forcing = .false.`, subtracted the whole depth</span>
+<span class="w">      </span><span class="c">!! mean, so there a depth-uniform `δPFu` cancelled identically.)</span>
+<span class="w">      </span><span class="c">!! The UNSPLIT driver has no seam, so there this term is the load's</span>
+<span class="w">      </span><span class="c">!! only path into the momentum.</span>
 <span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
 <span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
@@ -1898,7 +1902,7 @@ large graphs.</div>
             <p class="text-end">
               Documentation generated by
               <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
- on 2026-09-25 22:39 +0000             </p>
+ on 2026-09-26 05:13 +0000             </p>
           </div>
         </div>
         <br>

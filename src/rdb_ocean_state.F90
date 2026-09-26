@@ -80,7 +80,8 @@ module rdb_ocean_state
                                CAVITY_SIGN_INVALID, &
                                cavity_water_column_impl, cavity_apply_land_exclusion, &
                                cavity_count_grounded, cavity_fill_cover_frac, &
-                               cavity_draft_is_finite_nonneg, CAVITY_BOUND_INF
+                               cavity_draft_is_finite_nonneg, CAVITY_BOUND_INF, &
+                               cavity_trim_eta_linear_impl
    use rdb_config, only: config_t, ice_hlim_count
    use rdb_profiler, only: profiler_start, profiler_stop
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IC_SEED, &
@@ -1132,6 +1133,14 @@ contains
          !! Reference water-column thickness the IC seeds work on:
          !! `b − z_draft` under an ice shelf, a byte copy of `b`
          !! otherwise.  Host-only setup scratch, released on return.
+      real(wp), allocatable :: eta_trim(:, :)
+         !! Initial free-surface anomaly of the TRIMMED cavity IC
+         !! (`&ocean_cavity_dyn_nml trim_ic_for_p_surf`); 0 when off.
+      real(wp), allocatable :: h_col(:, :)
+         !! Initial water column `water + eta_trim` the layer split seeds
+         !! from; a byte copy of `water` when the trim is off.
+      logical :: trim_ic
+         !! `&ocean_cavity_dyn_nml trim_ic_for_p_surf` under an active cavity.
 
       nz_ml = state%multilayer%nz_ml
       idx_S = state%multilayer%idx_salinity
@@ -1328,10 +1337,57 @@ contains
          water = state%barotropic%b
       end if
 
+      ! MOM6 TRIM_IC_FOR_P_SURF (`&ocean_cavity_dyn_nml
+      ! trim_ic_for_p_surf`, default off).  The ice LOAD stays the
+      ! Boussinesq-isostatic `rho_ref*g*z_draft`; each loaded column's
+      ! initial TOP moves to the depth where the displaced water's own
+      ! weight equals it, so the MOM6 barotropic split starts at rest (see
+      ! `cavity_trim_eta_linear_impl`).  `water` itself — the datum and
+      ! the grounding decision — is untouched: the trim is an initial
+      ! `bt_eta`, not a geometry change.  The density is the linear EOS
+      ! over the analytic zinit profile, both enforced by
+      ! `validate_config`, and taken from `cfg` because they are exactly
+      ! what `ocean_state_init` copied onto `state%eos`.
+      allocate (eta_trim(nx, ny), source=0.0_wp)
+      trim_ic = state%metrics%use_cavity .and. cfg%ocean%cavity_dyn%trim_ic_for_p_surf
+      if (trim_ic) then
+         block
+            real(wp) :: rho_surf, drho_dz
+            logical :: trim_ok
+            rho_surf = cfg%ocean%ic%rho_0 + &
+                       cfg%ocean%ic%beta_S*(cfg%ocean%zinit%lin_s_ref - cfg%ocean%ic%S_ref) - &
+                       cfg%ocean%ic%alpha_T*(cfg%ocean%zinit%lin_t_ref - cfg%ocean%ic%T_ref)
+            drho_dz = cfg%ocean%ic%beta_S*cfg%ocean%zinit%lin_ds_dz - &
+                      cfg%ocean%ic%alpha_T*cfg%ocean%zinit%lin_dt_dz
+            call cavity_trim_eta_linear_impl(eta_trim, trim_ok, state%metrics%z_draft, &
+                                             water, cfg%ocean%cavity_dyn%h_min_cavity, &
+                                             cfg%ocean%ic%rho_0, rho_surf, drho_dz, nx, ny)
+            if (.not. trim_ok) then
+               call fail("ocean_state_seed_from_cfg: &ocean_cavity_dyn_nml "// &
+                         "trim_ic_for_p_surf found no admissible trim depth (the "// &
+                         "initial density must be positive and stably stratified, "// &
+                         "and the trimmed column must stay non-empty)", &
+                         ierr, OCEAN_STATUS_ERR_IC_SEED)
+               return
+            end if
+            call logger%info("ocean_cavity: trimmed the initial column under the ice "// &
+                             "to the load (MOM6 TRIM_IC_FOR_P_SURF): eta in ["// &
+                             to_string(minval(eta_trim))//", "// &
+                             to_string(maxval(eta_trim))//"] m")
+         end block
+      end if
+      allocate (h_col(nx, ny))
+      if (trim_ic) then
+         h_col = water + eta_trim
+      else
+         h_col = water
+      end if
+
       ! Water column thickness h = b − z_draft → the free-surface anomaly
       ! `bt_eta = Σ h_layer − bt_H_ref` starts at zero (SSH = 0 without a
-      ! cavity; the loaded equilibrium under one).
-      state%barotropic%h = water
+      ! cavity; the loaded equilibrium under one) — or at `eta_trim` under
+      ! a trimmed cavity IC.
+      state%barotropic%h = h_col
       state%barotropic%u_face_x = 0.0_wp
       state%barotropic%v_face_y = 0.0_wp
       state%barotropic%hu_face_x = 0.0_wp
@@ -1382,8 +1438,6 @@ contains
                cfg%ocean%topo%max_depth > 0.0_wp) then
          block
             real(wp) :: h_min_seed
-            real(wp), allocatable :: eta_rest(:, :)
-            allocate (eta_rest(nx, ny), source=0.0_wp)
             ! `zstar_h_min` comes off the SLOT, not off `cfg`: there is
             ! one source of truth for the filler thickness and it is the
             ! one the running target builder will use.  `engine_setup`
@@ -1399,23 +1453,22 @@ contains
             ! is installed on the slot by `engine_setup` before this seed,
             ! for the same one-source-of-truth reason as `zstar_h_min`.
             if (state%vcoord%is_init .and. state%vcoord%z_fixed_use_profile) then
-               call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_rest, &
+               call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_trim, &
                                                 state%metrics%z_draft, nx, ny, nz_ml, &
                                                 cfg%ocean%topo%max_depth/real(nz_ml, wp), &
                                                 .true., state%vcoord%z_fixed_zi, &
                                                 state%vcoord%z_fixed_dz, h_min_seed)
             else
                call ocean_vcoord_z_fixed_target_uniform(state%multilayer%h_layer, water, &
-                                                        eta_rest, state%metrics%z_draft, &
+                                                        eta_trim, state%metrics%z_draft, &
                                                         nx, ny, nz_ml, &
                                                         cfg%ocean%topo%max_depth/real(nz_ml, wp), &
                                                         h_min_seed)
             end if
-            deallocate (eta_rest)
          end block
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
-                                        water, nz_ml, &
+                                        h_col, nz_ml, &
                                         apply_wetdry_floor=cfg%ocean%wetdry%enable)
       end if
       ! Keep the barotropic water-column prognostic non-negative on the
@@ -1578,7 +1631,20 @@ contains
       ! ice base; see `seed_zinit_overlay`.
       if (cfg%ocean%zinit%enable) then
 #ifndef RDB_NO_NETCDF
-         if (present(ierr)) then
+         ! A trimmed cavity IC moves the column top to `z_draft - eta_trim`.
+         if (trim_ic) then
+            if (present(ierr)) then
+               call seed_zinit_overlay(state, grid, cfg, ierr=local_ierr, &
+                                       z_top=state%metrics%z_draft - eta_trim)
+               if (local_ierr /= 0) then
+                  ierr = local_ierr
+                  return
+               end if
+            else
+               call seed_zinit_overlay(state, grid, cfg, &
+                                       z_top=state%metrics%z_draft - eta_trim)
+            end if
+         else if (present(ierr)) then
             call seed_zinit_overlay(state, grid, cfg, ierr=local_ierr)
             if (local_ierr /= 0) then
                ierr = local_ierr
@@ -1711,7 +1777,7 @@ contains
    end subroutine seed_wrap_static_2d
 
 #ifndef RDB_NO_NETCDF
-   subroutine seed_zinit_overlay(state, grid, cfg, ierr)
+   subroutine seed_zinit_overlay(state, grid, cfg, ierr, z_top)
       !! Dispatch the `&ocean_zinit_nml` T/S overlay across its two axes:
       !! the profile SOURCE (`"file"` — the pre-regridded NetCDF reader;
       !! `"linear"` — the analytic affine `lin_*` profile) and whether a
@@ -1734,10 +1800,23 @@ contains
       integer, intent(out), optional :: ierr
          !! Threaded straight through to the seeder; an ABSENT `ierr`
          !! stays absent there, so each keeps its own `error stop` text.
+      real(wp), intent(in), optional :: z_top(:, :)
+         !! Column-top depth (m, positive down), FULL ghosted shape, in
+         !! place of `metrics%z_draft`: the TRIMMED cavity IC
+         !! (`&ocean_cavity_dyn_nml trim_ic_for_p_surf`) puts the top at
+         !! `z_draft - eta_trim`.  Absent => `metrics%z_draft`.
 
       logical :: cav
 
       cav = state%metrics%use_cavity
+      if (present(z_top)) then
+         if (trim(adjustl(cfg%ocean%zinit%source)) == "linear") then
+            call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr, z_top)
+         else
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, z_top)
+         end if
+         return
+      end if
       if (trim(adjustl(cfg%ocean%zinit%source)) == "linear") then
          if (cav) then
             call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr, &
