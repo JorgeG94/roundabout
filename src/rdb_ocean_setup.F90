@@ -3288,6 +3288,7 @@ contains
       ocean_state%pressure_force%mass_weight = cfg%ocean%pgf%mass_weight
       ocean_state%pressure_force%reconstruct_for_pressure = &
          cfg%ocean%pgf%reconstruct_for_pressure
+      ocean_state%pressure_force%insitu_density = cfg%ocean%pgf%insitu_density
       ocean_state%pressure_force%recon_scheme = cfg%ocean%pgf%recon_scheme
       ocean_state%pressure_force%p_top_in_bc = cfg%ocean%pgf%p_top_in_bc
       ! The top-of-column load enters the `pa` stack's surface boundary

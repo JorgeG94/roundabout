@@ -36,9 +36,11 @@ module rdb_ocean_pressure_force
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
-   use rdb_eos, only: eos_wright_pgf_column_sweep_impl, eos_t
+   use rdb_eos, only: eos_wright_pgf_column_sweep_impl, eos_t, &
+                      EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV
    use rdb_ocean_pgf_reconstruct, only: plm_edges_column, ppm_edges_column, &
                                         boole_dpa_intz_layer, boole_dpa_face, &
+                                        boole_dpa_face_pcm, &
                                         PGF_RECON_PLM, PGF_RECON_PPM
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -294,6 +296,21 @@ module rdb_ocean_pressure_force
       integer :: recon_scheme = PGF_RECON_PLM
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM. Only consulted
          !! when `reconstruct_for_pressure = .true.`.
+      logical :: insitu_density = .true.
+         !! FV_MOM6 constant-by-layer (PCM) density at its IN-SITU pressure
+         !! (`&ocean_pgf_nml insitu_density`, MOM6 parity).  `.true.`
+         !! (default): each layer's `dpa`/`intz_dpa` and the cross-face
+         !! `intx_dpa`/`inty_dpa` are 5-point Boole quadratures of
+         !! `EOS(T, S, p = -g·rho0·z)` with the layer-mean T/S — MOM6
+         !! `int_density_dz_generic_pcm` (`compute_fv_mom6_insitu_pcm_impl`).
+         !! `.false.`: the legacy PCM integral of `ms%rho_layer`, a
+         !! POTENTIAL density at the single `&ocean_eos_nml p_ref`, which
+         !! drops the pressure dependence of the horizontal density
+         !! gradient below the reference level.  Consulted only by FV_MOM6
+         !! with `reconstruct_for_pressure = .false.`, an EOS handle and
+         !! T/S, and only for a PRESSURE-DEPENDENT EOS (Wright, Roquet):
+         !! for the linear EOS in-situ and potential density coincide, so
+         !! the legacy path runs and answers are bit-identical.
       logical :: p_top_in_bc = .false.
          !! FV_MOM6 top-of-column pressure in the surface boundary
          !! condition (`&ocean_pgf_nml p_top_in_bc`). `.false.` (default):
@@ -814,6 +831,22 @@ contains
                                                   pgf%gfs_scale, pgf%recon_scheme, &
                                                   ms%p_top, pgf%p_top_in_bc, &
                                                   metrics%idxCu, metrics%idyCv, nx, ny, nz)
+         else if (use_insitu_pcm(pgf, ms, eos)) then
+            ! Constant-by-layer T/S, density at the in-situ pressure
+            ! (MOM6 `int_density_dz_generic_pcm`).  See `insitu_density`.
+            call compute_fv_mom6_insitu_pcm_impl(ms%h_layer, &
+                                                 ms%tracers(ms%idx_salinity)%hTr, &
+                                                 ms%tracers(ms%idx_temperature)%hTr, &
+                                                 pgf%b, eos, &
+                                                 pgf%e_face%data, pgf%pa%data, &
+                                                 pgf%intz_dpa%data, &
+                                                 pgf%intx_pa%data, pgf%inty_pa%data, &
+                                                 pgf%intx_dpa%data, pgf%inty_dpa%data, &
+                                                 pgf%dpdx_face%data, pgf%dpdy_face%data, &
+                                                 pgf%rho0, pgf%rho_ref, pgf%h_neglect, &
+                                                 pgf%gfs_scale, pgf%mass_weight, &
+                                                 ms%p_top, pgf%p_top_in_bc, &
+                                                 metrics%idxCu, metrics%idyCv, nx, ny, nz)
          else
             call compute_fv_mom6_impl(ms%h_layer, ms%rho_layer, pgf%b, &
                                       pgf%e_face%data, pgf%pa%data, &
@@ -1713,6 +1746,298 @@ contains
          end do
       end if
    end subroutine compute_fv_mom6_reconstruct_impl
+
+   pure function use_insitu_pcm(pgf, ms, eos) result(yes)
+      !! Does the FV_MOM6 constant-by-layer branch take the IN-SITU
+      !! density path (`compute_fv_mom6_insitu_pcm_impl`)?  Only when it
+      !! can change the answer: the knob is on, there is an EOS handle and
+      !! T/S to evaluate it on, and the EOS depends on pressure.  For the
+      !! linear EOS `ms%rho_layer` already IS the in-situ density, so the
+      !! legacy path runs, bit-identical.
+      type(ocean_pressure_force_t), intent(in) :: pgf
+      type(multilayer_state_t), intent(in) :: ms
+      type(eos_t), intent(in), optional :: eos
+      logical :: yes
+      yes = .false.
+      if (.not. pgf%insitu_density) return
+      if (.not. present(eos)) return
+      if (ms%idx_salinity <= 0 .or. ms%idx_temperature <= 0) return
+      yes = eos%variant == EOS_VARIANT_WRIGHT_97 .or. &
+            eos%variant == EOS_VARIANT_ROQUET_SPV
+   end function use_insitu_pcm
+
+   pure subroutine compute_fv_mom6_insitu_pcm_impl(h_layer, hS, hT, b, eos, &
+                                                   e_face, pa, intz_dpa, &
+                                                   intx_pa, inty_pa, &
+                                                   intx_dpa, inty_dpa, &
+                                                   dpdx_face, dpdy_face, &
+                                                   rho0, rho_ref, h_neglect, &
+                                                   gfs_scale, mass_weight, &
+                                                   p_top, p_top_in_bc, &
+                                                   idxCu, idyCv, nx, ny, nz)
+      !! FV_MOM6 pressure gradient, constant-by-layer (PCM) T/S, density at
+      !! the IN-SITU pressure — MOM6 `PressureForce_FV_Bouss` with
+      !! `RECONSTRUCT_FOR_PRESSURE = False` (`int_density_dz_generic_pcm`).
+      !!
+      !! The PCM twin `compute_fv_mom6_impl` integrates `ms%rho_layer`, a
+      !! POTENTIAL density at the one horizontally uniform `p_ref`.  Its
+      !! horizontal difference at depth is then the difference at the
+      !! REFERENCE pressure, not at the local one: the thermal expansion
+      !! coefficient roughly doubles between the surface and 4000 dbar
+      !! (thermobaricity), so with `p_ref = 0` the deep baroclinic
+      !! pressure gradient — the bottom-pressure gradient that forces the
+      !! barotropic mode over topography — is systematically too weak.
+      !! On the global 1-degree WOA13 spin-up it held Drake Passage at
+      !! ~80 Sv where MOM6 on the same protocol adjusts to ~155 Sv, and
+      !! the transport tracked `p_ref` (0 / 2000 / 4000 dbar: 83 / 143 /
+      !! 203 Sv) — the tell of a reference-pressure artefact.
+      !!
+      !! Here every density is `EOS(T, S, p = −g·rho0·z)` at the point it
+      !! is used, integrated by the same 5-point Boole rules as the
+      !! reconstruction branch, with the sub-layer profile flat:
+      !!
+      !!   * Pass 1 (per column): `dpa(k)`, `intz_dpa(k)` from
+      !!     `boole_dpa_intz_layer` with top = bottom = mean T/S.
+      !!   * Pass 2 (per face): `intx_dpa` / `inty_dpa` from
+      !!     `boole_dpa_face_pcm` — end points are the columns' own `dpa`,
+      !!     the three interior sub-columns interpolate `z` linearly and
+      !!     T/S with MOM6's near-bottom mass weighting (`hWght`, the same
+      !!     measure and blend as `compute_fv_mom6_impl`) when
+      !!     `mass_weight`.
+      !!   * Passes 3–5: the face assembly, identical to the other two
+      !!     FV_MOM6 branches.
+      !!
+      !! The trapezoid `0.5·(dpa_L + dpa_R)` of the potential-density twin
+      !! is NOT kept: an in-situ density carries the compressibility
+      !! gradient (`~4.4e-3 kg m⁻⁴`), and the trapezoid's curvature
+      !! residual `g·(∂ρ/∂z)·Δe²/12` at a tilted interface (a partial-cell
+      !! bed step) would be of the size of the signal.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      real(wp), intent(in)    :: hS(nx, ny, nz)
+         !! Salinity * thickness (PSU*m) — layer-mean S = hS / h.
+      real(wp), intent(in)    :: hT(nx, ny, nz)
+         !! Temperature * thickness (degC*m) — layer-mean T = hT / h.
+      real(wp), intent(in)    :: b(nx, ny)
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(inout) :: e_face(nx, ny, nz + 1)
+      real(wp), intent(inout) :: pa(nx, ny, nz + 1)
+      real(wp), intent(inout) :: intz_dpa(nx, ny, nz)
+      real(wp), intent(inout) :: intx_pa(nx + 1, ny, nz + 1)
+      real(wp), intent(inout) :: inty_pa(nx, ny + 1, nz + 1)
+      real(wp), intent(inout) :: intx_dpa(nx + 1, ny, nz)
+      real(wp), intent(inout) :: inty_dpa(nx, ny + 1, nz)
+      real(wp), intent(inout) :: dpdx_face(nx + 1, ny, nz)
+      real(wp), intent(inout) :: dpdy_face(nx, ny + 1, nz)
+      real(wp), intent(in)    :: rho0, rho_ref, h_neglect, gfs_scale
+      logical, intent(in)    :: mass_weight
+         !! MOM6 `MASS_WEIGHT_IN_PRESSURE_GRADIENT` (near-bottom `hWght`).
+      real(wp), intent(in)    :: p_top(nx, ny)
+         !! Top-of-column pressure (Pa, `>= 0`), `multilayer_state_t%p_top`.
+      logical, intent(in)    :: p_top_in_bc
+         !! Add `p_top` to the Pass-1 surface BC (`.false.` ⇒ the plain
+         !! `rho_ref·g·eta` seed).
+      real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
+
+      integer  :: i, j, k
+      real(wp) :: inv_rho0, eta, dpa_kk, intz_kk, t_m, s_m
+      real(wp) :: t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R
+      real(wp) :: hwght, hwl, hwr, idenom_hw, hwt_ll, hwt_lr, hwt_rr, hwt_rl
+      real(wp) :: h_L, h_R, e_bot_L, e_bot_R
+      real(wp) :: pa_h_intz_L, pa_h_intz_R, numer, denom
+      real(wp) :: dM_coeff, ddM_dx, ddM_dy
+
+      inv_rho0 = 1.0_wp/rho0
+
+      ! ---- Pass 1: per-column e_face, pa, intz_dpa (in-situ Boole) ----
+      do concurrent(j=1:ny, i=1:nx) local(k, eta, dpa_kk, intz_kk, t_m, s_m)
+         e_face(i, j, 1) = -b(i, j)
+         do k = 1, nz
+            e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
+         end do
+         eta = e_face(i, j, nz + 1)
+         if (p_top_in_bc) then
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
+         else
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+         end if
+         do k = nz, 1, -1
+            t_m = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            call boole_dpa_intz_layer(eos, rho0, rho_ref, &
+                                      e_face(i, j, k + 1), h_layer(i, j, k), &
+                                      t_m, t_m, t_m, s_m, s_m, s_m, &
+                                      .false., dpa_kk, intz_kk)
+            pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
+            intz_dpa(i, j, k) = intz_kk
+         end do
+      end do
+
+      ! ---- Pass 2a: u-face horizontal integrals ----
+      do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                          dpa_L, dpa_R, hwght, hwl, hwr, idenom_hw, &
+                                          hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+         intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
+         do k = nz, 1, -1
+            hwght = 0.0_wp
+            if (mass_weight) then
+               hwght = max(0.0_wp, &
+                           e_face(i, j, 1) - e_face(i - 1, j, k + 1), &
+                           e_face(i - 1, j, 1) - e_face(i, j, k + 1))
+            end if
+            hwt_ll = 1.0_wp
+            hwt_lr = 0.0_wp
+            hwt_rr = 1.0_wp
+            hwt_rl = 0.0_wp
+            if (hwght > 0.0_wp) then
+               hwl = h_layer(i - 1, j, k) + h_neglect
+               hwr = h_layer(i, j, k) + h_neglect
+               hwght = hwght*((hwl - hwr)/(hwl + hwr))**2
+               idenom_hw = 1.0_wp/(hwght*(hwr + hwl) + hwl*hwr)
+               hwt_ll = (hwght*hwl + hwr*hwl)*idenom_hw
+               hwt_lr = (hwght*hwr)*idenom_hw
+               hwt_rr = (hwght*hwr + hwr*hwl)*idenom_hw
+               hwt_rl = (hwght*hwl)*idenom_hw
+            end if
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face_pcm(eos, rho0, rho_ref, &
+                                    e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                    h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                    t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
+                                    hwt_ll, hwt_lr, hwt_rr, hwt_rl, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
+            intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
+         end do
+      end do
+      do concurrent(k=1:nz, j=1:ny)
+         intx_dpa(1, j, k) = 0.0_wp
+         intx_dpa(nx + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz + 1, j=1:ny)
+         intx_pa(1, j, k) = 0.0_wp
+         intx_pa(nx + 1, j, k) = 0.0_wp
+      end do
+
+      ! ---- Pass 2b: v-face horizontal integrals ----
+      do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                          dpa_L, dpa_R, hwght, hwl, hwr, idenom_hw, &
+                                          hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+         inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
+         do k = nz, 1, -1
+            hwght = 0.0_wp
+            if (mass_weight) then
+               hwght = max(0.0_wp, &
+                           e_face(i, j, 1) - e_face(i, j - 1, k + 1), &
+                           e_face(i, j - 1, 1) - e_face(i, j, k + 1))
+            end if
+            hwt_ll = 1.0_wp
+            hwt_lr = 0.0_wp
+            hwt_rr = 1.0_wp
+            hwt_rl = 0.0_wp
+            if (hwght > 0.0_wp) then
+               hwl = h_layer(i, j - 1, k) + h_neglect
+               hwr = h_layer(i, j, k) + h_neglect
+               hwght = hwght*((hwl - hwr)/(hwl + hwr))**2
+               idenom_hw = 1.0_wp/(hwght*(hwr + hwl) + hwl*hwr)
+               hwt_ll = (hwght*hwl + hwr*hwl)*idenom_hw
+               hwt_lr = (hwght*hwr)*idenom_hw
+               hwt_rr = (hwght*hwr + hwr*hwl)*idenom_hw
+               hwt_rl = (hwght*hwl)*idenom_hw
+            end if
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face_pcm(eos, rho0, rho_ref, &
+                                    e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                    h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                    t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
+                                    hwt_ll, hwt_lr, hwt_rr, hwt_rl, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
+            inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
+         end do
+      end do
+      do concurrent(k=1:nz, i=1:nx)
+         inty_dpa(i, 1, k) = 0.0_wp
+         inty_dpa(i, ny + 1, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz + 1, i=1:nx)
+         inty_pa(i, 1, k) = 0.0_wp
+         inty_pa(i, ny + 1, k) = 0.0_wp
+      end do
+
+      ! ---- Pass 3: PFu assembly (identical to compute_fv_mom6_impl) ----
+      do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+         local(h_L, h_R, e_bot_L, e_bot_R, pa_h_intz_L, pa_h_intz_R, numer, denom)
+         h_L = h_layer(i - 1, j, k)
+         h_R = h_layer(i, j, k)
+         e_bot_L = e_face(i - 1, j, k)
+         e_bot_R = e_face(i, j, k)
+         pa_h_intz_L = pa(i - 1, j, k + 1)*h_L + intz_dpa(i - 1, j, k)
+         pa_h_intz_R = pa(i, j, k + 1)*h_R + intz_dpa(i, j, k)
+         numer = (pa_h_intz_L - pa_h_intz_R) &
+                 + (h_R - h_L)*intx_pa(i, j, k + 1) &
+                 - (e_bot_R - e_bot_L)*intx_dpa(i, j, k)
+         denom = h_L + h_R + h_neglect
+         dpdx_face(i, j, k) = numer*(2.0_wp*inv_rho0*idxCu(i, j))/denom
+      end do
+      do concurrent(k=1:nz, j=1:ny)
+         dpdx_face(1, j, k) = 0.0_wp
+         dpdx_face(nx + 1, j, k) = 0.0_wp
+      end do
+
+      ! ---- Pass 4: PFv assembly ----
+      do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+         local(h_L, h_R, e_bot_L, e_bot_R, pa_h_intz_L, pa_h_intz_R, numer, denom)
+         h_L = h_layer(i, j - 1, k)
+         h_R = h_layer(i, j, k)
+         e_bot_L = e_face(i, j - 1, k)
+         e_bot_R = e_face(i, j, k)
+         pa_h_intz_L = pa(i, j - 1, k + 1)*h_L + intz_dpa(i, j - 1, k)
+         pa_h_intz_R = pa(i, j, k + 1)*h_R + intz_dpa(i, j, k)
+         numer = (pa_h_intz_L - pa_h_intz_R) &
+                 + (h_R - h_L)*inty_pa(i, j, k + 1) &
+                 - (e_bot_R - e_bot_L)*inty_dpa(i, j, k)
+         denom = h_L + h_R + h_neglect
+         dpdy_face(i, j, k) = numer*(2.0_wp*inv_rho0*idyCv(i, j))/denom
+      end do
+      do concurrent(k=1:nz, i=1:nx)
+         dpdy_face(i, 1, k) = 0.0_wp
+         dpdy_face(i, ny + 1, k) = 0.0_wp
+      end do
+
+      ! ---- Pass 5: Montgomery dM correction (MOM6 GFS_scale) ----
+      ! Same depth-independent form as the reconstruction branch, with the
+      ! surface layer's mean in-situ density recovered from its `dpa`.
+      if (gfs_scale < 1.0_wp - 1.0e-12_wp) then
+         dM_coeff = (gfs_scale - 1.0_wp)*GRAVITY*inv_rho0
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) local(ddM_dx)
+            ddM_dx = dM_coeff*(recon_rho_surf(pa(i, j, nz), pa(i, j, nz + 1), &
+                                              h_layer(i, j, nz), rho_ref) &
+                               *e_face(i, j, nz + 1) &
+                               - recon_rho_surf(pa(i - 1, j, nz), pa(i - 1, j, nz + 1), &
+                                                h_layer(i - 1, j, nz), rho_ref) &
+                               *e_face(i - 1, j, nz + 1))*idxCu(i, j)
+            dpdx_face(i, j, k) = dpdx_face(i, j, k) - ddM_dx
+         end do
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) local(ddM_dy)
+            ddM_dy = dM_coeff*(recon_rho_surf(pa(i, j, nz), pa(i, j, nz + 1), &
+                                              h_layer(i, j, nz), rho_ref) &
+                               *e_face(i, j, nz + 1) &
+                               - recon_rho_surf(pa(i, j - 1, nz), pa(i, j - 1, nz + 1), &
+                                                h_layer(i, j - 1, nz), rho_ref) &
+                               *e_face(i, j - 1, nz + 1))*idyCv(i, j)
+            dpdy_face(i, j, k) = dpdy_face(i, j, k) - ddM_dy
+         end do
+      end if
+   end subroutine compute_fv_mom6_insitu_pcm_impl
 
    pure function recon_layer_mean(hq, h) result(q)
       !$acc routine seq
