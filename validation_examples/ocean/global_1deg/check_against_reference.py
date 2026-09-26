@@ -31,38 +31,42 @@ differ at round-off, and round-off grows.  So the two kinds of number are
 checked differently.
 
 **Energy (En, and MaxCFL): a relative band that widens with time.**
-En is a global integral of a smooth, large-scale adjustment (the WOA
-density field spinning up geostrophically over two months, then the
-closures spinning it down), so it stays close across toolchains long after
+En is a global integral of a smooth, large-scale adjustment (the
+barotropic mode answering the WOA pressure field within days, a plateau
+through the first hundred days, then the closures spinning it down), so it stays close across toolchains long after
 individual features have decorrelated — but it does decorrelate, so the
 band widens:
 
 ====================  ===========  ==========================================
 days                   En band      reasoning
 ====================  ===========  ==========================================
-1 - 10  (quick mode)   0.5 %        deterministic adjustment; the console
-                                    prints En to 4 digits (rounding alone is
-                                    up to 0.2 %), cross-toolchain round-off
-                                    is still far below that
-11 - 30                2 %          spin-up; the one-cell features (Celebes
-                                    overflow, Gibraltar) start to decorrelate
-31 - 90                5 %          En peak (day 65); eddying part of the
-                                    flow decorrelated
+1 - 10  (quick mode)   0.5 %        deterministic adjustment (En peaks on
+                                    day 3); the console prints En to 4
+                                    digits (rounding alone is up to 0.2 %),
+                                    cross-toolchain round-off is still far
+                                    below that
+11 - 30                2 %          spin-up; the one-cell straits and
+                                    shelves that carry the fastest water
+                                    start to decorrelate
+31 - 90                5 %          En plateau (secondary maximum on day
+                                    63); eddying part of the flow
+                                    decorrelated
 91 - 365               10 %         slow spin-down of a decorrelated flow; the
                                     global integral is still pinned by the
                                     initial state and the closures
 ====================  ===========  ==========================================
 
 On the reference toolchain the run is deterministic and matches every
-printed digit (all 365 days re-run at the reference commit), so the band is
-slack there; it exists for the others.  gfortran 15.1 on the CPU (serial)
-also matched En and MaxCFL to every printed digit over the 10 quick days.
+printed digit (the previous reference year re-ran all 365 days identically),
+so the band is slack there; it exists for the others.  On that previous
+reference, gfortran 15.1 on the CPU (serial) also matched En and MaxCFL to
+every printed digit over the 10 quick days (not yet repeated on this one).
 The later bands are not measured across toolchains (a CPU year is days of
 wall time); they are set from how the flow evolves, and are the numbers to
 revisit when a second toolchain's year is on record.
 MaxCFL is a pointwise maximum, far more sensitive to where one fast cell
 sits than the integral, so its band is twice En's (and it must stay
-below 0.5 every day, far above the reference maximum of 0.16).
+below 0.5 every day, well above the reference maximum of 0.243).
 
 **Budgets (Mass, Salt, Heat Error): round-off in THIS run — not equality
 with the reference.**  The Error is the relative closure residual of a

@@ -23,7 +23,7 @@ closures make of it.
 | Time step | `dt = 1800 s` (OM_1deg `DT`), `pred_corr`, barotropic `n_inner` from the per-wet-cell CFL (32) |
 | Physics | Wright EOS, FV-MOM6 PGF, Sadourny energy-conserving Coriolis, Smagorinsky Laplacian (0.15, floor 2000 m²/s) + biharmonic (0.06) with `bound_kh`, quadratic bottom drag distributed over `hbbl = 10 m` (OM_1deg `HBBL`, `DRAG_BG_VEL`), KPP + PP81, `maxvel = 6 m/s` (OM_1deg `MAXVEL`) |
 | Output | daily: SSH, and the top-10 m means of u, v, T, S (one conservative `z_fixed` output level), single precision |
-| Cost | 11 s per simulated day on one V100 (a year in 67 min), 10.4 GB of device memory |
+| Cost | 12.7 s per simulated day on one V100 (a year in 77 min), 10.4 GB of device memory |
 
 ## 1. Reproduce it — one command
 
@@ -93,18 +93,20 @@ grows:
 
   | days | En band | why |
   |---:|---:|---|
-  | 1–10 (`--quick`) | 0.5 % | deterministic geostrophic adjustment; the console prints En to 4 digits (rounding alone is up to 0.2 %) |
-  | 11–30 | 2 % | spin-up; the one-cell features (Celebes overflow, Gibraltar) begin to decorrelate |
-  | 31–90 | 5 % | En peaks (day 65); the eddying part of the flow has decorrelated |
+  | 1–10 (`--quick`) | 0.5 % | deterministic adjustment: the barotropic mode answers the baroclinic pressure field within days (En peaks on day 3), then settles; the console prints En to 4 digits (rounding alone is up to 0.2 %) |
+  | 11–30 | 2 % | spin-up; the one-cell straits and shelves that carry the fastest water begin to decorrelate |
+  | 31–90 | 5 % | En plateau (~5.1e-04, a secondary maximum on day 63); the eddying part of the flow has decorrelated |
   | 91–365 | 10 % | slow spin-down of a decorrelated flow, still pinned by the initial state and the closures |
 
   MaxCFL, a pointwise maximum and far more sensitive to where one fast cell
   sits, gets twice En's band and must stay below 0.5 (the reference peaks
-  at 0.16). On the reference toolchain the run is deterministic and matches
-  every printed digit (all 365 days re-run at the reference commit: identical)
-  — the bands exist for the others. gfortran 15.1 on the CPU (serial) also
-  matches En and MaxCFL to every printed digit over the 10 quick days
-  (a 5550 s run). The bands after day 10 are not yet measured across toolchains
+  at 0.243 on day 28). On the reference toolchain the run is deterministic
+  and matches every printed digit (the previous reference year, before the
+  barotropic-split fix, re-ran all 365 days identically) — the bands exist
+  for the others. On that previous reference, gfortran 15.1 on the CPU
+  (serial) also matched En and MaxCFL to every printed digit over the 10
+  quick days (a 5550 s run); not yet repeated on this one. The bands after
+  day 10 are not yet measured across toolchains
   (a CPU year is days of wall time); they follow from how the flow evolves.
 * **Budgets — round-off in this run, not equality with the reference.** The
   `Error` of a closed domain is accumulated round-off, which is
@@ -179,7 +181,7 @@ python3 validation_examples/ocean/global_1deg/run_global_1deg.py --days 365 --ou
 
 The Python-driven run is the same computation as the executable's: its
 diagnostic file is bit-identical to the reference run's (checked on the
-year run, every record of SSH, u, v, T and S).
+previous reference year's run, every record of SSH, u, v, T and S).
 
 ### The movie from the executable's output
 
@@ -197,50 +199,71 @@ map for SSH), a built-in bitmap font, PPM frames, then `ffmpeg` to MP4
 
 ## 4. What the year shows
 
-Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-24:
-365 days, 17 520 steps, 4013 s wall (11 s per simulated day), 10.4 GB of
-device memory.
+Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-25,
+code `f995eeef2` (the MOM6 barotropic split, `&ocean_bt_nml bc_pgf_forcing`,
+plus the FV_MOM6 in-situ density): 365 days, 17 520 steps, 4637 s wall
+(12.7 s per simulated day), 10.4 GB of device memory.
 
-| day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max 3-D \|u\|,\|v\| (m/s) and where |
+| day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s) and where |
 |---:|---:|---:|---:|---:|---:|---|
-| 1 | 2.532e-04 | 0.031 | -1.80e-14 | -4.4e-16 | -2.3e-16 | 2.00, Strait of Gibraltar, ~550 m |
-| 10 | 3.556e-04 | 0.112 | -1.80e-13 | -3.9e-15 | -3.2e-15 | 2.97, Celebes Sea trench, 4800 m |
-| 30 | 5.416e-04 | 0.160 | -5.41e-13 | -1.2e-14 | -1.0e-14 | 4.23, Celebes Sea trench |
-| 60 | 5.777e-04 | 0.156 | -1.08e-12 | -2.4e-14 | -2.1e-14 | 4.00, Celebes Sea trench |
-| 90 | 5.747e-04 | 0.135 | -1.62e-12 | -3.7e-14 | -3.1e-14 | 3.46, Celebes Sea trench |
-| 180 | 5.375e-04 | 0.091 | -3.25e-12 | -7.4e-14 | -6.1e-14 | 2.38, Celebes Sea trench |
-| 240 | 4.996e-04 | 0.069 | -4.33e-12 | -1.0e-13 | -8.0e-14 | 1.75, Celebes Sea trench |
-| 300 | 4.631e-04 | 0.059 | -5.41e-12 | -1.3e-13 | -9.8e-14 | 1.45, Celebes Sea trench |
-| 365 | 4.345e-04 | 0.039 | -6.58e-12 | -1.5e-13 | -1.2e-13 | 1.12, Strait of Gibraltar |
+| 1 | 5.764e-04 | 0.046 | -1.80e-14 | -5.6e-16 | -2.4e-16 | 0.59, Cape Hatteras shelf, 30 m cell |
+| 10 | 5.166e-04 | 0.238 | -1.80e-13 | -3.7e-15 | -3.3e-15 | 0.85, Taiwan Strait, 17 m cell |
+| 30 | 5.067e-04 | 0.239 | -5.41e-13 | -1.2e-14 | -9.8e-15 | 0.80, North Carolina shelf, 16 m cell |
+| 60 | 5.097e-04 | 0.224 | -1.08e-12 | -2.4e-14 | -2.1e-14 | 0.70, Taiwan Strait |
+| 90 | 5.100e-04 | 0.220 | -1.62e-12 | -3.7e-14 | -3.2e-14 | 0.65, Taiwan Strait |
+| 180 | 4.614e-04 | 0.146 | -3.25e-12 | -7.3e-14 | -6.4e-14 | 0.67, North Carolina shelf |
+| 240 | 4.390e-04 | 0.112 | -4.33e-12 | -9.7e-14 | -8.4e-14 | 0.67, Bering Strait, 42 m cell |
+| 300 | 4.172e-04 | 0.087 | -5.41e-12 | -1.2e-13 | -1.0e-13 | 0.69, Bering Strait |
+| 365 | 3.941e-04 | 0.066 | -6.58e-12 | -1.5e-13 | -1.2e-13 | 0.71, Bering Strait |
 
-* **No NaN, no CFL truncation, no positive-definite-limiter event, and the
-  6 m/s `maxvel` clamp never reached** (3-D maximum over the year 4.33 m/s,
-  day 38).
-* **Energy is bounded.** En rises from rest over the first two months as the
-  WOA density field adjusts geostrophically, peaks at 5.79e-04 m²/s² on
-  day 65, and then decays slowly (4.35e-04 at day 365): with no forcing the
-  closures spin it down.
+(Speeds are the daily means of the diagnostic file's one top-10 m level;
+the file carries no deeper velocity.)
+
+* **No NaN, no CFL truncation, no positive-definite-limiter event, no
+  NaN-catch**: each of these is logged when it fires, and the console has
+  none. The 6 m/s `maxvel` clamp keeps no counter, and the 3-D maximum
+  speed was not re-measured for this year (the diagnostic file holds only
+  the top 10 m; the previous reference year's 3-D maximum was 4.33 m/s, in
+  the Celebes trench, day 38). MaxCFL stays at or below 0.243 all year.
+* **Why the curve differs from the previous reference.** That year was
+  measured before the barotropic mode was driven by the depth mean of the
+  baroclinic pressure gradient (JEBAR, MOM6's barotropic split). Now the
+  barotropic mode answers the WOA pressure field at once: En reaches
+  5.76e-04 on day 1 (was 2.53e-04) and peaks on day 3 instead of rising
+  over two months; the faster, stronger barotropic flow lifts the MaxCFL
+  peak from 0.16 to 0.243 (day 28).
+* **Energy is bounded.** En peaks at 5.924e-04 m²/s² on day 3, settles to a
+  plateau of 5.0–5.1e-04 through day ~100 (a secondary maximum of 5.13e-04
+  on day 63), and then decays slowly (3.94e-04 at day 365): with no forcing
+  the closures spin it down.
 * **Budgets close to round-off, linearly.** The relative residuals grow at
-  a constant rate — mass −1.80e-14 per day, salt −4.1e-16, heat −3.4e-16 —
+  a constant rate — mass −1.80e-14 per day, salt −4.0e-16, heat −3.4e-16 —
   i.e. round-off accumulating, not a leak; the tracked boundary fluxes
   (`out`) stay at round-off size in this closed domain (mass ≤ 1e2 kg of
-  1.4e21, heat ≤ 7e10 J of 5.0e21).
-* The fastest water all year is the Celebes Sea overflow (§5) and the
-  Gibraltar exchange (1–2 m/s through a one-cell, 600 m channel — the
-  Mediterranean outflow, the right order of magnitude). The surface
-  (top-10 m daily mean) never exceeds 0.50 m/s: the equatorial current
-  system and the Antarctic Circumpolar Current's fronts carry it, and the
-  movie shows them spinning up and slowly decaying.
+  1.4e21, heat ≤ 6e10 J of 5.0e21).
+* **The fastest surface water is in one-cell shallow straits and shelves.**
+  The top-10 m daily mean peaks at 0.92 m/s on day 2 on the Yucatán shelf
+  (a 10 m cell); after that the domain maximum, 0.6–0.9 m/s, sits in the
+  Taiwan Strait (days 4–115), on the North Carolina shelf south of Cape
+  Hatteras (on and off, days 17–197) and in the Bering Strait (from day
+  116 on) — cells 16–42 m deep that carry the barotropic flow. The previous
+  reference's surface never exceeded 0.50 m/s. Elsewhere the equatorial
+  current system and the Antarctic Circumpolar Current's fronts carry the
+  surface flow (the Drake Passage box peaks at 0.49 m/s), and the movie
+  shows them spinning up and slowly decaying. The Drake Passage transport
+  is not measured: the diagnostic file carries no depth-integrated transport.
 * **The Florida Straits jet is gone.** With uniform 130 m layers (the
   scoping probe) a 9.5 m cell next to 587 m cells in the Straits carried
   6 m/s by day 2 — with bed-only or HBBL drag alike. With the stretched
   profile the same cells are 2–5 m layers like their neighbours: the
   Straits stayed below 0.7 m/s over the first 12 days of the probe, and
-  over the year they never carry the domain maximum.
-* **The Python-driven run is bit-identical to the executable's**: every
-  value of every record of SSH, T, S, u and v in the two diagnostic files
-  (43.5 M values per field, ghosts included) is equal, and so are En and
-  the mass drift each day.
+  over this year their top-10 m speed peaks at 0.52 m/s (day 43) and never
+  carries the surface maximum.
+* **The Python-driven run is bit-identical to the executable's** (checked on
+  the previous reference year; not re-run for this one): every value of
+  every record of SSH, T, S, u and v in the two diagnostic files (43.5 M
+  values per field, ghosts included) is equal, and so are En and the mass
+  drift each day.
 
 ## 5. Known limits of this configuration
 
@@ -258,10 +281,11 @@ device memory.
   keeps a basin warm (the Celebes Sea, 3.3 °C at depth behind a sill that
   the 1° topography puts at ~2700 m) the colder Pacific water overflows
   into it from the start and runs down a one-cell trench as a narrow bed
-  jet (4.3 m/s at 4800 m by day 38, saturated by the bottom drag, then
-  decaying to 0.9 m/s by day 365). It is the model
-  geometry disagreeing with the observed state, not an instability, and it
-  is the fastest flow in the run. With bed-only drag (see the next point)
+  jet. In the previous reference year (before the barotropic-split fix; the
+  3-D field was not re-measured on this one) it reached 4.3 m/s at 4800 m by
+  day 38, saturated by the bottom drag, then decayed to 0.9 m/s by day 365.
+  It is the model geometry disagreeing with the observed state, not an
+  instability, and it was the fastest flow in that run. With bed-only drag (see the next point)
   the same jet reaches the 6 m/s clamp by day 19.
 * **`z_fixed` + bed-only bottom drag gives no bottom drag.** The bed-only
   mode (`hbbl = 0`) drags layer `k = 1`, which is an inert filler in every
