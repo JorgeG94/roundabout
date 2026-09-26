@@ -430,7 +430,13 @@ PROBLEMS["lid_slope"] = {
     "topo": "flat", "max_depth": CAVITY_DEPTH, "tier2": False,
     "cavity": {"draft_config": "linear", "draft_depth": 570.0,
                "draft_slope": -6.9e-3, "draft_x0": -10000.0,
-               "draft_x1": 72000.0},
+               "draft_x1": 72000.0,
+               # Start from a BALANCED state: the Boussinesq load
+               # rho_ref*g*z_draft outweighs the lighter ISOMIP+ COLD water
+               # it displaces, a depth-uniform force the MOM6 barotropic
+               # split (bc_pgf_forcing) acts on. Same trim as the shipped
+               # cavity_sloping_lid_rest.nml (MOM6 TRIM_IC_FOR_P_SURF).
+               "trim_ic_for_p_surf": True},
     "doc": "a linearly SLOPING ice lid with a calving front. The headline "
            "cavity geometry, and the one the Phase-6 PGF corrections (Yung, "
            "Hallberg, Adcroft & Morrison 2026, JAMES 18, e2025MS005645) "
@@ -796,6 +802,12 @@ def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
     # the sloping lid additionally injects the ice load as the stack's top
     # boundary condition.
     p_top = ".true." if (cav and cav.get("draft_config") == "linear") else ".false."
+    # `z_fixed` under a cavity runs the layer-mean (PCM) density, as the
+    # shipped z_fixed cavity configurations do: `validate_config` refuses the
+    # in-layer PLM/PPM reconstruction there (it reads the inert top-side
+    # fillers as water at the partial top cell) until the filler-aware
+    # reconstruction lands.  Every other cell keeps the reconstruction.
+    recon_p = ".false." if (cav and fam_id == "z_fixed") else ".true."
 
     bt_extra = ""
     if pin:
@@ -806,6 +818,7 @@ def render(name, prob, fam, strat, eos, remap="ppm", leg="inviscid"):
         "NGHOST": NGHOST, "DT": DT, "CORIOLIS_F": CORIOLIS_F,
         "VCOORD": vcoord, "REMAP": remap, "VCOORD_EXTRA": extra,
         "TOPO_CONFIG": prob["topo"], "MAX_DEPTH": max_depth,
+        "RECON_P": recon_p,
         "EDGE_DEPTH": prob.get("edge_depth", max_depth),
         "SLOPE_SCALE": prob.get("slope_scale", 4.0e5),
         "BATHY_FILE": bathy_block, "CAVITY": cavity_block,
@@ -851,6 +864,19 @@ def _bathy_setup(prob):
 # ONLY and says so rather than being evaluated on noise.
 T1_STEPS = 4320          # 30 days at dt = 600
 T2_STEPS = 480           # 3.33 days
+# The SEAMOUNT problems (the `seamount` pair and the `rx0` ladder) run 10 days
+# at tier 1 (maintainer decision, 2026-09-25).  Under the MOM6 barotropic
+# split (`&ocean_bt_nml bc_pgf_forcing`, the default) the depth mean of the
+# sigma-family PGF truncation over a seamount forces the barotropic mode, as
+# it does in MOM6; the legacy split discarded it.  The inviscid legs'
+# sloping-boundary mode -- the one MOM6 shares (MOM6_EVIDENCE) -- then reaches
+# the CFL wall inside 30 days on the steeper rungs and aborts, so a 30-day
+# nightly measures only WHEN a documented mode kills the run.  Ten days keeps
+# every cell reaching its end, so the nightly still gates conservation,
+# finiteness, the level bar and the rate on every cell.  Flat, slope and lid
+# problems keep the 30 days.
+T1_STEPS_SEAMOUNT = 1440  # 10 days at dt = 600
+T1_SEAMOUNT_CLASSES = ("seamount", "rx0")
 REST_SIGMA_MAX = 0.05 / 2.0 / 86400.0
     #: Amplitude growth-rate bar, 1/s.  0.05 per day of `En` = a 20-day
     #: e-folding; `En ~ exp(2 sigma t)` so the amplitude rate is half that.
@@ -970,6 +996,16 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
         # The RATE gate. Tier 1 only: a 3.3-day twin cannot fit an
         # exponential whose e-folding the bar puts at 20 days.
         kw["rest_sigma_max"] = REST_SIGMA_MAX
+        if prob["class"] in T1_SEAMOUNT_CLASSES:
+            # 10 days is too short for the TREND gates: the rest adjustment
+            # over a seamount is still rising at day 10 (viscous cells that
+            # settle by day 30 read peak == final and a fitted e-folding of
+            # the adjustment itself). The LEVEL gates all stay armed.
+            kw["rest_trend_skip_tiers"] = [1]
+            kw["rest_trend_skip_reason"] = (
+                "a 10-day seamount row (T1_STEPS_SEAMOUNT): the rest "
+                "adjustment is still rising, so settles / growth-rate would "
+                "measure the adjustment, not an instability")
     else:
         kw["known_failure"] = {
             "assertions": ["completed"],
@@ -991,8 +1027,10 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
         kw["matrix"]["twin_known_failure"] = (
             _marker(leg, mkey, twin) if twin else None)
     t2 = prob.get("tier2_" + leg, prob.get("tier2"))
+    t1_steps = (T1_STEPS_SEAMOUNT if prob["class"] in T1_SEAMOUNT_CLASSES
+                else T1_STEPS)
     entry = _case(name, os.path.join(OUT_REL, name + ".nml"), "rest",
-                  T1_STEPS, T2_STEPS if t2 else 0, **kw)
+                  t1_steps, T2_STEPS if t2 else 0, **kw)
     if not t2:
         entry["tier2"] = {"skip": True, "reason":
                           "the tier-2 slice is a few problems per leg (see "
