@@ -152,6 +152,7 @@ module test_ocean_cavity_load
                             rdb_ocean_get_v_face_y_layer_ptr, rdb_ocean_get_b_ptr, &
                             rdb_ocean_get_grid_info, rdb_ocean_set_tracer
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_ocean_cavity, only: cavity_trim_eta_linear_impl
    implicit none
    private
 
@@ -216,6 +217,25 @@ module test_ocean_cavity_load
    real(wp), parameter :: DRAFT_STEP_U = 2.0_wp
       !! Per-column draft step (m) for the sloping-lid unit case — `D`.
 
+   ! ---- Trimmed-IC (MOM6 TRIM_IC_FOR_P_SURF) unit case ----------------
+   ! The `cavity_sloping_lid_rest` geometry and ISOMIP+ COLD density on
+   ! the linear EOS: rho(z) = RHO_S_T + DRHO_DZ_T*z (z positive UP), with
+   ! the surface value BELOW rho_ref (the T/S references are not the
+   ! surface values), which is what makes the load shortfall non-trivial.
+   real(wp), parameter :: RHO_REF_T = 1027.51_wp
+   real(wp), parameter :: RHO_S_T = RHO_REF_T + 8.0587609e-1_wp*(33.8_wp - 34.2_wp) &
+                          - 3.8356948e-2_wp*(-1.9_wp + 1.0_wp)
+      !! `rho_0 + beta_S*(S_s - S_ref) - alpha_T*(T_s - T_ref)`.
+   real(wp), parameter :: DRHO_DZ_T = 8.0587609e-1_wp*(-1.0416667e-3_wp)
+      !! `beta_S * dS/dz` (kg/m^4); N^2 = -(g/rho_0)*DRHO_DZ_T = 8.0e-6.
+   real(wp), parameter :: DX_T = 2000.0_wp
+   real(wp), parameter :: BED_T = 720.0_wp
+   real(wp), parameter :: DRAFT0_T = 494.0_wp
+   real(wp), parameter :: DRAFT_STEP_T = -13.8_wp
+      !! The case's own per-face draft step (6.9e-3 * 2 km), shallowing.
+   integer, parameter :: NZ_T = 15
+      !! The case's own layer count.
+
 contains
 
    subroutine collect_ocean_cavity_load_tests(testsuite)
@@ -226,7 +246,9 @@ contains
                   new_unittest("cavity_resting_uniform_density", test_rest_uniform), &
                   new_unittest("flat_lid_stratified_pfu_is_zero", test_flat_lid_pfu), &
                   new_unittest("sloping_lid_residual_matches_formula", test_slope_formula), &
-                  new_unittest("load_off_control_at_the_pgf", test_load_off_control) &
+                  new_unittest("load_off_control_at_the_pgf", test_load_off_control), &
+                  new_unittest("trim_ic_root_is_the_displaced_weight", test_trim_root), &
+                  new_unittest("trim_ic_balances_the_depth_mean_pfu", test_trim_balances_pfu) &
                   ]
    end subroutine collect_ocean_cavity_load_tests
 
@@ -458,9 +480,12 @@ contains
       !! BEBT damping; under the legacy split the same run holds
       !! 7.1e-8 m/s — the truncation floor of the gate above.
       !!
-      !! A model whose initial surface is TRIMMED to the actual column
-      !! density (MOM6 `trim_for_ice`) starts balanced and would not show
-      !! this; the static datum here does not do that yet.
+      !! A TRIMMED initial surface (`&ocean_cavity_dyn_nml
+      !! trim_ic_for_p_surf`, MOM6 `trim_for_ice`) starts balanced and does
+      !! not show this — `trim_ic_balances_the_depth_mean_pfu` below.  This
+      !! case seeds its temperature through the API instead of the zinit
+      !! overlay the trim needs, so it keeps measuring the untrimmed
+      !! adjustment on purpose.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: umax, vmax, ubt_max, ubc_max, draft_max, h_min, a_0, bound
       logical :: ok
@@ -808,5 +833,227 @@ contains
       end block checks
       call pgf_on%destroy(); call pgf_off%destroy(); call ms%destroy()
    end subroutine test_load_off_control
+
+   ! ==================================================================
+   ! Trimmed initial condition (MOM6 TRIM_IC_FOR_P_SURF)
+   ! ==================================================================
+
+   pure function int_rho_linear(s) result(w)
+      !! `int_{-s}^{0} rho(z) dz` for the affine trimmed-case profile —
+      !! the displaced water's mass per unit area above depth `s`.
+      real(wp), intent(in) :: s
+      real(wp) :: w
+      w = RHO_S_T*s - 0.5_wp*DRHO_DZ_T*s*s
+   end function int_rho_linear
+
+   subroutine test_trim_root(error)
+      !! The helper's closed-form root IS the trim condition
+      !! `g*int_{-s}^{0} rho dz = rho_ref*g*z_draft`, column by column, with
+      !! `eta = z_draft - s`; an open-ocean column (`z_draft = 0`) and a
+      !! GROUNDED one (`water < h_min_cavity`) are left exactly at 0.  The
+      !! magnitude is checked against the leading-order estimate
+      !! `eta ~ I(z_draft)/rho_ref`, `I = int (rho - rho_ref)`, so a sign
+      !! or factor-of-two slip in the root cannot pass.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NC = 5
+      real(wp) :: zd(NC, 1), water(NC, 1), eta(NC, 1)
+      real(wp) :: s, resid, lead
+      logical :: ok
+      integer :: i
+
+      zd(:, 1) = [0.0_wp, 11.0_wp, 342.9_wp, 494.0_wp, 700.0_wp]
+      water(:, 1) = BED_T - zd(:, 1)
+      call cavity_trim_eta_linear_impl(eta, ok, zd, water, 40.0_wp, RHO_REF_T, &
+                                       RHO_S_T, DRHO_DZ_T, NC, 1)
+      call check(error, ok, "an ISOMIP+ COLD column must admit a trim depth")
+      if (allocated(error)) return
+      call check(error, eta(1, 1) == 0.0_wp, "open ocean (z_draft = 0) is not trimmed")
+      if (allocated(error)) return
+      call check(error, eta(5, 1) == 0.0_wp, &
+                 "a GROUNDED column (20 m < h_min_cavity) is not trimmed")
+      if (allocated(error)) return
+      do i = 2, 4
+         s = zd(i, 1) - eta(i, 1)
+         resid = int_rho_linear(s) - RHO_REF_T*zd(i, 1)
+         call check(error, abs(resid) <= 1.0e-12_wp*RHO_REF_T*zd(i, 1), &
+                    "the trimmed column's displaced mass must equal the load's "// &
+                    "rho_ref*z_draft (the MOM6 trim_for_ice condition)")
+         if (allocated(error)) return
+         lead = (int_rho_linear(zd(i, 1)) - RHO_REF_T*zd(i, 1))/RHO_REF_T
+         call check(error, abs(eta(i, 1) - lead) <= 0.01_wp*abs(lead), &
+                    "eta must match the leading-order I(z_draft)/rho_ref to 1 %")
+         if (allocated(error)) return
+         call check(error, eta(i, 1) < 0.0_wp, &
+                    "water lighter than rho_ref above the ice base needs a DEEPER top")
+         if (allocated(error)) return
+      end do
+      ! The extremum of I sits where rho(-z_draft) = rho_ref, z = 342.9 m:
+      ! -4.80e-2 m, the number the case's configure line prints.
+      call check(error, abs(eta(3, 1) + 4.80e-2_wp) <= 1.0e-4_wp, &
+                 "the deepest trim on the ISOMIP+ COLD profile is -4.80 cm")
+   end subroutine test_trim_root
+
+   pure subroutine seed_trim_column(ms, b, water, trimmed)
+      !! The `cavity_sloping_lid_rest` resting state across a strip of
+      !! columns (draft stepping by `DRAFT_STEP_T`), `NZ_T` sigma layers,
+      !! the layer density sampled at each layer centre's GEOPOTENTIAL
+      !! height (flat isopycnals), the Boussinesq-isostatic load — and,
+      !! when `trimmed`, the column top moved to `-z_draft + eta_trim`.
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(out) :: b(:, :)
+      real(wp), intent(out) :: water(:, :)
+         !! The seeded water column, trim included.
+      logical, intent(in) :: trimmed
+      integer :: i, j, k, nx, ny
+      real(wp), allocatable :: zd(:, :), eta(:, :)
+      real(wp) :: e_low
+      logical :: ok
+
+      nx = size(ms%p_top, 1)
+      ny = size(ms%p_top, 2)
+      allocate (zd(nx, ny), eta(nx, ny))
+      do j = 1, ny
+         do i = 1, nx
+            b(i, j) = BED_T
+            zd(i, j) = DRAFT0_T + DRAFT_STEP_T*real(i - 1, wp)
+            water(i, j) = BED_T - zd(i, j)
+         end do
+      end do
+      eta = 0.0_wp
+      if (trimmed) call cavity_trim_eta_linear_impl(eta, ok, zd, water, 40.0_wp, &
+                                                    RHO_REF_T, RHO_S_T, DRHO_DZ_T, nx, ny)
+      do j = 1, ny
+         do i = 1, nx
+            water(i, j) = water(i, j) + eta(i, j)
+            e_low = -BED_T
+            do k = 1, NZ_T
+               ms%h_layer(i, j, k) = water(i, j)/real(NZ_T, wp)
+               ms%rho_layer(i, j, k) = RHO_S_T + DRHO_DZ_T*(e_low + 0.5_wp*ms%h_layer(i, j, k))
+               e_low = e_low + ms%h_layer(i, j, k)
+            end do
+            ms%p_top(i, j) = (RHO_REF_T*GRAVITY)*zd(i, j)
+         end do
+      end do
+   end subroutine seed_trim_column
+
+   subroutine test_trim_balances_pfu(error)
+      !! THE t = 0 MEASUREMENT behind `cavity_sloping_lid_rest`, at the PGF,
+      !! on the case's own geometry, stratification and `nz = 15`.
+      !!
+      !! UNTRIMMED, every level below the ice sits `-g*I(z_draft)` off the
+      !! open-ocean hydrostatic pressure (`I = int_{-z_draft}^{0}
+      !! (rho - rho_ref) dz`), so the thickness-weighted depth mean of the
+      !! FV_MOM6 face force carries the bottom-pressure gradient
+      !! `g*(I(z_R) - I(z_L))/(rho_ref*dx)` — up to 1.8e-5 m/s^2 here, what
+      !! the MOM6 split (`bc_pgf_forcing`) hands the barotropic mode.
+      !!
+      !! TRIMMED (`cavity_trim_eta_linear_impl`), every column's INTERFACE
+      !! pressures equal the open ocean's at the same z (the layer-midpoint
+      !! stack integrates a linear density exactly), and what is left of
+      !! the depth mean is the discretisation's own truncation, derived:
+      !!
+      !!   * the Pass-3 in-layer integral `pa(top)*h + rho'*g*h^2/2` treats
+      !!     each layer's density as uniform, short by `g*rho_z*h^3/12` per
+      !!     column; sigma layers `h = W/nz` differ across the face, so the
+      !!     depth mean carries `-g*rho_z*(W_L^3 - W_R^3)/(12*nz^2*rho_0*dx*Hbar)`
+      !!     (~ N^2*W*dW/(4*nz^2*dx), 1-3e-8 m/s^2 here).  Under sigma it is
+      !!     DEPTH-UNIFORM, which is why the legacy split never saw it;
+      !!   * plus the top interface's trapezoid error `G = -(De^3/12)*rho_0*N^2`
+      !!     (flat bed: the depth-summed `G(k) - G(k+1)` telescopes to it),
+      !!     `N^2*D^3/(12*dx*Hbar)` ~ 4e-9 m/s^2 — bounded, not predicted.
+      !!
+      !! Both are checked: the untrimmed mean to 1 % of its peak against
+      !! (shortfall + quadrature), the trimmed one against the quadrature
+      !! term to within the trapezoid bound.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t) :: ms_raw, ms_trim
+      type(ocean_pressure_force_t) :: pgf_raw, pgf_trim
+      type(hgrid_t) :: grid
+      real(wp), allocatable :: b(:, :), w_raw(:, :), w_trim(:, :)
+      real(wp) :: mean_raw, mean_trim, hsum_r, hsum_t, hb, zl, zr
+      real(wp) :: pred_load, pred_q_raw, pred_q_trim, g_top, n2
+      real(wp) :: err_raw, err_trim, peak_load, peak_trim
+      integer :: i, j, k, nx, ny
+
+      checks: block
+         call grid%init(30, 4, NG_U, DX_T, DX_T)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         ms_raw%nz_ml = NZ_T
+         call ms_raw%init(grid)
+         ms_trim%nz_ml = NZ_T
+         call ms_trim%init(grid)
+         allocate (b(nx, ny), w_raw(nx, ny), w_trim(nx, ny))
+         call seed_trim_column(ms_raw, b, w_raw, .false.)
+         call seed_trim_column(ms_trim, b, w_trim, .true.)
+         call make_pgf_t(grid, pgf_raw)
+         call run_pgf_u(grid, ms_raw, pgf_raw, b)
+         call make_pgf_t(grid, pgf_trim)
+         call run_pgf_u(grid, ms_trim, pgf_trim, b)
+
+         n2 = -GRAVITY*DRHO_DZ_T/RHO_REF_T
+         err_raw = 0.0_wp
+         err_trim = 0.0_wp
+         peak_load = 0.0_wp
+         peak_trim = 0.0_wp
+         do j = 3, ny - 1
+            do i = 3, nx - 1
+               mean_raw = 0.0_wp; mean_trim = 0.0_wp; hsum_r = 0.0_wp; hsum_t = 0.0_wp
+               do k = 1, NZ_T
+                  hb = 0.5_wp*(ms_raw%h_layer(i - 1, j, k) + ms_raw%h_layer(i, j, k))
+                  mean_raw = mean_raw + hb*pgf_raw%dpdx_face%data(i, j, k)
+                  hsum_r = hsum_r + hb
+                  hb = 0.5_wp*(ms_trim%h_layer(i - 1, j, k) + ms_trim%h_layer(i, j, k))
+                  mean_trim = mean_trim + hb*pgf_trim%dpdx_face%data(i, j, k)
+                  hsum_t = hsum_t + hb
+               end do
+               mean_raw = mean_raw/hsum_r
+               mean_trim = mean_trim/hsum_t
+               ! u-face i sits between columns i-1 (L) and i (R).
+               zl = DRAFT0_T + DRAFT_STEP_T*real(i - 2, wp)
+               zr = DRAFT0_T + DRAFT_STEP_T*real(i - 1, wp)
+               pred_load = GRAVITY*((int_rho_linear(zr) - RHO_REF_T*zr) - &
+                                    (int_rho_linear(zl) - RHO_REF_T*zl))/(RHO_REF_T*DX_T)
+               pred_q_raw = -GRAVITY*DRHO_DZ_T*(w_raw(i - 1, j)**3 - w_raw(i, j)**3)/ &
+                            (12.0_wp*real(NZ_T*NZ_T, wp)*RHO_REF_T*DX_T*hsum_r)
+               pred_q_trim = -GRAVITY*DRHO_DZ_T*(w_trim(i - 1, j)**3 - w_trim(i, j)**3)/ &
+                             (12.0_wp*real(NZ_T*NZ_T, wp)*RHO_REF_T*DX_T*hsum_t)
+               g_top = n2*abs(DRAFT_STEP_T)**3/(12.0_wp*DX_T*hsum_t)
+               err_raw = max(err_raw, abs(mean_raw - (pred_load + pred_q_raw)))
+               peak_load = max(peak_load, abs(pred_load))
+               err_trim = max(err_trim, abs(mean_trim - pred_q_trim)/(1.5_wp*g_top))
+               peak_trim = max(peak_trim, abs(mean_trim))
+            end do
+         end do
+         call check(error, peak_load > 1.0e-5_wp, &
+                    "the untrimmed load shortfall must be the 1e-5 m/s^2 force it is "// &
+                    "on this geometry (else the comparison below is vacuous)")
+         if (allocated(error)) exit checks
+         call check(error, err_raw <= 0.01_wp*peak_load, &
+                    "untrimmed, the depth-mean face force must be the load "// &
+                    "shortfall's bottom-pressure gradient g*dI/dx/rho_ref (plus the "// &
+                    "in-layer quadrature term) to 1 % of its peak")
+         if (allocated(error)) exit checks
+         call check(error, err_trim <= 1.0_wp, &
+                    "trimmed, the depth-mean face force must be the in-layer "// &
+                    "quadrature truncation to within the top trapezoid error")
+         if (allocated(error)) exit checks
+         call check(error, peak_trim <= 1.0e-2_wp*peak_load, &
+                    "and the trim must remove the load shortfall: two decades or more")
+      end block checks
+      call pgf_raw%destroy(); call pgf_trim%destroy()
+      call ms_raw%destroy(); call ms_trim%destroy()
+   end subroutine test_trim_balances_pfu
+
+   subroutine make_pgf_t(grid, pgf)
+      !! FV_MOM6 with the load in the top BC, at the trimmed case's rho_ref.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_pressure_force_t), intent(out) :: pgf
+      call pgf%init(grid, nz_ml=NZ_T)
+      pgf%variant = OPGF_VARIANT_FV_MOM6
+      pgf%rho0 = RHO_REF_T
+      pgf%rho_ref = RHO_REF_T
+      pgf%p_top_in_bc = .true.
+   end subroutine make_pgf_t
 
 end module test_ocean_cavity_load

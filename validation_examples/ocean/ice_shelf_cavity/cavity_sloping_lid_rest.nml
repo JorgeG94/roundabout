@@ -14,10 +14,32 @@
 !     bt_H_ref  = b - z_draft                   the barotropic DATUM
 !     p_ice_ref = rho_ref*GRAVITY*z_draft       the Boussinesq-isostatic load
 !     ms%p_top  = p_ice_ref + sf%p_surf         the PGF/EOS surface BC
-!     pa(nz+1)  = rho_ref*g*eta_geo + p_top     -> 0 at rest, bit-exactly
+!     pa(nz+1)  = rho_ref*g*eta_geo + p_top     -> rho_ref*g*eta_trim at rest
 !
-! so the barotropic mode sees `bt_eta = 0` and a seam of zero, and the
-! baroclinic residual is the FV-MOM6 truncation error alone.
+! THE BALANCED INITIAL STATE (`trim_ic_for_p_surf`, MOM6
+! TRIM_IC_FOR_P_SURF / `trim_for_ice`).  `p_ice_ref` is the displaced
+! weight at the REFERENCE density; the stratified water it displaces
+! weighs g*int_{-z_draft}^{0} rho dz, lighter by g*I(z_draft),
+! I = int (rho - rho_ref) dz = -0.2878*z_d + 4.197e-4*z_d^2 kg/m2 here
+! (surface water is 0.29 kg/m3 lighter than rho_ref, N^2 = 8.0e-6).  At
+! eta = 0 every level under the ice would then sit -g*I off the open
+! ocean at the same z: a DEPTH-UNIFORM force
+! (g/rho_ref)*(rho(-z_draft) - rho_ref)*grad(z_draft), up to 1.8e-5 m/s^2
+! (-8.4e-6 at the grounding end, +1.8e-5 near the front, zero at
+! z_draft = 343 m), ~5000x the truncation this case measures.  The legacy
+! split discarded it with the depth mean; the MOM6 split
+! (`&ocean_bt_nml bc_pgf_forcing`, default) hands it to the barotropic
+! mode, which adjusted to it on day 1 (En 1.06E-06, over the bar).  As in
+! MOM6, the LOAD is kept (the ice mass is what is prescribed) and the
+! initial column top moves to the depth s where the water above weighs
+! the load, g*int_{-s}^{0} rho dz = p_ice_ref: eta_trim = z_draft - s,
+! -3.0 mm at the front to -4.80 cm at z_draft = 343 m, with T/S
+! evaluated at the trimmed layer centres.  The interface pressures are
+! then the open ocean's exactly; what the depth mean still carries is
+! truncation (measured at the PGF on this geometry, 1.6e-5 -> 3.9e-8
+! m/s^2: `test_ocean_cavity_load::trim_ic_balances_the_depth_mean_pfu`).
+! So the barotropic mode starts balanced and the residual is the FV-MOM6
+! truncation error alone.
 !
 ! WHY THE INITIAL CONDITION USES `&ocean_zinit_nml source = "linear"`.
 ! Under `VCOORD_SIGMA` the layer interfaces TILT with the ice base.  The
@@ -26,8 +48,8 @@
 ! the isopycnals with the lid and is NOT a state of rest, so the run would
 ! measure a real baroclinic adjustment rather than a numerical error.  The
 ! zinit "linear" source evaluates T(z)/S(z) at each layer centre's TRUE
-! GEOPOTENTIAL depth (column top at `z = -z_draft`), so the isopycnals are
-! flat in z on every column, sloping lid included.
+! GEOPOTENTIAL depth (column top at `z = -z_draft + eta_trim`), so the
+! isopycnals are flat in z on every column, sloping lid included.
 !
 ! GEOMETRY (2-D in x; the y direction is 6 cells of the same column).
 !   * 48 x 6 x 15 @ dx = dy = 2 km  ->  96 km x 12 km, flat bed at 720 m.
@@ -78,44 +100,52 @@
 !     a_peak = 3.73e-9 m/s^2
 !     geostrophic scale U = a_peak/|f| = 2.65e-5 m/s  ->  En ~ 3.5e-10
 !
-! MEASURED, gfortran 15.1 Release, single rank, 2026-09-20.  En is the
-! domain-mean specific KE from the daily [stats] line.
+! Under the MOM6 split the depth MEAN reaches the barotropic mode too, and
+! it carries one more truncation term the deviation above does not: the
+! Pass-3 in-layer integral treats each layer's density as uniform (short
+! by g*rho_z*h^3/12), and sigma layers h = W/nz differ across a face, so
+! the depth mean carries a DEPTH-UNIFORM ~N^2*W*dW/(4*nz^2*dx) = 1-4e-8
+! m/s^2 (measured at the PGF, see above).  Curl-free in this 2-D geometry,
+! it is balanced by a sub-millimetre surface tilt; its seiche is
+! |u| ~ a*L/(2c) ~ 2e-5 m/s, inside the plateau below.
+!
+! MEASURED, gfortran 15.1 Release, single rank, 2026-09-25, with the
+! trimmed IC and the default MOM6 split.  En is the domain-mean specific
+! KE from the daily [stats] line.
 !
 !   pred_corr (the DEFAULT, and the base case):
-!     day  1   1.030E-09      day 22   2.290E-09      day 40   7.133E-07
-!     day  5   1.346E-09      day 25   5.275E-09      day 50   2.770E-06
-!     day 10   1.626E-09      day 30   3.043E-08      day 60   3.894E-06
-!     day 20   2.070E-09      day 35   1.901E-07
+!     day  1   1.117E-09      day 22   2.495E-09      day 40   6.434E-07
+!     day  5   1.381E-09      day 25   3.875E-09      day 50   2.523E-06
+!     day 10   1.877E-09      day 30   2.298E-08      day 60   3.492E-06
+!     day 20   1.645E-09      day 35   1.552E-07
 !
 !   ssp_rk2 (the automatic __ssp_rk2 twin):
-!     day 10   1.660E-09      day 15   4.617E-06      day 30   1.652E-04
-!     day 11   1.981E-09      day 20   4.217E-05
+!     day 10   1.875E-09      day 15   5.757E-06      day 30   1.850E-04
+!     day 11   1.577E-09      day 20   4.237E-05
 !
-!   The tables above predate the MOM6 barotropic split and are what
-!   `&ocean_bt_nml bc_pgf_forcing = .false.` (the legacy split) still gives.
-!   Under the default split the depth-mean layer PGF forces the barotropic
-!   mode, so the Boussinesq-isostatic load's REFERENCE-density shortfall
-!   (a depth-uniform N^2*z_draft*grad(z_draft), see the README) is no
-!   longer annihilated: the barotropic mode adjusts to it on day 1 and the
-!   same late mode then grows from that larger seed (gfortran 15.1,
-!   2026-09-25, pred_corr):
-!     day  1   1.061E-06      day 20   4.371E-09      day 40   1.730E-06
-!     day  5   2.108E-07      day 30   1.316E-07      day 60   5.466E-06
-!     day 10   1.020E-08
-!   The day-1 transient exceeds the REST_1MM_S bar (energy:rest); the
-!   remedy is an initial surface balanced against the actual column
-!   density (MOM6 `trim_for_ice`, here the deferred draft_source="in_situ").
+!   Controls on the same tree (pred_corr):
+!     * UNtrimmed (trim_ic_for_p_surf = .false.): the barotropic mode
+!       adjusts to the load shortfall on day 1 and the late mode grows
+!       from that larger seed -- 1.061E-06 (d1, over the REST_1MM_S bar),
+!       2.108E-07 (d5), 1.020E-08 (d10), 4.371E-09 (d20), 1.316E-07 (d30).
+!     * the legacy split (`&ocean_bt_nml bc_pgf_forcing = .false.`, no
+!       trim), which discards the depth mean and so both the shortfall and
+!       the in-layer term: 1.030E-09 (d1), 1.346E-09 (d5), 1.626E-09
+!       (d10), 2.070E-09 (d20), 5.275E-09 (d25), 3.043E-08 (d30),
+!       3.894E-06 (d60) -- the table this file carried through 2026-09-24,
+!       and within 30 % of the trimmed default at every sample.  (ssp_rk2,
+!       legacy: 1.981E-09 d11, 4.617E-06 d15, 1.652E-04 d30.)
 !
-! Cross-toolchain: the GPU build (nvfortran 26.5, -stdpar=gpu, cc70, one
-! Tesla V100-DGXS, 4320 steps in 74.6 s) reads 3.043E-08 at day 30 — every
-! printed digit of the gfortran answer, on a different compiler and a
-! different execution model.  The measurement is the algorithm, not an FMA
-! accident.
+! Cross-toolchain (legacy split, 2026-09-20): the GPU build (nvfortran
+! 26.5, -stdpar=gpu, cc70, one Tesla V100-DGXS, 4320 steps in 74.6 s) read
+! 3.043E-08 at day 30 — every printed digit of the gfortran answer, on a
+! different compiler and a different execution model.  The measurement is
+! the algorithm, not an FMA accident.
 !
 ! READ IT IN TWO PARTS.
 !
-! (a) THE PLATEAU, days 1-20, is the measurement.  En sits at 1.0-2.1E-09,
-!     i.e. |u|_rms = 4.5-6.5e-05 m/s, against the derived 3.5E-10 / 2.6e-05
+! (a) THE PLATEAU, days 1-20, is the measurement.  En sits at 0.9-1.9E-09,
+!     i.e. |u|_rms = 4.2-6.2e-05 m/s, against the derived 3.5E-10 / 2.6e-05
 !     m/s.  Two to three times a peak-acceleration estimate compared against
 !     a domain rms is as close as that formula can be asked to come, and it
 !     is the number the sloping-surface PGF corrections have to beat.  Two
@@ -127,10 +157,11 @@
 !
 ! (b) THE GROWTH, from day ~22, is the FINDING, and it is why this file is
 !     a Phase-6 baseline rather than a passing gate.  En leaves the plateau
-!     on a ~3.2-day e-folding, then SATURATES: 3.9E-06 by day 60 (2.8 mm/s
+!     on a ~3.2-day e-folding, then SATURATES: 3.5E-06 by day 60 (2.6 mm/s
 !     rms) with the rate clearly decaying, every budget residual still at
-!     4e-13 relative, no CFL truncation and no velocity clamping.  It is
-!     bounded, not runaway.  Characterised by substitution on this tree:
+!     8e-13 relative, no CFL truncation and no velocity clamping.  It is
+!     bounded, not runaway.  Characterised by substitution (under the
+!     legacy split, 2026-09-20, whose curve the trimmed default tracks):
 !       * dt 600 -> 300 reproduces the curve (day 30: 3.069E-08 vs
 !         3.043E-08).  It is NOT an (omega*dt)^n outer-split mode.
 !       * ISOMIP+'s own Laplacian (Table 4, nu_h = 6.0 m2/s) only DELAYS it
@@ -145,19 +176,22 @@
 !         entirely downstream of the sloping-lid PGF error: remove the
 !         source and it does not exist.
 !     ssp_rk2 then amplifies the same wave field catastrophically from day
-!     12 (1.65E-04 at day 30, 5400x the default) — which is what
+!     12 (1.85E-04 at day 30, 8000x the default) — which is what
 !     EXPERIMENTAL on that scheme means, stated as a number, exactly as in
 !     `validation_examples/ocean/eady/resting_stratified_channel.nml`.
 !
 ! THE GATE.  `tests/regression/stability_manifest.py` runs this at
 ! `en_rest_max = REST_1MM_S` (0.5e-06 m2/s2, 1 mm/s), the bar the sloped
 ! resting family already uses and the velocity a resting sub-shelf cavity
-! has no excuse to exceed; the measured day-30 peak of 3.043E-08 clears it
-! by 16x in energy, 4x in velocity.  It is carried as a SCOPED XFAIL on
-! `energy:rest-settles` only, because (b) means the final sample is the
-! peak at every horizon short of saturation.  It does NOT clear the tighter
-! `REST_100UM_S` (0.5e-08) the Phase-5 design proposed — day 30 is 6x over
-! it — and that is recorded here deliberately rather than legislated away:
+! has no excuse to exceed; the measured day-30 peak of 2.298E-08 clears it
+! by 22x in energy, 4.7x in velocity.  At tier 1 (30 days) it is carried
+! as a SCOPED XFAIL on `energy:rest-settles` only, because (b) means the
+! final sample is the peak at every horizon past day ~22 and short of
+! saturation; the 20-day tier-2 twin ends on the plateau (final 1.645E-09
+! = 88 % of its 1.877E-09 day-10 peak) and settles.  It does NOT clear the
+! tighter `REST_100UM_S` (0.5e-08) the Phase-5 design proposed — day 30 is
+! 4.6x over it — and that is recorded here deliberately rather than
+! legislated away:
 ! restoring it is the Phase-6 acceptance criterion.  Do not close either by
 ! widening the bar, by shortening the run, or by putting viscosity into
 ! this file.
@@ -174,13 +208,13 @@
 ! ... order 10^-9 m s^-1 or less" (§5.2).  This build implements NONE of
 ! their three corrections (nonlinear surface pressure reconstruction §3.1,
 ! interior reference interface §3.2, MWIPG §3.3.2), so at their own 10-day
-! horizon it sits at |u|_rms = 5.7e-05 m/s.  Read that comparison with the
+! horizon it sits at |u|_rms = 6.1e-05 m/s.  Read that comparison with the
 ! two configuration differences in front of you: their runs carry a
 ! Laplacian viscosity (1000 m2/s for the icemount) plus top and bottom drag
 ! (c_D = 0.002, U_bg = 0.05 m/s, ~1-day spin-down), and this file carries
 ! NO dissipation at all by design, so it integrates the spurious force
-! instead of arresting it.  With ISOMIP+'s nu_h = 6.0 m2/s this file reads
-! 3.73E-10 (|u|_rms = 2.7e-05 m/s) at day 10 — still above their
+! instead of arresting it.  With ISOMIP+'s nu_h = 6.0 m2/s this file read
+! 3.73E-10 (|u|_rms = 2.7e-05 m/s) at day 10 (legacy split) — still above their
 ! uncorrected sigma figure.  The gap is the work, not the measurement.
 !
 ! Run:
@@ -241,6 +275,9 @@
    draft_x0     = -10000.0     ! anchor OUTSIDE the domain so ghosts are iced
    draft_x1     = 72000.0      ! the CALVING FRONT; open ocean beyond
    h_min_cavity = 40.0         ! MOM6-LAYER's ISOMIP+ minimum column
+   trim_ic_for_p_surf = .true. ! MOM6 TRIM_IC_FOR_P_SURF: start the column
+                               ! top where the stratified water above it
+                               ! weighs the load (header) -- a real rest
 /
 
 &ocean_pgf_nml
