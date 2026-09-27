@@ -4105,6 +4105,7 @@ contains
          !! full-dt prognostic update.  Both .false. under ssp_rk2 ⇒ every
          !! gate below is untaken ⇒ bit-identical.
       logical :: sponge_maps_on
+      logical :: sponge_seam
          !! .true. when the map-driven sponge (PR-23) supersedes the legacy
          !! band path. A local logical because Fortran does not guarantee
          !! `.and.` short-circuits past `present()`.
@@ -4869,6 +4870,24 @@ contains
       else if (present(bc)) then
          call ocean_sponge_apply(grid, bc, ms, dt)
          call ocean_sponge_apply_tracers(grid, bc, ms, dt)
+      end if
+      ! Both sponges relax this tile's PHYSICAL cells only; the copies of
+      ! those cells in a neighbour's seam ghosts keep the un-relaxed value,
+      ! and the boundary-layer scheme and the corrector's advection read
+      ! them before the stage-end exchange.  Refresh the seam ghosts on a
+      ! decomposed run (collective: the gate is rank-uniform).
+      if (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()) then
+         sponge_seam = sponge_maps_on
+         if (present(bc)) then
+            sponge_seam = sponge_seam .or. &
+                          any([bc%west%bc_type, bc%east%bc_type, bc%south%bc_type, &
+                               bc%north%bc_type] == OBC_SPONGE)
+         end if
+         if (sponge_seam) then
+            call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
+            call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
+            call refresh_tracer_ghosts(grid, ms)
+         end if
       end if
 
       ! ---- 8. Surface tracer fluxes (heat / salt) ----
