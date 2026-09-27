@@ -30,7 +30,8 @@ module rdb_ocean_dyn
    use rdb_ocean_obc_baroclinic, only: ocean_obc_apply_baroclinic, &
                                        ocean_obc_fill_ghosts, &
                                        ocean_obc_refill_ghost_ssh, &
-                                       ocean_obc_update_reservoirs
+                                       ocean_obc_update_reservoirs, &
+                                       ocean_obc_any_open_edge
    use rdb_barotropic_coupling, only: derive_bt_from_layers, &
                                       compute_h_face_upstream, &
                                       sum_slow_tendencies_into_F_slow, &
@@ -3418,7 +3419,21 @@ contains
       ! it.  On the open-class edges (OPEN/TIDAL/CHAPMAN/NESTED) the old fill
       ! is inert, so THIS fill's upwind-aware values survive and govern.
       ! No-op when bc is absent or all edges are WALL.
-      if (present(bc)) call ocean_obc_fill_ghosts(grid, bc, ms)
+      if (present(bc)) then
+         call ocean_obc_fill_ghosts(grid, bc, ms)
+         ! The fill writes the open-edge ghost rows/columns over this tile's
+         ! PHYSICAL span only; the corner cells beyond an MPI seam (a seam
+         ! ghost column x an open-edge ghost row) are the neighbour's fill,
+         ! which only an exchange delivers.  The Lie-split advection's first
+         ! pass reads them (serial: an ordinary open-edge ghost cell), so a
+         ! decomposed OBC run diverged at the seam x open-edge corner.
+         ! Collective: the gate is the GLOBAL tags.
+         if (ocean_obc_any_open_edge(bc) .and. &
+             (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
+            call ocean_halo_centre(ms%h_layer, ms%nz_ml)
+            call refresh_tracer_ghosts(grid, ms)
+         end if
+      end if
 
       ! ---- 5b. Slow horizontal continuity + tracer, constrained ----
       ! Pass `bt_uhbt, bt_vhbt` so the per-layer mass fluxes are
@@ -4826,7 +4841,21 @@ contains
       ! CHAPMAN/NESTED) or uniform clamped_u/v (CLAMPED).  Runs AFTER
       ! apply_bt_correction so it sees the recombined per-layer velocity.
       ! No-op when bc is absent or no edge is open-ish.
-      if (present(bc)) call ocean_obc_apply_baroclinic(grid, bc, dyn%bt_work, ms, dt)
+      if (present(bc)) then
+         call ocean_obc_apply_baroclinic(grid, bc, dyn%bt_work, ms, dt)
+         ! The open-edge face values were just rewritten on this tile's
+         ! physical rows only; the same faces in a neighbour's seam ghost
+         ! rows still hold the pre-OBC velocity, and the boundary-layer
+         ! scheme below (KPP u*, shear) reads them before the stage-end
+         ! exchange.  Refresh the seam ghosts so a decomposed OBC run sees
+         ! what the serial run sees (the gate is the GLOBAL tags: every
+         ! rank takes the collective).
+         if (ocean_obc_any_open_edge(bc) .and. &
+             (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
+            call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
+            call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
+         end if
+      end if
 
       ! Sponge.  Map-driven path (&ocean_sponge_nml enable, PR-23)
       ! supersedes the legacy per-edge band; exactly one of the two runs.

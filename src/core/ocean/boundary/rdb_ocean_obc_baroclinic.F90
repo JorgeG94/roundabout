@@ -43,6 +43,7 @@ module rdb_ocean_obc_baroclinic
    public :: ocean_obc_fill_ghosts
    public :: ocean_obc_refill_ghost_ssh
    public :: ocean_obc_update_reservoirs
+   public :: ocean_obc_any_open_edge
 
    ! Minimum depth for outward-normal velocity computation in reservoir update.
    ! Matches the continuity h_min floor (1e-6 m).
@@ -335,6 +336,16 @@ contains
       res = (bc_type == OBC_OPEN .or. bc_type == OBC_TIDAL .or. &
              bc_type == OBC_CHAPMAN .or. bc_type == OBC_CLAMPED)
    end function open_ghost_fill_edge
+
+   pure logical function ocean_obc_any_open_edge(bc) result(res)
+      !! True when ANY edge TAG of the domain needs the baroclinic open-edge
+      !! treatment.  Reads the global tags only (never `has_*`), so every
+      !! rank gets the same answer: callers use it to gate a COLLECTIVE seam
+      !! exchange after `ocean_obc_apply_baroclinic`.
+      type(ocean_bc_state_t), intent(in) :: bc
+      res = is_open_ish(bc%west%bc_type) .or. is_open_ish(bc%east%bc_type) .or. &
+            is_open_ish(bc%south%bc_type) .or. is_open_ish(bc%north%bc_type)
+   end function ocean_obc_any_open_edge
 
    pure logical function is_open_ish(bc_type) result(res)
       !! Returns .true. for edge types that need baroclinic velocity treatment.
