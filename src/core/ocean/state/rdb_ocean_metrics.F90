@@ -30,7 +30,7 @@ module rdb_ocean_metrics
    use rdb_grid, only: hgrid_t
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
-                            nc_get_dim_len, nc_get_varid, nc_get_var_2d
+                            nc_get_dim_len, nc_get_varid, nc_get_var_slab_2d
    use netcdf, only: nf90_inq_varid, nf90_noerr
 #endif
    use rdb_ocean_bipolar, only: bipolar_corner_latlon
@@ -1140,12 +1140,20 @@ contains
       !! The file must contain variables `x`, `y` (degrees, shape
       !! `(2*ni+1, 2*nj+1)`), `dx` (m, shape `(2*ni, 2*nj+1)`), `dy` (m,
       !! shape `(2*ni+1, 2*nj)`), and `area` (m^2, shape `(2*ni, 2*nj)`),
-      !! where `ni = grid%nx_phys`, `nj = grid%ny_phys`.  Dimensions must
+      !! where `ni = grid%nx_global`, `nj = grid%ny_global` (the file
+      !! always describes the WHOLE grid).  Dimensions must
       !! be named `nxp`/`nyp` (size 2ni+1 / 2nj+1) and `nx`/`ny` (size
       !! 2ni / 2nj).  Ghost rows are filled by constant extrapolation,
       !! then — on a periodic-x and/or tripolar-fold grid — replaced by the
       !! periodic / fold images through `metrics_fold_periodic_ghosts`, the
       !! routine the analytic tripolar generator uses.
+      !!
+      !! Decomposed tile: only the full-width band of rows the tile needs
+      !! (its storage rows plus one padding row each side) is read, with
+      !! start/count windows; the band is assembled and ghost-filled as a
+      !! whole grid of that height, and the tile's storage window is cut
+      !! out of it, so every tile is bit-identical to its slice of the
+      !! single-rank metrics (see the band note in the body).
       !!
       !! Topology cross-check (fail-loud, `OCEAN_STATUS_ERR_SETUP`): whether
       !! the file IS tripolar is read off the file itself
@@ -1162,7 +1170,8 @@ contains
       !! (`supergrid_angle_dx_from_geography`).
       type(ocean_metrics_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
-         !! Grid metadata — supplies `nx_phys`, `ny_phys`, `nghost`.
+         !! Grid metadata — supplies the tile (`nx_phys`, `ny_phys`,
+         !! `nghost`, offsets) and the whole grid (`nx_global`, `ny_global`).
       character(len=*), intent(in) :: supergrid_file
          !! Path to the MOM6 mosaic supergrid NetCDF file.
       integer, intent(out), optional :: ierr
@@ -1181,26 +1190,33 @@ contains
       integer :: sg_nxp, sg_nyp, sg_nx, sg_ny
       integer :: varid_x, varid_y, varid_dx, varid_dy, varid_area, varid_angle
       integer :: local_ierr
-      logical :: per_x, fold, file_folds, has_angle
+      integer :: jb0, jb1, nb, n0, nnode
+      logical :: per_x, fold, file_folds, has_angle, decomposed, band_top
       real(wp) :: y_seam_err, y_scale
       real(wp), allocatable :: sg_x(:, :), sg_y(:, :)
       real(wp), allocatable :: sg_dx(:, :), sg_dy(:, :), sg_area(:, :)
       real(wp), allocatable :: sg_angle(:, :)
+      real(wp), allocatable :: top_x(:, :), top_y(:, :)
+      type(hgrid_t) :: gband
+      type(ocean_metrics_t) :: mband
 
       per_x = .false.
       if (present(periodic_x)) per_x = periodic_x
       fold = .false.
       if (present(north_fold)) fold = north_fold
 
-      ni = grid%nx_phys
-      nj = grid%ny_phys
+      ! The file describes the WHOLE grid.  A decomposed tile reads only the
+      ! full-width band of rows it needs (see the band note below).
+      ni = grid%nx_global
+      nj = grid%ny_global
       ng = grid%nghost
+      decomposed = (grid%nx_phys /= ni .or. grid%ny_phys /= nj)
 
       call logger%info("Loading supergrid metrics from: "//trim(supergrid_file))
       call nc_open_read(supergrid_file, ncid, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr)) return
 
-      ! ---- Validate supergrid dimensions against the model grid ----
+      ! ---- Validate supergrid dimensions against the (global) model grid ----
       call nc_get_dim_len(ncid, "nxp", sg_nxp, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
       call nc_get_dim_len(ncid, "nyp", sg_nyp, ierr=local_ierr)
@@ -1214,32 +1230,56 @@ contains
          call nc_close(ncid)
          call fail("Supergrid nxp mismatch: file has "// &
                    to_string(sg_nxp)//" but expected "// &
-                   to_string(2*ni + 1)//" (2*nx_phys+1)", ierr, OCEAN_STATUS_ERR_IO)
+                   to_string(2*ni + 1)//" (2*nx+1)", ierr, OCEAN_STATUS_ERR_IO)
          return
       end if
       if (sg_nyp /= 2*nj + 1) then
          call nc_close(ncid)
          call fail("Supergrid nyp mismatch: file has "// &
                    to_string(sg_nyp)//" but expected "// &
-                   to_string(2*nj + 1)//" (2*ny_phys+1)", ierr, OCEAN_STATUS_ERR_IO)
+                   to_string(2*nj + 1)//" (2*ny+1)", ierr, OCEAN_STATUS_ERR_IO)
          return
       end if
       if (sg_nx /= 2*ni) then
          call nc_close(ncid)
          call fail("Supergrid nx mismatch: file has "// &
                    to_string(sg_nx)//" but expected "// &
-                   to_string(2*ni)//" (2*nx_phys)", ierr, OCEAN_STATUS_ERR_IO)
+                   to_string(2*ni)//" (2*nx)", ierr, OCEAN_STATUS_ERR_IO)
          return
       end if
       if (sg_ny /= 2*nj) then
          call nc_close(ncid)
          call fail("Supergrid ny mismatch: file has "// &
                    to_string(sg_ny)//" but expected "// &
-                   to_string(2*nj)//" (2*ny_phys)", ierr, OCEAN_STATUS_ERR_IO)
+                   to_string(2*nj)//" (2*ny)", ierr, OCEAN_STATUS_ERR_IO)
          return
       end if
 
-      ! ---- Read supergrid arrays ----
+      ! ---- The band of cell rows this rank assembles ----
+      ! Undecomposed: every row.  Decomposed: the tile's storage rows
+      ! (physical +- nghost) plus ONE padding row on each side, clipped to
+      ! the grid, over the FULL width.  The band is assembled exactly as a
+      ! whole grid would be; the only rows where that can differ from the
+      ! undecomposed assembly are the band's own interior-side edge rows
+      ! (the assembler extrapolates the face/corner spans there), and the
+      ! padding row keeps those outside the tile's window.  At a GLOBAL
+      ! edge the band edge IS the grid edge, so its extrapolated ghosts are
+      ! the undecomposed ones.  Full width keeps the periodic-x wrap and the
+      ! fold (the north band holds the whole fold row) local.  Rows read:
+      ! 2*nb+1 node rows instead of 2*nj+1 -- a per-rank window of the file.
+      if (decomposed) then
+         jb0 = max(1, grid%j_offset_global + 1 - ng - 1)
+         jb1 = min(nj, grid%j_offset_global + grid%ny_phys + ng + 1)
+      else
+         jb0 = 1
+         jb1 = nj
+      end if
+      nb = jb1 - jb0 + 1
+      n0 = 2*jb0 - 1          ! first supergrid node / segment row of the band
+      nnode = 2*nb + 1
+      band_top = (jb1 == nj)
+
+      ! ---- Read the band of the supergrid arrays ----
       call nc_get_varid(ncid, "x", varid_x, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
       call nc_get_varid(ncid, "y", varid_y, ierr=local_ierr)
@@ -1251,38 +1291,52 @@ contains
       call nc_get_varid(ncid, "area", varid_area, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
 
-      allocate (sg_x(sg_nxp, sg_nyp))
-      allocate (sg_y(sg_nxp, sg_nyp))
-      allocate (sg_dx(sg_nx, sg_nyp))
-      allocate (sg_dy(sg_nxp, sg_ny))
-      allocate (sg_area(sg_nx, sg_ny))
+      allocate (sg_x(sg_nxp, nnode))
+      allocate (sg_y(sg_nxp, nnode))
+      allocate (sg_dx(sg_nx, nnode))
+      allocate (sg_dy(sg_nxp, 2*nb))
+      allocate (sg_area(sg_nx, 2*nb))
 
-      call nc_get_var_2d(ncid, varid_x, sg_x, ierr=local_ierr)
+      call nc_get_var_slab_2d(ncid, varid_x, [1, n0], [sg_nxp, nnode], sg_x, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
-      call nc_get_var_2d(ncid, varid_y, sg_y, ierr=local_ierr)
+      call nc_get_var_slab_2d(ncid, varid_y, [1, n0], [sg_nxp, nnode], sg_y, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
-      call nc_get_var_2d(ncid, varid_dx, sg_dx, ierr=local_ierr)
+      call nc_get_var_slab_2d(ncid, varid_dx, [1, n0], [sg_nx, nnode], sg_dx, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
-      call nc_get_var_2d(ncid, varid_dy, sg_dy, ierr=local_ierr)
+      call nc_get_var_slab_2d(ncid, varid_dy, [1, n0], [sg_nxp, 2*nb], sg_dy, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
-      call nc_get_var_2d(ncid, varid_area, sg_area, ierr=local_ierr)
+      call nc_get_var_slab_2d(ncid, varid_area, [1, n0], [sg_nx, 2*nb], sg_area, ierr=local_ierr)
       if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
       ! Optional grid rotation.  Probed with the raw inquiry so an absent
-      ! variable is not logged as an error.
+      ! variable is not logged as an error.  The geography-derived angle at a
+      ! T node reads only its own node row, so the band derives it exactly.
       has_angle = nf90_inq_varid(ncid, "angle_dx", varid_angle) == nf90_noerr
-      allocate (sg_angle(sg_nxp, sg_nyp))
+      allocate (sg_angle(sg_nxp, nnode))
       if (has_angle) then
-         call nc_get_var_2d(ncid, varid_angle, sg_angle, ierr=local_ierr)
+         call nc_get_var_slab_2d(ncid, varid_angle, [1, n0], [sg_nxp, nnode], sg_angle, &
+                                 ierr=local_ierr)
          if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
       else
          sg_angle = supergrid_angle_dx_from_geography(sg_x, sg_y)
          call logger%info("Supergrid has no angle_dx: grid rotation derived "// &
                           "from the node geography")
       end if
+      ! The fold test reads the file's TOP node row, which a band that stops
+      ! short of it does not hold: read that one row on its own.
+      allocate (top_x(sg_nxp, 1), top_y(sg_nxp, 1))
+      if (band_top) then
+         top_x(:, 1) = sg_x(:, nnode)
+         top_y(:, 1) = sg_y(:, nnode)
+      else
+         call nc_get_var_slab_2d(ncid, varid_x, [1, sg_nyp], [sg_nxp, 1], top_x, ierr=local_ierr)
+         if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
+         call nc_get_var_slab_2d(ncid, varid_y, [1, sg_nyp], [sg_nxp, 1], top_y, ierr=local_ierr)
+         if (.not. supergrid_io_ok(local_ierr, ierr, ncid)) return
+      end if
       call nc_close(ncid)
 
       ! ---- Topology: the file must agree with the run's edge tags ----
-      file_folds = supergrid_top_row_folds(sg_x, sg_y)
+      file_folds = supergrid_top_row_folds(top_x, top_y)
       if (file_folds .and. .not. fold) then
          call fail("Supergrid "//trim(supergrid_file)//" is TRIPOLAR (its top node row "// &
                    "folds onto itself, m <-> 2ni+2-m) but &ocean_bc_nml north is not "// &
@@ -1308,21 +1362,41 @@ contains
          end if
       end if
 
-      ! Assemble model metrics from the supergrid node/segment arrays via
-      ! the shared even/odd index-sum logic (also used by the tripolar
-      ! analytic generator).
-      call metrics_assemble_from_supergrid_arrays(this, grid, &
-                                                  sg_x, sg_y, sg_dx, sg_dy, sg_area, &
-                                                  periodic_x=per_x, sg_angle_dx=sg_angle)
-      ! Replace the constant-extrapolated seam ghosts with the periodic /
-      ! fold images — the same treatment as the analytic tripolar.
-      if (per_x .or. fold) then
-         call metrics_fold_periodic_ghosts(this, grid, periodic_x=per_x, north_fold=fold)
+      if (.not. decomposed) then
+         ! Assemble model metrics from the supergrid node/segment arrays via
+         ! the shared even/odd index-sum logic (also used by the tripolar
+         ! analytic generator).
+         call metrics_assemble_from_supergrid_arrays(this, grid, &
+                                                     sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                     periodic_x=per_x, sg_angle_dx=sg_angle)
+         ! Replace the constant-extrapolated seam ghosts with the periodic /
+         ! fold images -- the same treatment as the analytic tripolar.
+         if (per_x .or. fold) then
+            call metrics_fold_periodic_ghosts(this, grid, periodic_x=per_x, north_fold=fold)
+         end if
+      else
+         ! Assemble the band as a whole grid of `ni x nb` cells (the fold
+         ! only on the band that holds the fold row), then cut the tile's
+         ! storage window -- ghosts included -- out of it.
+         call gband%init(ni, nb, ng, grid%dx, grid%dy)
+         call mband%init(gband)
+         call metrics_assemble_from_supergrid_arrays(mband, gband, &
+                                                     sg_x, sg_y, sg_dx, sg_dy, sg_area, &
+                                                     periodic_x=per_x, sg_angle_dx=sg_angle)
+         if (per_x .or. (fold .and. band_top)) then
+            call metrics_fold_periodic_ghosts(mband, gband, periodic_x=per_x, &
+                                              north_fold=(fold .and. band_top))
+         end if
+         call metrics_window_all(this, mband, grid%i_offset_global, &
+                                 grid%j_offset_global - (jb0 - 1))
+         call mband%destroy()
       end if
 
-      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area, sg_angle)
-      call logger%info("Supergrid metrics loaded for "// &
-                       to_string(ni)//"x"//to_string(nj)//" physical grid")
+      deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area, sg_angle, top_x, top_y)
+      call logger%info("Supergrid metrics loaded for a "// &
+                       to_string(grid%nx_phys)//"x"//to_string(grid%ny_phys)// &
+                       " tile (rows "//to_string(jb0)//"-"//to_string(jb1)//" of "// &
+                       to_string(ni)//"x"//to_string(nj)//")")
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 #else
       call fail("grid_config='supergrid' requires RDB_ENABLE_NETCDF=ON "// &
@@ -1654,27 +1728,39 @@ contains
                                        rad_earth, phi_join, lon_pole)
       io = grid%i_offset_global
       jo = grid%j_offset_global
-      call metrics_window_2d(this%dxT, mwhole%dxT, io, jo)
-      call metrics_window_2d(this%dyT, mwhole%dyT, io, jo)
-      call metrics_window_2d(this%areaT, mwhole%areaT, io, jo)
-      call metrics_window_2d(this%geolatT, mwhole%geolatT, io, jo)
-      call metrics_window_2d(this%geolonT, mwhole%geolonT, io, jo)
-      call metrics_window_2d(this%angle_dx, mwhole%angle_dx, io, jo)
-      call metrics_window_2d(this%dxCu, mwhole%dxCu, io, jo)
-      call metrics_window_2d(this%dyCu, mwhole%dyCu, io, jo)
-      call metrics_window_2d(this%areaCu, mwhole%areaCu, io, jo)
-      call metrics_window_2d(this%dy_cu, mwhole%dy_cu, io, jo)
-      call metrics_window_2d(this%dxCv, mwhole%dxCv, io, jo)
-      call metrics_window_2d(this%dyCv, mwhole%dyCv, io, jo)
-      call metrics_window_2d(this%areaCv, mwhole%areaCv, io, jo)
-      call metrics_window_2d(this%dx_cv, mwhole%dx_cv, io, jo)
-      call metrics_window_2d(this%dxBu, mwhole%dxBu, io, jo)
-      call metrics_window_2d(this%dyBu, mwhole%dyBu, io, jo)
-      call metrics_window_2d(this%areaBu, mwhole%areaBu, io, jo)
-      call metrics_window_2d(this%geolatBu, mwhole%geolatBu, io, jo)
-      call metrics_window_2d(this%geolonBu, mwhole%geolonBu, io, jo)
+      call metrics_window_all(this, mwhole, io, jo)
       call mwhole%destroy()
    end subroutine metrics_fill_tripolar
+
+   subroutine metrics_window_all(tile, whole, io, jo)
+      !! Cut a tile's storage window (ghosts included) out of a larger
+      !! assembled metric set, for every array the supergrid assembler and
+      !! the fold/periodic ghost fill write: `tile%X(i, j) = whole%X(i + io,
+      !! j + jo)`.  Shared by the decomposed tripolar generator (whole grid)
+      !! and the decomposed supergrid reader (a full-width row band).
+      type(ocean_metrics_t), intent(inout) :: tile
+      type(ocean_metrics_t), intent(in) :: whole
+      integer, intent(in) :: io, jo
+      call metrics_window_2d(tile%dxT, whole%dxT, io, jo)
+      call metrics_window_2d(tile%dyT, whole%dyT, io, jo)
+      call metrics_window_2d(tile%areaT, whole%areaT, io, jo)
+      call metrics_window_2d(tile%geolatT, whole%geolatT, io, jo)
+      call metrics_window_2d(tile%geolonT, whole%geolonT, io, jo)
+      call metrics_window_2d(tile%angle_dx, whole%angle_dx, io, jo)
+      call metrics_window_2d(tile%dxCu, whole%dxCu, io, jo)
+      call metrics_window_2d(tile%dyCu, whole%dyCu, io, jo)
+      call metrics_window_2d(tile%areaCu, whole%areaCu, io, jo)
+      call metrics_window_2d(tile%dy_cu, whole%dy_cu, io, jo)
+      call metrics_window_2d(tile%dxCv, whole%dxCv, io, jo)
+      call metrics_window_2d(tile%dyCv, whole%dyCv, io, jo)
+      call metrics_window_2d(tile%areaCv, whole%areaCv, io, jo)
+      call metrics_window_2d(tile%dx_cv, whole%dx_cv, io, jo)
+      call metrics_window_2d(tile%dxBu, whole%dxBu, io, jo)
+      call metrics_window_2d(tile%dyBu, whole%dyBu, io, jo)
+      call metrics_window_2d(tile%areaBu, whole%areaBu, io, jo)
+      call metrics_window_2d(tile%geolatBu, whole%geolatBu, io, jo)
+      call metrics_window_2d(tile%geolonBu, whole%geolonBu, io, jo)
+   end subroutine metrics_window_all
 
    subroutine metrics_window_2d(tile, whole, io, jo)
       !! Copy a tile's storage window (ghosts included) out of the

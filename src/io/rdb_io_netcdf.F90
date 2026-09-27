@@ -47,6 +47,7 @@ module rdb_io_netcdf
    public :: nc_def_var_4d
    public :: nc_put_var_4d_slice
    public :: nc_get_var_slab_3d
+   public :: nc_get_var_slab_2d
    public :: nc_get_att_text
    public :: nc_put_att_real_r4
    public :: nc_put_var_3d_slice_r4
@@ -610,6 +611,23 @@ contains
                     "reading NetCDF slab", ierr)
 
    end subroutine nc_get_var_slab_3d
+
+   subroutine nc_get_var_slab_2d(ncid, varid, start, count, data, ierr)
+      !! Windowed read of a 2D variable: `start`/`count` (length 2, FORTRAN
+      !! dimension order) select the block that lands in `data`, whose
+      !! shape must equal `count`.  The per-rank readers (bathymetry,
+      !! supergrid) use it to load only the rows their tile needs.
+      integer, intent(in) :: ncid, varid
+      integer, intent(in) :: start(2), count(2)
+      real(wp), intent(inout) :: data(:, :)
+      integer, intent(out), optional :: ierr
+         !! Non-zero on failure when present; absent behaves as today
+         !! (`error stop`).
+
+      call nc_check(nf90_get_var(ncid, varid, data, start=start, count=count), &
+                    "reading NetCDF 2D window", ierr)
+
+   end subroutine nc_get_var_slab_2d
 
    subroutine nc_get_att_text(ncid, varid, name, value, ok)
       !! Read a character (text) attribute from a variable — used for the
