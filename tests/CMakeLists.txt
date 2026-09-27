@@ -575,14 +575,21 @@ endforeach()
 # the structured halo test wants a 2x2 grid (4 ranks) while the unstructured
 # halo and lake-at-rest tests run on 2 ranks.
 if(RDB_ENABLE_MPI)
-  set(MPI_TESTS test_halo_mpi test_halo_ocean_mpi test_ocean_dyn_mpi
-                test_ocean_bt_cfl_mpi test_efp_mpi test_ocean_tripolar_fold_mpi)
+  set(MPI_TESTS
+      test_halo_mpi
+      test_halo_ocean_mpi
+      test_ocean_dyn_mpi
+      test_ocean_bt_cfl_mpi
+      test_efp_mpi
+      test_ocean_tripolar_fold_mpi
+      test_ocean_decomp_bitid_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_dyn_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_bt_cfl_mpi 2)
   set(MPI_TEST_NPROCS_test_efp_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_tripolar_fold_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
   set(MPI_TEST_REGIME_test_halo_mpi core)
@@ -591,6 +598,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_bt_cfl_mpi ocean)
   set(MPI_TEST_REGIME_test_efp_mpi core)
   set(MPI_TEST_REGIME_test_ocean_tripolar_fold_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
   set(MPI_NETCDF_TESTS)
   foreach(test ${MPI_TESTS})
     add_executable(${test} mpi/${test}.F90)
@@ -667,6 +675,19 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_tripolar_fold_mpi_1rank
     rdb_test_ocean_tripolar_fold_mpi_4rank PROPERTIES LABELS "ocean")
+  # Dycore bit-identity across decompositions: every px x py factorisation of
+  # the launched rank count (2: 2x1, 1x2; 4: 4x1, 1x4, 2x2) vs the serial run,
+  # every restart-registry field, owned cells bitwise.  The 2-rank leg comes
+  # from the foreach above; add the 1-rank (identity) and 4-rank legs.
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_1rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
+    PROPERTIES LABELS "ocean")
 endif()
 
 # --------------------------------------------------------------------------
