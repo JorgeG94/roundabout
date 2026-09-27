@@ -2293,7 +2293,7 @@ contains
       do it = 1, size(ms%tracers)
          if (.not. ms%tracers(it)%do_horizontal_advection) cycle
          if (present(bc)) then
-            if (bc%west%bc_type == OBC_CLAMPED .and. &
+            if (bc%west%bc_type == OBC_CLAMPED .and. bc%has_west .and. &
                 allocated(bc%west%clamped_tracer) .and. &
                 it <= size(bc%west%clamped_tracer)) then
                clamped_tr = bc%west%clamped_tracer(it)
@@ -2301,7 +2301,7 @@ contains
                   ms%tracers(it)%hTr(i, j, k) = clamped_tr*ms%h_layer(i, j, k)
                end do
             end if
-            if (bc%east%bc_type == OBC_CLAMPED .and. &
+            if (bc%east%bc_type == OBC_CLAMPED .and. bc%has_east .and. &
                 allocated(bc%east%clamped_tracer) .and. &
                 it <= size(bc%east%clamped_tracer)) then
                clamped_tr = bc%east%clamped_tracer(it)
@@ -2376,7 +2376,7 @@ contains
       do it = 1, size(ms%tracers)
          if (.not. ms%tracers(it)%do_horizontal_advection) cycle
          if (present(bc)) then
-            if (bc%south%bc_type == OBC_CLAMPED .and. &
+            if (bc%south%bc_type == OBC_CLAMPED .and. bc%has_south .and. &
                 allocated(bc%south%clamped_tracer) .and. &
                 it <= size(bc%south%clamped_tracer)) then
                clamped_tr = bc%south%clamped_tracer(it)
@@ -2384,7 +2384,7 @@ contains
                   ms%tracers(it)%hTr(i, j, k) = clamped_tr*ms%h_layer(i, j, k)
                end do
             end if
-            if (bc%north%bc_type == OBC_CLAMPED .and. &
+            if (bc%north%bc_type == OBC_CLAMPED .and. bc%has_north .and. &
                 allocated(bc%north%clamped_tracer) .and. &
                 it <= size(bc%north%clamped_tracer)) then
                clamped_tr = bc%north%clamped_tracer(it)

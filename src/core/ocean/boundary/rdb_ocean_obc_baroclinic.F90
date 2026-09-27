@@ -1129,6 +1129,14 @@ contains
       bc_e = bc%east%bc_type
       bc_s = bc%south%bc_type
       bc_n = bc%north%bc_type
+      ! An MPI seam is not an open edge: its ghost columns are a neighbour's
+      ! interior, filled by the halo exchange.  Overwriting them with the
+      ! zero-gradient copy made every decomposed OBC run diverge from the
+      ! serial one (same gate as `ocean_obc_fill_ghosts`).
+      if (.not. bc%has_west) bc_w = OBC_WALL
+      if (.not. bc%has_east) bc_e = OBC_WALL
+      if (.not. bc%has_south) bc_s = OBC_WALL
+      if (.not. bc%has_north) bc_n = OBC_WALL
 
       any_open = is_open_ish(bc_w) .or. is_open_ish(bc_e) .or. &
                  is_open_ish(bc_s) .or. is_open_ish(bc_n)
