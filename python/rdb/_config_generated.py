@@ -3731,7 +3731,7 @@ class OceanBt(Group):
 
     bt_halo = Int(
         'bt_halo',
-        doc='Wide-halo BT march-in width (-1 = auto: 8 under multi-rank if compatible, else 0; 0 = explicit off, bit-identical)',
+        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical)',
         units='',
         required=False,
         default=-1,

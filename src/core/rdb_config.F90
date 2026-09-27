@@ -104,11 +104,12 @@ module rdb_config
 
    integer, parameter :: BT_HALO_AUTO_SENTINEL = -1
       !! `&ocean_bt_nml bt_halo` default: AUTO.  Resolved at configure (in the
-      !! driver, where `compute_size` is known) to `BT_HALO_AUTO_WIDTH` under a
-      !! compatible multi-rank run, else 0.  See `resolve_bt_halo`.
+      !! driver, where `compute_size` is known).  AUTO resolves to 0 — the
+      !! march-in is OPT-IN (set `bt_halo` explicitly) because it is not yet
+      !! bit-reproducible against the serial run.  See `resolve_bt_halo`.
    integer, parameter :: BT_HALO_AUTO_WIDTH = 8
-      !! Wide-halo BT march-in width chosen when `bt_halo` auto-resolves ON
-      !! (the validated production width).
+      !! The recommended EXPLICIT march-in width (the validated production
+      !! width).  AUTO no longer selects it — see `resolve_bt_halo`.
 
    real(wp), parameter :: ZFIXED_CAVITY_NU_H_MIN = 2.0_wp
       !! Lower envelope of `&ocean_hvisc_nml nu_h` (m²/s) under
@@ -765,9 +766,13 @@ module rdb_config
       character(len=64) :: wave_drag_var = "rH"
          !! Reserved for PR-14 (MOM6 `BT_WAVE_DRAG_VAR`); unused today.
       integer :: bt_halo = BT_HALO_AUTO_SENTINEL
-         !! Wide-halo march-in width.  `-1` (default) = AUTO: resolved at
-         !! configure to `BT_HALO_AUTO_WIDTH` (8) IFF the run is multi-rank
-         !! (`compute_size > 1`) AND no march-in exclusion is active, else 0.
+         !! Wide-halo march-in width.  `-1` (default) = AUTO, which resolves
+         !! to 0: the march-in is OPT-IN.  A decomposed run with the march-in
+         !! is not bit-identical to the serial run over variable bathymetry or
+         !! with open boundaries (measured by `test_ocean_decomp_bitid_mpi`;
+         !! flat-bottom closed / periodic / spherical cases are), so the
+         !! default keeps every decomposition bit-reproducible.  `8`
+         !! (`BT_HALO_AUTO_WIDTH`) is the recommended explicit width.
          !! `0` = explicit off (per-substep grouped exchange, v1 bit-identical).
          !! Even positive value: widen the BT ghost band to `nghost + bt_halo`
          !! and fire one grouped exchange every `bt_halo/2` substeps.  Odd
@@ -7535,29 +7540,31 @@ contains
    pure function resolve_bt_halo(requested, compute_size, exclusion_active) result(width)
       !! Resolve the `&ocean_bt_nml bt_halo` sentinel to a concrete march-in
       !! width.
-      !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO:
-      !!     BT_HALO_AUTO_WIDTH (8) IFF compute_size > 1 AND no march-in
-      !!     exclusion is active; else 0 (serial, or an incompatible feature).
+      !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO: 0.
+      !!     The march-in used to switch itself on (BT_HALO_AUTO_WIDTH) on
+      !!     every compatible multi-rank run.  It is not bit-reproducible
+      !!     against the serial run over variable bathymetry or with open
+      !!     boundaries (`test_ocean_decomp_bitid_mpi`), so a default
+      !!     multi-rank run must not pick it: AUTO is off, serial or not.
       !!   requested >= 0 (user set it explicitly) => returned UNCHANGED; the
       !!     fail-loud exclusion checks in validate_config police an explicit
       !!     bt_halo > 0 against an incompatible feature (user asked for the
       !!     impossible), so the auto-resolution never overrides an explicit 0
       !!     or an explicit width.
+      !! `compute_size` / `exclusion_active` no longer change the answer; they
+      !! stay so the call site (and its exclusion log) keeps its shape for the
+      !! day the march-in is exact again.
       integer, intent(in) :: requested
          !! The namelist value: BT_HALO_AUTO_SENTINEL (-1) for auto, else >= 0.
       integer, intent(in) :: compute_size
-         !! Number of compute ranks (1 = serial).
+         !! Number of compute ranks (1 = serial).  Unused by AUTO (see above).
       logical, intent(in) :: exclusion_active
          !! .true. iff any march-in exclusion feature is on (see
-         !! `bt_halo_auto_exclusion`).  Only consulted for the auto sentinel.
+         !! `bt_halo_auto_exclusion`).  Unused by AUTO (see above).
       integer :: width
-      if (requested >= 0) then
-         width = requested
-      else if (compute_size > 1 .and. .not. exclusion_active) then
-         width = BT_HALO_AUTO_WIDTH
-      else
-         width = 0
-      end if
+      width = 0
+      if (requested >= 0) width = requested
+      if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
    end function resolve_bt_halo
 
    pure subroutine bt_halo_auto_exclusion(cfg, excluded, reason)
@@ -9897,7 +9904,7 @@ contains
       pi => cfg%ocean%bt%bt_halo
       call g%add(nml_int("bt_halo", pi, &
                          "Wide-halo BT march-in width "// &
-                         "(-1 = auto: 8 under multi-rank if compatible, else 0; "// &
+                         "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
                          "0 = explicit off, bit-identical)", &
                          min=BT_HALO_AUTO_SENTINEL))
       call schema%add_group(g)
