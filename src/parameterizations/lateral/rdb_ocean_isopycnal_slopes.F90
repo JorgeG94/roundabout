@@ -22,7 +22,7 @@ module rdb_ocean_isopycnal_slopes
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_specvol_derivs, eos_density_point
+   use rdb_eos, only: eos_t, eos_density_specvol_derivs
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -420,8 +420,7 @@ contains
                         (s_fill(iw, j, kb) + s_fill(i, j, kb)))
 
          ! Locally-referenced density derivatives: drho_dX = -ρ²·dSV/dX.
-         rho_u = eos_density_point(eos, t_u, s_u, pres_u)
-         call eos_specvol_derivs(eos, t_u, s_u, pres_u, dsv_dt, dsv_ds)
+         call eos_density_specvol_derivs(eos, t_u, s_u, pres_u, rho_u, dsv_dt, dsv_ds)
          drdt = -(rho_u*rho_u)*dsv_dt
          drds = -(rho_u*rho_u)*dsv_ds
 
@@ -555,8 +554,7 @@ contains
          s_v = 0.25_wp*((s_fill(i, js, ka) + s_fill(i, j, ka)) + &
                         (s_fill(i, js, kb) + s_fill(i, j, kb)))
 
-         rho_v = eos_density_point(eos, t_v, s_v, pres_v)
-         call eos_specvol_derivs(eos, t_v, s_v, pres_v, dsv_dt, dsv_ds)
+         call eos_density_specvol_derivs(eos, t_v, s_v, pres_v, rho_v, dsv_dt, dsv_ds)
          drdt = -(rho_v*rho_v)*dsv_dt
          drds = -(rho_v*rho_v)*dsv_ds
 
