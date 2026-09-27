@@ -61,10 +61,20 @@ kernels are within two lines of each other in PTX length and carry exactly one
 inlined `div.rn.f64`. On a 600×600×50 bandwidth-bound sweep the three are
 indistinguishable (0.0179 / 0.0173 / 0.0172 s for 30 launches).
 
-So on **this** compiler version the cross-module form inlines too, and the
-include's justification is **one source of truth**, not a speed-up. The
-include also never depends on that staying true, which hand duplication was
-invented to work around.
+So on **this** compiler version the cross-module form inlines too — for a
+SMALL helper — and the include's justification there is **one source of
+truth**, not a speed-up. The include also never depends on that staying true,
+which hand duplication was invented to work around.
+
+**It does not hold for a large helper.** `rdb_eos`'s `roquet_spv_ts_coeffs`
+(the (T, S) half of the Roquet SpV polynomial: two sqrt, a degree-7 PT→CT
+polynomial, ~50 terms) called from the FV-MOM6 PGF kernels stayed a real
+`call rdb_eos_roquet_spv_ts_coeffs_` in the PTX (nvfortran 26.5, cc70), its
+four results through a 48-byte device stack frame, 130+ registers in the face
+kernels. Included module-locally (`rdb_roquet_spv.inc`) it inlines: no stack,
+86–88 registers, and the global 1° `ocean_pgf` under Roquet fell 3.64 → 2.59 s
+with bit-identical `[stats]`. Check the PTX (`-gpu=keep`, grep `call`) rather
+than assuming either way.
 
 One observable difference worth knowing: passing an array element to a
 function (either helper form) makes nvfortran report the enclosing array as
@@ -104,4 +114,5 @@ every module that includes them.
 
 | File | Concern |
 |---|---|
+| `rdb_roquet_spv.inc` | The VALUE of the Roquet et al. (2015) SpV polynomial, split into its (T, S) part (`rdb_roq_ts_coeffs`) and its pressure part (`rdb_roq_spv_p`) — `rdb_eos`'s `roquet_spv_ts_coeffs` / `roquet_spv_value` and the FV-MOM6 PGF's per-EOS density integrals. The consumer imports the coefficient table from `rdb_eos` (see the file header). |
 | `rdb_vanished_layer.inc` | The vanished-layer rule (invariant I1′, a filler carries its donor live layer's concentration) — `rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_column_conc`, `rdb_vl_holds_live_conc`, `rdb_vl_merge_content`. Contract: `src/core/ocean/README.md`, "The vanished-layer content rule". |

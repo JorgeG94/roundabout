@@ -41,8 +41,17 @@ module rdb_ocean_pressure_force
                       WRIGHT_A0, WRIGHT_A1, WRIGHT_A2, &
                       WRIGHT_B0, WRIGHT_B1, WRIGHT_B2, WRIGHT_B3, WRIGHT_B4, WRIGHT_B5, &
                       WRIGHT_C0, WRIGHT_C1, WRIGHT_C2, WRIGHT_C3, WRIGHT_C4, WRIGHT_C5, &
-                      roquet_spv_ts_coeffs, &
-                      ROQ_V00, ROQ_V01, ROQ_V02, ROQ_V03, ROQ_V04, ROQ_V05
+                      ROQ_V00, ROQ_V01, ROQ_V02, ROQ_V03, ROQ_V04, ROQ_V05, &
+                      ROQ_CP0, ROQ_CT_SFAC, ROQ_R1_S0, ROQ_RDELTAS, ROQ_SR_FACTOR, &
+                      SPV000, SPV001, SPV002, SPV003, SPV010, SPV011, SPV012, SPV013, &
+                      SPV020, SPV021, SPV022, SPV030, SPV031, SPV040, SPV041, SPV050, &
+                      SPV060, SPV100, SPV101, SPV102, SPV103, SPV110, SPV111, SPV112, &
+                      SPV120, SPV121, SPV130, SPV131, SPV140, SPV150, SPV200, SPV201, &
+                      SPV202, SPV210, SPV211, SPV220, SPV221, SPV230, SPV240, SPV300, &
+                      SPV301, SPV310, SPV311, SPV320, SPV330, SPV400, SPV401, SPV410, &
+                      SPV420, SPV500, SPV510, SPV600
+   ! (The Roquet coefficient table feeds `rdb_roquet_spv.inc`, included in
+   ! `contains` for a module-local, inlinable copy of the SpV value.)
    use rdb_ocean_pgf_reconstruct, only: plm_edges_column, ppm_edges_column, &
                                         boole_dpa_intz_layer, boole_dpa_face, &
                                         boole_dpa_intz_layer_wright, boole_dpa_face_wright, &
@@ -1930,7 +1939,11 @@ contains
       !! pressure Horner per point — the same five densities as
       !! `boole_dpa_intz_layer`, so answers are unchanged (to the digit on
       !! the global 1° run's `[stats]` and En).  `ocean_pgf` 10.73 s →
-      !! 3.64 s on the same run.
+      !! 3.64 s on the same run, → 2.55 s (1.36x Wright) with the SpV value
+      !! from the module-local include `rdb_roquet_spv.inc`: as a call into
+      !! `rdb_eos` the (T, S) part was NOT inlined on the device (a real
+      !! `call`, its four results through the stack, 130+ registers in the
+      !! face kernels against 88 inlined).
       !!
       !! Pass 1 and Pass 2 each run their integrals as a 3-D `do concurrent`
       !! over (k, j, i) — every layer's and every face's integral is
@@ -2396,7 +2409,7 @@ contains
       !! WHAT IS FACTORED.  In a PCM layer T and S are the same at all five
       !! Boole points, so everything expensive in the EOS -- two sqrt, the
       !! PT->CT polynomial, the ~50-term (T, S) sums -- is the same at all
-      !! five.  `roquet_spv_ts_coeffs` computes it ONCE; each point then
+      !! five.  `rdb_roq_ts_coeffs` computes it ONCE; each point then
       !! costs the degree-6 pressure Horner and one division.  The five
       !! densities are the numbers `boole_dpa_intz_layer` evaluates (up to
       !! its `wt_t*t + wt_b*t` blend of equal edge values, which can move
@@ -2428,33 +2441,18 @@ contains
       real(wp), intent(out) :: intz_dpa
          !! First moment from the top (Pa*m), as `boole_dpa_intz_layer`.
 
-      real(wp) :: sv0, sv1, sv2, sv3, gxrho, p, rho_anom
+      real(wp) :: sv0, sv1, sv2, sv3, gxrho, rho_anom
       real(wp) :: r1, r2, r3, r4, r5
 
-      call roquet_spv_ts_coeffs(t, s, sv0, sv1, sv2, sv3)
+      call rdb_roq_ts_coeffs(t, s, sv0, sv1, sv2, sv3)
       gxrho = GRAVITY*rho0
       ! The five Boole points, top (n = 1) to bottom (n = 5), at the same
       ! `z5 = e_top - 0.25*(n-1)*dz` as `boole_dpa_intz_layer`.
-      p = -gxrho*e_top
-      r1 = 1.0_wp/((sv0 + p*(sv1 + p*(sv2 + p*sv3))) &
-                   + p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                               + p*(ROQ_V04 + p*ROQ_V05)))))) - rho_ref
-      p = -gxrho*(e_top - 0.25_wp*dz)
-      r2 = 1.0_wp/((sv0 + p*(sv1 + p*(sv2 + p*sv3))) &
-                   + p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                               + p*(ROQ_V04 + p*ROQ_V05)))))) - rho_ref
-      p = -gxrho*(e_top - 0.5_wp*dz)
-      r3 = 1.0_wp/((sv0 + p*(sv1 + p*(sv2 + p*sv3))) &
-                   + p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                               + p*(ROQ_V04 + p*ROQ_V05)))))) - rho_ref
-      p = -gxrho*(e_top - 0.75_wp*dz)
-      r4 = 1.0_wp/((sv0 + p*(sv1 + p*(sv2 + p*sv3))) &
-                   + p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                               + p*(ROQ_V04 + p*ROQ_V05)))))) - rho_ref
-      p = -gxrho*(e_top - dz)
-      r5 = 1.0_wp/((sv0 + p*(sv1 + p*(sv2 + p*sv3))) &
-                   + p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                               + p*(ROQ_V04 + p*ROQ_V05)))))) - rho_ref
+      r1 = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, -gxrho*e_top) - rho_ref
+      r2 = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, -gxrho*(e_top - 0.25_wp*dz)) - rho_ref
+      r3 = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, -gxrho*(e_top - 0.5_wp*dz)) - rho_ref
+      r4 = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, -gxrho*(e_top - 0.75_wp*dz)) - rho_ref
+      r5 = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, -gxrho*(e_top - dz)) - rho_ref
 
       rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r1 + r5) + 32.0_wp*(r2 + r4) + 12.0_wp*r3)
       dpa = GRAVITY*dz*rho_anom
@@ -2614,5 +2612,7 @@ contains
                + this%recon_S_t%bytes() &
                + this%recon_S_b%bytes()
    end function ocean_pressure_force_bytes
+
+#include "rdb_roquet_spv.inc"
 
 end module rdb_ocean_pressure_force
