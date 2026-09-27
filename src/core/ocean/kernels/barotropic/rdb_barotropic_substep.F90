@@ -1109,15 +1109,18 @@ contains
          ! never clobbered (keeps periodic+open mixed configs, e.g. the Eady
          ! channel, bit-identical).  Must run before Pass 2b reads bt_eta(nghost).
          ! WALL/PERIODIC tags are not open-ish ⇒ no DC launched ⇒ no-op.
+         ! An MPI seam is not an open edge (`has_*` false): its η ghosts are
+         ! the neighbour's interior, filled by the halo exchange — a
+         ! zero-gradient copy there made every decomposed OBC run diverge.
          ! x-pass: west / east ghost columns over the full j extent.
-         if (bc_w == OBC_OPEN .or. bc_w == OBC_TIDAL .or. &
-             bc_w == OBC_CHAPMAN .or. bc_w == OBC_CLAMPED) then
+         if (has_w .and. (bc_w == OBC_OPEN .or. bc_w == OBC_TIDAL .or. &
+                          bc_w == OBC_CHAPMAN .or. bc_w == OBC_CLAMPED)) then
             do concurrent(j=1:ny, i=1:grid%nghost)
                bt_eta(i, j) = bt_eta(i_w_int, j)
             end do
          end if
-         if (bc_e == OBC_OPEN .or. bc_e == OBC_TIDAL .or. &
-             bc_e == OBC_CHAPMAN .or. bc_e == OBC_CLAMPED) then
+         if (has_e .and. (bc_e == OBC_OPEN .or. bc_e == OBC_TIDAL .or. &
+                          bc_e == OBC_CHAPMAN .or. bc_e == OBC_CLAMPED)) then
             do concurrent(j=1:ny, i=i_e_int + 1:nx)
                bt_eta(i, j) = bt_eta(i_e_int, j)
             end do
@@ -1130,14 +1133,14 @@ contains
          eta_gx_hi = i_e_int
          if (bc_w /= OBC_PERIODIC) eta_gx_lo = 1
          if (bc_e /= OBC_PERIODIC) eta_gx_hi = nx
-         if (bc_s == OBC_OPEN .or. bc_s == OBC_TIDAL .or. &
-             bc_s == OBC_CHAPMAN .or. bc_s == OBC_CLAMPED) then
+         if (has_s .and. (bc_s == OBC_OPEN .or. bc_s == OBC_TIDAL .or. &
+                          bc_s == OBC_CHAPMAN .or. bc_s == OBC_CLAMPED)) then
             do concurrent(j=1:grid%nghost, i=eta_gx_lo:eta_gx_hi)
                bt_eta(i, j) = bt_eta(i, j_s_int)
             end do
          end if
-         if (bc_n == OBC_OPEN .or. bc_n == OBC_TIDAL .or. &
-             bc_n == OBC_CHAPMAN .or. bc_n == OBC_CLAMPED) then
+         if (has_n .and. (bc_n == OBC_OPEN .or. bc_n == OBC_TIDAL .or. &
+                          bc_n == OBC_CHAPMAN .or. bc_n == OBC_CLAMPED)) then
             do concurrent(j=j_n_int + 1:ny, i=eta_gx_lo:eta_gx_hi)
                bt_eta(i, j) = bt_eta(i, j_n_int)
             end do
