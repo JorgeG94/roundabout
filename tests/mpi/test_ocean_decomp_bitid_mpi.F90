@@ -27,14 +27,21 @@
 !!   * island_basin — closed Cartesian basin with an interior land block
 !!     (static land mask), beta plane, `2gyre` wind, sigma;
 !!   * periodic_channel_zstar — re-entrant channel over a seamount on z*
-!!     (ALE remap every step);
+!!     (ALE remap every step), with porous barriers;
 !!   * open_obc — tidal west edge (eta target) + Flather east edge,
 !!     zstar_sigma, over a seamount;
 !!   * spherical — lon-lat sector, planetary Coriolis, spoon basin, Wright
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
-!!     reservoirs, clamped north inflow, legacy relaxing sponge band west.
-!! All are stratified with KPP on (the default), so the tiles exchange real
+!!     reservoirs, clamped north inflow, legacy relaxing sponge band west;
+!!   * closures — the spherical case with EPBL (instead of KPP), Fox-Kemper
+!!     MLE, GM + MEKE, Redi, kappa-shear, tidal mixing, convective
+!!     adjustment, geothermal heating and tracer hdiff;
+!!   * file_readers — the per-rank windowed readers (a periodic 360-degree
+!!     MOM6 supergrid, a C-order bathymetry file with land, a z-level T/S
+!!     IC), all written by rank 0 first, with the global-1-degree physics
+!!     set (z_fixed + closed faces, fv_mom6, energy Coriolis, Wright).
+!! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
 !! factorisation above is uneven somewhere.
 !!
@@ -60,6 +67,12 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
+#ifndef RDB_NO_NETCDF
+   use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
+                            nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
+                            rdb_put_var_1d
+   use netcdf, only: nf90_put_var
+#endif
    implicit none
 
    integer, parameter :: NX_G = 26
@@ -68,6 +81,9 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: N_STEPS = 48
    real(wp), parameter :: DT = 900.0_wp
    integer, parameter :: MAXF = 64
+   character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
+   character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
+   character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -85,9 +101,10 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(5) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(7) = [character(len=24) :: &
                                                "island_basin", "periodic_channel_zstar", &
-                                               "open_obc", "spherical", "obc_radiation_sponge"]
+                                               "open_obc", "spherical", "obc_radiation_sponge", &
+                                               "closures", "file_readers"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -95,11 +112,20 @@ program test_ocean_decomp_bitid_mpi
    nprocs = comm_env_size()
    comm = comm_env_compute_comm()
    n_fail = 0
+#ifndef RDB_NO_NETCDF
+   if (rank == 0) call write_input_files()
+   call comm%barrier()
+#endif
 
    do ic = 1, size(CASES)
+#ifdef RDB_NO_NETCDF
+      if (trim(CASES(ic)) == "file_readers") cycle
+#endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
+
+   if (nprocs >= 2) call check_single_rank_fences()
 
    call comm%barrier()
    total_fail = n_fail
@@ -141,7 +167,7 @@ contains
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL
+               ""
 
       select case (label)
       case ("island_basin")
@@ -165,6 +191,7 @@ contains
                "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_porous_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case ("open_obc")
@@ -179,8 +206,11 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
-      case ("spherical")
-         ! Lon-lat sector, spoon basin, Wright EOS.
+      case ("spherical", "closures")
+         ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
+         ! lateral and vertical parameterisation set on top (EPBL instead of
+         ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
+         ! convective adjustment, geothermal heating, tracer hdiff).
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 1.0, dy = 1.0 /"//NL// &
@@ -192,6 +222,21 @@ contains
                "edge_depth = 300.0, slope_scale = 300000.0, wind_config = '2gyre', "// &
                "taux_magnitude = 0.1 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         if (label == "closures") then
+            nml = nml// &
+                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                  "&ocean_epbl_nml enable = .true. /"//NL// &
+                  "&ocean_foxkemper_nml enable = .true. /"//NL// &
+                  "&ocean_slopes_nml enable = .true. /"//NL// &
+                  "&ocean_gm_nml enable = .true. /"//NL// &
+                  "&ocean_meke_nml enable = .true. /"//NL// &
+                  "&ocean_redi_nml enable = .true. /"//NL// &
+                  "&ocean_kappa_shear_nml enable = .true. /"//NL// &
+                  "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"//NL// &
+                  "&ocean_conv_nml enable = .true. /"//NL// &
+                  "&ocean_geothermal_nml enable = .true. /"//NL// &
+                  "&ocean_hdiff_nml kappa_h = 100.0 /"//NL
+         end if
       case ("obc_radiation_sponge")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
          ! clamped (inflow) north edge, and a relaxing sponge band west.
@@ -208,9 +253,31 @@ contains
                "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
                "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &
                "res_lscale_in = 20000.0 /"//NL
+      case ("file_readers")
+         ! The three per-rank windowed readers (supergrid, bathymetry,
+         ! z-level T/S IC) on files the test writes, with the global-1-degree
+         ! physics set: z_fixed + closed partial-step faces, fv_mom6 PGF,
+         ! energy Coriolis, Wright EOS, periodic in x.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3 /"//NL// &
+               "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SG_FILE// &
+               "', coriolis_scheme = 'planetary', rad_earth = 6.371e6 /"//NL// &
+               "&physics_nml wind_stress_x = 0.08, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
+               "check_vanished_content = .true. /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 3000.0 /"//NL// &
+               "&output_nml bathymetry_file = '"//BATHY_FILE//"', output_to_file = .false. /"//NL// &
+               "&ocean_zinit_nml enable = .true., source = 'file', file = '"//ZINIT_FILE//"' /"//NL// &
+               "&ocean_pgf_nml form = 'fv_mom6' /"//NL// &
+               "&ocean_coriolis_nml form = 'sadourny_energy' /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
       case default
          error stop "test_ocean_decomp_bitid_mpi: unknown case"
       end select
+      if (label /= "file_readers") nml = nml//"&output_nml output_to_file = .false. /"//NL
    end function case_nml
 
    subroutine run_one(nml, csize, crank, snap, ok)
@@ -382,6 +449,154 @@ contains
          if (sum(glob) > 0) n_fail = n_fail + 1
       end do
    end subroutine run_case
+
+   subroutine check_single_rank_fences()
+      !! The single-rank features must be REFUSED at configure on more than
+      !! one rank -- with the process grid left unset (px = py = 1, which
+      !! the engine auto-factors and which `validate_config`'s px*py fences
+      !! cannot see), so the engine-side gate is the one exercised.
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=48), parameter :: KNOBS(4) = [character(len=48) :: &
+                                                  "&ocean_wetdry_nml enable = .true. /", &
+                                                  "&ocean_ice_nml enable = .true. /", &
+                                                  "&ocean_cavity_dyn_nml enable = .true. /", &
+                                                  "&ocean_bc_nml east = 'chapman' /"]
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      character(len=:), allocatable :: nml
+      integer :: ik, ierr
+
+      do ik = 1, size(KNOBS)
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL// &
+               trim(KNOBS(ik))//NL
+         call read_config_from_string(nml, cfg, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+         if (ierr == OCEAN_STATUS_OK) then
+            call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+            call engine_teardown(engine)
+         end if
+         if (ierr == OCEAN_STATUS_OK) then
+            write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
+               "' was ACCEPTED on multi-rank, rank ", rank
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+            write (*, '(3a)') "case fence: '", trim(KNOBS(ik)), "' refused on multi-rank (ok)"
+         end if
+      end do
+   end subroutine check_single_rank_fences
+
+#ifndef RDB_NO_NETCDF
+   subroutine write_input_files()
+      !! Rank 0 writes the three whole-grid input files the "file_readers"
+      !! case reads through the per-rank windowed readers: a periodic lon-lat
+      !! MOM6 supergrid (360 deg in x, 20-56 N), a bathymetry with a land
+      !! block stored C-ORDER (Fortran dims (y, x) — the reader's transpose
+      !! path) and a z-level T/S initial condition (x, y, z).  Every field
+      !! varies in both directions, so a tile that read the wrong window
+      !! cannot match the serial run.
+      integer, parameter :: NZS = 8
+      real(wp), parameter :: DEG = 3.14159265358979323846_wp/180.0_wp
+      real(wp), parameter :: RE = 6.371e6_wp, LAT0 = 20.0_wp, DLAT = 2.0_wp
+      real(wp) :: dlon
+      integer :: ncid, dnxp, dnyp, dnx, dny, dx_, dy_, dz_, v1, v2, v3, v4, v5, ierr
+      integer :: m, n, i, j, k
+      real(wp), allocatable :: sx(:, :), sy(:, :), sdx(:, :), sdy(:, :), sar(:, :)
+      real(wp), allocatable :: byx(:, :), tt(:, :, :), ss(:, :, :)
+      real(wp) :: zs(NZS), lat, x, y
+
+      dlon = 360.0_wp/real(NX_G, wp)
+      allocate (sx(2*NX_G + 1, 2*NY_G + 1), sy(2*NX_G + 1, 2*NY_G + 1))
+      allocate (sdx(2*NX_G, 2*NY_G + 1), sdy(2*NX_G + 1, 2*NY_G), sar(2*NX_G, 2*NY_G))
+      do n = 1, 2*NY_G + 1
+         lat = LAT0 + real(n - 1, wp)*0.5_wp*DLAT
+         do m = 1, 2*NX_G + 1
+            sx(m, n) = real(m - 1, wp)*0.5_wp*dlon
+            sy(m, n) = lat
+         end do
+         do m = 1, 2*NX_G
+            sdx(m, n) = RE*cos(lat*DEG)*0.5_wp*dlon*DEG
+         end do
+      end do
+      sdy = RE*0.5_wp*DLAT*DEG
+      do n = 1, 2*NY_G
+         do m = 1, 2*NX_G
+            sar(m, n) = sdx(m, n)*sdy(m, n)
+         end do
+      end do
+      call nc_create_file(SG_FILE, ncid)
+      call nc_def_dim(ncid, "nxp", 2*NX_G + 1, dnxp)
+      call nc_def_dim(ncid, "nyp", 2*NY_G + 1, dnyp)
+      call nc_def_dim(ncid, "nx", 2*NX_G, dnx)
+      call nc_def_dim(ncid, "ny", 2*NY_G, dny)
+      call nc_def_var_2d(ncid, "x", [dnxp, dnyp], v1)
+      call nc_def_var_2d(ncid, "y", [dnxp, dnyp], v2)
+      call nc_def_var_2d(ncid, "dx", [dnx, dnyp], v3)
+      call nc_def_var_2d(ncid, "dy", [dnxp, dny], v4)
+      call nc_def_var_2d(ncid, "area", [dnx, dny], v5)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, sx)
+      call nc_put_var_2d(ncid, v2, sy)
+      call nc_put_var_2d(ncid, v3, sdx)
+      call nc_put_var_2d(ncid, v4, sdy)
+      call nc_put_var_2d(ncid, v5, sar)
+      call nc_close(ncid)
+
+      ! Bathymetry, positive-down, C-order: byx(j, i).  A shelf rising to
+      ! the north, a Gaussian ridge, and a small land block.
+      allocate (byx(NY_G, NX_G))
+      do i = 1, NX_G
+         do j = 1, NY_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            byx(j, i) = 3000.0_wp - 1800.0_wp*y**2 - &
+                        900.0_wp*exp(-((x - 0.3_wp)**2 + (y - 0.5_wp)**2)/0.02_wp)
+            if (i >= 17 .and. i <= 19 .and. j >= 7 .and. j <= 10) byx(j, i) = 0.0_wp
+         end do
+      end do
+      call nc_create_file(BATHY_FILE, ncid)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, byx)
+      call nc_close(ncid)
+
+      ! z-level T/S (x, y, z), positive-down source depths.
+      allocate (tt(NX_G, NY_G, NZS), ss(NX_G, NY_G, NZS))
+      do k = 1, NZS
+         zs(k) = real(k - 1, wp)*450.0_wp
+      end do
+      do k = 1, NZS
+         do j = 1, NY_G
+            do i = 1, NX_G
+               x = real(i, wp)/real(NX_G, wp)
+               y = real(j, wp)/real(NY_G, wp)
+               tt(i, j, k) = 22.0_wp - 18.0_wp*y - zs(k)/250.0_wp + 1.5_wp*sin(6.2831853_wp*x)
+               tt(i, j, k) = max(tt(i, j, k), -1.5_wp)
+               ss(i, j, k) = 34.5_wp + 0.6_wp*y - 0.2_wp*cos(6.2831853_wp*x) + zs(k)*1.0e-4_wp
+            end do
+         end do
+      end do
+      call nc_create_file(ZINIT_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "z", NZS, dz_)
+      call nc_def_var_3d(ncid, "temp", [dx_, dy_, dz_], v1)
+      call nc_def_var_3d(ncid, "salt", [dx_, dy_, dz_], v2)
+      call rdb_def_var_1d(ncid, "z_src", dz_, v3)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, tt)
+      ierr = nf90_put_var(ncid, v2, ss)
+      call rdb_put_var_1d(ncid, v3, zs)
+      call nc_close(ncid)
+   end subroutine write_input_files
+#endif
 
 end program test_ocean_decomp_bitid_mpi
 #else
