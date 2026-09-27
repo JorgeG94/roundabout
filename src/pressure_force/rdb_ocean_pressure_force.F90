@@ -25,11 +25,7 @@ module rdb_ocean_pressure_force
    !! in the top layer) DO carry it; the split sheds exactly that term from
    !! the barotropic forcing (`pgf_free_surface_gravity`,
    !! `set_fast_forcing_eta_pf`) and keeps the rest of the depth mean.
-#ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS
-#else
-   use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY, H_VANISHED, H_DIV_EPS
-#endif
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -52,21 +48,12 @@ module rdb_ocean_pressure_force
                       SPV420, SPV500, SPV510, SPV600
    ! (The Roquet coefficient table feeds `rdb_roquet_spv.inc`, included in
    ! `contains` for a module-local, inlinable copy of the SpV value.)
-   use rdb_ocean_pgf_reconstruct, only: plm_edges_column, ppm_edges_column, &
-                                        boole_dpa_intz_layer, boole_dpa_face, &
-                                        boole_dpa_intz_layer_wright, boole_dpa_face_wright, &
+   use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face, &
                                         PGF_RECON_PLM, PGF_RECON_PPM
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
-
-#ifdef LFORTRAN_PASSING
-   integer, parameter :: NZ_STACK_MAX = 64
-      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
-      !! (an imported parameter used as an explicit-shape dummy bound inside a
-      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
-#endif
 
    public :: ocean_pressure_force_t
    public :: ocean_pressure_force_compute
@@ -77,6 +64,16 @@ module rdb_ocean_pressure_force
    public :: wright_pcm_dpa_face
    public :: roquet_pcm_dpa_intz
    public :: roquet_pcm_dpa_face
+   public :: plm_edges_layer
+   public :: ppm_edges_layer
+   public :: boole_dpa_intz_layer_wright
+   public :: boole_dpa_face_wright
+   public :: roquet_recon_dpa_intz
+   public :: roquet_recon_dpa_face
+
+   integer, parameter :: N_BOOLE = 5
+      !! Sub-points of the in-layer Boole (5-point closed Newton-Cotes) rule;
+      !! the same value as `rdb_ocean_pgf_reconstruct`'s.
 
    ! Pressure-force variant tags.
    integer, parameter, public :: OPGF_VARIANT_MONT = 1
@@ -1487,12 +1484,21 @@ contains
       !! two integrals that assembly consumes are BOTH taken from the
       !! reconstructed sub-layer T/S profile rather than a layer mean:
       !!
-      !!   * Pass 1 (per column) replaces the PCM `dpa(k)` / `intz_dpa(k)`
-      !!     with the 5-point VERTICAL Boole quadrature of the monotone
-      !!     PLM/PPM profile — the side integrals of the control volume.
+      !!   * Pass 1 replaces the PCM `dpa(k)` / `intz_dpa(k)` with the
+      !!     5-point VERTICAL Boole quadrature of the monotone PLM/PPM
+      !!     profile (edges from Pass 0) — the side integrals of the
+      !!     control volume.
       !!   * Pass 2 (per face) replaces the two-column trapezoid
       !!     `0.5*(dpa_L + dpa_R)` with the 5-point HORIZONTAL Boole
       !!     quadrature `boole_dpa_face` — the top/bottom (tilted) edges.
+      !!
+      !! Passes 0-2 each run one GPU thread per CELL (3-D `do concurrent`
+      !! over k, j, i, plus a cheap per-column scan for the `pa` / `intx_pa`
+      !! / `inty_pa` recurrences) with every per-EOS helper inlined: the
+      !! same operations in the same order as the column-serial form they
+      !! replaced, so bit-identical to it.  Global 1-degree PPM, 5 days, one
+      !! V100: `ocean_pgf` 5.97 -> 3.45 s under Wright, 12.42 -> 6.55 s under
+      !! Roquet (`[stats]` identical to the digit).
       !!
       !! Both are required for the defining property: with a linear EOS
       !! and T/S linear in z, the PGF then vanishes to round-off for ANY
@@ -1549,126 +1555,141 @@ contains
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
 
       integer  :: i, j, k
-      real(wp) :: inv_rho0, eta, dpa_kk, intz_kk
+      real(wp) :: inv_rho0, dpa_kk, intz_kk
       real(wp) :: h_L, h_R, e_bot_L, e_bot_R
       real(wp) :: t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R
       real(wp) :: pa_h_intz_L, pa_h_intz_R, numer, denom
       real(wp) :: dM_coeff, ddM_dx, ddM_dy
       logical  :: parabolic
-      ! Per-column edge-build stacks (fixed-size for local()).
-      real(wp) :: h_col(NZ_STACK_MAX), s_col(NZ_STACK_MAX), t_col(NZ_STACK_MAX)
-      real(wp) :: st_col(NZ_STACK_MAX), sb_col(NZ_STACK_MAX)
-      real(wp) :: tt_col(NZ_STACK_MAX), tb_col(NZ_STACK_MAX)
-      ! Gate the layer-mean T/S recovery at H_VANISHED (the D4 vanished-layer
-      ! role), not the old 1e-10: during an active drain the PPM limiter only
-      ! guarantees h >= 0, so a layer in (0, H_VANISHED] would otherwise pass
-      ! `h > 1e-10` and feed hS/h ≈ hS/1e-8 into the reconstruction.  Bit-
-      ! identical for any layer with h > H_VANISHED (the `hS/h` branch is
-      ! selected either way); only extreme-thin (0, H_VANISHED] layers switch
-      ! to the floored fallback.  Reconstruct-for-pressure is default-off so
-      ! no shipped anchor exercises this path.
-      real(wp), parameter :: H_FLOOR = H_VANISHED
+      integer  :: km2, km1, kp1, kp2
       integer  :: eos_variant
 
       inv_rho0 = 1.0_wp/rho0
       parabolic = (recon_scheme == PGF_RECON_PPM)
       eos_variant = eos%variant
 
-      ! ---- Pass 0: per-column PLM/PPM T/S edge values ----
-      ! Build the layer-mean T,S column (= hTr/h, floored), call the
-      ! edge helper, write the four edge slots.  Done as its own DC pass
-      ! so the quadrature pass below reads clean edge stacks.
-      do concurrent(j=1:ny, i=1:nx) local(k, h_col, s_col, t_col, &
-                                          st_col, sb_col, tt_col, tb_col)
-         do k = 1, nz
-            h_col(k) = h_layer(i, j, k)
-            if (h_col(k) > H_FLOOR) then
-               s_col(k) = hS(i, j, k)/h_col(k)
-               t_col(k) = hT(i, j, k)/h_col(k)
-            else
-               s_col(k) = hS(i, j, k)/H_FLOOR
-               t_col(k) = hT(i, j, k)/H_FLOOR
-            end if
-         end do
+      ! ---- Pass 0: PLM/PPM T/S edge values, one thread per cell ----
+      ! A layer's edges come from its own short vertical stencil of layer
+      ! means (k-1..k+1 for PLM, k-2..k+2 for PPM), so this is a 3-D
+      ! `do concurrent`; the per-column form built seven NZ_STACK_MAX
+      ! stacks per thread in device local memory.  The means are `hTr/h`
+      ! floored at H_VANISHED (`recon_layer_mean`, the D4 vanished-layer
+      ! role, not the old 1e-10: during an active drain the PPM limiter
+      ! only guarantees h >= 0, so a layer in (0, H_VANISHED] would
+      ! otherwise feed hS/h ≈ hS/1e-8 into the reconstruction).  Stencil
+      ! indices outside the column are clamped into it; the boundary
+      ! branches that would read them do not.  Done as its own pass so the
+      ! quadrature passes below read clean edge arrays.
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(km2, km1, kp1, kp2)
+         km2 = max(k - 2, 1)
+         km1 = max(k - 1, 1)
+         kp1 = min(k + 1, nz)
+         kp2 = min(k + 2, nz)
          if (parabolic) then
-            call ppm_edges_column(nz, h_col, s_col, st_col, sb_col)
-            call ppm_edges_column(nz, h_col, t_col, tt_col, tb_col)
+            call ppm_edges_layer(k, nz, h_layer(i, j, km2), h_layer(i, j, km1), &
+                                 h_layer(i, j, k), h_layer(i, j, kp1), h_layer(i, j, kp2), &
+                                 recon_layer_mean(hS(i, j, km2), h_layer(i, j, km2)), &
+                                 recon_layer_mean(hS(i, j, km1), h_layer(i, j, km1)), &
+                                 recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                 recon_layer_mean(hS(i, j, kp1), h_layer(i, j, kp1)), &
+                                 recon_layer_mean(hS(i, j, kp2), h_layer(i, j, kp2)), &
+                                 recon_layer_mean(hT(i, j, km2), h_layer(i, j, km2)), &
+                                 recon_layer_mean(hT(i, j, km1), h_layer(i, j, km1)), &
+                                 recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                 recon_layer_mean(hT(i, j, kp1), h_layer(i, j, kp1)), &
+                                 recon_layer_mean(hT(i, j, kp2), h_layer(i, j, kp2)), &
+                                 S_t(i, j, k), S_b(i, j, k), T_t(i, j, k), T_b(i, j, k))
          else
-            call plm_edges_column(nz, h_col, s_col, st_col, sb_col)
-            call plm_edges_column(nz, h_col, t_col, tt_col, tb_col)
+            call plm_edges_layer(k, nz, h_layer(i, j, km1), h_layer(i, j, k), h_layer(i, j, kp1), &
+                                 recon_layer_mean(hS(i, j, km1), h_layer(i, j, km1)), &
+                                 recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                 recon_layer_mean(hS(i, j, kp1), h_layer(i, j, kp1)), &
+                                 S_t(i, j, k), S_b(i, j, k))
+            call plm_edges_layer(k, nz, h_layer(i, j, km1), h_layer(i, j, k), h_layer(i, j, kp1), &
+                                 recon_layer_mean(hT(i, j, km1), h_layer(i, j, km1)), &
+                                 recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                 recon_layer_mean(hT(i, j, kp1), h_layer(i, j, kp1)), &
+                                 T_t(i, j, k), T_b(i, j, k))
          end if
-         do k = 1, nz
-            S_t(i, j, k) = st_col(k)
-            S_b(i, j, k) = sb_col(k)
-            T_t(i, j, k) = tt_col(k)
-            T_b(i, j, k) = tb_col(k)
-         end do
       end do
 
-      ! ---- Pass 1: per-column e_face, pa, intz_dpa via Boole quadrature ----
+      ! ---- Pass 1: e_face, pa, intz_dpa via Boole quadrature ----
       ! e_top = e_face(k+1) is the shallower interface of layer k.  The
       ! reconstructed dpa(k) marches the pa stack; intz_dpa(k) is the
       ! first-moment piece.  Both replace the PCM forms.
       !
-      ! Passes 1 and 2 come in one loop copy per EOS, selected here, outside
-      ! the loops: Wright calls its own Boole twins with the density
-      ! inline and no `eos_t` handle; everything else takes the generic
-      ! `eos_density_point` rule.  Roquet deliberately stays on the generic
-      ! rule: a Roquet twin (value-only SpV, no handle) was measured SLOWER
-      ! on the V100 -- this path's device cost is the non-inlined call
-      ! chain's stack traffic, not the EOS arithmetic -- and the generic
-      ! chain already evaluates Roquet value-only (`eos_density_point` ->
-      ! `roquet_spv_value`).  Same sub-points, weights and summation order
-      ! in both copies.
+      ! Pass 1a (per column): interface heights and the surface seed of the
+      ! pressure-anomaly stack.  Pass 1b (3-D `do concurrent` over k, j, i):
+      ! every layer's `dpa` / `intz_dpa`, `dpa` parked in `pa(i, j, k)`.
+      ! Pass 1c (per column): the stack sum, top down, in place.  The same
+      ! operations in the same order as the column-serial march, so
+      ! bit-identical to it, but one GPU thread per CELL -- the per-column
+      ! form ran one thread per column through nz layers x 5 EOS
+      ! evaluations (115k threads on the global 1-degree grid).  Pass 2
+      ! likewise: 3-D face integrals, then a per-column scan.
+      !
+      ! Passes 1b and 2 come in one loop copy per EOS, selected here, outside
+      ! the loops (same sub-points, weights and summation order in every
+      ! copy): Wright calls its Boole twins (density inline, no `eos_t`
+      ! handle); Roquet calls this module's twins `roquet_recon_dpa_intz` /
+      ! `roquet_recon_dpa_face`, whose SpV value comes from the included
+      ! `rdb_roquet_spv.inc` and is inlined into the kernel (the generic
+      ! chain's out-of-line `eos_density_point` calls were this path's
+      ! device cost); anything else (the linear EOS) takes the generic
+      ! `eos_density_point` rule.
+      do concurrent(j=1:ny, i=1:nx) local(k)
+         e_face(i, j, 1) = -b(i, j)
+         do k = 1, nz
+            e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
+         end do
+         if (p_top_in_bc) then
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*e_face(i, j, nz + 1) + p_top(i, j)
+         else
+            pa(i, j, nz + 1) = rho_ref*GRAVITY*e_face(i, j, nz + 1)
+         end if
+      end do
       if (eos_variant == EOS_VARIANT_WRIGHT_97) then
-         do concurrent(j=1:ny, i=1:nx) local(k, eta, dpa_kk, intz_kk)
-            e_face(i, j, 1) = -b(i, j)
-            do k = 1, nz
-               e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
-            end do
-            eta = e_face(i, j, nz + 1)
-            if (p_top_in_bc) then
-               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
-            else
-               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
-            end if
-            do k = nz, 1, -1
-               call boole_dpa_intz_layer_wright(rho0, rho_ref, &
-                                                e_face(i, j, k + 1), h_layer(i, j, k), &
-                                                T_t(i, j, k), T_b(i, j, k), &
-                                                recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
-                                                S_t(i, j, k), S_b(i, j, k), &
-                                                recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
-                                                parabolic, dpa_kk, intz_kk)
-               pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
-               intz_dpa(i, j, k) = intz_kk
-            end do
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk)
+            call boole_dpa_intz_layer_wright(rho0, rho_ref, &
+                                             e_face(i, j, k + 1), h_layer(i, j, k), &
+                                             T_t(i, j, k), T_b(i, j, k), &
+                                             recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                             S_t(i, j, k), S_b(i, j, k), &
+                                             recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                             parabolic, dpa_kk, intz_kk)
+            pa(i, j, k) = dpa_kk
+            intz_dpa(i, j, k) = intz_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk)
+            call roquet_recon_dpa_intz(rho0, rho_ref, &
+                                       e_face(i, j, k + 1), h_layer(i, j, k), &
+                                       T_t(i, j, k), T_b(i, j, k), &
+                                       recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                       S_t(i, j, k), S_b(i, j, k), &
+                                       recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                       parabolic, dpa_kk, intz_kk)
+            pa(i, j, k) = dpa_kk
+            intz_dpa(i, j, k) = intz_kk
          end do
       else
-         do concurrent(j=1:ny, i=1:nx) local(k, eta, dpa_kk, intz_kk)
-            e_face(i, j, 1) = -b(i, j)
-            do k = 1, nz
-               e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
-            end do
-            eta = e_face(i, j, nz + 1)
-            if (p_top_in_bc) then
-               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
-            else
-               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
-            end if
-            do k = nz, 1, -1
-               call boole_dpa_intz_layer(eos, rho0, rho_ref, &
-                                         e_face(i, j, k + 1), h_layer(i, j, k), &
-                                         T_t(i, j, k), T_b(i, j, k), &
-                                         recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
-                                         S_t(i, j, k), S_b(i, j, k), &
-                                         recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
-                                         parabolic, dpa_kk, intz_kk)
-               pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
-               intz_dpa(i, j, k) = intz_kk
-            end do
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk)
+            call boole_dpa_intz_layer(eos, rho0, rho_ref, &
+                                      e_face(i, j, k + 1), h_layer(i, j, k), &
+                                      T_t(i, j, k), T_b(i, j, k), &
+                                      recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                      S_t(i, j, k), S_b(i, j, k), &
+                                      recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                      parabolic, dpa_kk, intz_kk)
+            pa(i, j, k) = dpa_kk
+            intz_dpa(i, j, k) = intz_kk
          end do
       end if
+      do concurrent(j=1:ny, i=1:nx) local(k)
+         do k = nz, 1, -1
+            pa(i, j, k) = pa(i, j, k + 1) + pa(i, j, k)
+         end do
+      end do
 
       ! ---- Pass 2a: u-face horizontal integrals ----
       ! The along-face mean of the layer pressure increment, by the 5-point
@@ -1679,52 +1700,71 @@ contains
       ! interface it leaves the sigma second-kind curvature residual at
       ! every interface — see the `boole_dpa_face` docstring.
       if (eos_variant == EOS_VARIANT_WRIGHT_97) then
-         do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
-                                             dpa_L, dpa_R)
-            intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
-            do k = nz, 1, -1
-               t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-               s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-               dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
-               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-               call boole_dpa_face_wright(rho0, rho_ref, &
-                                          e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
-                                          h_layer(i - 1, j, k), h_layer(i, j, k), &
-                                          T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
-                                          T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                          S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
-                                          S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                          dpa_L, dpa_R, parabolic, dpa_kk)
-               intx_dpa(i, j, k) = dpa_kk
-               intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
-            end do
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face_wright(rho0, rho_ref, &
+                                       e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                       h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                       T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                       T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                       S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                       S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                       dpa_L, dpa_R, parabolic, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_recon_dpa_face(rho0, rho_ref, &
+                                       e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                       h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                       T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                       T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                       S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                       S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                       dpa_L, dpa_R, parabolic, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
          end do
       else
-         do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
-                                             dpa_L, dpa_R)
-            intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
-            do k = nz, 1, -1
-               t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-               s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-               dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
-               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-               call boole_dpa_face(eos, rho0, rho_ref, &
-                                   e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
-                                   h_layer(i - 1, j, k), h_layer(i, j, k), &
-                                   T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
-                                   T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                   S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
-                                   S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                   dpa_L, dpa_R, parabolic, dpa_kk)
-               intx_dpa(i, j, k) = dpa_kk
-               intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
-            end do
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face(eos, rho0, rho_ref, &
+                                e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                dpa_L, dpa_R, parabolic, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
          end do
       end if
+      ! Column scan of the face integrals (cheap; the EOS work above is
+      ! 3-D parallel).
+      do concurrent(j=1:ny, i=2:nx) local(k)
+         intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
+         do k = nz, 1, -1
+            intx_pa(i, j, k) = intx_pa(i, j, k + 1) + intx_dpa(i, j, k)
+         end do
+      end do
       do concurrent(k=1:nz, j=1:ny)
          intx_dpa(1, j, k) = 0.0_wp
          intx_dpa(nx + 1, j, k) = 0.0_wp
@@ -1736,52 +1776,69 @@ contains
 
       ! ---- Pass 2b: v-face horizontal integrals ----
       if (eos_variant == EOS_VARIANT_WRIGHT_97) then
-         do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
-                                             dpa_L, dpa_R)
-            inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
-            do k = nz, 1, -1
-               t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-               s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-               dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
-               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-               call boole_dpa_face_wright(rho0, rho_ref, &
-                                          e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
-                                          h_layer(i, j - 1, k), h_layer(i, j, k), &
-                                          T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
-                                          T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                          S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
-                                          S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                          dpa_L, dpa_R, parabolic, dpa_kk)
-               inty_dpa(i, j, k) = dpa_kk
-               inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
-            end do
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face_wright(rho0, rho_ref, &
+                                       e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                       h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                       T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                       T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                       S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                       S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                       dpa_L, dpa_R, parabolic, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_recon_dpa_face(rho0, rho_ref, &
+                                       e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                       h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                       T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                       T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                       S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                       S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                       dpa_L, dpa_R, parabolic, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
          end do
       else
-         do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
-                                             dpa_L, dpa_R)
-            inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
-            do k = nz, 1, -1
-               t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-               s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-               dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
-               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
-               call boole_dpa_face(eos, rho0, rho_ref, &
-                                   e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
-                                   h_layer(i, j - 1, k), h_layer(i, j, k), &
-                                   T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
-                                   T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                   S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
-                                   S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                   dpa_L, dpa_R, parabolic, dpa_kk)
-               inty_dpa(i, j, k) = dpa_kk
-               inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
-            end do
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call boole_dpa_face(eos, rho0, rho_ref, &
+                                e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                dpa_L, dpa_R, parabolic, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
          end do
       end if
+      do concurrent(j=2:ny, i=1:nx) local(k)
+         inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
+         do k = nz, 1, -1
+            inty_pa(i, j, k) = inty_pa(i, j, k + 1) + inty_dpa(i, j, k)
+         end do
+      end do
       do concurrent(k=1:nz, i=1:nx)
          inty_dpa(i, 1, k) = 0.0_wp
          inty_dpa(i, ny + 1, k) = 0.0_wp
@@ -2508,6 +2565,599 @@ contains
       end do
       dpa_face = acc/90.0_wp
    end subroutine roquet_pcm_dpa_face
+
+   ! ---- Reconstruct-for-pressure PLM / PPM edge values, per layer.  They
+   ! live HERE, next to the kernel whose 3-D Pass 0 calls them, so they
+   ! inline into it (across the module boundary they were real calls with
+   ! their ~12 scalar arguments through the device stack: measured ~1.7x
+   ! slower on the global 1-degree Pass 0).
+
+   pure subroutine boundary_edges_linear(h_self, h_nbr, q_self, dq_up, q_t, q_b)
+      !$acc routine seq
+      !! Linear-exact one-sided edge pair for a BOUNDARY layer (k=1 or
+      !! k=nz), where a centred slope has no second neighbour.
+      !!
+      !! `dq_up` is the layer-mean increment toward the SURFACE across the
+      !! two cell centres (`q(2)-q(1)` at the bed, `q(nz)-q(nz-1)` at the
+      !! surface).  The centres are `(h_self + h_nbr)/2` apart, so the
+      !! per-metre slope is `dq_up/((h_self+h_nbr)/2)` and the half-jump
+      !! across this layer is
+      !!
+      !!     d = dq_up * h_self / (h_self + h_nbr)
+      !!
+      !! giving `q_t = q + d` (shallower edge) and `q_b = q - d`.  For a
+      !! profile that is linear in z this reproduces the true edge values
+      !! EXACTLY, for any thickness pair — which is the property the FV
+      !! pressure-gradient quadrature needs (Adcroft, Hallberg & Harrison
+      !! 2008; White, Adcroft & Hallberg 2009 §2): a PCM flatten here
+      !! leaves the full terrain-following truncation error in the layers
+      !! next to the tilted boundary.
+      !!
+      !! Limiter: `|d| <= |dq_up|`, i.e. the edge never leaves the
+      !! interval the two cell means span on the other side.  Since
+      !! `h_self/(h_self+h_nbr) < 1` it never bites on a real thickness
+      !! pair — it is armour against a degenerate `h_nbr <= 0`, and it
+      !! keeps the extrapolation from manufacturing a density inversion.
+      real(wp), intent(in)  :: h_self
+         !! Thickness of the boundary layer itself (m).
+      real(wp), intent(in)  :: h_nbr
+         !! Thickness of its single interior neighbour (m).
+      real(wp), intent(in)  :: q_self
+         !! Layer mean of the boundary layer.
+      real(wp), intent(in)  :: dq_up
+         !! Layer-mean increment toward the surface, neighbour -> self at
+         !! the surface layer, self -> neighbour at the bed layer.
+      real(wp), intent(out) :: q_t
+         !! Top (shallower) edge value.
+      real(wp), intent(out) :: q_b
+         !! Bottom (deeper) edge value.
+
+      real(wp), parameter :: H_TINY = 1.0e-30_wp
+      real(wp) :: d
+
+      d = dq_up*h_self/max(h_self + h_nbr, H_TINY)
+      d = sign(min(abs(d), abs(dq_up)), d)
+      q_t = q_self + d
+      q_b = q_self - d
+   end subroutine boundary_edges_linear
+
+   pure subroutine plm_edges_layer(k, nz, h_dn, h_c, h_up, q_dn, q_c, q_up, q_t, q_b)
+      !$acc routine seq
+      !! PLM top/bottom edge values of ONE layer `k` of a layer-mean field
+      !! `q`, via a two-stage h-weighted van-Leer slope (White, Adcroft &
+      !! Hallberg 2009 §2).  Returns the SHALLOWER edge in `q_t` (toward
+      !! k+1) and the DEEPER edge in `q_b` (toward k-1), bottom-up.
+      !! Boundary layers (k=1, k=nz) -> `boundary_edges_linear`, the
+      !! linear-exact one-sided pair.
+      !!
+      !! Every layer's edges depend on its two neighbours only, so the
+      !! caller runs this one thread per CELL (the FV-MOM6 reconstruct
+      !! kernel's Pass 0 is a 3-D `do concurrent`); the neighbour arguments
+      !! of a boundary layer that has none are not referenced.
+      integer, intent(in) :: k
+         !! Layer index (1 = bed, nz = surface).
+      integer, intent(in) :: nz
+         !! Number of layers in the column.
+      real(wp), intent(in)  :: h_dn, h_c, h_up
+         !! Thicknesses (m) of layers k-1 (deeper), k, k+1 (shallower).
+      real(wp), intent(in)  :: q_dn, q_c, q_up
+         !! Layer means of layers k-1, k, k+1.
+      real(wp), intent(out) :: q_t
+         !! Top (shallower) edge value of layer k.
+      real(wp), intent(out) :: q_b
+         !! Bottom (deeper) edge value of layer k.
+
+      real(wp) :: slp, sig_c, sig_l, sig_r, slp_max, e_t, e_b, q_lo, q_hi
+
+      ! Single-layer column: PCM is the only option (no neighbour).
+      if (nz <= 1) then
+         q_t = q_c
+         q_b = q_c
+         return
+      end if
+      if (k == 1) then
+         call boundary_edges_linear(h_c, h_up, q_c, q_up - q_c, q_t, q_b)
+         return
+      end if
+      if (k == nz) then
+         call boundary_edges_linear(h_c, h_dn, q_c, q_c - q_dn, q_t, q_b)
+         return
+      end if
+
+      ! ---- Stage 1: h-weighted limited central slope ----
+      ! sig_c is the change ACROSS the layer measured deeper->shallower:
+      ! positive sig_c means q increases toward the surface (k+1).
+      ! h-weighted central slope (van-Leer / White-Adcroft-Hallberg):
+      !   sig_c = (q(k+1)-q(k-1)) * h(k) / (h(k-1)+2 h(k)+h(k+1))  * 2
+      ! then limited to 2*min(|q(k)-q_deeper|,|q_shallower-q(k)|), zeroed
+      ! at extrema.
+      sig_l = q_c - q_dn     ! deeper one-sided (toward k-1)
+      sig_r = q_up - q_c     ! shallower one-sided (toward k+1)
+      if (sig_l*sig_r <= 0.0_wp) then
+         slp = 0.0_wp        ! local extremum -> flatten
+      else
+         sig_c = 2.0_wp*(q_up - q_dn)*h_c/(h_dn + 2.0_wp*h_c + h_up)
+         slp_max = 2.0_wp*min(abs(sig_l), abs(sig_r))
+         slp = sign(min(abs(sig_c), slp_max), sig_c)
+      end if
+
+      ! ---- Stage 2: monotonized edges bounded against neighbour means ----
+      ! Clamp each edge between the cell mean and the adjacent cell mean
+      ! (White, Adcroft & Hallberg 2009 §2 monotonization — prevents the
+      ! reconstructed edge from over/undershooting the neighbour mean,
+      ! which would manufacture a density inversion under the EOS).
+      e_t = q_c + 0.5_wp*slp   ! shallower edge (toward k+1)
+      e_b = q_c - 0.5_wp*slp   ! deeper edge (toward k-1)
+      q_lo = min(q_c, q_up)
+      q_hi = max(q_c, q_up)
+      q_t = max(q_lo, min(q_hi, e_t))
+      q_lo = min(q_c, q_dn)
+      q_hi = max(q_c, q_dn)
+      q_b = max(q_lo, min(q_hi, e_b))
+   end subroutine plm_edges_layer
+
+   pure subroutine ppm_interface_values(m, nz, h0, h1, h2, h3, s0, s1, s2, s3, &
+                                        t0, t1, t2, t3, edge_s, edge_t)
+      !$acc routine seq
+      !! The PPM estimates of salinity and temperature at the interface
+      !! between layer `m` (deeper) and `m+1` (shallower), `1 <= m <= nz-1`,
+      !! from the four-layer stencil `m-1 .. m+2` (thicknesses `h0..h3`,
+      !! layer means `s0..s3`, `t0..t3`).  Interior interfaces
+      !! (`2 <= m <= nz-2`) take the implicit-h4 estimate in its explicit
+      !! form (White & Adcroft 2008 non-uniform stencil, exactly 4th-order
+      !! on non-uniform layers; matches `remap_column_ppm_h4` Step 1 to
+      !! round-off).  The two near-boundary interfaces (`m = 1`,
+      !! `m = nz-1`) take the thickness-weighted (h2) estimate — the
+      !! linear-exact value at the shared face of two piecewise-linear
+      !! cells, `(q_m h_{m+1} + q_{m+1} h_m)/(h_m + h_{m+1})` (a plain mean
+      !! biases the thick interior layer's edge on non-uniform
+      !! thicknesses); layer `m-1` (resp. `m+2`) is then not referenced.
+      !!
+      !! Both tracers at once: the stencil's thickness factors (five of the
+      !! six divisions) are the same for S and T, so they are formed once.
+      !! Each tracer's value is the single-tracer expression, operation for
+      !! operation.
+      integer, intent(in) :: m
+         !! Interface index: between layers m and m+1.
+      integer, intent(in) :: nz
+         !! Number of layers in the column.
+      real(wp), intent(in) :: h0, h1, h2, h3
+         !! Thicknesses of layers m-1, m, m+1, m+2 (m).
+      real(wp), intent(in) :: s0, s1, s2, s3
+         !! Salinity layer means of layers m-1 .. m+2.
+      real(wp), intent(in) :: t0, t1, t2, t3
+         !! Temperature layer means of layers m-1 .. m+2.
+      real(wp), intent(out) :: edge_s, edge_t
+         !! Interface salinity / temperature.
+
+      real(wp) :: g0, g1, g2, g3, hf, h_sum
+      real(wp) :: h01, h12, h23, h012, h123, h0123
+      real(wp) :: f1, f3, w2, w3
+      real(wp), parameter :: H_NEGLECT = 1.0e-30_wp
+      real(wp), parameter :: H_MIN_FRAC = 1.0e-5_wp
+
+      if (m == 1 .or. m == nz - 1) then
+         edge_s = (s1*h2 + s2*h1)/(h1 + h2)
+         edge_t = (t1*h2 + t2*h1)/(h1 + h2)
+         return
+      end if
+      g0 = h0
+      g1 = h1
+      g2 = h2
+      g3 = h3
+      h_sum = g0 + g1 + g2 + g3
+      if (g0 + g1 <= 0.0_wp .or. g1 + g2 <= 0.0_wp .or. g2 + g3 <= 0.0_wp) then
+         hf = H_MIN_FRAC*max(H_NEGLECT, h_sum)
+         g0 = max(g0, hf)
+         g1 = max(g1, hf)
+         g2 = max(g2, hf)
+         g3 = max(g3, hf)
+      end if
+      h01 = g0 + g1
+      h12 = g1 + g2
+      h23 = g2 + g3
+      h012 = g0 + g1 + g2
+      h123 = g1 + g2 + g3
+      h0123 = g0 + g1 + g2 + g3
+      f1 = h01*h23/h12
+      f3 = 1.0_wp/h012 + 1.0_wp/h123
+      w2 = g2*h23/(h012*h01)
+      w3 = g1*h01/(h123*h23)
+      edge_s = (f1*(g2*s1 + g1*s2)*f3 + w2*((g0 + 2.0_wp*g1)*s1 - g1*s0) &
+                + w3*((2.0_wp*g2 + g3)*s2 - g2*s3))/h0123
+      edge_t = (f1*(g2*t1 + g1*t2)*f3 + w2*((g0 + 2.0_wp*g1)*t1 - g1*t0) &
+                + w3*((2.0_wp*g2 + g3)*t2 - g2*t3))/h0123
+   end subroutine ppm_interface_values
+
+   pure subroutine ppm_limit_edges(q_m1, q_c, q_p1, ql_raw, qr_raw, q_t, q_b)
+      !$acc routine seq
+      !! The PPM edge limiter of one interior layer: clip both interface
+      !! estimates into the monotone bounds of the three adjacent means,
+      !! flatten a local extremum to PCM, and apply the Colella & Woodward
+      !! (1984) parabola limiter.
+      real(wp), intent(in)  :: q_m1, q_c, q_p1
+         !! Layer means of layers k-1, k, k+1.
+      real(wp), intent(in)  :: ql_raw, qr_raw
+         !! Interface estimates at the layer's deeper / shallower interface.
+      real(wp), intent(out) :: q_t, q_b
+         !! Limited top (shallower) / bottom (deeper) edge values.
+
+      real(wp) :: q_lo, q_hi, ql, qr, dq, dq_l, dq_r, q6
+
+      q_lo = min(q_m1, q_c, q_p1)
+      q_hi = max(q_m1, q_c, q_p1)
+      ql = max(q_lo, min(q_hi, ql_raw))
+      qr = max(q_lo, min(q_hi, qr_raw))
+      dq = qr - ql
+      dq_l = q_c - ql
+      dq_r = qr - q_c
+      if (dq_l*dq_r <= 0.0_wp) then
+         ! Local extremum -> flatten to PCM.
+         ql = q_c
+         qr = q_c
+      else
+         q6 = 6.0_wp*q_c - 3.0_wp*(ql + qr)
+         if (abs(q6) > abs(dq)) then
+            if (q6*dq > 0.0_wp) then
+               ql = 3.0_wp*q_c - 2.0_wp*qr
+            else
+               qr = 3.0_wp*q_c - 2.0_wp*ql
+            end if
+         end if
+      end if
+      q_b = ql     ! deeper edge
+      q_t = qr     ! shallower edge
+   end subroutine ppm_limit_edges
+
+   pure subroutine ppm_edges_layer(k, nz, h_m2, h_m1, h_c, h_p1, h_p2, &
+                                   s_m2, s_m1, s_c, s_p1, s_p2, &
+                                   t_m2, t_m1, t_c, t_p1, t_p2, &
+                                   s_top, s_bot, t_top, t_bot)
+      !$acc routine seq
+      !! PPM top/bottom edge values of salinity and temperature in ONE layer
+      !! `k`: the implicit-h4 interface estimates (`ppm_interface_values`)
+      !! + the Colella & Woodward (1984) limiter (`ppm_limit_edges`).
+      !! Returns the SHALLOWER edges in `*_top`, the DEEPER in `*_bot`
+      !! (bottom-up).
+      !!
+      !! NOTE the PGF integrand on top of these edges is PARABOLIC (see
+      !! `boole_dpa_intz_layer`): q6 = 3*(2*q_mean - (q_t + q_b)) is the
+      !! in-layer curvature — why PPM differs from PLM at the density
+      !! integral even at identical edge values.
+      !!
+      !! Boundary layers (k=1, k=nz) -> `boundary_edges_linear`.  The pair
+      !! is symmetric about the layer mean, so `q6 = 3*(2*q - (q_t+q_b))`
+      !! is identically zero there: the boundary layer carries a straight
+      !! line, which is the exact profile whenever `q(z)` is linear.
+      !!
+      !! A layer's edges depend on the five layers `k-2 .. k+2` only, so the
+      !! caller runs this one thread per CELL (the FV-MOM6 reconstruct
+      !! kernel's Pass 0 is a 3-D `do concurrent`); arguments of layers
+      !! outside the column are not referenced.
+      integer, intent(in) :: k
+         !! Layer index (1 = bed, nz = surface).
+      integer, intent(in) :: nz
+         !! Number of layers in the column.
+      real(wp), intent(in)  :: h_m2, h_m1, h_c, h_p1, h_p2
+         !! Thicknesses (m) of layers k-2 .. k+2.
+      real(wp), intent(in)  :: s_m2, s_m1, s_c, s_p1, s_p2
+         !! Salinity layer means of layers k-2 .. k+2.
+      real(wp), intent(in)  :: t_m2, t_m1, t_c, t_p1, t_p2
+         !! Temperature layer means of layers k-2 .. k+2.
+      real(wp), intent(out) :: s_top, s_bot, t_top, t_bot
+         !! Top (shallower) / bottom (deeper) edge values of layer k.
+
+      real(wp) :: sl, sr, tl, tr
+
+      if (nz <= 1) then
+         s_top = s_c
+         s_bot = s_c
+         t_top = t_c
+         t_bot = t_c
+         return
+      end if
+      ! Boundary layers: linear-exact one-sided pair (q6 == 0 there).
+      if (k == 1) then
+         call boundary_edges_linear(h_c, h_p1, s_c, s_p1 - s_c, s_top, s_bot)
+         call boundary_edges_linear(h_c, h_p1, t_c, t_p1 - t_c, t_top, t_bot)
+         return
+      end if
+      if (k == nz) then
+         call boundary_edges_linear(h_c, h_m1, s_c, s_c - s_m1, s_top, s_bot)
+         call boundary_edges_linear(h_c, h_m1, t_c, t_c - t_m1, t_top, t_bot)
+         return
+      end if
+
+      call ppm_interface_values(k - 1, nz, h_m2, h_m1, h_c, h_p1, s_m2, s_m1, s_c, s_p1, &
+                                t_m2, t_m1, t_c, t_p1, sl, tl)
+      call ppm_interface_values(k, nz, h_m1, h_c, h_p1, h_p2, s_m1, s_c, s_p1, s_p2, &
+                                t_m1, t_c, t_p1, t_p2, sr, tr)
+      call ppm_limit_edges(s_m1, s_c, s_p1, sl, sr, s_top, s_bot)
+      call ppm_limit_edges(t_m1, t_c, t_p1, tl, tr, t_top, t_bot)
+   end subroutine ppm_edges_layer
+
+   ! ---- Reconstruct-for-pressure per-EOS twins of the generic Boole rules
+   ! (`rdb_ocean_pgf_reconstruct :: boole_dpa_intz_layer` / `boole_dpa_face`).
+   ! They live HERE, in the kernel's module, so nvfortran inlines them into
+   ! the 3-D Pass 1b / Pass 2 loops of `compute_fv_mom6_reconstruct_impl`
+   ! (measured: across the module boundary they were real calls, their
+   ! arguments and sub-point arrays through the device stack).
+
+   pure subroutine boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, &
+                                      s_t, s_b, s_mean, parabolic, t5, s5, p5)
+      !$acc routine seq
+      !! The five sub-point (T, S, p) triples of the in-layer Boole rule,
+      !! top (n = 1) to bottom (n = 5), for the per-EOS twins -- the same
+      !! points `boole_dpa_intz_layer` writes out in place.
+      real(wp), intent(in)  :: rho0
+         !! Boussinesq reference density used in the pressure estimate.
+      real(wp), intent(in)  :: e_top
+         !! Surface-relative height of the SHALLOWER interface.
+      real(wp), intent(in)  :: dz
+         !! Layer thickness (m), dz >= 0.
+      real(wp), intent(in)  :: t_t, t_b, t_mean
+         !! Temperature: top edge, bottom edge, layer mean.
+      real(wp), intent(in)  :: s_t, s_b, s_mean
+         !! Salinity: top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> add the PPM curvature (s6/t6) term.
+      real(wp), intent(out) :: t5(N_BOOLE), s5(N_BOOLE), p5(N_BOOLE)
+         !! Sub-point temperature, salinity and Boussinesq pressure (Pa).
+
+      real(wp) :: gxrho, wt_t, wt_b, t6, s6, z5
+      integer  :: n
+
+      gxrho = GRAVITY*rho0
+
+      ! PPM curvature (zero for PLM).
+      t6 = 0.0_wp
+      s6 = 0.0_wp
+      if (parabolic) then
+         t6 = 3.0_wp*(2.0_wp*t_mean - (t_t + t_b))
+         s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
+      end if
+
+      do n = 1, N_BOOLE
+         wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
+         wt_b = 1.0_wp - wt_t
+         ! Linear blend + parabolic correction.  At wt_t in [0,1] the
+         ! parabola through (_t at wt_t=1, _b at wt_t=0, mean) is
+         !   q(wt_t) = wt_t*q_t + wt_b*q_b + q6*wt_t*wt_b.
+         t5(n) = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
+         s5(n) = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
+         z5 = e_top - 0.25_wp*real(n - 1, wp)*dz   ! marches DOWN from top
+         p5(n) = -gxrho*z5
+      end do
+   end subroutine boole_layer_points
+
+   pure subroutine boole_layer_combine(r5, dz, dpa, intz_dpa)
+      !$acc routine seq
+      !! Boole weights of the five sub-point density anomalies `r5` (top
+      !! to bottom): `dpa = g*dz*<rho'>` and the first moment from the top.
+      real(wp), intent(in)  :: r5(N_BOOLE)
+         !! Density anomaly at the five sub-points (kg/m^3).
+      real(wp), intent(in)  :: dz
+         !! Layer thickness (m).
+      real(wp), intent(out) :: dpa
+         !! g * int rho' dz over the layer (Pa).
+      real(wp), intent(out) :: intz_dpa
+         !! 0.5 * g * dz^2 * bracket (Pa*m), first moment from the top.
+
+      real(wp) :: rho_anom
+
+      rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r5(1) + r5(5)) &
+                                   + 32.0_wp*(r5(2) + r5(4)) + 12.0_wp*r5(3))
+      dpa = GRAVITY*dz*rho_anom
+      intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
+                                       - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
+   end subroutine boole_layer_combine
+
+   pure subroutine boole_dpa_intz_layer_wright(rho0, rho_ref, e_top, dz, &
+                                               t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                                               parabolic, dpa, intz_dpa)
+      !$acc routine seq
+      !! `boole_dpa_intz_layer` specialised to Wright (1997): the same five
+      !! sub-points and weights, with the density written inline
+      !! (`wright_rho`, the expression `eos_density_point` evaluates) --
+      !! no `eos_t` handle, no per-point variant dispatch.  The caller
+      !! selects this twin ONCE, outside its loops.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top, dz
+         !! Shallower-interface height / layer thickness (m).
+      real(wp), intent(in)  :: t_t, t_b, t_mean, s_t, s_b, s_mean
+         !! T / S top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa, intz_dpa
+         !! As `boole_dpa_intz_layer`.
+
+      real(wp) :: t5(N_BOOLE), s5(N_BOOLE), p5(N_BOOLE), r5(N_BOOLE)
+      integer  :: n
+
+      call boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                              parabolic, t5, s5, p5)
+      do n = 1, N_BOOLE
+         r5(n) = wright_rho(t5(n), s5(n), p5(n)) - rho_ref
+      end do
+      call boole_layer_combine(r5, dz, dpa, intz_dpa)
+   end subroutine boole_dpa_intz_layer_wright
+
+   pure function wright_rho(t, s, p) result(rho)
+      !$acc routine seq
+      !! Wright (1997) in-situ density (kg/m^3) -- term for term the
+      !! Wright branch of `eos_density_point`, without the handle.
+      real(wp), intent(in) :: t, s, p
+         !! Temperature (degC), salinity (PSU), pressure (Pa).
+      real(wp) :: rho
+
+      real(wp) :: T_sq, alpha_0, p_0, lambda, p_plus_p0
+
+      T_sq = t*t
+      alpha_0 = WRIGHT_A0 + WRIGHT_A1*t + WRIGHT_A2*s
+      p_0 = WRIGHT_B0 + WRIGHT_B1*t + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*t + &
+            WRIGHT_B4*s + WRIGHT_B5*s*t
+      lambda = WRIGHT_C0 + WRIGHT_C1*t + WRIGHT_C2*T_sq + WRIGHT_C3*T_sq*t + &
+               WRIGHT_C4*s + WRIGHT_C5*s*t
+      p_plus_p0 = p + p_0
+      rho = p_plus_p0/(lambda + alpha_0*p_plus_p0)
+   end function wright_rho
+
+   pure subroutine boole_dpa_face_wright(rho0, rho_ref, &
+                                         e_top_l, e_top_r, dz_l, dz_r, &
+                                         t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
+                                         s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
+                                         dpa_l, dpa_r, parabolic, dpa_face)
+      !$acc routine seq
+      !! `boole_dpa_face` with the Wright (1997) vertical rule
+      !! `boole_dpa_intz_layer_wright` at each of the five sub-columns --
+      !! identical sub-columns, weights and summation order, no `eos_t`
+      !! handle.  15 inline Wright density evaluations per face per layer
+      !! (the end points are the columns' own `dpa`).
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top_l, e_top_r, dz_l, dz_r
+         !! Left / right shallower-interface heights and thicknesses (m).
+      real(wp), intent(in)  :: t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r
+         !! Left / right temperature triples (top, bottom, mean).
+      real(wp), intent(in)  :: s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r
+         !! Left / right salinity triples.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The left / right columns' own layer `dpa` (Pa), the end points.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      do m = 2, N_BOOLE - 1
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         call boole_dpa_intz_layer_wright(rho0, rho_ref, &
+                                          wl*e_top_l + wr*e_top_r, &
+                                          wl*dz_l + wr*dz_r, &
+                                          wl*t_t_l + wr*t_t_r, &
+                                          wl*t_b_l + wr*t_b_r, &
+                                          wl*t_m_l + wr*t_m_r, &
+                                          wl*s_t_l + wr*s_t_r, &
+                                          wl*s_b_l + wr*s_b_r, &
+                                          wl*s_m_l + wr*s_m_r, &
+                                          parabolic, dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine boole_dpa_face_wright
+
+   pure subroutine roquet_recon_dpa_intz(rho0, rho_ref, e_top, dz, &
+                                         t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                                         parabolic, dpa, intz_dpa)
+      !$acc routine seq
+      !! `boole_dpa_intz_layer` (the reconstruct-for-pressure in-layer 5-point
+      !! Boole rule over a PLM / PPM T/S profile) specialised to Roquet SpV:
+      !! the same five sub-points, weights and summation order, with the
+      !! density `1/SV` from this module's copy of the SpV value
+      !! (`rdb_roq_ts_coeffs` + `rdb_roq_spv_p`, `rdb_roquet_spv.inc`) -- no
+      !! `eos_t` handle, no per-point variant dispatch, and a body the
+      !! compiler inlines into the kernel.  T and S vary through the layer,
+      !! so unlike `roquet_pcm_dpa_intz` there is no (T, S) hoist: each point
+      !! is a full EOS evaluation.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top, dz
+         !! Shallower-interface height / layer thickness (m).
+      real(wp), intent(in)  :: t_t, t_b, t_mean, s_t, s_b, s_mean
+         !! T / S top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa, intz_dpa
+         !! As `boole_dpa_intz_layer`.
+
+      real(wp) :: gxrho, wt_t, wt_b, t6, s6, t5, s5, p5, rho_anom
+      real(wp) :: sv0, sv1, sv2, sv3
+      real(wp) :: r5(N_BOOLE)
+      integer  :: n
+
+      gxrho = GRAVITY*rho0
+
+      ! PPM curvature (zero for PLM).
+      t6 = 0.0_wp
+      s6 = 0.0_wp
+      if (parabolic) then
+         t6 = 3.0_wp*(2.0_wp*t_mean - (t_t + t_b))
+         s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
+      end if
+
+      do n = 1, N_BOOLE
+         wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
+         wt_b = 1.0_wp - wt_t
+         t5 = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
+         s5 = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
+         p5 = -gxrho*(e_top - 0.25_wp*real(n - 1, wp)*dz)
+         call rdb_roq_ts_coeffs(t5, s5, sv0, sv1, sv2, sv3)
+         r5(n) = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, p5) - rho_ref
+      end do
+
+      rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r5(1) + r5(5)) &
+                                   + 32.0_wp*(r5(2) + r5(4)) + 12.0_wp*r5(3))
+      dpa = GRAVITY*dz*rho_anom
+      intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
+                                       - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
+   end subroutine roquet_recon_dpa_intz
+
+   pure subroutine roquet_recon_dpa_face(rho0, rho_ref, &
+                                         e_top_l, e_top_r, dz_l, dz_r, &
+                                         t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
+                                         s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
+                                         dpa_l, dpa_r, parabolic, dpa_face)
+      !$acc routine seq
+      !! `boole_dpa_face` (the reconstruct-for-pressure cross-face 5-point
+      !! Boole rule) with the Roquet vertical rule `roquet_recon_dpa_intz` at
+      !! the three interior sub-columns -- identical sub-columns, weights and
+      !! summation order; the end points are the columns' own `dpa`.  15
+      !! inlined Roquet evaluations per face per layer.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top_l, e_top_r, dz_l, dz_r
+         !! Left / right shallower-interface heights and thicknesses (m).
+      real(wp), intent(in)  :: t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r
+         !! Left / right temperature triples (top, bottom, mean).
+      real(wp), intent(in)  :: s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r
+         !! Left / right salinity triples.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The left / right columns' own layer `dpa` (Pa), the end points.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      do m = 2, N_BOOLE - 1
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         call roquet_recon_dpa_intz(rho0, rho_ref, &
+                                    wl*e_top_l + wr*e_top_r, &
+                                    wl*dz_l + wr*dz_r, &
+                                    wl*t_t_l + wr*t_t_r, &
+                                    wl*t_b_l + wr*t_b_r, &
+                                    wl*t_m_l + wr*t_m_r, &
+                                    wl*s_t_l + wr*s_t_r, &
+                                    wl*s_b_l + wr*s_b_r, &
+                                    wl*s_m_l + wr*s_m_r, &
+                                    parabolic, dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine roquet_recon_dpa_face
 
    pure subroutine fv_mom6_mass_weights(mass_weight, e_bed_l, e_bed_r, e_top_l, e_top_r, &
                                         h_l, h_r, h_neglect, &
