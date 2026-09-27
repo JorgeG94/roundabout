@@ -1,8 +1,25 @@
 !! Tripolar north-fold seam-exchange helpers for the ocean dyn-core.
 module rdb_ocean_fold
-   !! Single-rank discrete tripolar north-fold exchange (Murray 1996). Pure
-   !! seam operators only (state orchestration lives in `rdb_ocean_fold_apply`).
-   !! Free procedures, explicit-shape dummies, j-outer / i-inner `do concurrent`.
+   !! Discrete tripolar north-fold exchange (Murray 1996), LOCAL to the tile
+   !! that holds the whole fold row. Pure seam operators only (state
+   !! orchestration lives in `rdb_ocean_fold_apply`). Free procedures,
+   !! explicit-shape dummies, j-outer / i-inner `do concurrent`.
+   !!
+   !! ## Decomposition
+   !!
+   !! Every map below reads the mirror point from the SAME array, so it is
+   !! exact only on a tile that holds the whole fold row: the north-edge
+   !! rank of a north-south split (`px = 1`, any `py`), where `nx_phys`
+   !! is the global `ni` and `ny_phys` counts the tile's rows up to the
+   !! fold line (every map is relative to the tile's own last row, so no
+   !! global j offset enters).  Callers apply it only there — the gate is
+   !! the rank-local `bc%north_fold` (tag `.and.` `has_north`); on the other
+   !! ranks the north ghosts are an MPI seam the halo exchange fills.  An
+   !! east-west split (`px > 1`) would need a distributed fold exchange (the
+   !! mirror of column `i` is column `ni+1-i`, on another rank) and is
+   !! refused at configure.  The fold also reads the `nghost` rows below the
+   !! fold line, so the north tile must be at least `nghost+1` rows tall
+   !! (also refused at configure otherwise).
    !!
    !! ## Roundabout staggering (the load-bearing input to every map below)
    !!

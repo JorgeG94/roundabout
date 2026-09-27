@@ -348,7 +348,7 @@ contains
       integer :: i, j, k, nx, ny, nz, nghost, nx_phys, ny_phys
       real(wp) :: ce_l, f_floor_l, rho0_l, g_over_rho0
       real(wp) :: cr_l, mstar_l, nstar_l, minw2_l
-      logical :: use_mr_l, use_bodner_l, has_ustar, do_limit, do_filter, n_seam
+      logical :: use_mr_l, use_bodner_l, has_ustar, do_limit, do_filter, n_seam, s_seam, w_seam, e_seam
       real(wp) :: h_remain, w, htot, rho_int
       real(wp) :: db, h_vel, f_abs, ustar, ts, uDml, vDml, i4dt, h_av
       real(wp) :: a_stack(NZ_STACK_MAX), hf_stack(NZ_STACK_MAX)
@@ -558,21 +558,28 @@ contains
       ! i=nghost+nx_phys+1, interior to the array); a nonzero uhml/vhml
       ! there leaks tracer across the wall (worst under the windowed drain).
       ! Zero the FK transport on every non-periodic physical edge, mirroring
-      ! the continuity wall convention.  Periodic edges are seams, not walls.
+      ! the continuity wall convention.  Periodic edges are seams, not walls,
+      ! and so is an MPI subdomain edge (`has_* = .false.`): the face there is
+      ! an interior face the neighbour rank computes identically.
       if (present(bc)) then
          if (.not. bc%periodic_x) then
+            ! host scalars: never deref bc on device
+            w_seam = .not. bc%has_west
+            e_seam = .not. bc%has_east
             do concurrent(k=1:nz, j=1:ny)
-               this%uhml(nghost + 1, j, k) = 0.0_wp
-               this%uhml(nghost + nx_phys + 1, j, k) = 0.0_wp
+               if (.not. w_seam) this%uhml(nghost + 1, j, k) = 0.0_wp
+               if (.not. e_seam) this%uhml(nghost + nx_phys + 1, j, k) = 0.0_wp
             end do
          end if
          if (.not. bc%periodic_y) then
             ! A tripolar north fold is a seam too: its fold-line face keeps
             ! the FK transport (projected antisymmetric with the resolved
-            ! mass flux in `continuity_tracer_step_split`).
-            n_seam = bc%north_fold   ! host scalar: never deref bc on device
+            ! mass flux in `continuity_tracer_step_split`).  `north_fold` is
+            ! rank-local (the north-edge rank only), hence the `has_north`.
+            s_seam = .not. bc%has_south
+            n_seam = bc%north_fold .or. .not. bc%has_north
             do concurrent(k=1:nz, i=1:nx)
-               this%vhml(i, nghost + 1, k) = 0.0_wp
+               if (.not. s_seam) this%vhml(i, nghost + 1, k) = 0.0_wp
                if (.not. n_seam) this%vhml(i, nghost + ny_phys + 1, k) = 0.0_wp
             end do
          end if

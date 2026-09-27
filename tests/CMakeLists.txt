@@ -576,12 +576,13 @@ endforeach()
 # halo and lake-at-rest tests run on 2 ranks.
 if(RDB_ENABLE_MPI)
   set(MPI_TESTS test_halo_mpi test_halo_ocean_mpi test_ocean_dyn_mpi
-                test_ocean_bt_cfl_mpi test_efp_mpi)
+                test_ocean_bt_cfl_mpi test_efp_mpi test_ocean_tripolar_fold_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_dyn_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_bt_cfl_mpi 2)
   set(MPI_TEST_NPROCS_test_efp_mpi 4)
+  set(MPI_TEST_NPROCS_test_ocean_tripolar_fold_mpi 2)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
   set(MPI_TEST_REGIME_test_halo_mpi core)
@@ -589,6 +590,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_dyn_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_bt_cfl_mpi ocean)
   set(MPI_TEST_REGIME_test_efp_mpi core)
+  set(MPI_TEST_REGIME_test_ocean_tripolar_fold_mpi ocean)
   set(MPI_NETCDF_TESTS)
   foreach(test ${MPI_TESTS})
     add_executable(${test} mpi/${test}.F90)
@@ -652,6 +654,19 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_bt_cfl_mpi_1rank rdb_test_ocean_bt_cfl_mpi_4rank
     PROPERTIES LABELS "ocean")
+  # Tripolar north fold under a north-south split (px = 1, py = nprocs):
+  # bit-identity of the prognostic fields vs the serial run, through the
+  # production engine.  The 2-rank leg (1x2, + the px = 2 refusal) comes from
+  # the foreach above; add the 1-rank (identity) and 4-rank (1x4) legs.
+  add_test(NAME rdb_test_ocean_tripolar_fold_mpi_1rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                   $<TARGET_FILE:test_ocean_tripolar_fold_mpi>)
+  add_test(NAME rdb_test_ocean_tripolar_fold_mpi_4rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                   $<TARGET_FILE:test_ocean_tripolar_fold_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_tripolar_fold_mpi_1rank
+    rdb_test_ocean_tripolar_fold_mpi_4rank PROPERTIES LABELS "ocean")
 endif()
 
 # --------------------------------------------------------------------------

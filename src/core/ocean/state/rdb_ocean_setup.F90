@@ -746,11 +746,18 @@ contains
       !! Periodic-x wrap + north-fold (scalar copy) of the static corner
       !! Coriolis array for a tripolar grid.  f is reflection-invariant
       !! (same latitude at the conjugate corner), so negate=.false.
+      !!
+      !! Decomposed: only an axis this tile holds WHOLE is wrapped, and only
+      !! the tile that owns the north edge folds (the `seed_wrap_static_2d`
+      !! rule).  Every other seam ghost was already filled by the generator
+      !! from the global-slice geography (`metrics_fill_tripolar`), which is
+      !! exactly the neighbour's corner value.
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(inout) :: f_corner(:, :)
       integer :: ng, ni, i, j
       ng = grid%nghost
       ni = grid%nx_phys
+      if (grid%nx_phys /= grid%nx_global) return   ! px > 1 is refused at preflight
       ! Periodic-x ghost columns (corner/Bu face-type: physical i=ng+1..ng+ni+1).
       do j = 1, size(f_corner, 2)
          do i = 1, ng
@@ -758,7 +765,8 @@ contains
             f_corner(ng + ni + 1 + i, j) = f_corner(ng + 1 + i, j)
          end do
       end do
-      ! North fold (copy).
+      ! North fold (copy) — the north-edge tile only.
+      if (grid%j_offset_global + grid%ny_phys /= grid%ny_global) return
       call fold_north_corner(f_corner, grid%nx_total + 1, grid%ny_total + 1, &
                              grid%nx_phys, grid%ny_phys, grid%nghost, negate=.false.)
    end subroutine fill_f_corner_seam_ghosts

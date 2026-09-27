@@ -255,8 +255,12 @@ Most new-physics knobs default off ⇒ bit-identical (KPP + ALE-remap are the on
 **Horizontal grids** — `&ocean_grid_nml grid_config`: `cartesian`
 (default, bit-identity), `spherical` lon-lat sector, `supergrid`
 (MOM6 mosaic reader), and `tripolar` — Murray (1996) bipolar Arctic
-cap above `phi_join` + ordinary lon-lat below, closed by a single-rank
-north fold (`north="tripolar_fold"`, requires periodic west/east).
+cap above `phi_join` + ordinary lon-lat below, closed by a north fold
+(`north="tripolar_fold"`, requires periodic west/east) that is
+single-rank IN X: north-south splits (`px = 1`, any `py`) run
+bit-identical to one rank — only the north-edge rank folds
+(`bc%north_fold` is rank-local) — while `px > 1` is refused at configure
+until the distributed fold exchange lands.
 Kernels consume full 2D metric arrays only (`ocean_metrics_t` slot);
 the fold exchange (`rdb_ocean_fold` + `rdb_ocean_fold_apply`)
 reverses-i and sign-flips vector normals, projecting the
@@ -290,7 +294,8 @@ non-hydrostatic on the C-grid, per-layer Orlanski
 phase-speed radiation + file-backed boundary-data backends (Flather +
 zero-gradient anomaly and the constant backend ship today), MPI
 per-feature multi-rank support for the
-single-rank closures (porous barriers, wet/dry, sea ice, tripolar fold,
+single-rank closures (porous barriers, wet/dry, sea ice, the tripolar fold
+split east-west (`px > 1`; north-south splits ship), the supergrid reader,
 windowed tracer-advect drain) — the C-grid MPI halo itself ships.
 
 ### Vertical Coordinates
@@ -331,6 +336,8 @@ See the "Boundaries" bullet of the Ocean dyn-core section — `&ocean_bc_nml` se
 **Multi-GPU one node: pin `CUDA_VISIBLE_DEVICES` per rank BEFORE `MPI_Init`.** With `RDB_CUDA_AWARE_MPI=ON` (GPU-direct halo), UCX/hpcx creates a CUDA primary context at `MPI_Init` — which runs *before* `acc_set_device_num` — so with all GPUs visible every rank also lands a context on device 0 (`{0},{0,1},{0,2},{0,3}` in `nvidia-smi`, binding diagnostic still looks correct). Fix: each rank must see only its own GPU. The launcher (or the script, before the first CUDA call) sets `CUDA_VISIBLE_DEVICES` from the local-rank env var (`OMPI_COMM_WORLD_LOCAL_RANK`, …); the `mod(node_rank, n_devices)` clamp then binds the single visible device 0. With pinning, plain `mpirun -np N ./rdb …` works — no `bash -c` wrapper. Host-staged MPI (`RDB_CUDA_AWARE_MPI=OFF`) doesn't hit this (UCX never touches CUDA).
 
 Halo coverage: `rdb_ocean_halo` + `ocean_halo_exchange_ml_state`. Tracer halo uses the outer-shim + flat-impl pattern.
+
+Tripolar fold under MPI: every seam site runs exchange → periodic wrap → fold, and the fold is applied only by the rank that owns the north edge (`bc%north_fold` = tag `.and.` `has_north`, re-derived in `ocean_bc_state_set_edges`), which with `px = 1` holds the whole fold row, so the local fold kernels are exact. `px > 1` needs a distributed fold exchange (the mirror point `(ni+1-i, nj+1-d)` lives on another rank) and is refused at configure.
 
 ### I/O
 

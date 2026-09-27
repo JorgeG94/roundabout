@@ -104,7 +104,8 @@ module rdb_ocean_engine
                                        ocean_bc_type_from_string, OBC_PERIODIC, &
                                        OBC_TRIPOLAR_FOLD
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
-                                metrics_fold_periodic_ghosts
+                                metrics_fold_periodic_ghosts, parse_grid_config, &
+                                GRID_CONFIG_SUPERGRID
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
@@ -323,11 +324,45 @@ contains
          return
       end if
       if (csize > 1) then
-         ! D6: tripolar north fold requires the north rank-row undecomposed
-         ! in x; allow it only when px == 1.
-         if (trim(cfg%ocean%bc%north) == "tripolar_fold" .and. cfg%px > 1) then
-            call fail("Tripolar north fold requires the north rank-row "// &
-                      "undecomposed in x (px must be 1) — deferred D6.", &
+         ! D6: the tripolar north fold is applied LOCALLY by the rank that
+         ! owns the north edge (`bc%north_fold` is rank-local), which is only
+         ! correct when that rank holds the WHOLE fold row: a fold point
+         ! (i, nj+d) mirrors (ni+1-i, nj+1-d), which sits on another rank
+         ! as soon as the row is split in x.  North-south splits (px = 1,
+         ! any py) are supported; an east-west split needs the distributed
+         ! fold exchange (hero-run Phase A), which does not exist yet.
+         if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD .and. &
+             cfg%px > 1) then
+            call fail("Tripolar north fold with px = "//to_string(cfg%px)// &
+                      " > 1: the fold is single-rank-in-x — the north rank row "// &
+                      "must hold the whole fold row. The distributed fold exchange "// &
+                      "(east-west split, deferred D6) is not implemented; use px = 1 "// &
+                      "(north-south splits, any py, are supported).", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         ! The fold reads the nghost rows just below the fold line from the
+         ! north tile itself, so that tile must be at least nghost+1 rows
+         ! tall (the v fold row plus the nghost rows it mirrors).  The
+         ! smallest tile is ny/py (the remainder goes to the first rows), so
+         ! the check is rank-invariant and every rank fails together.
+         if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD .and. &
+             cfg%py > 1 .and. cfg%ny/cfg%py < cfg%nghost + 1) then
+            call fail("Tripolar north fold with py = "//to_string(cfg%py)// &
+                      ": tiles of ny/py = "//to_string(cfg%ny/cfg%py)// &
+                      " rows are too short for the fold's mirror (need >= nghost+1 = "// &
+                      to_string(cfg%nghost + 1)//"); reduce py.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         ! The supergrid (mosaic) reader reads the WHOLE file into one tile
+         ! and checks its dimensions against the tile's, so a decomposed run
+         ! would only fail later on a bare dimension mismatch.  Refuse it
+         ! here, naming the real limitation.
+         if (parse_grid_config(cfg%ocean%grid%grid_config) == GRID_CONFIG_SUPERGRID) then
+            call fail("grid_config = 'supergrid' is single-rank: the mosaic reader "// &
+                      "loads the whole grid into one tile (no per-rank window). "// &
+                      "Run it on 1 rank, or use an analytic grid_config.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -577,6 +612,14 @@ contains
          ! images (`metrics_fold_periodic_ghosts`).  Periodicity is the
          ! staged topology's or the tags', as for the seed above; the fold
          ! is the north tag's.  No grid rotation is staged (`angle_dx` = 0).
+         ! Injected supergrid arrays describe the WHOLE grid (the shape
+         ! check above is against the tile), so they are single-rank.
+         if (csize > 1) then
+            call fail("engine_setup: injected (staged) supergrid metrics are "// &
+                      "single-rank — they describe the whole grid, not a tile.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          block
             logical :: per_x, fold
             per_x = (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &

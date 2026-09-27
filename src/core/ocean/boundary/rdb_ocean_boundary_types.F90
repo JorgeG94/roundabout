@@ -142,9 +142,15 @@ module rdb_ocean_boundary_types
       logical :: periodic_y = .false.
          !! True when south and north edges are both OBC_PERIODIC.
       logical :: north_fold = .false.
-         !! True when the north edge is OBC_TRIPOLAR_FOLD. Gates every fold
-         !! exchange in the dyn loop + BT substep; default .false. is
-         !! bit-identical.
+         !! True when THIS RANK applies the tripolar north fold: the north
+         !! edge is OBC_TRIPOLAR_FOLD AND this subdomain owns the physical
+         !! north edge (`has_north`).  Gates every fold exchange in the dyn
+         !! loop + BT substep + continuity + setup wraps.  On a north-south
+         !! split (px = 1, py > 1) only the north rank row folds; every other
+         !! rank's north ghosts are an MPI seam the halo exchange fills, and
+         !! folding them would overwrite that with a mirror of the rank's
+         !! own tile.  (`ocean_bc_state_set_edges` re-derives it once the
+         !! decomposition is known.)  Default .false. is bit-identical.
       logical :: has_west = .true.
          !! False when the west edge of this subdomain is an MPI seam (a
          !! neighbouring rank owns the cells beyond it), true when it is a
@@ -436,7 +442,8 @@ contains
          end if
       end if
 
-      this%north_fold = n_fold
+      ! Rank-local: only the rank that owns the physical north edge folds.
+      this%north_fold = n_fold .and. this%has_north
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine ocean_bc_validate_fold
 
@@ -580,7 +587,9 @@ contains
       !! Set the physical-domain-edge flags from a decomposition descriptor.
       !! Called once by the driver after configure_ocean_bc so kernels can
       !! gate wall / BC / periodic closures on physical edges (a subdomain
-      !! seam is never a wall).  Default .true. keeps single-rank bit-identity.
+      !! seam is never a wall), and re-derives the rank-local `north_fold`
+      !! (the fold is applied only by the rank that owns the north edge).
+      !! Default .true. keeps single-rank bit-identity.
       type(ocean_bc_state_t), intent(inout) :: this
       logical, intent(in) :: has_west
          !! True when the west edge is a physical domain edge, false at an MPI seam.
@@ -594,6 +603,9 @@ contains
       this%has_east = has_east
       this%has_south = has_south
       this%has_north = has_north
+      ! The tripolar fold is a north-EDGE operation: a rank whose north edge
+      ! is an MPI seam must not fold (see `north_fold`).
+      this%north_fold = (this%north%bc_type == OBC_TRIPOLAR_FOLD) .and. has_north
    end subroutine ocean_bc_state_set_edges
 
    subroutine ocean_bc_state_set_topology(this, periodic_x, periodic_y, ierr)
