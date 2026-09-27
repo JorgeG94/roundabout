@@ -1229,6 +1229,7 @@ contains
       integer(int64) :: expect_c2d, expect_fx2d, expect_fy2d
       integer(int64) :: expect_msgs
       integer(int64) :: expect_fx3d, expect_fy3d, pc_per_stage, pc_isends_per_step
+      integer(int64) :: pc_refresh_per_stage
       integer :: bh
 
       bh = 0
@@ -1251,8 +1252,15 @@ contains
       pc_per_stage = 0_int64
       if (is_pc .and. decomposed) pc_per_stage = 1_int64
 
+      ! pred_corr also refreshes the 2 tracers' ghosts before the corrector
+      ! chain in EVERY stage (`refresh_tracer_ghosts`: the stage's vertical
+      ! mixing leaves the ghost columns non-images of the neighbour), on any
+      ! rank count -- one centre_3d exchange per tracer per stage.
+      pc_refresh_per_stage = 0_int64
+      if (is_pc) pc_refresh_per_stage = 2_int64
+
       expect_ml = int(3*2*N_STEPS, int64)
-      expect_c3d = (3_int64 + pc_per_stage)*2_int64*int(N_STEPS, int64)
+      expect_c3d = (3_int64 + pc_per_stage + pc_refresh_per_stage)*2_int64*int(N_STEPS, int64)
       expect_fx3d = pc_per_stage*2_int64*int(N_STEPS, int64)
       expect_fy3d = pc_per_stage*2_int64*int(N_STEPS, int64)
 
@@ -1260,7 +1268,7 @@ contains
       ! each (u_av, v_av, h_av) x 2 stages.  A face_y array still posts its
       ! x-seam columns, so all three count on an x-decomposition.  Multiplied
       ! by n_x_dirs alongside the base term below.
-      pc_isends_per_step = pc_per_stage*3_int64*2_int64
+      pc_isends_per_step = pc_per_stage*3_int64*2_int64 + pc_refresh_per_stage*2_int64
 
       if (bh > 0) then
          ! Wide-halo march-in schedule (num_cycles = bh/2 = 2 for bh=4,
