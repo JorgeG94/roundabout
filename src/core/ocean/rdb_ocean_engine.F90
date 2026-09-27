@@ -89,7 +89,8 @@ module rdb_ocean_engine
    use rdb_vcoord, only: parse_remap_method
    use rdb_state, only: register_default_tracers
    use rdb_grid, only: hgrid_t
-   use rdb_decomp, only: decomp_t, decomp_init_from_config, decomp_log_summary
+   use rdb_decomp, only: decomp_t, decomp_init_from_config, decomp_log_summary, &
+                         decomp_auto_factor
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data, &
                               ocean_state_seed_from_cfg, ocean_state_restart_read
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
@@ -315,6 +316,23 @@ contains
          call fail("sim_type='ocean' requires dt_fixed > 0 (no adaptive CFL helper yet).", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
+      end if
+      ! Process grid left unset (the `&mpi_nml` default px = py = 1) on more
+      ! than one rank: choose it here, BEFORE the px*py check below (which
+      ! used to reject it, leaving `decomp_init_from_config`'s own
+      ! auto-factor unreachable on the ocean path).  The tripolar fold is
+      ! single-rank in x, so a folded grid is split north-south; any other
+      ! grid gets the perimeter-minimising factorisation.
+      if (csize > 1 .and. cfg%px == 1 .and. cfg%py == 1) then
+         if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            cfg%px = 1
+            cfg%py = csize
+         else
+            call decomp_auto_factor(csize, cfg%nx, cfg%ny, cfg%px, cfg%py)
+         end if
+         if (rank == 0) call logger%info("Process grid auto: px x py = "// &
+                                         to_string(cfg%px)//" x "//to_string(cfg%py)// &
+                                         " (&mpi_nml px/py unset)")
       end if
       if (cfg%px*cfg%py /= csize) then
          call fail("Process grid px*py = "//to_string(cfg%px*cfg%py)// &
