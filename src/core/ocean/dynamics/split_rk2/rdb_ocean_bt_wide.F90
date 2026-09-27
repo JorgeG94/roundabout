@@ -146,7 +146,7 @@ contains
 
    subroutine bt_wide_init(this, grid, dx, dy, lon_west, lat_south, &
                            rad_earth, grid_config, &
-                           f_0, beta, y_ref, coriolis_scheme)
+                           f_0, beta, y_ref, coriolis_scheme, omega)
       !! Allocate the wide shadow state.  Builds `grid_w` (same nx_phys/ny_phys
       !! as `grid`, nghost = grid%nghost + bt_halo), fills wide metrics via the
       !! same formula generator, fills wide f_corner.
@@ -167,9 +167,14 @@ contains
          !! Beta-plane Coriolis parameters.
       integer, intent(in) :: coriolis_scheme
          !! CORIOLIS_SCHEME_BETA_PLANE or CORIOLIS_SCHEME_PLANETARY.
+      real(wp), intent(in), optional :: omega
+         !! Planetary rotation rate for the planetary scheme.  Absent => 0.
+      real(wp) :: omega_l
 
       integer :: nx_w, ny_w, bt_h
 
+      omega_l = 0.0_wp
+      if (present(omega)) omega_l = omega
       bt_h = this%bt_halo
       this%ng_wide = grid%nghost + bt_h
       this%num_cycles = bt_h/2
@@ -203,7 +208,7 @@ contains
          real(wp), allocatable :: f_centre_scratch(:, :)
          allocate (f_centre_scratch(nx_w, ny_w), source=0.0_wp)
          call metrics_fill_coriolis(this%metrics_w, coriolis_scheme, &
-                                    f_0, beta, y_ref, 0.0_wp, &
+                                    f_0, beta, y_ref, omega_l, &
                                     this%grid_w, this%f_corner_w, f_centre_scratch)
          deallocate (f_centre_scratch)
       end block

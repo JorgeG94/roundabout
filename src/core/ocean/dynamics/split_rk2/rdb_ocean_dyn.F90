@@ -726,7 +726,7 @@ contains
 
    subroutine ocean_dyn_enable_bt_wide(dyn, grid, dx, dy, lon_west, lat_south, &
                                        rad_earth, grid_config_str, &
-                                       f_0, beta, y_ref, coriolis_scheme_str)
+                                       f_0, beta, y_ref, coriolis_scheme_str, omega)
       !! Allocate, initialise, and GPU-attach the wide-halo shadow state
       !! from `dyn%bt_halo` (already set by the caller).
       !!
@@ -753,6 +753,11 @@ contains
          !! Beta-plane Coriolis parameters.
       character(len=*), intent(in) :: coriolis_scheme_str
          !! Coriolis-scheme string (e.g. "beta_plane").
+      real(wp), intent(in), optional :: omega
+         !! Planetary rotation rate (1/s) for `coriolis_scheme = "planetary"`
+         !! (`&ocean_grid_nml omega`).  Absent => 0, which is only right for
+         !! the beta plane: the wide clone's planetary f used to be built
+         !! with omega = 0, i.e. a non-rotating barotropic fast loop.
 
       integer :: bh, ng_w, grid_cfg, cor_scheme
 
@@ -778,8 +783,13 @@ contains
 
       allocate (dyn%bt_wide)
       dyn%bt_wide%bt_halo = bh
-      call dyn%bt_wide%init(grid, dx, dy, lon_west, lat_south, rad_earth, &
-                            grid_cfg, f_0, beta, y_ref, cor_scheme)
+      if (present(omega)) then
+         call dyn%bt_wide%init(grid, dx, dy, lon_west, lat_south, rad_earth, &
+                               grid_cfg, f_0, beta, y_ref, cor_scheme, omega=omega)
+      else
+         call dyn%bt_wide%init(grid, dx, dy, lon_west, lat_south, rad_earth, &
+                               grid_cfg, f_0, beta, y_ref, cor_scheme)
+      end if
       call dyn%bt_wide%enter_data()
    end subroutine ocean_dyn_enable_bt_wide
 
