@@ -5672,10 +5672,10 @@ class OceanDiag(Group):
 
     reproducing_sums = Bool(
         'reproducing_sums',
-        doc='Order-invariant EFP console totals: rank-count reproducible, exact drift residual (default off = byte-identical)',
+        doc='Order-invariant EFP console totals + budget terms: identical console on every rank count, exact drift residual (.false. = the pre-v0.1.0 FP sums)',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     output_precision = Enum(

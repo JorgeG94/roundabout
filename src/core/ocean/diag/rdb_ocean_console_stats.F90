@@ -339,10 +339,16 @@ contains
          !! `!$acc parallel loop reduction(+:acc)` kernels + SEVEN separate
          !! `halo_allreduce_sum` calls.  Absent / `.false.` (default) ⇒ the
          !! FP path below runs VERBATIM — byte-identical console output.
-         !! Salt/heat closed-budget out/src terms (section (d) below) stay
-         !! on the FP path in EITHER case (documented scope reduction —
-         !! see the PR-32 report); only the primary totals feeding the
-         !! `Error` residual get the EFP + `efp_real_diff` treatment.
+         !! The salt/heat closed-budget out/src terms (section (d) below)
+         !! take the EFP path too (one extra collective per active budget),
+         !! so every printed number is independent of the rank count; the
+         !! primary totals feeding the `Error` residual also get the
+         !! `efp_real_diff` treatment.  The cumulative open-boundary
+         !! `mass_out`/`mass_src` scalars are each rank's own running FP
+         !! sum, combined exactly here but accumulated in a
+         !! decomposition-dependent order over the steps — on an OBC run
+         !! those two terms can differ in the last digits across rank
+         !! counts.
       real(wp), intent(in), optional :: budget_stage_weight
          !! Per-outer-step weight for the salt/heat budget accumulators, from
          !! `ocean_budget_stage_weight(is_pc)`.  Absent ⇒ the historical
@@ -378,6 +384,10 @@ contains
       integer, parameter :: IX_MSRC = 10
       type(efp_t) :: efp_local(NVAL_EFP), efp_global(NVAL_EFP)
       type(efp_t) :: mass_efp_v, salt_efp_v, heat_efp_v
+      integer, parameter :: NVAL_BUD = 6
+         !! Closed-budget terms combined in ONE EFP collective per tracer
+         !! (salt uses 4 slots, heat 5 + frazil); unused slots stay zero.
+      type(efp_t) :: efp_bl(NVAL_BUD), efp_bg(NVAL_BUD)
 
       use_efp = .false.
       if (present(reproducing_sums)) use_efp = reproducing_sums
@@ -590,18 +600,34 @@ contains
       if (present(budget_stage_weight)) bud_w = budget_stage_weight
       if (ocean_budget_is_active(ms%idx_salinity, hav, &
                                  redi_with_open_edge=redi_gate)) then
-         b_salt_surf = compute_total_tracer(ms%salt_budget_surface, metrics%areaT, grid%nghost)
-         b_salt_sponge = compute_total_tracer(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
-         b_salt_adv = compute_total_tracer(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
-         b_salt_hdiff = compute_total_tracer(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
-         tmp = b_salt_surf
-         call halo_allreduce_sum(tmp, b_salt_surf)
-         tmp = b_salt_sponge
-         call halo_allreduce_sum(tmp, b_salt_sponge)
-         tmp = b_salt_adv
-         call halo_allreduce_sum(tmp, b_salt_adv)
-         tmp = b_salt_hdiff
-         call halo_allreduce_sum(tmp, b_salt_hdiff)
+         if (use_efp) then
+            ! Order-invariant budget terms too, so the `out` / `src` columns
+            ! print the same digits on every rank count (they used to stay
+            ! on the FP path even with `reproducing_sums`).
+            efp_bl = efp_t()
+            efp_bl(1) = compute_total_tracer_efp(ms%salt_budget_surface, metrics%areaT, grid%nghost)
+            efp_bl(2) = compute_total_tracer_efp(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
+            efp_bl(3) = compute_total_tracer_efp(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
+            efp_bl(4) = compute_total_tracer_efp(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
+            call halo_allreduce_efp_list(efp_bl, efp_bg, NVAL_BUD)
+            b_salt_surf = real(efp_to_real(efp_bg(1)), wp)
+            b_salt_sponge = real(efp_to_real(efp_bg(2)), wp)
+            b_salt_adv = real(efp_to_real(efp_bg(3)), wp)
+            b_salt_hdiff = real(efp_to_real(efp_bg(4)), wp)
+         else
+            b_salt_surf = compute_total_tracer(ms%salt_budget_surface, metrics%areaT, grid%nghost)
+            b_salt_sponge = compute_total_tracer(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
+            b_salt_adv = compute_total_tracer(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
+            b_salt_hdiff = compute_total_tracer(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
+            tmp = b_salt_surf
+            call halo_allreduce_sum(tmp, b_salt_surf)
+            tmp = b_salt_sponge
+            call halo_allreduce_sum(tmp, b_salt_sponge)
+            tmp = b_salt_adv
+            call halo_allreduce_sum(tmp, b_salt_adv)
+            tmp = b_salt_hdiff
+            call halo_allreduce_sum(tmp, b_salt_hdiff)
+         end if
          bud%salt_src = ocean_budget_src(ocean_salt_src_sum(b_salt_surf, b_salt_sponge), &
                                          stage_weight=bud_w)
          bud%salt_out = ocean_budget_out(b_salt_adv, b_salt_hdiff, stage_weight=bud_w)
@@ -609,29 +635,48 @@ contains
       end if
       if (ocean_budget_is_active(ms%idx_temperature, hav, &
                                  redi_with_open_edge=redi_gate)) then
-         b_heat_surf = compute_total_tracer(ms%heat_budget_surface, metrics%areaT, grid%nghost)
-         b_heat_geo = compute_total_tracer(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
-         b_heat_sponge = compute_total_tracer(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
-         b_heat_adv = compute_total_tracer(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
-         b_heat_hdiff = compute_total_tracer(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
-         tmp = b_heat_surf
-         call halo_allreduce_sum(tmp, b_heat_surf)
-         tmp = b_heat_geo
-         call halo_allreduce_sum(tmp, b_heat_geo)
-         tmp = b_heat_sponge
-         call halo_allreduce_sum(tmp, b_heat_sponge)
-         tmp = b_heat_adv
-         call halo_allreduce_sum(tmp, b_heat_adv)
-         tmp = b_heat_hdiff
-         call halo_allreduce_sum(tmp, b_heat_hdiff)
          ! Sea-ice frazil source (PR 1) — full weight, see
          ! `ocean_frazil_heat_src`.  Absent / ice-off ⇒ adds 0.
          b_heat_frazil = 0.0_wp
-         if (present(heat_budget_frazil)) then
-            b_heat_frazil = compute_total_tracer(heat_budget_frazil, &
-                                                 metrics%areaT, grid%nghost)
-            tmp = b_heat_frazil
-            call halo_allreduce_sum(tmp, b_heat_frazil)
+         if (use_efp) then
+            efp_bl = efp_t()
+            efp_bl(1) = compute_total_tracer_efp(ms%heat_budget_surface, metrics%areaT, grid%nghost)
+            efp_bl(2) = compute_total_tracer_efp(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
+            efp_bl(3) = compute_total_tracer_efp(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
+            efp_bl(4) = compute_total_tracer_efp(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
+            efp_bl(5) = compute_total_tracer_efp(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
+            if (present(heat_budget_frazil)) then
+               efp_bl(6) = compute_total_tracer_efp(heat_budget_frazil, metrics%areaT, grid%nghost)
+            end if
+            call halo_allreduce_efp_list(efp_bl, efp_bg, NVAL_BUD)
+            b_heat_surf = real(efp_to_real(efp_bg(1)), wp)
+            b_heat_geo = real(efp_to_real(efp_bg(2)), wp)
+            b_heat_sponge = real(efp_to_real(efp_bg(3)), wp)
+            b_heat_adv = real(efp_to_real(efp_bg(4)), wp)
+            b_heat_hdiff = real(efp_to_real(efp_bg(5)), wp)
+            if (present(heat_budget_frazil)) b_heat_frazil = real(efp_to_real(efp_bg(6)), wp)
+         else
+            b_heat_surf = compute_total_tracer(ms%heat_budget_surface, metrics%areaT, grid%nghost)
+            b_heat_geo = compute_total_tracer(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
+            b_heat_sponge = compute_total_tracer(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
+            b_heat_adv = compute_total_tracer(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
+            b_heat_hdiff = compute_total_tracer(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
+            tmp = b_heat_surf
+            call halo_allreduce_sum(tmp, b_heat_surf)
+            tmp = b_heat_geo
+            call halo_allreduce_sum(tmp, b_heat_geo)
+            tmp = b_heat_sponge
+            call halo_allreduce_sum(tmp, b_heat_sponge)
+            tmp = b_heat_adv
+            call halo_allreduce_sum(tmp, b_heat_adv)
+            tmp = b_heat_hdiff
+            call halo_allreduce_sum(tmp, b_heat_hdiff)
+            if (present(heat_budget_frazil)) then
+               b_heat_frazil = compute_total_tracer(heat_budget_frazil, &
+                                                    metrics%areaT, grid%nghost)
+               tmp = b_heat_frazil
+               call halo_allreduce_sum(tmp, b_heat_frazil)
+            end if
          end if
          bud%heat_src = ocean_budget_src(ocean_heat_src_sum(b_heat_surf, b_heat_geo, &
                                                             b_heat_sponge), &
