@@ -362,8 +362,13 @@ contains
       this%tau_x = 0.0_wp
       this%tau_y = 0.0_wp
       ng = grid%nghost
-      do j = ng + 1, ng + grid%ny_phys
+      do j = 1, size(this%tau_x, 2)
          j_phys = j - ng
+         ! Every storage row inside the GLOBAL domain, ghost rows included:
+         ! a ghost row beyond an MPI seam is a neighbour's physical row and
+         ! must carry its stress (read by the stress/ustar stencils), not
+         ! the zero a wall ghost gets.  Rows beyond the global edges stay 0.
+         if (j_phys + joff < 1 .or. j_phys + joff > nyg) cycle
          ! Global meridional normalisation: (j_phys + joff) gives the
          ! global physical row index; ny_global is the global extent.
          y_rel = (real(j_phys + joff, wp) - 0.5_wp)/real(nyg, wp)
@@ -388,8 +393,9 @@ contains
       !!   else (polar):               τ = 0
       !!
       !! This reproduces the canonical southern-westerlies / trades /
-      !! polar-easterlies pattern.  τ_y ≡ 0.  Physical-interior rows only;
-      !! ghost rows stay at zero so wall faces see no spurious stress (land
+      !! polar-easterlies pattern.  τ_y ≡ 0.  Every storage row inside the
+      !! GLOBAL domain (seam ghost rows included, as for 2gyre); the rows
+      !! beyond the global edges stay at zero so wall faces see no spurious stress (land
       !! masking is applied downstream via `wet_mask` in the stress-acceleration
       !! kernel).  Host only — call `enter_data` afterwards.
       !!
@@ -416,8 +422,10 @@ contains
       this%tau_x = 0.0_wp
       this%tau_y = 0.0_wp
       ng = grid%nghost
-      do j = ng + 1, ng + grid%ny_phys
+      do j = 1, size(this%tau_x, 2)
          j_phys = j - ng
+         ! Every storage row inside the GLOBAL domain (see the 2gyre setter).
+         if (j_phys + joff < 1 .or. j_phys + joff > nyg) cycle
          ! Global meridional normalisation: (j_phys + joff) gives the
          ! global physical row index; nyg is the global extent.
          y = (real(j_phys + joff, wp) - 0.5_wp)/real(nyg, wp)
