@@ -18,7 +18,7 @@ module rdb_ocean_redi
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_specvol_derivs, eos_density_point
+   use rdb_eos, only: eos_t, eos_density_specvol_derivs
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -630,8 +630,7 @@ contains
 
       ! Interface density derivs (locally referenced at the interface P).
       do k = 1, nz + 1
-         rho_i = eos_density_point(eos, Tint(k), Sint(k), Pint(k))
-         call eos_specvol_derivs(eos, Tint(k), Sint(k), Pint(k), dsv_dt, dsv_ds)
+         call eos_density_specvol_derivs(eos, Tint(k), Sint(k), Pint(k), rho_i, dsv_dt, dsv_ds)
          dRdT(k) = -(rho_i*rho_i)*dsv_dt
          dRdS(k) = -(rho_i*rho_i)*dsv_ds
       end do

@@ -33,10 +33,13 @@ module rdb_eos
    public :: eos_density_derivs
    public :: eos_buoyancy_coeffs
    public :: eos_density_point
+   public :: eos_density_specvol_derivs
    public :: eos_freezing_point
    public :: parse_eos_variant
    public :: parse_tfreeze_set
    public :: eos_apply_tfreeze_set
+   public :: roquet_spv_ts_coeffs
+   public :: roquet_spv_value
 
    integer, parameter, public :: EOS_VARIANT_LINEAR = 1
       !! Linear T/S (debug / lock-exchange / Eady).
@@ -199,13 +202,17 @@ module rdb_eos
    real(wp), parameter :: ROQ_SR_FACTOR = 35.16504_wp/35.0_wp
       !! SP -> SR (Reference Salinity) conversion factor.
 
-   ! Reference-profile (SV00p) pressure coefficients, in Pa-powers.
-   real(wp), parameter :: ROQ_V00 = -4.4015007269e-05_wp*ROQ_PA2KB
-   real(wp), parameter :: ROQ_V01 = 6.9232335784e-06_wp*ROQ_PA2KB**2
-   real(wp), parameter :: ROQ_V02 = -7.5004675975e-07_wp*ROQ_PA2KB**3
-   real(wp), parameter :: ROQ_V03 = 1.7009109288e-08_wp*ROQ_PA2KB**4
-   real(wp), parameter :: ROQ_V04 = -1.6884162004e-08_wp*ROQ_PA2KB**5
-   real(wp), parameter :: ROQ_V05 = 1.9613503930e-09_wp*ROQ_PA2KB**6
+   ! Reference-profile (SV00p) pressure coefficients, in Pa-powers.  Public
+   ! (with the T/S-dependent part from `roquet_spv_ts_coeffs`) so a caller
+   ! that evaluates ONE water parcel at several pressures -- the FV-MOM6
+   ! in-situ PGF's vertical quadrature -- can inline the cheap pressure
+   ! polynomial and pay the T/S polynomial + CT conversion once.
+   real(wp), parameter, public :: ROQ_V00 = -4.4015007269e-05_wp*ROQ_PA2KB
+   real(wp), parameter, public :: ROQ_V01 = 6.9232335784e-06_wp*ROQ_PA2KB**2
+   real(wp), parameter, public :: ROQ_V02 = -7.5004675975e-07_wp*ROQ_PA2KB**3
+   real(wp), parameter, public :: ROQ_V03 = 1.7009109288e-08_wp*ROQ_PA2KB**4
+   real(wp), parameter, public :: ROQ_V04 = -1.6884162004e-08_wp*ROQ_PA2KB**5
+   real(wp), parameter, public :: ROQ_V05 = 1.9613503930e-09_wp*ROQ_PA2KB**6
 
    ! SV(zs,zt,zp) term coefficients  SPV_abc * zs**a * zt**b * zp**c.
    real(wp), parameter :: SPV000 = 1.0772899069e-03_wp
@@ -707,15 +714,17 @@ contains
       real(wp), intent(in) :: rho_0, p_ref
 
       integer :: i, j, k
-      real(wp) :: inv_h, S_k, T_k, sv_k, d_dum1, d_dum2
+      real(wp) :: inv_h, S_k, T_k, sv_k
 
+      ! Value-only (`roquet_spv_value`): the derivatives `roquet_spv_point`
+      ! also returns were discarded here.
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
-         local(inv_h, S_k, T_k, sv_k, d_dum1, d_dum2)
+         local(inv_h, S_k, T_k, sv_k)
          if (h_layer(i, j, k) > H_VANISHED) then
             inv_h = 1.0_wp/h_layer(i, j, k)
             S_k = hS_layer(i, j, k)*inv_h
             T_k = hT_layer(i, j, k)*inv_h
-            call roquet_spv_point(T_k, S_k, p_ref, sv_k, d_dum1, d_dum2)
+            sv_k = roquet_spv_value(T_k, S_k, p_ref)
             rho_layer(i, j, k) = 1.0_wp/sv_k
          else
             rho_layer(i, j, k) = rho_0
@@ -1028,6 +1037,105 @@ contains
       dsv_ds_model = (dsv_dsa + dsv_dct*dct_dsr)*ROQ_SR_FACTOR
    end subroutine roquet_spv_point
 
+   pure subroutine roquet_spv_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+      !! The (T, S)-dependent coefficients of the Roquet et al. (2015) SpV
+      !! polynomial viewed as a polynomial in PRESSURE, in model variables
+      !! (potential temperature `T_pt` degC, practical salinity `S_sp` PSU):
+      !!
+      !!   SV(p) = (sv0 + p*(sv1 + p*(sv2 + p*sv3))) + SV00p(p),
+      !!   SV00p(p) = p*(ROQ_V00 + p*(ROQ_V01 + ... + p*ROQ_V05)),
+      !!
+      !! with `SV00p` the (T, S)-independent reference profile.  This is
+      !! the value half of `roquet_spv_point`, term for term (same SR / CT
+      !! conversion, same Horner nesting), with none of the derivative
+      !! work: evaluating the expression above reproduces
+      !! `roquet_spv_point`'s `sv` exactly.
+      !!
+      !! WHY SPLIT.  Everything expensive in the Roquet EOS -- two sqrt, the
+      !! degree-7 PT->CT polynomial and the ~50-term (zs, zt) sums -- depends
+      !! on T and S only.  A caller that evaluates ONE parcel at several
+      !! pressures (the FV-MOM6 in-situ PGF's 5-point vertical Boole rule
+      !! over a constant-T/S layer) calls this once and then pays only the
+      !! degree-6 pressure Horner per point.
+      !$acc routine seq
+      real(wp), intent(in)  :: T_pt
+         !! Potential temperature (degC).
+      real(wp), intent(in)  :: S_sp
+         !! Practical salinity (PSU).
+      real(wp), intent(out) :: sv0
+         !! Pressure-independent part, `sv_ts0 + sv_0s0` (m^3/kg).
+      real(wp), intent(out) :: sv1, sv2, sv3
+         !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
+
+      real(wp) :: zt, zs, x2, xx, yy, hh
+      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
+      real(wp) :: sv_ts0, sv_0s0
+
+      ! CT = ct_from_pt(SR, PT) -- identical to `roquet_spv_point`.
+      x2 = max(ROQ_CT_SFAC*(S_sp*ROQ_SR_FACTOR), 1.0e-20_wp)
+      xx = sqrt(x2)
+      yy = T_pt*0.025_wp
+      c0 = 61.01362420681071_wp &
+           + x2*(268.5520265845071_wp &
+                 + xx*(937.2099110620707_wp &
+                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
+      c1 = 168776.46138048015_wp &
+           + x2*(-12019.028203559312_wp &
+                 + xx*(588.1802812170108_wp &
+                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
+      c2 = -2735.2785605119625_wp &
+           + x2*(3734.858026725145_wp &
+                 + xx*(248.39476522971285_wp &
+                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
+      c3 = 2574.2164453821433_wp &
+           + x2*(-2046.7671145057618_wp &
+                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
+      c4 = -1536.6644434977543_wp &
+           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
+      c5 = 545.7340497931629_wp &
+           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
+      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
+      c7 = -18.30489878927802_wp
+      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
+      zt = hh/ROQ_CP0
+      zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
+
+      sv3 = SPV003 + (zs*SPV103 + zt*SPV013)
+      sv2 = SPV002 + (zs*(SPV102 + zs*SPV202) &
+                      + zt*(SPV012 + (zs*SPV112 + zt*SPV022)))
+      sv1 = SPV001 + (zs*(SPV101 + zs*(SPV201 + zs*(SPV301 + zs*SPV401))) &
+                      + zt*(SPV011 + (zs*(SPV111 + zs*(SPV211 + zs*SPV311)) &
+                                      + zt*(SPV021 + (zs*(SPV121 + zs*SPV221) &
+                                                      + zt*(SPV031 + (zs*SPV131 + zt*SPV041)))))))
+      sv_ts0 = zt*(SPV010 &
+                   + (zs*(SPV110 + zs*(SPV210 + zs*(SPV310 + zs*(SPV410 + zs*SPV510)))) &
+                      + zt*(SPV020 + (zs*(SPV120 + zs*(SPV220 + zs*(SPV320 + zs*SPV420))) &
+                                      + zt*(SPV030 + (zs*(SPV130 + zs*(SPV230 + zs*SPV330)) &
+                                                      + zt*(SPV040 + (zs*(SPV140 + zs*SPV240) &
+                                                                      + zt*(SPV050 + (zs*SPV150 + zt*SPV060))))))))))
+      sv_0s0 = SPV000 + zs*(SPV100 + zs*(SPV200 + zs*(SPV300 + zs*(SPV400 &
+                                                                   + zs*(SPV500 + zs*SPV600)))))
+      sv0 = sv_ts0 + sv_0s0
+   end subroutine roquet_spv_ts_coeffs
+
+   pure function roquet_spv_value(T_pt, S_sp, p) result(sv)
+      !! VALUE-ONLY Roquet et al. (2015) specific volume (m^3/kg) at a point,
+      !! model variables (PT degC, SP PSU, p Pa).  The same number as
+      !! `roquet_spv_point`'s `sv` without the dSV/dT, dSV/dS and PT->CT
+      !! chain-rule work that a density-only consumer (`rho_layer`,
+      !! `eos_density_point`) would discard -- roughly half the arithmetic.
+      !$acc routine seq
+      real(wp), intent(in) :: T_pt, S_sp, p
+      real(wp) :: sv
+
+      real(wp) :: sv0, sv1, sv2, sv3, sv_00p
+
+      call roquet_spv_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+      sv_00p = p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
+                                                         + p*(ROQ_V04 + p*ROQ_V05)))))
+      sv = (sv0 + p*(sv1 + p*(sv2 + p*sv3))) + sv_00p
+   end function roquet_spv_value
+
    pure subroutine eos_specvol_derivs(eos, T, S, p, dsv_dt, dsv_ds)
       !! Analytic specific-volume sensitivities dSV/dT and dSV/dS
       !! (SV = 1/rho) at a point.  Needed by the EPBL energy
@@ -1252,11 +1360,10 @@ contains
       real(wp) :: rho
 
       real(wp) :: T_sq, alpha_0, p_0, lambda, p_plus_p0
-      real(wp) :: sv_roq, d_dum1, d_dum2
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
-         call roquet_spv_point(T, S, p, sv_roq, d_dum1, d_dum2)
-         rho = 1.0_wp/sv_roq
+         ! Value-only: no discarded derivative work.
+         rho = 1.0_wp/roquet_spv_value(T, S, p)
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
@@ -1270,6 +1377,60 @@ contains
          rho = eos%rho0 + eos%beta_S*(S - eos%S_ref) - eos%alpha_T*(T - eos%T_ref)
       end if
    end function eos_density_point
+
+   pure subroutine eos_density_specvol_derivs(eos, T, S, p, rho, dsv_dt, dsv_ds)
+      !! `eos_density_point` AND `eos_specvol_derivs` at the same point from
+      !! ONE evaluation of the active EOS.  The isopycnal-slope and Redi
+      !! builders need both (`drho/dX = -rho^2 * dSV/dX`, locally
+      !! referenced); calling the two routines separately evaluated the EOS
+      !! twice -- under Roquet, two full `roquet_spv_point` calls, the first
+      !! of which threw its derivatives away.  Each branch uses the same
+      !! expressions as the two routines it fuses, so `rho`, `dsv_dt` and
+      !! `dsv_ds` are the numbers they return.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+         !! Shared EOS handle (variant + scalar coeffs), by value.
+      real(wp), intent(in) :: T, S
+         !! Potential temperature (degC) and practical salinity (PSU).
+      real(wp), intent(in) :: p
+         !! Pressure (Pa).
+      real(wp), intent(out) :: rho
+         !! In-situ density (kg/m^3), as `eos_density_point`.
+      real(wp), intent(out) :: dsv_dt, dsv_ds
+         !! dSV/dT, dSV/dS, as `eos_specvol_derivs`.
+
+      real(wp) :: T_sq, alpha_0, p_0, lambda, p_plus_p0, inv_p, inv_p2
+      real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
+      real(wp) :: sv_roq
+
+      if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds)
+         rho = 1.0_wp/sv_roq
+      else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
+         T_sq = T*T
+         alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
+         p_0 = WRIGHT_B0 + WRIGHT_B1*T + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*T + &
+               WRIGHT_B4*S + WRIGHT_B5*S*T
+         lambda = WRIGHT_C0 + WRIGHT_C1*T + WRIGHT_C2*T_sq + WRIGHT_C3*T_sq*T + &
+                  WRIGHT_C4*S + WRIGHT_C5*S*T
+         p_plus_p0 = p + p_0
+         rho = p_plus_p0/(lambda + alpha_0*p_plus_p0)
+         dp0_dt = WRIGHT_B1 + 2.0_wp*WRIGHT_B2*T + 3.0_wp*WRIGHT_B3*T_sq + &
+                  WRIGHT_B5*S
+         dlam_dt = WRIGHT_C1 + 2.0_wp*WRIGHT_C2*T + 3.0_wp*WRIGHT_C3*T_sq + &
+                   WRIGHT_C5*S
+         dp0_ds = WRIGHT_B4 + WRIGHT_B5*T
+         dlam_ds = WRIGHT_C4 + WRIGHT_C5*T
+         inv_p = 1.0_wp/p_plus_p0
+         inv_p2 = inv_p*inv_p
+         dsv_dt = WRIGHT_A1 + dlam_dt*inv_p - lambda*dp0_dt*inv_p2
+         dsv_ds = WRIGHT_A2 + dlam_ds*inv_p - lambda*dp0_ds*inv_p2
+      else
+         rho = eos%rho0 + eos%beta_S*(S - eos%S_ref) - eos%alpha_T*(T - eos%T_ref)
+         dsv_dt = eos%alpha_T/(eos%rho0*eos%rho0)
+         dsv_ds = -eos%beta_S/(eos%rho0*eos%rho0)
+      end if
+   end subroutine eos_density_specvol_derivs
 
    pure elemental function eos_freezing_point(eos, S, p) result(T_f)
       !! Seawater freezing point T_f (degC) at salinity `S` and pressure

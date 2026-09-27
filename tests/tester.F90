@@ -50,6 +50,8 @@ program rdb_tests
                                     collect_ocean_pgf_insitu_tests
    use test_ocean_pgf_wright_analytic, only: ocean_pgf_wright_analytic_collect => &
                                              collect_ocean_pgf_wright_analytic_tests
+   use test_ocean_pgf_eos_fast, only: ocean_pgf_eos_fast_collect => &
+                                      collect_ocean_pgf_eos_fast_tests
    use test_ocean_pgf_sigma_rest, only: ocean_pgf_sigma_rest_collect => &
                                         collect_ocean_pgf_sigma_rest_tests
    use test_ocean_pgf_p_top_bc, only: ocean_pgf_p_top_bc_collect => &
@@ -268,6 +270,7 @@ program rdb_tests
                 new_testsuite("ocean_pgf_reconstruct", ocean_pgf_reconstruct_collect), &
                 new_testsuite("ocean_pgf_insitu", ocean_pgf_insitu_collect), &
                 new_testsuite("ocean_pgf_wright_analytic", ocean_pgf_wright_analytic_collect), &
+                new_testsuite("ocean_pgf_eos_fast", ocean_pgf_eos_fast_collect), &
                 new_testsuite("ocean_pgf_sigma_rest", ocean_pgf_sigma_rest_collect), &
                 new_testsuite("ocean_pgf_p_top_bc", ocean_pgf_p_top_bc_collect), &
                 new_testsuite("ocean_cavity_draft", ocean_cavity_draft_collect), &
