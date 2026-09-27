@@ -2306,11 +2306,10 @@ contains
       real(wp), intent(in) :: h
          !! Layer thickness (m).
       real(wp) :: q
-      if (h > H_VANISHED) then
-         q = hq/h
-      else
-         q = hq/H_VANISHED
-      end if
+      ! Branch-free (`h > H_VANISHED` selects `h`, else the floor): the
+      ! same quotient either way, and a CPU compiler can vectorise the
+      ! kernels that call this.
+      q = hq/max(h, H_VANISHED)
    end function recon_layer_mean
 
    pure subroutine wright_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
@@ -2428,6 +2427,10 @@ contains
       integer  :: m
 
       acc = 7.0_wp*(dpa_l + dpa_r)
+      ! (`GCC$ unroll`: gfortran unrolls the three sub-columns completely
+      ! before vectorising, so the face loops over this vectorise on the CPU;
+      ! nvfortran keeps the loop, which costs fewer registers on the device.)
+      !GCC$ unroll 3
       do m = 2, 4
          wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
          wl = 1.0_wp - wr
@@ -2549,6 +2552,10 @@ contains
       integer  :: m
 
       acc = 7.0_wp*dpa_l + 7.0_wp*dpa_r
+      ! (`GCC$ unroll`: gfortran unrolls the three sub-columns completely
+      ! before vectorising, so the face loops over this vectorise on the CPU;
+      ! nvfortran keeps the loop, which costs fewer registers on the device.)
+      !GCC$ unroll 3
       do m = 2, 4
          wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
          wl = 1.0_wp - wr
@@ -2917,6 +2924,7 @@ contains
          s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
       end if
 
+      !GCC$ unroll 5
       do n = 1, N_BOOLE
          wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
          wt_b = 1.0_wp - wt_t
@@ -2977,6 +2985,7 @@ contains
 
       call boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, s_t, s_b, s_mean, &
                               parabolic, t5, s5, p5)
+      !GCC$ unroll 5
       do n = 1, N_BOOLE
          r5(n) = wright_rho(t5(n), s5(n), p5(n)) - rho_ref
       end do
@@ -3035,6 +3044,7 @@ contains
                              [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
 
       acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      !GCC$ unroll 3
       do m = 2, N_BOOLE - 1
          wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
          wl = 1.0_wp - wr
@@ -3092,6 +3102,7 @@ contains
          s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
       end if
 
+      !GCC$ unroll 5
       do n = 1, N_BOOLE
          wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
          wt_b = 1.0_wp - wt_t
@@ -3141,6 +3152,7 @@ contains
                              [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
 
       acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      !GCC$ unroll 3
       do m = 2, N_BOOLE - 1
          wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
          wl = 1.0_wp - wr
@@ -3182,23 +3194,24 @@ contains
          !! MOM6 `hWt_LL/LR/RR/RL`.
 
       real(wp) :: hwght, hwl, hwr, idenom_hw
+      logical  :: use_hw
 
+      ! Branch-free: the weighted fractions are formed unconditionally and
+      ! SELECTED where `hwght > 0` (else plain linear interpolation) -- the
+      ! same numbers as the branched form, and a CPU compiler can vectorise
+      ! the face loops that call this.  `h_neglect > 0` keeps the unselected
+      ! arithmetic finite.
       hwght = 0.0_wp
       if (mass_weight) hwght = max(0.0_wp, e_bed_r - e_top_l, e_bed_l - e_top_r)
-      hwt_ll = 1.0_wp
-      hwt_lr = 0.0_wp
-      hwt_rr = 1.0_wp
-      hwt_rl = 0.0_wp
-      if (hwght > 0.0_wp) then
-         hwl = h_l + h_neglect
-         hwr = h_r + h_neglect
-         hwght = hwght*((hwl - hwr)/(hwl + hwr))**2
-         idenom_hw = 1.0_wp/(hwght*(hwr + hwl) + hwl*hwr)
-         hwt_ll = (hwght*hwl + hwr*hwl)*idenom_hw
-         hwt_lr = (hwght*hwr)*idenom_hw
-         hwt_rr = (hwght*hwr + hwr*hwl)*idenom_hw
-         hwt_rl = (hwght*hwl)*idenom_hw
-      end if
+      use_hw = hwght > 0.0_wp
+      hwl = h_l + h_neglect
+      hwr = h_r + h_neglect
+      hwght = hwght*((hwl - hwr)/(hwl + hwr))**2
+      idenom_hw = 1.0_wp/(hwght*(hwr + hwl) + hwl*hwr)
+      hwt_ll = merge((hwght*hwl + hwr*hwl)*idenom_hw, 1.0_wp, use_hw)
+      hwt_lr = merge((hwght*hwr)*idenom_hw, 0.0_wp, use_hw)
+      hwt_rr = merge((hwght*hwr + hwr*hwl)*idenom_hw, 1.0_wp, use_hw)
+      hwt_rl = merge((hwght*hwl)*idenom_hw, 0.0_wp, use_hw)
    end subroutine fv_mom6_mass_weights
 
    pure function recon_rho_surf(pa_k, pa_kp1, h_surf, rho_ref) result(rho_surf)
