@@ -379,6 +379,56 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
+         ! The single-rank features, keyed on the ACTUAL rank count.
+         ! `validate_config` refuses them too, but on `px*py > 1` -- which
+         ! an unset process grid (px = py = 1, auto-factored above) does
+         ! not trip -- so this is the gate that always holds.  Every rank
+         ! evaluates the same condition and fails together.
+         if (cfg%ocean%cavity_dyn%enable) then
+            call fail("&ocean_cavity_dyn_nml enable = .true. is single-rank ("// &
+                      to_string(csize)//" ranks requested): the grounding statistics "// &
+                      "are global reductions the configure does not take.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call fail("&ocean_wetdry_nml enable = .true. is single-rank ("// &
+                      to_string(csize)//" ranks requested): the wet-mask / outflow-"// &
+                      "limiter halo exchange is not implemented.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (cfg%ocean%ice%enable) then
+            call fail("&ocean_ice_nml enable = .true. is single-rank ("// &
+                      to_string(csize)//" ranks requested): the sea-ice slot (thermo, "// &
+                      "ITD transport, EVP) carries no cross-rank halo exchange.  Run on "// &
+                      "1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         ! In-memory geometry injection (the API's staged bathymetry /
+         ! supergrid arrays) hands over WHOLE-grid arrays.
+         if (allocated(engine%staged_bathymetry) .or. allocated(engine%staged_metrics_x)) then
+            call fail("in-memory geometry injection (staged bathymetry / supergrid "// &
+                      "arrays) is single-rank ("//to_string(csize)//" ranks requested): "// &
+                      "the arrays describe the whole grid.  Use the file readers "// &
+                      "(topo_config='file', grid_config='supergrid') or 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         ! Chapman radiation keeps ONE edge-uniform eta target per edge,
+         ! computed from the tile's own stretch of the edge (and a corner
+         ! depth): split along a Chapman edge, every rank radiates toward a
+         ! different target.
+         if (any([ocean_bc_type_from_string(cfg%ocean%bc%west), &
+                  ocean_bc_type_from_string(cfg%ocean%bc%east), &
+                  ocean_bc_type_from_string(cfg%ocean%bc%south), &
+                  ocean_bc_type_from_string(cfg%ocean%bc%north)] == OBC_CHAPMAN)) then
+            call fail("&ocean_bc_nml 'chapman' edges are single-rank ("// &
+                      to_string(csize)//" ranks requested): the edge-mean eta target "// &
+                      "is a per-rank partial mean.  Use 'open' (Flather) or run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
       end if
 
       call decomp_init_from_config(engine%decomp, cfg, csize, rank)
