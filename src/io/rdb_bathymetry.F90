@@ -6,7 +6,7 @@ module rdb_bathymetry
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
-                            nc_get_dim_len, nc_get_varid, nc_get_var_2d
+                            nc_get_dim_len, nc_get_varid, nc_get_var_slab_2d
    use netcdf, only: nf90_inquire_variable, nf90_inquire_dimension, nf90_noerr
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
@@ -35,6 +35,15 @@ contains
       !! Bathymetry lands in the interior; ghost cells are filled by
       !! constant extrapolation from the nearest interior cell via
       !! `fill_bathymetry_ghosts_array`.
+      !!
+      !! The file holds the WHOLE grid (`grid%nx_global x grid%ny_global`).
+      !! A decomposed tile reads only the full-width band of rows its
+      !! storage covers (physical rows +- nghost, clipped to the grid) with a
+      !! start/count window, extrapolates that band's ghosts exactly as the
+      !! whole grid would (at a GLOBAL edge the band edge is the grid edge;
+      !! elsewhere the band's rows ARE the tile's ghost rows, read from the
+      !! file), and keeps its own columns: every tile is bit-identical to
+      !! its slice of the single-rank array, seam ghosts included.
       character(len=*), intent(in) :: filename
       real(wp), intent(inout) :: b(:, :)
       type(hgrid_t), intent(in) :: grid
@@ -43,7 +52,9 @@ contains
          !! when present; absent behaves as today (`error stop`).
 
       integer :: ncid, varid, file_nx, file_ny
-      integer :: ng, i, j
+      integer :: ng, i, j, ni, nj, jb0, jb1, nb, jo_b
+      type(hgrid_t) :: gband
+      real(wp), allocatable :: bband(:, :)
       integer :: var_dimids(2)
       integer :: var_ndims, dim1_len, dim2_len
       integer :: local_ierr
@@ -92,14 +103,18 @@ contains
       ! If dim1 is "y" (C-order file reversed), we need to transpose.
       needs_transpose = (trim(dim1_name) == "y")
 
+      ! The file describes the WHOLE grid.
+      ni = grid%nx_global
+      nj = grid%ny_global
+
       ! Validate dimensions
       if (needs_transpose) then
-         if (dim1_len /= grid%ny_phys .or. dim2_len /= grid%nx_phys) then
+         if (dim1_len /= nj .or. dim2_len /= ni) then
             call logger%error("Bathymetry grid mismatch: file has "// &
                               to_string(dim2_len)//" x "//to_string(dim1_len)// &
                               " but simulation expects "// &
-                              to_string(grid%nx_phys)//" x "// &
-                              to_string(grid%ny_phys))
+                              to_string(ni)//" x "// &
+                              to_string(nj))
             call nc_close(ncid)
             if (present(ierr)) then
                ierr = OCEAN_STATUS_ERR_IO
@@ -108,12 +123,12 @@ contains
             error stop "Bathymetry grid mismatch"
          end if
       else
-         if (dim1_len /= grid%nx_phys .or. dim2_len /= grid%ny_phys) then
+         if (dim1_len /= ni .or. dim2_len /= nj) then
             call logger%error("Bathymetry grid mismatch: file has "// &
                               to_string(dim1_len)//" x "//to_string(dim2_len)// &
                               " but simulation expects "// &
-                              to_string(grid%nx_phys)//" x "// &
-                              to_string(grid%ny_phys))
+                              to_string(ni)//" x "// &
+                              to_string(nj))
             call nc_close(ncid)
             if (present(ierr)) then
                ierr = OCEAN_STATUS_ERR_IO
@@ -124,31 +139,55 @@ contains
       end if
 
       ng = grid%nghost
+      ! Rows of the whole grid this tile's storage covers (all of them on an
+      ! undecomposed grid), full width.
+      jb0 = max(1, grid%j_offset_global + 1 - ng)
+      jb1 = min(nj, grid%j_offset_global + grid%ny_phys + ng)
+      nb = jb1 - jb0 + 1
 
-      ! Read into temporary array matching the Fortran storage order
-      allocate (b_interior(dim1_len, dim2_len))
-      call nc_get_var_2d(ncid, varid, b_interior, ierr=local_ierr)
+      ! Read the band into a temporary matching the Fortran storage order.
+      if (needs_transpose) then
+         allocate (b_interior(nb, ni))
+         call nc_get_var_slab_2d(ncid, varid, [jb0, 1], [nb, ni], b_interior, ierr=local_ierr)
+      else
+         allocate (b_interior(ni, nb))
+         call nc_get_var_slab_2d(ncid, varid, [1, jb0], [ni, nb], b_interior, ierr=local_ierr)
+      end if
       if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
       call nc_close(ncid)
 
+      ! Place the band in a whole-width, band-height array with ghosts and
+      ! extrapolate ITS ghosts -- exactly the undecomposed construction when
+      ! the band is the whole grid.
+      call gband%init(ni, nb, ng, grid%dx, grid%dy)
+      allocate (bband(gband%nx_total, gband%ny_total))
+      bband = 0.0_wp
       if (needs_transpose) then
-         ! b_interior is (y, x) in Fortran — transpose to (x, y) for b
-         do j = 1, grid%ny_phys
-            do i = 1, grid%nx_phys
-               b(ng + i, ng + j) = b_interior(j, i)
+         ! b_interior is (y, x) in Fortran — transpose to (x, y)
+         do j = 1, nb
+            do i = 1, ni
+               bband(ng + i, ng + j) = b_interior(j, i)
             end do
          end do
       else
-         b(ng + 1:ng + grid%nx_phys, ng + 1:ng + grid%ny_phys) = b_interior
+         bband(ng + 1:ng + ni, ng + 1:ng + nb) = b_interior
       end if
-
       deallocate (b_interior)
 
       ! Fill ghost cells by constant extrapolation from nearest interior cell.
       ! Without this, ghost cells retain b=0 which creates artificial cliffs
       ! against real bathymetry (e.g. b=-50m interior vs b=0 ghost), generating
       ! extreme velocities and tiny CFL timesteps.
-      call fill_bathymetry_ghosts_array(b, grid)
+      call fill_bathymetry_ghosts_array(bband, gband)
+
+      ! Cut this tile's storage window (ghosts included) out of the band.
+      jo_b = grid%j_offset_global - (jb0 - 1)
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            b(i, j) = bband(i + grid%i_offset_global, j + jo_b)
+         end do
+      end do
+      deallocate (bband)
 
       call logger%info("Bathymetry loaded: min = "// &
                        to_string(minval(b(ng + 1:ng + grid%nx_phys, &

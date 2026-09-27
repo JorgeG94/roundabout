@@ -50,7 +50,7 @@ module rdb_ocean_z_init
    use rdb_config, only: ocean_zinit_config_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
-                            nc_get_var_3d, nc_get_var_1d
+                            nc_get_var_slab_3d, nc_get_var_1d
    use netcdf, only: nf90_noerr, nf90_inq_varid, nf90_inquire_variable, &
                      nf90_inquire_dimension
    use pic_logger, only: logger => global_logger
@@ -191,10 +191,10 @@ contains
       ! C/Fortran dimension reversal when the file is C-ordered (z, y, x).
       allocate (t_src(nx, ny, nz_src), s_src(nx, ny, nz_src))
       call read_field_xyz(ncid, t_varid, t_src, nx, ny, nz_src, needs_transpose, &
-                          ierr=local_ierr)
+                          grid%i_offset_global, grid%j_offset_global, ierr=local_ierr)
       if (.not. zinit_io_ok(local_ierr, ierr, ncid)) return
       call read_field_xyz(ncid, s_varid, s_src, nx, ny, nz_src, needs_transpose, &
-                          ierr=local_ierr)
+                          grid%i_offset_global, grid%j_offset_global, ierr=local_ierr)
       if (.not. zinit_io_ok(local_ierr, ierr, ncid)) return
       call nc_close(ncid)
 
@@ -512,28 +512,35 @@ contains
 
       if (needs_transpose) then
          ! Fortran storage (z, y, x): physical lengths are d3=x, d2=y, d1=z.
-         ok = (d3_len == grid%nx_phys .and. d2_len == grid%ny_phys)
+         ok = (d3_len == grid%nx_global .and. d2_len == grid%ny_global)
          nz_src = d1_len
       else
          ! Fortran storage (x, y, z): physical lengths are d1=x, d2=y, d3=z.
-         ok = (d1_len == grid%nx_phys .and. d2_len == grid%ny_phys)
+         ok = (d1_len == grid%nx_global .and. d2_len == grid%ny_global)
          nz_src = d3_len
       end if
 
       if (.not. ok) then
          call nc_close(ncid)
          call fail("ocean_zinit: T/S grid mismatch: file horizontal dims do not match "// &
-                   "simulation "//to_string(grid%nx_phys)//" x "//to_string(grid%ny_phys), ierr, OCEAN_STATUS_ERR_IO)
+                   "simulation "//to_string(grid%nx_global)//" x "//to_string(grid%ny_global), &
+                   ierr, OCEAN_STATUS_ERR_IO)
          return
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine read_dims
 
-   subroutine read_field_xyz(ncid, varid, dst, nx, ny, nz_src, needs_transpose, ierr)
-      !! Read a 3D T/S variable into a model-grid `(nx, ny, nz_src)`
-      !! interior array, permuting from the file's Fortran storage order.
+   subroutine read_field_xyz(ncid, varid, dst, nx, ny, nz_src, needs_transpose, &
+                             io, jo, ierr)
+      !! Read this tile's `(nx, ny, nz_src)` window of a 3D T/S variable
+      !! (the file holds the WHOLE grid; the window starts at global cell
+      !! `(io+1, jo+1)`) with a start/count read, permuting from the file's
+      !! Fortran storage order.  On an undecomposed grid the window is the
+      !! whole variable.
       integer, intent(in) :: ncid, varid, nx, ny, nz_src
       logical, intent(in) :: needs_transpose
+      integer, intent(in) :: io, jo
+         !! Global offsets of the tile (`grid%i/j_offset_global`).
       real(wp), intent(out) :: dst(nx, ny, nz_src)
       integer, intent(out), optional :: ierr
          !! Non-zero on a read failure when present; absent behaves as
@@ -545,7 +552,7 @@ contains
       if (needs_transpose) then
          ! File is (z, y, x) in Fortran order.
          allocate (buf(nz_src, ny, nx))
-         call nc_get_var_3d(ncid, varid, buf, ierr)
+         call nc_get_var_slab_3d(ncid, varid, [1, jo + 1, io + 1], [nz_src, ny, nx], buf, ierr)
          if (present(ierr)) then
             if (ierr /= 0) then
                deallocate (buf)
@@ -560,8 +567,8 @@ contains
             end do
          end do
       else
-         ! File is (x, y, z) in Fortran order — direct read.
-         call nc_get_var_3d(ncid, varid, dst, ierr)
+         ! File is (x, y, z) in Fortran order — direct read of the window.
+         call nc_get_var_slab_3d(ncid, varid, [io + 1, jo + 1, 1], [nx, ny, nz_src], dst, ierr)
       end if
 
       if (allocated(buf)) deallocate (buf)

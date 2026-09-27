@@ -102,10 +102,9 @@ module rdb_ocean_engine
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, &
-                                       OBC_TRIPOLAR_FOLD
+                                       OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
-                                metrics_fold_periodic_ghosts, parse_grid_config, &
-                                GRID_CONFIG_SUPERGRID
+                                metrics_fold_periodic_ghosts
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
@@ -352,17 +351,6 @@ contains
                       ": tiles of ny/py = "//to_string(cfg%ny/cfg%py)// &
                       " rows are too short for the fold's mirror (need >= nghost+1 = "// &
                       to_string(cfg%nghost + 1)//"); reduce py.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! The supergrid (mosaic) reader reads the WHOLE file into one tile
-         ! and checks its dimensions against the tile's, so a decomposed run
-         ! would only fail later on a bare dimension mismatch.  Refuse it
-         ! here, naming the real limitation.
-         if (parse_grid_config(cfg%ocean%grid%grid_config) == GRID_CONFIG_SUPERGRID) then
-            call fail("grid_config = 'supergrid' is single-rank: the mosaic reader "// &
-                      "loads the whole grid into one tile (no per-rank window). "// &
-                      "Run it on 1 rank, or use an analytic grid_config.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
