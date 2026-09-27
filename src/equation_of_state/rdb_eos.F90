@@ -203,10 +203,12 @@ module rdb_eos
       !! SP -> SR (Reference Salinity) conversion factor.
 
    ! Reference-profile (SV00p) pressure coefficients, in Pa-powers.  Public
-   ! (with the T/S-dependent part from `roquet_spv_ts_coeffs`) so a caller
-   ! that evaluates ONE water parcel at several pressures -- the FV-MOM6
-   ! in-situ PGF's vertical quadrature -- can inline the cheap pressure
-   ! polynomial and pay the T/S polynomial + CT conversion once.
+   ! -- with the SV table and the SR / CT constants below (the `public`
+   ! statement after the table) -- because the VALUE half of the EOS is the
+   ! shared include `rdb_roquet_spv.inc`: a kernel module that evaluates ONE
+   ! water parcel at several pressures (the FV-MOM6 in-situ PGF's vertical
+   ! quadrature) includes it for a module-local, inlinable copy and imports
+   ! the coefficients from here.
    real(wp), parameter, public :: ROQ_V00 = -4.4015007269e-05_wp*ROQ_PA2KB
    real(wp), parameter, public :: ROQ_V01 = 6.9232335784e-06_wp*ROQ_PA2KB**2
    real(wp), parameter, public :: ROQ_V02 = -7.5004675975e-07_wp*ROQ_PA2KB**3
@@ -319,6 +321,16 @@ module rdb_eos
    real(wp), parameter :: ROQ_CP0 = 3991.86795711963_wp
    real(wp), parameter :: ROQ_CT_SFAC = 0.0248826675584615_wp
       !! (35.16504/35)/40  [(g/kg)^-1] — normalises SR for the poly.
+
+   ! The value half of the SpV table + the SR / CT constants, for the
+   ! consumers of `rdb_roquet_spv.inc` (see the SV00p note above).
+   public :: SPV000, SPV001, SPV002, SPV003, SPV010, SPV011, SPV012, SPV013, SPV020, &
+             SPV021, SPV022, SPV030, SPV031, SPV040, SPV041, SPV050, SPV060, SPV100, SPV101, &
+             SPV102, SPV103, SPV110, SPV111, SPV112, SPV120, SPV121, SPV130, SPV131, SPV140, &
+             SPV150, SPV200, SPV201, SPV202, SPV210, SPV211, SPV220, SPV221, SPV230, SPV240, &
+             SPV300, SPV301, SPV310, SPV311, SPV320, SPV330, SPV400, SPV401, SPV410, SPV420, &
+             SPV500, SPV510, SPV600
+   public :: ROQ_CP0, ROQ_CT_SFAC, ROQ_R1_S0, ROQ_RDELTAS, ROQ_SR_FACTOR
 
    type :: eos_t
       logical :: is_init = .false.
@@ -1057,6 +1069,10 @@ contains
       !! pressures (the FV-MOM6 in-situ PGF's 5-point vertical Boole rule
       !! over a constant-T/S layer) calls this once and then pays only the
       !! degree-6 pressure Horner per point.
+      !!
+      !! The body is `rdb_roq_ts_coeffs` (`rdb_roquet_spv.inc`, included
+      !! here): kernel modules include the same file for a local, inlinable
+      !! copy rather than calling this out-of-line entry point.
       !$acc routine seq
       real(wp), intent(in)  :: T_pt
          !! Potential temperature (degC).
@@ -1067,55 +1083,7 @@ contains
       real(wp), intent(out) :: sv1, sv2, sv3
          !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
 
-      real(wp) :: zt, zs, x2, xx, yy, hh
-      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
-      real(wp) :: sv_ts0, sv_0s0
-
-      ! CT = ct_from_pt(SR, PT) -- identical to `roquet_spv_point`.
-      x2 = max(ROQ_CT_SFAC*(S_sp*ROQ_SR_FACTOR), 1.0e-20_wp)
-      xx = sqrt(x2)
-      yy = T_pt*0.025_wp
-      c0 = 61.01362420681071_wp &
-           + x2*(268.5520265845071_wp &
-                 + xx*(937.2099110620707_wp &
-                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
-      c1 = 168776.46138048015_wp &
-           + x2*(-12019.028203559312_wp &
-                 + xx*(588.1802812170108_wp &
-                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
-      c2 = -2735.2785605119625_wp &
-           + x2*(3734.858026725145_wp &
-                 + xx*(248.39476522971285_wp &
-                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
-      c3 = 2574.2164453821433_wp &
-           + x2*(-2046.7671145057618_wp &
-                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
-      c4 = -1536.6644434977543_wp &
-           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
-      c5 = 545.7340497931629_wp &
-           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
-      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
-      c7 = -18.30489878927802_wp
-      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
-      zt = hh/ROQ_CP0
-      zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
-
-      sv3 = SPV003 + (zs*SPV103 + zt*SPV013)
-      sv2 = SPV002 + (zs*(SPV102 + zs*SPV202) &
-                      + zt*(SPV012 + (zs*SPV112 + zt*SPV022)))
-      sv1 = SPV001 + (zs*(SPV101 + zs*(SPV201 + zs*(SPV301 + zs*SPV401))) &
-                      + zt*(SPV011 + (zs*(SPV111 + zs*(SPV211 + zs*SPV311)) &
-                                      + zt*(SPV021 + (zs*(SPV121 + zs*SPV221) &
-                                                      + zt*(SPV031 + (zs*SPV131 + zt*SPV041)))))))
-      sv_ts0 = zt*(SPV010 &
-                   + (zs*(SPV110 + zs*(SPV210 + zs*(SPV310 + zs*(SPV410 + zs*SPV510)))) &
-                      + zt*(SPV020 + (zs*(SPV120 + zs*(SPV220 + zs*(SPV320 + zs*SPV420))) &
-                                      + zt*(SPV030 + (zs*(SPV130 + zs*(SPV230 + zs*SPV330)) &
-                                                      + zt*(SPV040 + (zs*(SPV140 + zs*SPV240) &
-                                                                      + zt*(SPV050 + (zs*SPV150 + zt*SPV060))))))))))
-      sv_0s0 = SPV000 + zs*(SPV100 + zs*(SPV200 + zs*(SPV300 + zs*(SPV400 &
-                                                                   + zs*(SPV500 + zs*SPV600)))))
-      sv0 = sv_ts0 + sv_0s0
+      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
    end subroutine roquet_spv_ts_coeffs
 
    pure function roquet_spv_value(T_pt, S_sp, p) result(sv)
@@ -1128,12 +1096,10 @@ contains
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp) :: sv
 
-      real(wp) :: sv0, sv1, sv2, sv3, sv_00p
+      real(wp) :: sv0, sv1, sv2, sv3
 
-      call roquet_spv_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
-      sv_00p = p*(ROQ_V00 + p*(ROQ_V01 + p*(ROQ_V02 + p*(ROQ_V03 &
-                                                         + p*(ROQ_V04 + p*ROQ_V05)))))
-      sv = (sv0 + p*(sv1 + p*(sv2 + p*sv3))) + sv_00p
+      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+      sv = rdb_roq_spv_p(sv0, sv1, sv2, sv3, p)
    end function roquet_spv_value
 
    pure subroutine eos_specvol_derivs(eos, T, S, p, dsv_dt, dsv_ds)
@@ -1533,5 +1499,7 @@ contains
 
       T_f = (eos%tfr_s*S + eos%tfr_p*p) + eos%tfr_0
    end function eos_freezing_point
+
+#include "rdb_roquet_spv.inc"
 
 end module rdb_eos
