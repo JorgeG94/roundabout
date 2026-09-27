@@ -12,13 +12,13 @@ module rdb_ocean_dyn
                                        barotropic_workstate_exit_data_impl
    use rdb_barotropic_substep, only: barotropic_substep_nonlinear_interior
    use rdb_ocean_bt_wide, only: bt_wide_t, bt_wide_substep
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_SPONGE
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, &
                                  ocean_periodic_wrap_centre_2d, &
                                  ocean_periodic_wrap_centre_3d, &
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
-   use rdb_ocean_fold_apply, only: ocean_fold_wrap_state
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_centre_3d_state
    use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, fold_north_v_face
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
@@ -4943,6 +4943,20 @@ contains
       ! forward-backward gravity-wave pairing that lifts the
       ! internal-wave dt ceiling (SPEC §1 fact 5, §2 C8).
       if (is_pc) then
+         ! The surface fluxes and the vertical mixing above updated every
+         ! tracer column, ghosts included, but a ghost column's diffusivity
+         ! is computed from the TILE's data and is not the neighbour's
+         ! interior value wherever the boundary layer / smoothing stencil
+         ! reaches past the ghost band — so the ghosts the corrector's
+         ! tracer advection reads next are no longer images of the
+         ! neighbour.  Serial, that happened only at a periodic wrap; on a
+         ! decomposed run it happened at every seam, so the answer
+         ! depended on where the seam fell (1 ULP in hTr at a seam cell by
+         ! step 12 of the spherical 2x1 case, growing from there).  The
+         ! `ssp_rk2` chain runs straight after the stage-entry exchange
+         ! and never sees this.  Refresh the tracer ghosts (exchange, local
+         ! periodic wrap, north fold) first.
+         call refresh_tracer_ghosts(grid, ms, bc)
          call run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &
                                    h_min_floor, chain_weight, is_pred, &
@@ -4967,6 +4981,29 @@ contains
          end if
       end if
    end subroutine run_stage_split
+
+   subroutine refresh_tracer_ghosts(grid, ms, bc)
+      !! Re-fill every tracer's ghost band from its owners: the halo
+      !! exchange (MPI seams, and the local periodic wrap on an undecomposed
+      !! periodic axis — the halo primitive does both), then the tripolar
+      !! north fold on the rank that owns it.  Thickness and velocity are
+      !! left alone.  Collective (every rank calls it).
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_bc_state_t), intent(in), optional :: bc
+      integer :: it
+
+      if (.not. allocated(ms%tracers)) return
+      call profiler_start("ocean_comms_ml")
+      do it = 1, size(ms%tracers)
+         if (.not. allocated(ms%tracers(it)%hTr)) cycle
+         call ocean_halo_centre(ms%tracers(it)%hTr, ms%nz_ml)
+      end do
+      call profiler_stop("ocean_comms_ml")
+      if (present(bc)) then
+         if (bc%north_fold) call ocean_fold_wrap_centre_3d_state(grid, bc, ms)
+      end if
+   end subroutine refresh_tracer_ghosts
 
    pure function ocean_dyn_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the split-RK2 driver (BT work state
