@@ -300,3 +300,21 @@ target_sources(
           ${ENGINE_SOURCES}
           ${DRIVER_SOURCES}
           ${API_SOURCES})
+
+# gfortran keeps the FV-MOM6 PGF's per-EOS density-integral helpers
+# (`roquet_pcm_dpa_intz`, the Boole twins, the PLM/PPM edge helpers -- each
+# carrying the inlined Roquet SpV body) as out-of-line CALLS, and a call in the
+# body keeps the kernels' 3-D `do concurrent` loops scalar.  Two reasons, both
+# needed: they exceed its default inlining budget, and under -fPIC (the core is
+# also built shared) a PUBLIC module procedure is interposable, so GCC will not
+# inline it at all.  For this one source: raise the budget and drop semantic
+# interposition (nothing interposes a Fortran module procedure), so they inline
+# and the loops vectorise (check with -fopt-info-vec).  GNU only: NVHPC already
+# inlines them on the device, and the options are GCC's.
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/pressure_force/rdb_ocean_pressure_force.F90
+  TARGET_DIRECTORY ${core_objs}
+  PROPERTIES
+    COMPILE_OPTIONS
+    "$<$<Fortran_COMPILER_ID:GNU>:-fno-semantic-interposition;--param=max-inline-insns-single=4000;--param=max-inline-insns-auto=4000;--param=large-function-growth=4000;--param=inline-unit-growth=4000>"
+)
