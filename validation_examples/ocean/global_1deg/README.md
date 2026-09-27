@@ -439,26 +439,29 @@ cp /path/to/roundabout/validation_examples/ocean/global_1deg/global_1deg_wind.nm
 CUDA_VISIBLE_DEVICES=1 /path/to/build/rdb global_1deg_wind.nml > run.log
 ```
 
-Measured on one V100, 2026-09-24/25: nvfortran 26.5,
-`-DRDB_ENABLE_GPU=ON -DRDB_GPU_ARCH=cc70`, `mem:separate`. The year took
-365 days and 17 520 steps in **3993 s of wall time (10.9 s per simulated
-day)**, using 10.4 GB of device memory. The diagnostic file is 1.2 GB.
+Measured on one V100, 2026-09-26: nvfortran 26.5,
+`-DRDB_ENABLE_GPU=ON -DRDB_GPU_ARCH=cc70`, `mem:separate`, on main
+`449b4387a` — the MOM6 barotropic split (`&ocean_bt_nml bc_pgf_forcing`) and
+the FV_MOM6 in-situ density. The year took 365 days and 17 520 steps in
+**4662 s of wall time (12.8 s per simulated day)**, using 10.4 GB of device
+memory. The diagnostic file is 1.2 GB. An earlier run of the same dycore on
+the pre-merge fix branches matches it in every printed digit of all 365 days.
 
 `reproduce.sh` and `check_against_reference.py` (§1–§2) cover the unforced
 case only. This run's daily series is not a committed reference yet.
 
-| day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s), where | Drake (Sv) | Gulf Stream box | Kuroshio box | eq. Pacific u (m/s) |
-|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
-| 1 | 2.691e-04 | 0.051 | -1.80e-14 | -6.4e-16 | -1.7e-16 | 0.81, Hudson Strait | 0.2 | 0.20 | 0.26 | -0.007 |
-| 10 | 4.238e-04 | 0.112 | -1.80e-13 | -3.9e-15 | -3.0e-15 | 1.29, Irish shelf | 1.7 | 0.76 | 0.65 | -0.016 |
-| 30 | 6.326e-04 | 0.168 | -5.41e-13 | -1.2e-14 | -8.8e-15 | 1.32, Taiwan Strait | -0.4 | 0.51 | 0.97 | -0.042 |
-| 60 | 6.692e-04 | 0.161 | -1.08e-12 | -2.4e-14 | -1.8e-14 | 0.99, Tierra del Fuego coast | -1.5 | 0.99 | 0.55 | -0.084 |
-| 90 | 6.635e-04 | 0.142 | -1.62e-12 | -3.6e-14 | -2.7e-14 | 1.17, Chukchi Sea, Alaska coast | -5.0 | 0.49 | 0.51 | -0.003 |
-| 120 | 6.615e-04 | 0.129 | -2.16e-12 | -4.8e-14 | -3.5e-14 | 1.02, Hudson Bay east coast | -0.4 | 0.27 | 0.37 | -0.108 |
-| 180 | 6.992e-04 | 0.092 | -3.25e-12 | -7.2e-14 | -5.2e-14 | 1.63, Sri Lanka coast (SW monsoon) | 5.6 | 0.36 | 0.51 | -0.290 |
-| 240 | 6.907e-04 | 0.071 | -4.33e-12 | -9.8e-14 | -6.8e-14 | 1.37, Brazil coast 22° S | 4.8 | 0.62 | 0.27 | -0.327 |
-| 300 | 6.346e-04 | 0.079 | -5.41e-12 | -1.2e-13 | -8.4e-14 | 2.04, Tierra del Fuego coast | 17.5 | 0.91 | 0.92 | -0.141 |
-| 365 | 6.248e-04 | 0.050 | -6.58e-12 | -1.5e-13 | -1.0e-13 | 1.07, Kamchatka coast | 1.7 | 0.81 | 0.49 | -0.127 |
+| day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s), where | Drake (Sv) | Drake SSH step (m) | Gulf Stream box | Kuroshio box | eq. Pacific u (m/s) |
+|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | 5.883e-04 | 0.066 | -1.80e-14 | -5.1e-16 | -2.2e-16 | 0.96, Hudson Strait | -174.6 | 0.58 | 0.59 | 0.41 | -0.008 |
+| 10 | 5.629e-04 | 0.239 | -1.80e-13 | -3.8e-15 | -2.8e-15 | 1.21, North Sea (1.5° W, 55.5° N) | 157.2 | 1.68 | 0.44 | 0.48 | -0.023 |
+| 30 | 5.560e-04 | 0.241 | -5.41e-13 | -1.2e-14 | -8.9e-15 | 1.09, Gulf of Maine | 148.0 | 1.51 | 0.60 | 0.45 | -0.043 |
+| 60 | 5.456e-04 | 0.224 | -1.08e-12 | -2.4e-14 | -1.8e-14 | 1.37, Gulf Stream (80.5° W, 31.3° N) | 151.4 | 1.45 | 1.37 | 0.47 | -0.073 |
+| 90 | 5.539e-04 | 0.219 | -1.62e-12 | -3.6e-14 | -2.7e-14 | 1.07, Chukchi Sea, Alaska coast | 149.1 | 1.44 | 0.45 | 0.56 | -0.003 |
+| 120 | 5.562e-04 | 0.200 | -2.16e-12 | -4.7e-14 | -3.7e-14 | 1.08, Hudson Bay east coast | 152.2 | 1.48 | 0.91 | 0.63 | -0.111 |
+| 180 | 6.008e-04 | 0.149 | -3.25e-12 | -7.2e-14 | -5.5e-14 | 1.60, Sri Lanka coast (SW monsoon) | 158.5 | 1.50 | 0.64 | 0.82 | -0.283 |
+| 240 | 6.008e-04 | 0.118 | -4.33e-12 | -9.6e-14 | -7.1e-14 | 1.46, Brazil coast 22° S | 148.1 | 1.45 | 0.56 | 0.51 | -0.336 |
+| 300 | 5.531e-04 | 0.099 | -5.41e-12 | -1.2e-13 | -8.8e-14 | 2.03, Tierra del Fuego coast | 159.8 | 1.51 | 0.78 | 0.73 | -0.141 |
+| 365 | 5.392e-04 | 0.084 | -6.58e-12 | -1.5e-13 | -1.1e-13 | 1.11, Kamchatka coast | 152.9 | 1.52 | 0.78 | 0.45 | -0.133 |
 
 Columns:
 
@@ -467,107 +470,127 @@ Columns:
   (from the diagnostic file). The "box" columns take that maximum over
   80–60° W × 28–42° N (Gulf Stream) and 120–150° E × 24–40° N (Kuroshio).
 * **Drake** is `Σ transport_x · dy` along 67.5° W, from Antarctica to South
-  America.
+  America. **Drake SSH step** is SSH at the northernmost wet cell of that
+  section minus SSH at the southernmost.
 * **eq. Pacific u** is the mean top-10 m zonal velocity over 160° E–100° W,
   2° S–2° N.
 
 `python_prototypes/global_1deg/wind_analysis.py` produces all of these (one
-row per day in `wind_daily.txt` there).
+row per day in `wind_main449_daily.txt` there).
 
 * **Stable.** The year ran without NaN, without a CFL truncation and
   without a positive-definite-limiter event. Nothing was logged as a
-  warning. The `maxvel` clamp (6 m/s) was never reached: MaxCFL peaked at
-  0.173 on day 38.
-* **Energy is bounded.** `En` rises over the first two months, to 6.3e-04
-  by day 30 (the unforced run: 5.4e-04). It reaches its maximum of
-  **7.16e-04 m²/s² on day 183** (austral winter westerlies) and ends the
-  year at 6.25e-04. It follows the seasonal cycle of the wind, not a trend.
+  warning. MaxCFL peaked at 0.244 on day 28, while the barotropic mode
+  adjusts; the `maxvel` clamp (6 m/s) is far above anything the diagnostics
+  show.
+* **Energy is bounded.** `En` peaks at **6.16e-04 m²/s² on day 3**, during
+  the barotropic adjustment to the WOA density field, and then stays at
+  5.4–6.0e-04 for the rest of the year, higher in austral winter (6.0e-04 on
+  days 180–240) with the westerlies. It ends at 5.39e-04. The unforced year
+  over the same days: 5.9e-04 on day 3, 3.94e-04 on day 365.
 * **Budgets close to round-off, linearly.** The residual grows at the same
   per-day rate as in the unforced run:
 
   | | per day | day 365 |
   |---|---:|---:|
-  | mass | −1.81e-14 | −6.58e-12 |
+  | mass | −1.80e-14 | −6.58e-12 |
   | salt | −4.1e-16 | −1.5e-13 |
-  | heat | −2.8e-16 | −1.0e-13 |
+  | heat | −3.0e-16 | −1.1e-13 |
 
   With no surface fluxes, the wind changes nothing here.
 
-  The tracked boundary term `out` does change. It should be zero in this
-  closed domain. It stays tiny: mass ≤ 82 kg of 1.4e21, salt ≤ 6.0e10 of
-  4.8e22 (1e-12 relative), heat ≤ 1.2e12 J of 5.0e21 (2.5e-10 relative).
-  But it is larger than the unforced run's: heat 1.2e12 J against
-  ≤ 7e10 J over the unforced year (17×); at day 30, −8.5e9 J against
-  ≤ 2.1e9 J. The printed heat total moves in its tenth digit, consistently.
-  So some flux in this closed domain, larger when the flow is stronger, is
-  booked as boundary flow; the tripolar fold seam is the first suspect. It
-  is not a leak in the budget sense, since `Error` stays at round-off, but
-  it is worth one look.
-* **The fastest surface water** (top-10 m daily mean) is **2.70 m/s on
-  day 338**, on the Labrador coast (56.5° W, 53.8° N). Other near-2 m/s
-  maxima sit at single coastal cells:
-  * the Antarctic coast at 85.5° E, 66.5° S (katabatic wind);
-  * southern Brazil, 50.5° W, 30.5° S (2.44 m/s, day 362);
-  * the Tierra del Fuego coast (2.04 m/s, day 300).
-
-  These are wind-driven shelf jets in 9.5–50 m cells. The median over the
-  year of the daily maximum is 1.31 m/s.
+  The tracked boundary term `out` should be zero in this closed domain. It
+  stays tiny, at most mass 137 kg of 1.4e21, salt 9.9e10 of 4.8e22 (2e-12
+  relative), heat 3.5e11 J of 5.0e21 (7e-11 relative). It is larger than
+  the unforced year's (mass 52 kg, salt 7.1e9, heat 5.6e10 J): some flux in
+  this closed domain, larger when the flow is stronger, is booked as
+  boundary flow, with the tripolar fold seam the first suspect. It is not a
+  leak in the budget sense, since `Error` stays at round-off, but it is
+  worth one look.
+* **The fastest surface water** (top-10 m daily mean) is **2.99 m/s on day
+  71**, on the Antarctic coast at 86.5° E, 66.5° S, under the katabatic
+  winds; it lasts a day. Other near-2 m/s maxima sit at single coastal
+  cells: the Brazil–Malvinas box reaches 2.32 m/s (day 265) and the Tierra
+  del Fuego coast 2.03 m/s (day 300). These are wind-driven shelf jets in
+  9.5–50 m cells. The median over the year of the daily maximum is
+  1.32 m/s.
 
   The namelist output has no 3-D velocity, so the 3-D maximum is not
   reported. MaxCFL bounds it.
 
 ### 6.3 Physics sanity
 
-* **The wind drives the western boundary currents.** Over the same boxes,
-  the unforced run's surface maximum stays at 0.21–0.25 m/s (Gulf Stream)
-  and 0.29–0.36 m/s (Kuroshio) all year. Forced, the maxima are:
+The MOM6 twin of this protocol — MOM6 `dev/gfdl` `d74a11f9c`, same grid,
+bathymetry, vertical grid, WOA13 state and stress file, run 90 days — is
+recorded in `python_prototypes/mom6_baselines/global_1deg_wind/`. It is the
+yardstick below.
 
-  | | typical | peak |
+* **Drake Passage carries ~150 Sv, as in MOM6.**
+
+  | | roundabout | MOM6 |
   |---|---:|---:|
-  | Gulf Stream | 0.5–1.0 m/s | 1.85 m/s on day 80 |
-  | Kuroshio | 0.5–1.0 m/s | 1.33 m/s on day 361 |
+  | day 1 (the adjustment surge) | −174.6 Sv | −188.0 Sv |
+  | day 10 | 157.2 Sv | 157.9 Sv |
+  | mean, days 10–90 | 152.4 Sv (140.6–163.3) | 161 Sv (143–171) |
+  | mean, days 91–365 | 151.0 Sv (140.1–164.3) | not run |
+  | day 365 | 152.9 Sv | not run |
+  | SSH step, days 10–365 | 1.34–1.68 m (mean 1.48 m) | 1.56–1.59 m (days 10–90) |
 
-  The Brazil–Malvinas confluence and the Agulhas show the same
-  strengthening. That is the right order for a 1° model in its first year.
-* **The subtropical gyres are there, but only as a barotropic spin-up.**
-  Over the last 30 days, the SSH of the subtropical box minus the subpolar
-  box is:
+  The observed transport is about 130–170 Sv; the observed step about
+  1.2–1.5 m. Sections 4° either side (i = 229, 237) agree to about 1.5 Sv.
+  Like MOM6, the transport comes from the WOA13 density field, not from the
+  wind: starting from rest with `η = 0`, the depth-integrated baroclinic
+  pressure gradient over the topography forces the barotropic mode, which
+  answers within days by external gravity-wave adjustment — the −175 Sv
+  surge on day 1, then about 150 Sv by day 10 with a 1.5 m SSH step across
+  the passage. The wind's share is a few Sv: MOM6's no-wind control carries
+  6–9 Sv less on days 10–15.
 
-  | | model | observed (dynamic topography) |
-  |---|---:|---:|
-  | North Atlantic | +3.5 cm | ≈ 1 m |
-  | North Pacific | +6.3 cm | ≈ 1 m |
+  An earlier version of this run gave **~0 Sv** all year and an SSH step of
+  a few cm. That was a roundabout defect, and this comparison is what found
+  it: the split-explicit scheme discarded the depth mean of the baroclinic
+  PGF, so the barotropic mode never felt JEBAR. MOM6 forces the barotropic
+  mode with that depth mean minus only its free-surface part
+  (`BT_force`/`eta_PF`); roundabout now does the same
+  (`&ocean_bt_nml bc_pgf_forcing`, default on). That fix alone gave
+  73–83 Sv. The FV_MOM6 PGF then evaluated its constant-by-layer density at
+  the surface reference pressure rather than in situ; with the in-situ
+  density (`&ocean_pgf_nml insitu_density`, default on) the transport
+  reaches the ~150 Sv here.
+* **The subtropical gyres match MOM6.** The SSH of the subtropical box
+  minus the subpolar box (N. Atlantic 70–40° W × 25–35° N against
+  50–30° W × 50–60° N; N. Pacific 150° E–170° W × 20–32° N against
+  160° E–170° W × 45–55° N):
 
-  A year is enough for the barotropic Sverdrup response (Rossby-wave time
-  scales of weeks) but not for the baroclinic one (decades).
+  | | roundabout, days 61–90 | MOM6, days 61–90 | roundabout, days 336–365 | observed (dynamic topography) |
+  |---|---:|---:|---:|---:|
+  | North Atlantic | +1.031 m | +1.031 m | +0.955 m | ≈ 1 m |
+  | North Pacific | +0.961 m | +0.967 m | +0.977 m | ≈ 1 m |
+
+  As with Drake, most of this is the initial density field, which the
+  barotropic mode now adjusts to; the wind's Sverdrup response is a small
+  part in one year.
+* **The western boundary currents are too fast.** Maximum top-10 m speed
+  in the boxes:
+
+  | | roundabout, median / peak | roundabout max, days 1–90 | MOM6 max, days 1–90 | unforced roundabout |
+  |---|---:|---:|---:|---:|
+  | Gulf Stream | 0.70 / 1.93 m/s (day 80) | 1.93 | 0.71 | 0.41–0.80 |
+  | Kuroshio | 0.54 / 1.23 m/s (day 205) | 1.09 | 0.74 | 0.37–0.53 |
+
+  So the peaks are 1.5–2.7× MOM6's. The barotropic fix did not change them.
+  The first suspect is the initial state: `om1deg_prepare_inputs.py` maps
+  WOA13 onto the model grid by nearest neighbour, and the resulting density
+  staircase carries thermal-wind jets (§6.4), where MOM6 regrids WOA
+  horizontally. A second is lateral viscosity near the boundary, where
+  OM_1deg adds a 2-D background viscosity file that this configuration does
+  not read. **This is the open question of this run.**
 * **Equatorial currents.** The top-10 m flow over the equatorial Pacific is
-  westward all year: −0.1 to −0.33 m/s, strongest in austral winter–spring
-  (days 180–240) with the trades. That is the South Equatorial Current. The
-  Equatorial Undercurrent is below the 10 m diagnostic and not measured.
-* **Drake Passage transport does NOT grow toward the observed ~130–170 Sv.**
-  It fluctuates around zero all year: −5 Sv on day 90, +5.6 Sv on day 180,
-  a maximum of 19.8 Sv on day 261, +1.7 Sv on day 365. The last 30 days
-  average −0.3 Sv, and sections 4° either side agree to about 1 Sv. The
-  unforced twin, re-run for 30 days with the same transport diagnostic,
-  sits at −2.5 Sv, so the wind adds only a few Sv.
-
-  The rest of the section is consistent with this:
-  * The SSH step across the passage is 8–11 cm, where the observed step is
-    about 1.2 m.
-  * The top-10 m flow is eastward at about 0.1 m/s, but it is compensated
-    by westward flow at depth.
-
-  From rest with `η = 0`, the geostrophic adjustment of the WOA density puts
-  the thermal-wind shear in the water column with ~zero depth-integrated
-  transport. The wind's momentum input into the barotropic mode is then
-  apparently taken out by topographic form stress within days.
-
-  The expectation for this experiment was growth toward O(100) Sv within
-  the year. This run does not show it. Nothing here says whether that is a
-  roundabout defect or a consequence of this protocol (rest, η = 0, no GM,
-  no buoyancy forcing). **It is the open question of this run.** The
-  discriminating experiment is MOM6 OM_1deg on the same protocol: rest,
-  WOA13 January, this stress file, no fluxes.
+  westward all year, −0.003 to −0.34 m/s, strongest in austral
+  winter–spring (days 180–240) with the trades: the South Equatorial
+  Current. On day 30 roundabout has −0.04 m/s where MOM6 has +0.12 m/s;
+  worth a look together with the boundary currents. The Equatorial
+  Undercurrent is below the 10 m diagnostic and not measured.
 
 ### 6.4 The movie
 
