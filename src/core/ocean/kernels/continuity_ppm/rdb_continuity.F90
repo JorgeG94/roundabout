@@ -25,7 +25,7 @@ module rdb_continuity
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_CLAMPED
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_CLAMPED, OBC_PERIODIC
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d, &
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
@@ -2615,11 +2615,17 @@ contains
       ! physical-domain `sum(hTr)` drifts.  BC-aware: periodic / open edges
       ! keep the folded transport.
       if (fold_wall) then
+         ! Re-close the physical walls after the GM / MLE fold.  An MPI seam
+         ! (`has_*` false) is not a wall: zeroing it cut every decomposed
+         ! GM / Fox-Kemper run's transport at the rank seams (the tile edge
+         ! is an interior face the neighbour computes identically).
          bc_w_tag = OBC_WALL
          bc_e_tag = OBC_WALL
          if (present(bc)) then
             bc_w_tag = bc%west%bc_type
             bc_e_tag = bc%east%bc_type
+            if (.not. bc%has_west) bc_w_tag = OBC_PERIODIC
+            if (.not. bc%has_east) bc_e_tag = OBC_PERIODIC
          end if
          do concurrent(kk=1:nz, jj=1:ny)
             if (bc_w_tag == OBC_WALL) ms%mass_flux_x_layer(nghost + 1, jj, kk) = 0.0_wp
@@ -2735,11 +2741,14 @@ contains
       ! No-normal-flow wall closure for the meridional bolus fold (see the
       ! zonal block above for the rationale).
       if (fold_wall) then
+         ! MPI seams are not walls (see the zonal twin above).
          bc_s_tag = OBC_WALL
          bc_n_tag = OBC_WALL
          if (present(bc)) then
             bc_s_tag = bc%south%bc_type
             bc_n_tag = bc%north%bc_type
+            if (.not. bc%has_south) bc_s_tag = OBC_PERIODIC
+            if (.not. bc%has_north) bc_n_tag = OBC_PERIODIC
          end if
          do concurrent(kk=1:nz, ii=1:nx)
             if (bc_s_tag == OBC_WALL) ms%mass_flux_y_layer(ii, nghost + 1, kk) = 0.0_wp
