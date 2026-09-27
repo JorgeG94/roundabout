@@ -151,22 +151,25 @@ module rdb_eos
       !! sets stay independently editable.
 
    ! Wright (1997) coefficients from Table A1 of the paper.  Units: SI
-   ! throughout (T in degC, S in PSU, P in Pa, ρ in kg/m^3).
-   real(wp), parameter :: WRIGHT_A0 = 7.057924e-4_wp
-   real(wp), parameter :: WRIGHT_A1 = 3.480336e-7_wp
-   real(wp), parameter :: WRIGHT_A2 = -1.112733e-7_wp
-   real(wp), parameter :: WRIGHT_B0 = 5.790749e8_wp
-   real(wp), parameter :: WRIGHT_B1 = 3.516535e6_wp
-   real(wp), parameter :: WRIGHT_B2 = -4.002714e4_wp
-   real(wp), parameter :: WRIGHT_B3 = 2.084372e2_wp
-   real(wp), parameter :: WRIGHT_B4 = 5.944068e5_wp
-   real(wp), parameter :: WRIGHT_B5 = -9.643486e3_wp
-   real(wp), parameter :: WRIGHT_C0 = 1.704853e5_wp
-   real(wp), parameter :: WRIGHT_C1 = 7.904722e2_wp
-   real(wp), parameter :: WRIGHT_C2 = -7.984422e0_wp
-   real(wp), parameter :: WRIGHT_C3 = 5.140652e-2_wp
-   real(wp), parameter :: WRIGHT_C4 = -2.302158e2_wp
-   real(wp), parameter :: WRIGHT_C5 = -3.079464e0_wp
+   ! throughout (T in degC, S in PSU, P in Pa, ρ in kg/m^3).  This is the
+   ! REDUCED-range fit — MOM6 `EQN_OF_STATE = "WRIGHT"` / `"WRIGHT_RED"`,
+   ! not `"WRIGHT_FULL"`.  Public so the FV-MOM6 in-situ PGF can inline
+   ! them into its closed-form layer integral (`wright_pcm_dpa_intz`).
+   real(wp), parameter, public :: WRIGHT_A0 = 7.057924e-4_wp
+   real(wp), parameter, public :: WRIGHT_A1 = 3.480336e-7_wp
+   real(wp), parameter, public :: WRIGHT_A2 = -1.112733e-7_wp
+   real(wp), parameter, public :: WRIGHT_B0 = 5.790749e8_wp
+   real(wp), parameter, public :: WRIGHT_B1 = 3.516535e6_wp
+   real(wp), parameter, public :: WRIGHT_B2 = -4.002714e4_wp
+   real(wp), parameter, public :: WRIGHT_B3 = 2.084372e2_wp
+   real(wp), parameter, public :: WRIGHT_B4 = 5.944068e5_wp
+   real(wp), parameter, public :: WRIGHT_B5 = -9.643486e3_wp
+   real(wp), parameter, public :: WRIGHT_C0 = 1.704853e5_wp
+   real(wp), parameter, public :: WRIGHT_C1 = 7.904722e2_wp
+   real(wp), parameter, public :: WRIGHT_C2 = -7.984422e0_wp
+   real(wp), parameter, public :: WRIGHT_C3 = 5.140652e-2_wp
+   real(wp), parameter, public :: WRIGHT_C4 = -2.302158e2_wp
+   real(wp), parameter, public :: WRIGHT_C5 = -3.079464e0_wp
 
    ! ======================================================================
    ! Roquet et al. (2015) specific-volume (SpV) polynomial coefficients.

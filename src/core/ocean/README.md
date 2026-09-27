@@ -566,9 +566,10 @@ wrong input for a pressure GRADIENT far from that pressure: its horizontal
 difference is the one at `p_ref`, and Wright's `α` roughly doubles between the
 surface and 4000 dbar.  That is why FV-MOM6's constant-by-layer branch no longer
 reads `rho_layer` for a pressure-dependent EOS (`&ocean_pgf_nml insitu_density`,
-default on, MOM6 `int_density_dz_generic_pcm` parity): it evaluates
-`EOS(T, S, −g·ρ₀·z)` itself, by the same Boole rules as the reconstruction
-branch.  With `p_ref = 0` the legacy integral held the global 1° Drake Passage
+default on, MOM6 PCM parity): it evaluates
+`EOS(T, S, −g·ρ₀·z)` itself — in closed form under Wright (MOM6
+`int_density_dz_wright`, about the cost of the legacy integral), by the same
+Boole rules as the reconstruction branch under Roquet.  With `p_ref = 0` the legacy integral held the global 1° Drake Passage
 transport at about half of MOM6's (`docs/CLOSURE_MATRIX.md`, PGF section).
 `test_ocean_eos_p_top`'s `rho_layer_independent_of_p_top` is the standing guard
 (it ramps `p_top` across the domain over uniform water and demands the density
