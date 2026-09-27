@@ -425,6 +425,7 @@ contains
       engine%grid%nx_global = engine%decomp%nx_global
       engine%grid%ny_global = engine%decomp%ny_global
       call engine%state%init_from_config(cfg, engine%grid)
+      engine%state%multilayer%mass_out_efp_on = cfg%ocean%diag%reproducing_sums
 
       ! Wire vcoord parameters BEFORE the seed runs — the seed calls
       ! `vcoord%build_zref_full(b)` at its tail, which reads
