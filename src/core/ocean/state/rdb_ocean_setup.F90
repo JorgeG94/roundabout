@@ -58,7 +58,8 @@ module rdb_ocean_setup
                                        ocean_bc_face_tag_t, &
                                        obc_tide_nodal_fill, obc_match_constituent
    use rdb_ocean_sponge, only: sponge_band_alpha, SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
-   use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed
+   use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_metrics, only: metrics_finalize, metrics_fill_cartesian, &
                                 metrics_fill_spherical, metrics_fill_from_supergrid, &
@@ -338,10 +339,18 @@ contains
       ! — and MaxCFL is a max reduction, which is exactly order-invariant,
       ! so that spread could not have been reduction roundoff.  With the
       ! conjunct, px=1 and px=2 agree.
+      ! The periodic flags select a LOCAL wrap of the working wet mask's
+      ! ghosts, which is right only on an axis this rank holds whole: on a
+      ! decomposed periodic axis the wrap ghosts are an MPI seam the
+      ! exchange above already filled, and a local wrap overwrote them with
+      ! the tile's own opposite edge (every rank of a px >= 3 periodic run
+      ! with land near a seam then masked the wrong ghost faces; the
+      ! decomposed-vs-serial bit-identity test caught it on 4x1).  The wall
+      ! flags below carry the edge tags, so nothing else reads these two.
       call metrics_apply_land_mask(ocean_state%metrics, &
                                    ocean_state%multilayer%wet_mask, grid, &
-                                   ocean_state%bc%periodic_x, &
-                                   ocean_state%bc%periodic_y, &
+                                   ocean_state%bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
+                                   ocean_state%bc%periodic_y .and. .not. ocean_halo_is_decomposed_y(), &
                                    ocean_state%bc%north_fold, &
                                    mask_wall_velocity=cfg%ocean%bc%mask_wall_velocity, &
                                    wall_west=(ocean_state%bc%west%bc_type == OBC_WALL &
