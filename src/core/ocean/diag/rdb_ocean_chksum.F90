@@ -279,6 +279,14 @@ contains
       !! than cell centres in their staggered direction (an x-face array
       !! spans `nx_phys + 1` faces), which is why `LOC_U`/`LOC_Q` extend
       !! `i1` by one and `LOC_V`/`LOC_Q` extend `j1`.
+      !!
+      !! A face on an MPI seam belongs to BOTH tiles' ranges, so a tile
+      !! whose west (south) edge is not the grid's west (south) edge —
+      !! global offset > 0 — drops its first face column (row): every face
+      !! is then counted exactly once over the ranks, as on one rank, and
+      !! the face `bits` are decomposition-invariant too.  (A periodic seam
+      !! face is counted twice — as the first and the last face — on EVERY
+      !! decomposition alike.)
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: loc
       integer, intent(out) :: i0, i1, j0, j1
@@ -290,11 +298,15 @@ contains
       select case (loc)
       case (LOC_U)
          i1 = i1 + 1
+         if (grid%i_offset_global > 0) i0 = i0 + 1
       case (LOC_V)
          j1 = j1 + 1
+         if (grid%j_offset_global > 0) j0 = j0 + 1
       case (LOC_Q)
          i1 = i1 + 1
          j1 = j1 + 1
+         if (grid%i_offset_global > 0) i0 = i0 + 1
+         if (grid%j_offset_global > 0) j0 = j0 + 1
       case default
          ! LOC_H (and any unknown tag): plain cell-centre range, already set.
       end select
@@ -350,7 +362,7 @@ contains
    end subroutine rdb_debug_chksum_2d
 
    subroutine chksum_state(grid, ms, probe, label, stage, step)
-      !! Sample the prognostic trio (h, u, v) at a phase seam.  Call
+      !! Sample the prognostics (h, u, v, every tracer) at a phase seam.  Call
       !! AFTER the phase named by `label`; drains device queues first so
       !! the async apply chain has landed.  Bounds come from the
       !! location-aware API (LOC_H / LOC_U / LOC_V), not hand-written.
@@ -360,11 +372,24 @@ contains
       character(len=*), intent(in) :: label
       integer, intent(in) :: stage, step
 
+      integer :: it
+      character(len=16) :: tname
+
       if (.not. chksum_active(probe, step)) return
       !$acc wait
       call rdb_debug_chksum(grid, ms%h_layer, label, "h_layer", stage, step, probe, LOC_H)
       call rdb_debug_chksum(grid, ms%u_face_x_layer, label, "u_face", stage, step, probe, LOC_U)
       call rdb_debug_chksum(grid, ms%v_face_y_layer, label, "v_face", stage, step, probe, LOC_V)
+      ! Every registered tracer (thickness-weighted content), named by its
+      ! registry slot.
+      if (allocated(ms%tracers)) then
+         do it = 1, size(ms%tracers)
+            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            write (tname, "(a,i0)") "hTr_", it
+            call rdb_debug_chksum(grid, ms%tracers(it)%hTr, label, trim(tname), stage, step, &
+                                  probe, LOC_H)
+         end do
+      end if
    end subroutine chksum_state
 
    subroutine chksum_bt(grid, bt_work, probe, label, stage, step)
