@@ -2888,18 +2888,20 @@ module rdb_config
          !! column) with a missing sentinel and tag the NetCDF variable with
          !! `_FillValue` / `missing_value`.  Default `.false.` => those cells
          !! read 0 (bit-identical to the legacy writer).
-      logical :: reproducing_sums = .false.
-         !! PR-32: when `.true.`, the ocean console-conservation totals
-         !! (Mass/KE/Salt/Heat + sea-ice area) use order-invariant
-         !! extended-fixed-point (EFP) summation (`rdb_efp` +
-         !! `halo_allreduce_efp_list`) instead of plain FP
+      logical :: reproducing_sums = .true.
+         !! PR-32: when `.true.` (the DEFAULT since v0.1.0), the ocean
+         !! console-conservation totals (Mass/KE/Salt/Heat + sea-ice area)
+         !! and the salt/heat closed-budget `out`/`src` terms use
+         !! order-invariant extended-fixed-point (EFP) summation
+         !! (`rdb_efp` + `halo_allreduce_efp_list`) instead of plain FP
          !! `!$acc parallel loop reduction(+:acc)` + `MPI_SUM` — the
-         !! printed totals become bit-identical across rank counts and
-         !! reduction orders, and the `Error` residual is formed via
+         !! printed console is identical on every rank count (1 included)
+         !! and reduction order, and the `Error` residual is formed via
          !! `efp_real_diff` (a fixed-point difference) rather than a
-         !! double subtraction of two already-quantised totals.  Default
-         !! `.false.` => the console block is byte-identical to the
-         !! pre-PR-32 output.  See
+         !! double subtraction of two already-quantised totals.  It runs
+         !! only at the status cadence and changes diagnostic TEXT only,
+         !! never the trajectory.  `.false.` restores the pre-PR-32 FP
+         !! console (whose last digits depend on the decomposition).  See
          !! `docs/CAPABILITIES_AND_LIMITATIONS.md`'s conservation-contract
          !! section for the achievable guarantee + the `EFP_MAX_RANKS =
          !! 131072` envelope.
@@ -10871,8 +10873,9 @@ contains
                              "Mask below-bottom/pinched remap cells to missing_value (default off)"))
       pl => cfg%ocean%diag%reproducing_sums
       call g%add(nml_logical("reproducing_sums", pl, &
-                             "Order-invariant EFP console totals: rank-count reproducible, "// &
-                             "exact drift residual (default off = byte-identical)"))
+                             "Order-invariant EFP console totals + budget terms: identical "// &
+                             "console on every rank count, exact drift residual "// &
+                             "(.false. = the pre-v0.1.0 FP sums)"))
       ps => cfg%ocean%diag%output_precision
       call g%add(nml_enum("output_precision", ps, &
                           "Element width of the diag NetCDF data vars; "// &
