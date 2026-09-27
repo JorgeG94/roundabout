@@ -569,7 +569,9 @@ reads `rho_layer` for a pressure-dependent EOS (`&ocean_pgf_nml insitu_density`,
 default on, MOM6 PCM parity): it evaluates
 `EOS(T, S, −g·ρ₀·z)` itself — in closed form under Wright (MOM6
 `int_density_dz_wright`, about the cost of the legacy integral), by the same
-Boole rules as the reconstruction branch under Roquet.  With `p_ref = 0` the legacy integral held the global 1° Drake Passage
+Boole rules as the reconstruction branch under Roquet, with the SpV
+polynomial's (T, S) part hoisted out of the five pressure points (global 1°,
+V100: `ocean_pgf` 1.9 s Wright, 3.6 s Roquet, 1.1 s legacy).  With `p_ref = 0` the legacy integral held the global 1° Drake Passage
 transport at about half of MOM6's (`docs/CLOSURE_MATRIX.md`, PGF section).
 `test_ocean_eos_p_top`'s `rho_layer_independent_of_p_top` is the standing guard
 (it ramps `p_top` across the domain over uniform water and demands the density
