@@ -343,12 +343,10 @@ contains
          !! take the EFP path too (one extra collective per active budget),
          !! so every printed number is independent of the rank count; the
          !! primary totals feeding the `Error` residual also get the
-         !! `efp_real_diff` treatment.  The cumulative open-boundary
-         !! `mass_out`/`mass_src` scalars are each rank's own running FP
-         !! sum, combined exactly here but accumulated in a
-         !! decomposition-dependent order over the steps — on an OBC run
-         !! those two terms can differ in the last digits across rank
-         !! counts.
+         !! `efp_real_diff` treatment.  The cumulative `mass_out` is
+         !! accumulated per step in EFP bins too (`mass_out_efp_on`, set
+         !! from this knob); the cavity-only `mass_src` stays an FP running
+         !! sum (single-rank path).
       real(wp), intent(in), optional :: budget_stage_weight
          !! Per-outer-step weight for the salt/heat budget accumulators, from
          !! `ocean_budget_stage_weight(is_pc)`.  Absent ⇒ the historical
@@ -444,7 +442,11 @@ contains
                                         ice_ncat, grid%nghost, &
                                         efp_local(IX_WET), efp_local(IX_CI), efp_local(IX_HI))
          end if
-         efp_local(IX_MOUT) = efp_from_real(real(ms%mass_out, real64))
+         if (ms%mass_out_efp_on) then
+            efp_local(IX_MOUT)%v = ms%mass_out_efp
+         else
+            efp_local(IX_MOUT) = efp_from_real(real(ms%mass_out, real64))
+         end if
          efp_local(IX_MSRC) = efp_from_real(real(ms%mass_src, real64))
 
          call halo_allreduce_efp_list(efp_local, efp_global, NVAL_EFP)

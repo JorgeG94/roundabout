@@ -136,7 +136,9 @@ module rdb_ocean_dyn
    use rdb_profiler, only: profiler_start, profiler_stop
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
-   use, intrinsic :: iso_fortran_env, only: output_unit, int64
+   use, intrinsic :: iso_fortran_env, only: output_unit, int64, real64
+   use rdb_efp, only: efp_carry, EFP_DIGITS
+   use rdb_ocean_console_stats, only: efp_decompose_impl
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -2315,6 +2317,9 @@ contains
       real(wp), intent(in) :: dt, weight
       integer :: i, j, k, nz, nx, ny, i_lo, i_hi, j_lo, j_hi
       real(wp) :: acc
+      integer(int64) :: e1, e2, e3, e4, e5, e6, d1, d2, d3, d4, d5, d6
+      integer(int64) :: slab_e(EFP_DIGITS)
+      real(real64) :: val, scale, colsum
 
       nx = min(size(flux_h_layer, 1), size(areaT, 1))
       ny = min(size(flux_h_layer, 2), size(areaT, 2))
@@ -2336,6 +2341,43 @@ contains
       ! = leaving) is its negative.
       ms%mass_out = ms%mass_out + weight*dt*RHO_WATER*acc
       ms%mass_out_tracked = .true.
+      if (ms%mass_out_efp_on) then
+         ! Order-invariant twin.  Each COLUMN's contribution is formed in a
+         ! fixed k order (the same on every decomposition), decomposed into
+         ! fixed-point bins, and the bins added exactly -- one 2-D reduction
+         ! per call, so the running sum depends on neither the decomposition
+         ! nor the reduction order.
+         scale = real(weight*dt*RHO_WATER, real64)
+         e1 = 0_int64
+         e2 = 0_int64
+         e3 = 0_int64
+         e4 = 0_int64
+         e5 = 0_int64
+         e6 = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6) &
+         !$acc&         private(val, colsum, d1, d2, d3, d4, d5, d6) present(flux_h_layer, areaT)
+         do j = j_lo, j_hi
+            do i = i_lo, i_hi
+               colsum = 0.0_real64
+               !$acc loop seq
+               do k = 1, nz
+                  colsum = colsum + real(flux_h_layer(i, j, k), real64)
+               end do
+               val = scale*colsum*real(areaT(i, j), real64)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+            end do
+         end do
+         slab_e = [e1, e2, e3, e4, e5, e6]
+         call efp_carry(slab_e)
+         ms%mass_out_efp = ms%mass_out_efp + slab_e
+         call efp_carry(ms%mass_out_efp)
+      end if
    end subroutine ocean_accumulate_mass_out
 
    pure subroutine rk2_average(ms)

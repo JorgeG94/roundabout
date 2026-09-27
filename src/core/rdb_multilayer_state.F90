@@ -22,6 +22,7 @@ module rdb_multilayer_state
    use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
 #endif
    use rdb_grid, only: hgrid_t
+   use rdb_efp, only: EFP_DIGITS
    use rdb_tracer, only: tracer_t, TRACER_BUDGET_NONE, TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use rdb_mem_report, only: arr_bytes
    use pic_logger, only: global_logger
@@ -51,6 +52,15 @@ module rdb_multilayer_state
          !! boundaries since t=0 (positive = outflow), accumulated per RK2
          !! stage from the continuity divergence (`flux_h_layer`) so the
          !! console mass `Error` closes to round-off even with open BCs.
+      logical :: mass_out_efp_on = .false.
+         !! Also accumulate `mass_out` as an order-invariant extended-fixed-
+         !! point sum (`mass_out_efp`), set from `&ocean_diag_nml
+         !! reproducing_sums`: the FP running sum's last digits depend on the
+         !! decomposition (it is a telescoping sum of large cancelling terms),
+         !! the EFP one does not, so the console `out` column is the same on
+         !! every rank count.
+      integer(int64) :: mass_out_efp(EFP_DIGITS) = 0_int64
+         !! This rank's `mass_out` as EFP bins (`rdb_efp` layout).
       logical :: mass_out_tracked = .false.
          !! Set once the dyn step has accumulated `mass_out`, so the console
          !! only activates the mass budget on a path that feeds it.
