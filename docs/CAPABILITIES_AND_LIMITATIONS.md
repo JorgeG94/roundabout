@@ -14,7 +14,8 @@ EOS + Smagorinsky KH/AH + KPP + ALE remap. The MOM6-reference double-gyre
 setup runs stable to day 580 on a single V100. Most physics slots are
 wired; deferred work is the Hollingsworth-Källén Coriolis correction,
 full KPP (V_t² + non-local), non-hydrostatic on the C-grid, and parts of
-the MPI surface. See the [**Ocean path**](#ocean-path-sim_typeocean)
+the MPI surface (see [*MPI (domain decomposition)*](#mpi-domain-decomposition)
+for what decomposes bit-identically and what is refused). See the [**Ocean path**](#ocean-path-sim_typeocean)
 section for the detailed shipped surface — it is the authority for
 everything below. Production-ready for regional hydrostatic ocean
 configurations within those limits.
@@ -233,6 +234,104 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 - Lagrangian drifters
 - Parallel collective NetCDF
 - In-situ visualization
+
+---
+
+## MPI (domain decomposition)
+
+**The contract: a decomposed run IS the serial run.** Every owned value of
+every prognostic field is bit-identical to the single-rank run on every
+supported decomposition — not a global integral that agrees to round-off.
+The gate is `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1, 2 and 4
+ranks: every `px x py` factorisation — 2x1, 1x2, 4x1, 2x2, 1x4 — of seven
+configurations under both `pred_corr` and `ssp_rk2`, 48 steps, every field
+of the restart registry plus the barotropic `eta`, compared bitwise over
+the owned cells). The configurations: a closed basin with an interior
+island, a periodic seamount channel on z* with porous barriers, a tidal /
+Flather open-boundary basin on zstar_sigma, a spherical sector (planetary
+f, Wright EOS), an Orlanski + reservoir / clamped / west-sponge open
+basin, the spherical sector with the closure set (EPBL, Fox-Kemper MLE,
+GM + MEKE, Redi, kappa-shear, tidal mixing, convective adjustment,
+geothermal heating, tracer hdiff), and the file-reader case below. It
+passes on gfortran (CPU ranks) and nvfortran (one V100 per rank).
+The tripolar north fold has its own gate,
+`tests/mpi/test_ocean_tripolar_fold_mpi` (north-south splits).
+
+- **Process grid.** `&mpi_nml px/py` left at the default `1 x 1` on more
+  than one rank is chosen by the engine: north-south (`px = 1, py = N`)
+  under a tripolar fold, the perimeter-minimising factorisation otherwise.
+  An explicit `px*py` that does not match the rank count is refused.
+- **File inputs are read per rank.** The supergrid (mosaic), bathymetry and
+  z-level T/S IC readers read the file's whole-grid variables through
+  start/count windows: the supergrid and bathymetry readers the full-width
+  band of rows covering the tile (plus ghosts; the supergrid one padding
+  row more), assembled as the single-rank code would and cut to the tile;
+  the IC reader the tile's own window. `&ocean_dataovr_nml` forcing was
+  already windowed. Every tile equals its slice of the serial arrays,
+  seam ghosts included.
+- **Console.** `&ocean_diag_nml reproducing_sums = .true.` is the default,
+  so the status block prints the same digits on every rank count (budget
+  `out`/`src` columns included; see *The summation-order floor* below).
+- **Restarts** are per-rank and resume only on the SAME decomposition
+  (checked on read, fail-loud).
+- **CUDA-aware MPI**: a multi-GPU run needs `-DRDB_CUDA_AWARE_MPI=ON` (the
+  driver refuses a host-staged multi-GPU build) and `CUDA_VISIBLE_DEVICES`
+  pinned per rank before `MPI_Init` (see CLAUDE.md, *MPI*).
+
+**Refused at configure on more than one rank** (fail-loud, every rank,
+with a message naming the knob; keyed on the ACTUAL rank count in
+`engine_setup`, so an auto-factored process grid cannot slip past):
+
+| Feature | Why |
+|---|---|
+| `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
+| `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
+| `&ocean_ice_nml enable` (thermo, ITD transport, EVP) | the sea-ice slot has no cross-rank halo exchange |
+| `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
+| `&ocean_vmix_nml dt_tracer_advect_ratio > 1` | the windowed drain's halo is not wired |
+| tripolar fold with `px > 1`, or a north tile shorter than `nghost + 1` rows | the fold is applied by the rank holding the whole fold row; the distributed (east-west) fold exchange does not exist |
+| in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
+| `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |
+| an explicit `&ocean_bt_nml bt_halo` wider than the smallest tile | the wide ghost ring must fit inside the tile |
+
+**Not refused, but not bit-identical across decompositions** (known,
+documented, the only such paths found):
+- **The barotropic march-in** (`&ocean_bt_nml bt_halo > 0`) differs from
+  the serial run at round-off over variable bathymetry and grossly with
+  open boundaries. It is therefore OPT-IN: the default (`bt_halo = -1`,
+  AUTO) resolves to 0 on every rank count, and a multi-rank run that sets it
+  explicitly logs a warning.
+- **An EAST legacy `'sponge'` edge together with a `'clamped'` north edge**,
+  split in x, drifts at round-off on the east boundary face.  A west sponge
+  edge (alone, or with Orlanski-open and clamped edges) and every other
+  combination tested are exact.
+
+**Not yet**: the distributed tripolar fold (`px > 1` on the global grid),
+resuming a restart on a different rank count, a parallel (collective) NetCDF
+writer (diagnostics and restarts are per-rank files, merged offline by
+`tools/merge_output.py`).
+
+**Global 1-degree (`validation_examples/ocean/global_1deg/`)**: runs on
+1, 2 and 4 ranks (north-south splits), the state bit-identical across rank
+counts; wall time per simulated day in the table below.
+
+2-day runs of `global_1deg_unforced.nml` (360 x 320 x 50, dt = 1800 s,
+48 steps/day), stepping wall time only, tripolar north-south splits
+(px = 1, py = ranks).  The final state (h, u, v, T, S, the barotropic
+fields, via the decomposition-invariant `&ocean_debug_nml chksum` bits) and
+the whole console block are identical on 1, 2 and 4 ranks on each
+platform; the 1-rank V100 run matches `reference_daily.csv` at 0.000 %.
+The wind-forced `global_1deg_wind.nml` (the `&ocean_dataovr_nml` stress
+file) is likewise identical on 1 and 2 V100s over one day.
+
+| Ranks | V100s, one per rank (nvfortran 26.5, HPC-X, CUDA-aware) | CPU cores, one per rank (gfortran 15.1, OpenMPI 5.0.5, Xeon E5-2698 v4) |
+|---|---|---|
+| 1 | 12.9 s / simulated day | 910 s / simulated day |
+| 2 | 8.1 s / day (1.6x) | 492 s / day (1.85x) |
+| 4 | 5.8 s / day (2.2x) | 252 s / day (3.6x) |
+
+At 1 degree a V100 is under-filled (5.8 M cells, 1.4 M per GPU on 4); the
+GPU scaling is halo-latency bound, the CPU scaling near-linear.
 
 ---
 
@@ -917,9 +1016,9 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   whole grid (a transient global-size metric set per rank at configure).
   **East-west splits (`px > 1`) are refused at configure** — the fold row
   must be whole on one rank until the distributed fold exchange exists —
-  as is a tile shorter than `nghost + 1` rows (`ny/py`), and
-  `grid_config = "supergrid"` on more than one rank (the mosaic reader
-  loads the whole grid into one tile).
+  as is a tile shorter than `nghost + 1` rows (`ny/py`).  The `supergrid`
+  (mosaic) reader is windowed per rank (see *MPI (domain decomposition)*),
+  so the MOM6 OM_1deg grid runs split north-south too.
   The `supergrid` reader applies the SAME ghost-metric topology as the
   analytic `tripolar` (`metrics_fold_periodic_ghosts`) whenever the edge
   tags say periodic-x and/or `tripolar_fold`, spans the periodic seam
@@ -1373,18 +1472,19 @@ When a budget term is not instrumented (see limitations below) the console falls
 
 ### The summation-order floor, and the `reproducing_sums` escape hatch (PR-32)
 
-By default every `Q_total` above is a plain floating-point `!$acc parallel loop reduction(+:acc)` device reduction, combined across ranks by `MPI_SUM` on doubles.  Neither is associative or order-deterministic: a changed rank count, a changed domain decomposition, or a changed GPU reduction-tree shape can all change the last few bits of `Q_total` — and `Q_ref` is latched as a `real(wp)` (double), so even a perfectly exact sum feeding an unchanged `(Q_total - Q_ref)` subtraction would still be quantised to ~1 ulp of `Q_total` (for a basin-scale `Q_total ~ 1e21`, that ulp is ~1.3e5 in absolute units — precisely the band the `Error` column is asked to resolve).  Two consequences:
+**Since v0.1.0 `reproducing_sums = .true.` is the DEFAULT**, so the console is identical on every rank count (1 included).  With `reproducing_sums = .false.` (the pre-v0.1.0 behaviour) every `Q_total` above is a plain floating-point `!$acc parallel loop reduction(+:acc)` device reduction, combined across ranks by `MPI_SUM` on doubles.  Neither is associative or order-deterministic: a changed rank count, a changed domain decomposition, or a changed GPU reduction-tree shape can all change the last few bits of `Q_total` — and `Q_ref` is latched as a `real(wp)` (double), so even a perfectly exact sum feeding an unchanged `(Q_total - Q_ref)` subtraction would still be quantised to ~1 ulp of `Q_total` (for a basin-scale `Q_total ~ 1e21`, that ulp is ~1.3e5 in absolute units — precisely the band the `Error` column is asked to resolve).  Two consequences of turning it off:
 
-- **`Total mass` / `Total KE` / `Total salt` / `Total heat` are NOT rank-count-reproducible** with `reproducing_sums = .false.` (the default) — the printed totals drift at round-off (~1e-14 to 1e-15 relative) when the decomposition changes, even for bit-identical physics.
+- **`Total mass` / `Total KE` / `Total salt` / `Total heat` are NOT rank-count-reproducible** with `reproducing_sums = .false.` — the printed totals drift at round-off (~1e-14 to 1e-15 relative) when the decomposition changes, even for bit-identical physics.
 - **The `Error` floor is set by summation noise, not physics**, at that same ~1e-14 to 1e-15 relative band.
 
-`&ocean_diag_nml reproducing_sums = .true.` routes `Total mass` / `Total KE` / `Total salt` / `Total heat` (and the sea-ice area totals) through an Extended-Fixed-Point (EFP) reproducing sum (Hallberg & Adcroft 2014; `src/framework/rdb_efp.F90` + the comm-facade `halo_allreduce_efp_list`, ONE collective in place of the default path's several separate `MPI_SUM` calls) and forms the `Error` residual by differencing in FIXED POINT (`efp_real_diff`) rather than subtracting two already-quantised doubles.  With it on:
+`&ocean_diag_nml reproducing_sums = .true.` (the default) routes `Total mass` / `Total KE` / `Total salt` / `Total heat` (and the sea-ice area totals) through an Extended-Fixed-Point (EFP) reproducing sum (Hallberg & Adcroft 2014; `src/framework/rdb_efp.F90` + the comm-facade `halo_allreduce_efp_list`, ONE collective in place of the default path's several separate `MPI_SUM` calls) and forms the `Error` residual by differencing in FIXED POINT (`efp_real_diff`) rather than subtracting two already-quantised doubles.  With it on:
 
 - The printed totals become **bit-identical across rank counts and reduction/decomposition orders** (EFP's decomposition is a pure function of each summand's value; integer bin addition is exact and order-invariant, modulo the bounds below).
 - The residual floor drops to the EFP quantum (`2^-3P` per summand, aggregated `<= N * 2^-3P` over `N` cells) — around `1e-54` relative against a `~1e21` total, i.e. the floor becomes irrelevant to any physically-meaningful drift rather than merely "exact".
 - **Rank envelope**: `EFP_MAX_RANKS = 2^(53 - 36) = 131072`.  The cross-rank combine transports the six fixed-point bins as exactly-representable `real64` values (there is no `integer(int64)` MPI allreduce in `pic_mpi_lib`), which is exact only while every partial sum a rank count could form stays `<= 2^53`; both this bound and the per-summand bin-1 bound are enforced fail-loud (`error stop`), never a silent fallback.  131072 ranks is far beyond any Roundabout run.
-- Default is `.false.` ⇒ the console block (and every latched `console_stats_t` field) is byte-identical to the pre-PR-32 output — this knob changes diagnostic TEXT only, never the prognostic trajectory.
-- Scope: the primary totals feeding `Error` (Mass/KE/Salt/Heat + sea-ice area) go through EFP; the salt/heat closed-budget `out`/`src` terms (the boundary-outflux and surface-source corrections above) remain on the pre-existing FP `halo_allreduce_sum` path in both branches — their individual magnitudes are typically much smaller than the total, so the summation-order floor is proportionately less consequential there. `compute_max_cfl` is untouched by this knob in either branch: a global max is already exact and order-invariant in floating point, so there is nothing to fix.
+- The knob changes diagnostic TEXT only, never the prognostic trajectory.  `.false.` restores the pre-PR-32 console byte-for-byte.
+- **Cost**: the EFP totals run only when the console fires (the status cadence); the one per-step piece is the mass `out` accumulator (a 2-D EFP reduction of each column's divergence, formed in a fixed k order).  Global 1-degree grid (360 x 320 x 50), one V100, daily status: 25.77 s vs 25.63 s of stepping for two days (**+0.5 %**); with a status report every step, about 0.05 s per report.
+- Scope: the primary totals feeding `Error` (Mass/KE/Salt/Heat + sea-ice area) AND the salt/heat closed-budget `out`/`src` terms (the boundary-outflux and surface-source corrections above) go through EFP, so every printed number is decomposition-independent.  The mass `out` term is accumulated per step in EFP bins as well; only the cavity-only mass `src` (a single-rank path) stays an FP running sum. `compute_max_cfl` is untouched by this knob in either branch: a global max is already exact and order-invariant in floating point, so there is nothing to fix.
 
 ### Instrumented paths
 

@@ -167,6 +167,27 @@ CUDA_VISIBLE_DEVICES=0 /path/to/build/rdb global_1deg_unforced.nml > run.log
 (`Error` = the relative closure residual, `out` = the tracked boundary
 flux, which is round-off in this closed domain).
 
+**On several ranks** (MPI build, `-DRDB_ENABLE_MPI=ON`; several GPUs also need
+`-DRDB_CUDA_AWARE_MPI=ON`): the same namelist runs unchanged — with
+`&mpi_nml` unset the engine splits the tripolar grid north-south (`px = 1`,
+`py = ranks`; the fold is single-rank in x) and every rank reads only its
+band of the three input files.  Pin one GPU per rank BEFORE `MPI_Init`:
+
+```bash
+cat > pin.sh <<'SH'
+#!/bin/bash
+export CUDA_VISIBLE_DEVICES=$OMPI_COMM_WORLD_LOCAL_RANK
+exec "$@"
+SH
+chmod +x pin.sh
+mpirun -np 4 ./pin.sh /path/to/build/rdb global_1deg_unforced.nml > run.log
+```
+
+The state and the console are bit-identical to the 1-rank run (the console
+uses the reproducing sums by default).  Measured, 2 days: 12.9 / 8.1 / 5.8 s
+per simulated day on 1 / 2 / 4 V100s (`docs/CAPABILITIES_AND_LIMITATIONS.md`,
+*MPI (domain decomposition)*, has the CPU numbers).
+
 ### The same run through the Python interface
 
 `run_global_1deg.py` builds the same configuration knob by knob with the
