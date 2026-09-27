@@ -902,11 +902,12 @@ module rdb_config
          !! under `form = "fv_mom6"` (fail-loud at configure otherwise).
          !!
          !! Cost: 5 EOS evaluations per layer + 15 per face per layer (T and
-         !! S vary through the layer, so no closed form and no hoisting).
-         !! Global 1-degree PPM, 5 days, one V100: `ocean_pgf` 6.1 s under
-         !! `wright` (density inline, was 13.7 s), 12.6 s under
-         !! `roquet_spv` (was 14.6 s) — against 1.9 / 3.6 s for the PCM
-         !! in-situ default.
+         !! S vary through the layer, so no closed form and no hoisting),
+         !! each inlined into a kernel that runs one GPU thread per CELL
+         !! (edges, layer and face integrals alike).  Global 1-degree PPM,
+         !! 5 days, one V100: `ocean_pgf` 3.5 s under `wright` (was 13.7 s,
+         !! then 6.0 s), 6.6 s under `roquet_spv` (was 14.6 s, then
+         !! 12.4 s) — against 1.9 / 2.5 s for the PCM in-situ default.
       integer :: recon_scheme = 1
          !! In-layer reconstruction scheme: 1 = PLM, 2 = PPM.  Mirrors
          !! MOM6 `Recon_Scheme`.  Only consulted when
@@ -934,9 +935,11 @@ module rdb_config
          !!   * `roquet_spv` — no closed form (the integrand `1/SV(p)` is
          !!     rational in depth); the 5-point Boole rule of MOM6
          !!     `int_density_dz_generic_pcm`, with the (T, S) part of the EOS
-         !!     evaluated ONCE per sub-column (`roquet_pcm_dpa_intz`) and only
-         !!     the pressure Horner per Boole point.  `ocean_pgf` 3.64 s
-         !!     (was 10.73 s), time loop 56.9 s (+5 %, was 63.9 s).
+         !!     evaluated ONCE per sub-column (`roquet_pcm_dpa_intz`, the SpV
+         !!     value inlined from `rdb_roquet_spv.inc`) and only the
+         !!     pressure Horner per Boole point.  `ocean_pgf` 2.55 s (was
+         !!     10.73 s, then 3.64 s with the (T, S) part an out-of-line
+         !!     call), time loop 55.8 s (+3 %, was 63.9 s): 1.36x Wright.
          !! Both run their integrals one GPU thread per CELL, not per column.
       logical :: p_top_in_bc = .false.
          !! Add the top-of-column load `multilayer_state_t%p_top` (Pa) to
@@ -991,11 +994,12 @@ module rdb_config
          !! (value only — `roquet_spv_value`; the derivatives cost as much
          !! again and are computed only where a consumer uses them).  Where
          !! it shows (global 1-degree, 5 days, one V100, FV-MOM6 in-situ
-         !! default): `ocean_pgf` 1.09 s linear, 1.86 s Wright (analytic),
-         !! 3.64 s Roquet (factored Boole); time loop 54.2 / 55.0 / 56.9 s.
+         !! default): `ocean_pgf` 1.09 s linear, 1.88 s Wright (analytic),
+         !! 2.55 s Roquet (factored Boole); time loop 54.3 / 55.1 / 55.8 s.
          !! On the CPU (gfortran) the gap is wider: `rho_layer` is ~7x
-         !! dearer under Roquet than Wright, and `benchmark_ale` (Roquet)
-         !! runs 42 s -> 15 s with the factored integral.
+         !! dearer under Roquet than Wright, and `benchmark_ale` (Roquet,
+         !! 8 steps) spends 4.9 s in `ocean_pgf` (33.1 s with the generic
+         !! Boole rule, 6.5 s factored but unvectorised).
       character(len=16) :: tfreeze_set = "seaice"
          !! Named seawater freezing-point (liquidus) coefficient set for
          !! `eos_freezing_point`, which evaluates the linear form
