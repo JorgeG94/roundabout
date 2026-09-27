@@ -62,6 +62,16 @@ module test_ocean_pgf_eos_fast
    real(wp), parameter :: TOL_ULP = 4.0_wp*epsilon(1.0_wp)
       !! Relative bound for "the same expression, compiled twice" -- equal
       !! but for an FMA contraction choice.
+   real(wp), parameter :: TOL_ULP_CANCEL = 16.0_wp*epsilon(1.0_wp)
+      !! The same, for d(SV)/dT, a sum of polynomial terms that CANCEL near
+      !! the temperature of maximum density: nvfortran -fast reassociates
+      !! the two compilations differently and measured 9 ulp (2.07e-15) of
+      !! d(SV)/dT at T = -1.9 degC, where it is 2.6e-8, against 1.1e-16 on
+      !! gfortran.  Measured against DSVDT_SCALE below, not its own value.
+   real(wp), parameter :: DSVDT_SCALE = 1.0e-7_wp
+      !! Physical scale of d(SV)/dT (m3/kg/K): alpha ~ 1e-4 /K times
+      !! SV ~ 9.7e-4 m3/kg.  A relative error measured against d(SV)/dT
+      !! itself blows up where it passes through zero.
 
 contains
 
@@ -217,10 +227,12 @@ contains
       real(wp), parameter :: P_SET(4) = [0.0_wp, 1.0e6_wp, 2.0e7_wp, 6.0e7_wp]
       type(eos_t) :: eos
       real(wp) :: sv_v, sv_p, d1, d2, rho_a, rho_b, dt_a, ds_a, dt_b, ds_b, err, max_err
+      real(wp) :: max_err_dt
       integer :: it, is, ip, iv
       character(len=200) :: msg
 
       max_err = 0.0_wp
+      max_err_dt = 0.0_wp
       do ip = 1, size(P_SET)
          do is = 1, N_S
             do it = 1, N_T
@@ -236,17 +248,18 @@ contains
                   call eos_specvol_derivs(eos, T_SET(it), S_SET(is), P_SET(ip), dt_a, ds_a)
                   call eos_density_specvol_derivs(eos, T_SET(it), S_SET(is), P_SET(ip), &
                                                   rho_b, dt_b, ds_b)
-                  err = max(abs(rho_a - rho_b)/abs(rho_a), abs(dt_a - dt_b)/abs(dt_a), &
-                            abs(ds_a - ds_b)/abs(ds_a))
+                  err = max(abs(rho_a - rho_b)/abs(rho_a), abs(ds_a - ds_b)/abs(ds_a))
                   max_err = max(max_err, err)
+                  max_err_dt = max(max_err_dt, &
+                                   abs(dt_a - dt_b)/max(abs(dt_a), DSVDT_SCALE))
                end do
             end do
          end do
       end do
-      write (msg, '(a,es10.3)') "value-only / fused EOS vs separate calls: max rel diff ", &
-         max_err
+      write (msg, '(a,es10.3,a,es10.3)') "value-only / fused EOS vs separate calls: max rel diff ", &
+         max_err, "; d(SV)/dT vs its scale ", max_err_dt
       call global_logger%info(trim(msg))
-      call check(error, max_err <= TOL_ULP, trim(msg))
+      call check(error, max_err <= TOL_ULP .and. max_err_dt <= TOL_ULP_CANCEL, trim(msg))
    end subroutine test_entry_points
 
    subroutine column_edges(t_t, t_b, t_m, s_t, s_b, s_m)
