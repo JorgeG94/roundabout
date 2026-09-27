@@ -189,7 +189,8 @@ contains
 
    subroutine test_bt_halo_default_sentinel(error)
       !! The shipping default must be the AUTO sentinel (-1), not a concrete
-      !! width — resolution to 0/8 happens later in the driver.
+      !! width — resolution (to 0; the march-in is opt-in) happens later in
+      !! the driver.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       call check(error, cfg%ocean%bt%bt_halo == BT_HALO_AUTO_SENTINEL, &
@@ -197,7 +198,7 @@ contains
       if (allocated(error)) return
       call check(error, BT_HALO_AUTO_SENTINEL == -1, "AUTO sentinel changed from -1")
       if (allocated(error)) return
-      call check(error, BT_HALO_AUTO_WIDTH == 8, "AUTO width changed from 8")
+      call check(error, BT_HALO_AUTO_WIDTH == 8, "recommended explicit width changed from 8")
    end subroutine test_bt_halo_default_sentinel
 
    subroutine test_resolve_bt_halo(error)
@@ -209,9 +210,10 @@ contains
       ! AUTO, serial => 0 (bit-identical to the historical default).
       call check(error, resolve_bt_halo(AUTO, 1, .false.) == 0, "auto serial clean should be 0")
       if (allocated(error)) return
-      ! AUTO, multi-rank, clean => the validated width (8).
-      call check(error, resolve_bt_halo(AUTO, 2, .false.) == BT_HALO_AUTO_WIDTH, &
-                 "auto multi-rank clean should be 8")
+      ! AUTO, multi-rank, clean => 0 as well: the march-in is opt-in (it is
+      ! not bit-reproducible against the serial run; test_ocean_decomp_bitid_mpi).
+      call check(error, resolve_bt_halo(AUTO, 2, .false.) == 0, &
+                 "auto multi-rank clean should be 0 (march-in is opt-in)")
       if (allocated(error)) return
       ! AUTO, multi-rank, but an exclusion is active => 0.
       call check(error, resolve_bt_halo(AUTO, 2, .true.) == 0, &

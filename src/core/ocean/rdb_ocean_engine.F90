@@ -384,16 +384,32 @@ contains
       call bt_halo_auto_exclusion(cfg, bt_excluded, bt_excl_reason)
       bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded)
       cfg%ocean%bt%bt_halo = bt_halo_res
-      if (rank == 0 .and. bt_halo_req == BT_HALO_AUTO_SENTINEL) then
-         if (bt_halo_res > 0) then
-            call logger%info("BT march-in: bt_halo auto -> "// &
-                             to_string(bt_halo_res)//" (multi-rank)")
-         else if (csize <= 1) then
-            call logger%info("BT march-in: bt_halo auto -> 0 (serial)")
+      ! An EXPLICIT width must fit inside the smallest tile too (the wide
+      ! clone's ghost ring is filled from the tile's own interior); refuse it
+      ! here with a status instead of the enable step's `error stop`.
+      if (bt_halo_res > 0 .and. &
+          cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) > min(cfg%nx/cfg%px, cfg%ny/cfg%py)) then
+         call fail("&ocean_bt_nml bt_halo = "//to_string(bt_halo_res)//" does not fit: "// &
+                   "nghost + bt_halo = "//to_string(cfg%nghost + bt_halo_res - mod(bt_halo_res, 2))// &
+                   " exceeds the smallest tile ("//to_string(min(cfg%nx/cfg%px, cfg%ny/cfg%py))// &
+                   " cells).  Reduce bt_halo (or leave it on auto) or use fewer ranks.", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (rank == 0 .and. bt_halo_req == BT_HALO_AUTO_SENTINEL .and. csize > 1) then
+         if (bt_excluded) then
+            call logger%info("BT march-in: bt_halo auto -> 0 ("// &
+                             trim(bt_excl_reason)//" active)")
          else
-            call logger%info("BT march-in: bt_halo auto -> 0 "// &
-                             "(auto disabled: "//trim(bt_excl_reason)//" active)")
+            call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
+                             "&ocean_bt_nml bt_halo = 8 explicitly; it is not "// &
+                             "bit-reproducible across decompositions)")
          end if
+      end if
+      if (rank == 0 .and. bt_halo_res > 0 .and. csize > 1) then
+         call logger%warning("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
+                             "): answers are NOT bit-identical to the serial run over "// &
+                             "variable bathymetry or with open boundaries.")
       end if
 
       call engine%grid%init(engine%decomp%nx_local, engine%decomp%ny_local, &

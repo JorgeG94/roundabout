@@ -690,7 +690,7 @@ Split-explicit barotropic substep controls.
 | `wave_drag_h2_max` | `0.2500000000E+05` | m^2 | Ceiling on <h^2> proxy for wave_drag_form='roughness_proxy' |
 | `wave_drag_file` | `""` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_FILE); unused today |
 | `wave_drag_var` | `"rH"` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_VAR); unused today |
-| `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: 8 under multi-rank if compatible, else 0; 0 = explicit off, bit-identical) |
+| `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical) |
 
 ### &ocean_debug_nml
 
