@@ -45,6 +45,7 @@ module rdb_ocean_pressure_force
                       ROQ_V00, ROQ_V01, ROQ_V02, ROQ_V03, ROQ_V04, ROQ_V05
    use rdb_ocean_pgf_reconstruct, only: plm_edges_column, ppm_edges_column, &
                                         boole_dpa_intz_layer, boole_dpa_face, &
+                                        boole_dpa_intz_layer_wright, boole_dpa_face_wright, &
                                         PGF_RECON_PLM, PGF_RECON_PPM
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -1541,7 +1542,7 @@ contains
       integer  :: i, j, k
       real(wp) :: inv_rho0, eta, dpa_kk, intz_kk
       real(wp) :: h_L, h_R, e_bot_L, e_bot_R
-      real(wp) :: t_m_L, t_m_R, s_m_L, s_m_R
+      real(wp) :: t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R
       real(wp) :: pa_h_intz_L, pa_h_intz_R, numer, denom
       real(wp) :: dM_coeff, ddM_dx, ddM_dy
       logical  :: parabolic
@@ -1558,9 +1559,11 @@ contains
       ! to the floored fallback.  Reconstruct-for-pressure is default-off so
       ! no shipped anchor exercises this path.
       real(wp), parameter :: H_FLOOR = H_VANISHED
+      integer  :: eos_variant
 
       inv_rho0 = 1.0_wp/rho0
       parabolic = (recon_scheme == PGF_RECON_PPM)
+      eos_variant = eos%variant
 
       ! ---- Pass 0: per-column PLM/PPM T/S edge values ----
       ! Build the layer-mean T,S column (= hTr/h, floored), call the
@@ -1597,36 +1600,66 @@ contains
       ! e_top = e_face(k+1) is the shallower interface of layer k.  The
       ! reconstructed dpa(k) marches the pa stack; intz_dpa(k) is the
       ! first-moment piece.  Both replace the PCM forms.
-      do concurrent(j=1:ny, i=1:nx) &
-         local(k, eta, dpa_kk, intz_kk, s_col, t_col)
-         e_face(i, j, 1) = -b(i, j)
-         do k = 1, nz
-            e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
-            ! Layer mean (for the PPM parabolic curvature term).
-            if (h_layer(i, j, k) > H_FLOOR) then
-               s_col(k) = hS(i, j, k)/h_layer(i, j, k)
-               t_col(k) = hT(i, j, k)/h_layer(i, j, k)
+      !
+      ! Passes 1 and 2 come in one loop copy per EOS, selected here, outside
+      ! the loops: Wright calls its own Boole twins with the density
+      ! inline and no `eos_t` handle; everything else takes the generic
+      ! `eos_density_point` rule.  Roquet deliberately stays on the generic
+      ! rule: a Roquet twin (value-only SpV, no handle) was measured SLOWER
+      ! on the V100 -- this path's device cost is the non-inlined call
+      ! chain's stack traffic, not the EOS arithmetic -- and the generic
+      ! chain already evaluates Roquet value-only (`eos_density_point` ->
+      ! `roquet_spv_value`).  Same sub-points, weights and summation order
+      ! in both copies.
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
+         do concurrent(j=1:ny, i=1:nx) local(k, eta, dpa_kk, intz_kk)
+            e_face(i, j, 1) = -b(i, j)
+            do k = 1, nz
+               e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
+            end do
+            eta = e_face(i, j, nz + 1)
+            if (p_top_in_bc) then
+               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
             else
-               s_col(k) = hS(i, j, k)/H_FLOOR
-               t_col(k) = hT(i, j, k)/H_FLOOR
+               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
             end if
+            do k = nz, 1, -1
+               call boole_dpa_intz_layer_wright(rho0, rho_ref, &
+                                                e_face(i, j, k + 1), h_layer(i, j, k), &
+                                                T_t(i, j, k), T_b(i, j, k), &
+                                                recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                                S_t(i, j, k), S_b(i, j, k), &
+                                                recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                                parabolic, dpa_kk, intz_kk)
+               pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
+               intz_dpa(i, j, k) = intz_kk
+            end do
          end do
-         eta = e_face(i, j, nz + 1)
-         if (p_top_in_bc) then
-            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
-         else
-            pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
-         end if
-         do k = nz, 1, -1
-            call boole_dpa_intz_layer(eos, rho0, rho_ref, &
-                                      e_face(i, j, k + 1), h_layer(i, j, k), &
-                                      T_t(i, j, k), T_b(i, j, k), t_col(k), &
-                                      S_t(i, j, k), S_b(i, j, k), s_col(k), &
-                                      parabolic, dpa_kk, intz_kk)
-            pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
-            intz_dpa(i, j, k) = intz_kk
+      else
+         do concurrent(j=1:ny, i=1:nx) local(k, eta, dpa_kk, intz_kk)
+            e_face(i, j, 1) = -b(i, j)
+            do k = 1, nz
+               e_face(i, j, k + 1) = e_face(i, j, k) + h_layer(i, j, k)
+            end do
+            eta = e_face(i, j, nz + 1)
+            if (p_top_in_bc) then
+               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta + p_top(i, j)
+            else
+               pa(i, j, nz + 1) = rho_ref*GRAVITY*eta
+            end if
+            do k = nz, 1, -1
+               call boole_dpa_intz_layer(eos, rho0, rho_ref, &
+                                         e_face(i, j, k + 1), h_layer(i, j, k), &
+                                         T_t(i, j, k), T_b(i, j, k), &
+                                         recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                         S_t(i, j, k), S_b(i, j, k), &
+                                         recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                         parabolic, dpa_kk, intz_kk)
+               pa(i, j, k) = pa(i, j, k + 1) + dpa_kk
+               intz_dpa(i, j, k) = intz_kk
+            end do
          end do
-      end do
+      end if
 
       ! ---- Pass 2a: u-face horizontal integrals ----
       ! The along-face mean of the layer pressure increment, by the 5-point
@@ -1636,25 +1669,53 @@ contains
       ! only for a pressure linear in x along the edge; under a tilted
       ! interface it leaves the sigma second-kind curvature residual at
       ! every interface — see the `boole_dpa_face` docstring.
-      do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
-         intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
-         do k = nz, 1, -1
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-            call boole_dpa_face(eos, rho0, rho_ref, &
-                                e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
-                                h_layer(i - 1, j, k), h_layer(i, j, k), &
-                                T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
-                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
-                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                parabolic, dpa_kk)
-            intx_dpa(i, j, k) = dpa_kk
-            intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
+         do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                             dpa_L, dpa_R)
+            intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
+            do k = nz, 1, -1
+               t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+               s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+               dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+               call boole_dpa_face_wright(rho0, rho_ref, &
+                                          e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                          h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                          T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                          T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                          S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                          S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                          dpa_L, dpa_R, parabolic, dpa_kk)
+               intx_dpa(i, j, k) = dpa_kk
+               intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
+            end do
          end do
-      end do
+      else
+         do concurrent(j=1:ny, i=2:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                             dpa_L, dpa_R)
+            intx_pa(i, j, nz + 1) = 0.5_wp*(pa(i - 1, j, nz + 1) + pa(i, j, nz + 1))
+            do k = nz, 1, -1
+               t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
+               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+               s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
+               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+               dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+               call boole_dpa_face(eos, rho0, rho_ref, &
+                                   e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                   h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                   T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                   T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                   S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                   S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                   dpa_L, dpa_R, parabolic, dpa_kk)
+               intx_dpa(i, j, k) = dpa_kk
+               intx_pa(i, j, k) = intx_pa(i, j, k + 1) + dpa_kk
+            end do
+         end do
+      end if
       do concurrent(k=1:nz, j=1:ny)
          intx_dpa(1, j, k) = 0.0_wp
          intx_dpa(nx + 1, j, k) = 0.0_wp
@@ -1665,25 +1726,53 @@ contains
       end do
 
       ! ---- Pass 2b: v-face horizontal integrals ----
-      do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R)
-         inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
-         do k = nz, 1, -1
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
-            call boole_dpa_face(eos, rho0, rho_ref, &
-                                e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
-                                h_layer(i, j - 1, k), h_layer(i, j, k), &
-                                T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
-                                T_t(i, j, k), T_b(i, j, k), t_m_R, &
-                                S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
-                                S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                parabolic, dpa_kk)
-            inty_dpa(i, j, k) = dpa_kk
-            inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
+         do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                             dpa_L, dpa_R)
+            inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
+            do k = nz, 1, -1
+               t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+               s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+               dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+               call boole_dpa_face_wright(rho0, rho_ref, &
+                                          e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                          h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                          T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                          T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                          S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                          S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                          dpa_L, dpa_R, parabolic, dpa_kk)
+               inty_dpa(i, j, k) = dpa_kk
+               inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
+            end do
          end do
-      end do
+      else
+         do concurrent(j=2:ny, i=1:nx) local(k, dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, &
+                                             dpa_L, dpa_R)
+            inty_pa(i, j, nz + 1) = 0.5_wp*(pa(i, j - 1, nz + 1) + pa(i, j, nz + 1))
+            do k = nz, 1, -1
+               t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
+               t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
+               s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
+               s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+               dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+               dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+               call boole_dpa_face(eos, rho0, rho_ref, &
+                                   e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                   h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                   T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                   T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                   S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                   S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                   dpa_L, dpa_R, parabolic, dpa_kk)
+               inty_dpa(i, j, k) = dpa_kk
+               inty_pa(i, j, k) = inty_pa(i, j, k + 1) + dpa_kk
+            end do
+         end do
+      end if
       do concurrent(k=1:nz, i=1:nx)
          inty_dpa(i, 1, k) = 0.0_wp
          inty_dpa(i, ny + 1, k) = 0.0_wp

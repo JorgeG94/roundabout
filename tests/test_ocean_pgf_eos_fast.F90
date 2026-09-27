@@ -15,6 +15,13 @@
 !! 3. value_and_fused_entry_points -- `roquet_spv_value` is the `sv` of
 !!    `roquet_spv_point`, and `eos_density_specvol_derivs` returns what
 !!    `eos_density_point` + `eos_specvol_derivs` return, for every variant.
+!! 4. wright_recon_twin_matches_generic -- the reconstruct-for-pressure
+!!    Wright twins (`boole_dpa_intz_layer_wright` / `boole_dpa_face_wright`,
+!!    density inline, no handle) against the generic rule on PLM and PPM
+!!    profiles, to round-off.
+!! 5. face_end_points_are_the_columns -- `boole_dpa_face` with the columns'
+!!    own `dpa` as its `w = 0, 1` end points equals the full 5-sub-column
+!!    rule it replaced (whose end sub-columns ARE the two columns).
 module test_ocean_pgf_eos_fast
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -22,7 +29,9 @@ module test_ocean_pgf_eos_fast
                       eos_density_specvol_derivs, roquet_spv_value, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV
    use rdb_ocean_pressure_force, only: roquet_pcm_dpa_intz, roquet_pcm_dpa_face
-   use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face_pcm
+   use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face, &
+                                        boole_dpa_face_pcm, boole_dpa_intz_layer_wright, &
+                                        boole_dpa_face_wright
    use pic_logger, only: global_logger
    implicit none
    private
@@ -61,7 +70,9 @@ contains
       testsuite = [ &
                   new_unittest("roquet_layer_matches_quadrature", test_roquet_quadrature), &
                   new_unittest("roquet_matches_generic_boole", test_roquet_generic), &
-                  new_unittest("value_and_fused_entry_points", test_entry_points) &
+                  new_unittest("value_and_fused_entry_points", test_entry_points), &
+                  new_unittest("wright_recon_twin_matches_generic", test_wright_twin), &
+                  new_unittest("face_end_points_are_the_columns", test_face_end_points) &
                   ]
    end subroutine collect_ocean_pgf_eos_fast_tests
 
@@ -237,5 +248,116 @@ contains
       call global_logger%info(trim(msg))
       call check(error, max_err <= TOL_ULP, trim(msg))
    end subroutine test_entry_points
+
+   subroutine column_edges(t_t, t_b, t_m, s_t, s_b, s_m)
+      !! A PLM/PPM-like sub-layer profile: edges off the mean.
+      real(wp), intent(in) :: t_m, s_m
+      real(wp), intent(out) :: t_t, t_b, s_t, s_b
+      t_t = t_m + 0.7_wp
+      t_b = t_m - 0.4_wp
+      s_t = s_m - 0.05_wp
+      s_b = s_m + 0.08_wp
+   end subroutine column_edges
+
+   subroutine test_wright_twin(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(eos_t) :: eos
+      real(wp) :: t_t, t_b, s_t, s_b, t_t2, t_b2, s_t2, s_b2
+      real(wp) :: dpa, intz, dpa_b, intz_b, dpa_l, dpa_r, fa, fb, err, max_err
+      integer :: it, is, il, ip
+      logical :: parabolic
+      character(len=200) :: msg
+
+      call make_eos(eos, EOS_VARIANT_WRIGHT_97)
+      max_err = 0.0_wp
+      do ip = 1, 2
+         parabolic = (ip == 2)
+         do il = 1, N_LAY
+            do is = 1, N_S
+               do it = 1, N_T
+                  call column_edges(t_t, t_b, T_SET(it), s_t, s_b, S_SET(is))
+                  call boole_dpa_intz_layer_wright(RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
+                                                   t_t, t_b, T_SET(it), s_t, s_b, S_SET(is), &
+                                                   parabolic, dpa, intz)
+                  call boole_dpa_intz_layer(eos, RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
+                                            t_t, t_b, T_SET(it), s_t, s_b, S_SET(is), &
+                                            parabolic, dpa_b, intz_b)
+                  err = max(abs(dpa - dpa_b)/(GRAVITY*RHO0*DZ_SET(il)), &
+                            abs(intz - intz_b)/(0.5_wp*GRAVITY*RHO0*DZ_SET(il)**2))
+                  max_err = max(max_err, err)
+               end do
+            end do
+         end do
+         ! A tilted, thick face.
+         call column_edges(t_t, t_b, 4.0_wp, s_t, s_b, 34.9_wp)
+         call column_edges(t_t2, t_b2, 1.0_wp, s_t2, s_b2, 34.7_wp)
+         call boole_dpa_intz_layer(eos, RHO0, RHO0, -10.0_wp, 5990.0_wp, t_t, t_b, 4.0_wp, &
+                                   s_t, s_b, 34.9_wp, parabolic, dpa_l, intz)
+         call boole_dpa_intz_layer(eos, RHO0, RHO0, -4000.0_wp, 2000.0_wp, t_t2, t_b2, 1.0_wp, &
+                                   s_t2, s_b2, 34.7_wp, parabolic, dpa_r, intz)
+         call boole_dpa_face_wright(RHO0, RHO0, -10.0_wp, -4000.0_wp, 5990.0_wp, 2000.0_wp, &
+                                    t_t, t_b, 4.0_wp, t_t2, t_b2, 1.0_wp, &
+                                    s_t, s_b, 34.9_wp, s_t2, s_b2, 34.7_wp, &
+                                    dpa_l, dpa_r, parabolic, fa)
+         call boole_dpa_face(eos, RHO0, RHO0, -10.0_wp, -4000.0_wp, 5990.0_wp, 2000.0_wp, &
+                             t_t, t_b, 4.0_wp, t_t2, t_b2, 1.0_wp, &
+                             s_t, s_b, 34.9_wp, s_t2, s_b2, 34.7_wp, &
+                             dpa_l, dpa_r, parabolic, fb)
+         max_err = max(max_err, abs(fa - fb)/(GRAVITY*RHO0*0.5_wp*(5990.0_wp + 2000.0_wp)))
+      end do
+      write (msg, '(a,es10.3)') "wright recon twin vs generic Boole: max rel diff ", max_err
+      call global_logger%info(trim(msg))
+      call check(error, max_err <= TOL_ROUND, trim(msg))
+   end subroutine test_wright_twin
+
+   subroutine test_face_end_points(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: BW(5) = [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+      type(eos_t) :: eos
+      real(wp) :: t_t, t_b, s_t, s_b, t_t2, t_b2, s_t2, s_b2
+      real(wp) :: dpa_l, dpa_r, dpa_m, intz, full, reuse, wl, wr, acc, err, max_err
+      integer :: iv, ip, m
+      logical :: parabolic
+      character(len=200) :: msg
+
+      max_err = 0.0_wp
+      do iv = 1, 2
+         call make_eos(eos, merge(EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV, iv == 1))
+         do ip = 1, 2
+            parabolic = (ip == 2)
+            call column_edges(t_t, t_b, 12.0_wp, s_t, s_b, 35.0_wp)
+            call column_edges(t_t2, t_b2, 9.0_wp, s_t2, s_b2, 34.6_wp)
+            ! The retired rule: all five sub-columns integrated.
+            acc = 0.0_wp
+            do m = 1, 5
+               wr = 0.25_wp*real(m - 1, wp)
+               wl = 1.0_wp - wr
+               call boole_dpa_intz_layer(eos, RHO0, RHO0, wl*(-200.0_wp) + wr*(-260.0_wp), &
+                                         wl*150.0_wp + wr*90.0_wp, &
+                                         wl*t_t + wr*t_t2, wl*t_b + wr*t_b2, &
+                                         wl*12.0_wp + wr*9.0_wp, &
+                                         wl*s_t + wr*s_t2, wl*s_b + wr*s_b2, &
+                                         wl*35.0_wp + wr*34.6_wp, parabolic, dpa_m, intz)
+               acc = acc + BW(m)*dpa_m
+            end do
+            full = acc/90.0_wp
+            ! The shipped rule: end points are the columns' own integrals.
+            call boole_dpa_intz_layer(eos, RHO0, RHO0, -200.0_wp, 150.0_wp, t_t, t_b, 12.0_wp, &
+                                      s_t, s_b, 35.0_wp, parabolic, dpa_l, intz)
+            call boole_dpa_intz_layer(eos, RHO0, RHO0, -260.0_wp, 90.0_wp, t_t2, t_b2, 9.0_wp, &
+                                      s_t2, s_b2, 34.6_wp, parabolic, dpa_r, intz)
+            call boole_dpa_face(eos, RHO0, RHO0, -200.0_wp, -260.0_wp, 150.0_wp, 90.0_wp, &
+                                t_t, t_b, 12.0_wp, t_t2, t_b2, 9.0_wp, &
+                                s_t, s_b, 35.0_wp, s_t2, s_b2, 34.6_wp, &
+                                dpa_l, dpa_r, parabolic, reuse)
+            err = abs(full - reuse)/(GRAVITY*RHO0*0.5_wp*(150.0_wp + 90.0_wp))
+            max_err = max(max_err, err)
+         end do
+      end do
+      write (msg, '(a,es10.3)') "face end-point reuse vs 5-sub-column rule: max rel diff ", &
+         max_err
+      call global_logger%info(trim(msg))
+      call check(error, max_err <= TOL_ROUND, trim(msg))
+   end subroutine test_face_end_points
 
 end module test_ocean_pgf_eos_fast

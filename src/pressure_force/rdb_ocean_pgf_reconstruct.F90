@@ -37,7 +37,10 @@ module rdb_ocean_pgf_reconstruct
 #else
    use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY
 #endif
-   use rdb_eos, only: eos_t, eos_density_point
+   use rdb_eos, only: eos_t, eos_density_point, &
+                      WRIGHT_A0, WRIGHT_A1, WRIGHT_A2, &
+                      WRIGHT_B0, WRIGHT_B1, WRIGHT_B2, WRIGHT_B3, WRIGHT_B4, WRIGHT_B5, &
+                      WRIGHT_C0, WRIGHT_C1, WRIGHT_C2, WRIGHT_C3, WRIGHT_C4, WRIGHT_C5
    implicit none
    private
 
@@ -53,6 +56,8 @@ module rdb_ocean_pgf_reconstruct
    public :: boole_dpa_intz_layer
    public :: boole_dpa_face
    public :: boole_dpa_face_pcm
+   public :: boole_dpa_intz_layer_wright
+   public :: boole_dpa_face_wright
 
    ! Reconstruction-scheme tags (mirror MOM6 Recon_Scheme; only consulted
    ! when reconstruct_for_pressure is on).
@@ -368,6 +373,11 @@ contains
       real(wp) :: r5(N_BOOLE)
       integer  :: n
 
+      ! The sub-points and weights are `boole_layer_points` /
+      ! `boole_layer_combine` written out in place: routing THIS generic
+      ! rule through them (array arguments) put its device sub-points in
+      ! local memory and cost ~10 % on the V100 (the `_wright` twin, whose
+      ! density inlines, keeps the helpers at no cost).
       gxrho = GRAVITY*rho0
 
       ! PPM curvature (zero for PLM).
@@ -398,11 +408,131 @@ contains
                                        - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
    end subroutine boole_dpa_intz_layer
 
+   pure subroutine boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, &
+                                      s_t, s_b, s_mean, parabolic, t5, s5, p5)
+      !$acc routine seq
+      !! The five sub-point (T, S, p) triples of the in-layer Boole rule,
+      !! top (n = 1) to bottom (n = 5), for the per-EOS twins -- the same
+      !! points `boole_dpa_intz_layer` writes out in place.
+      real(wp), intent(in)  :: rho0
+         !! Boussinesq reference density used in the pressure estimate.
+      real(wp), intent(in)  :: e_top
+         !! Surface-relative height of the SHALLOWER interface.
+      real(wp), intent(in)  :: dz
+         !! Layer thickness (m), dz >= 0.
+      real(wp), intent(in)  :: t_t, t_b, t_mean
+         !! Temperature: top edge, bottom edge, layer mean.
+      real(wp), intent(in)  :: s_t, s_b, s_mean
+         !! Salinity: top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> add the PPM curvature (s6/t6) term.
+      real(wp), intent(out) :: t5(N_BOOLE), s5(N_BOOLE), p5(N_BOOLE)
+         !! Sub-point temperature, salinity and Boussinesq pressure (Pa).
+
+      real(wp) :: gxrho, wt_t, wt_b, t6, s6, z5
+      integer  :: n
+
+      gxrho = GRAVITY*rho0
+
+      ! PPM curvature (zero for PLM).
+      t6 = 0.0_wp
+      s6 = 0.0_wp
+      if (parabolic) then
+         t6 = 3.0_wp*(2.0_wp*t_mean - (t_t + t_b))
+         s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
+      end if
+
+      do n = 1, N_BOOLE
+         wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
+         wt_b = 1.0_wp - wt_t
+         ! Linear blend + parabolic correction.  At wt_t in [0,1] the
+         ! parabola through (_t at wt_t=1, _b at wt_t=0, mean) is
+         !   q(wt_t) = wt_t*q_t + wt_b*q_b + q6*wt_t*wt_b.
+         t5(n) = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
+         s5(n) = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
+         z5 = e_top - 0.25_wp*real(n - 1, wp)*dz   ! marches DOWN from top
+         p5(n) = -gxrho*z5
+      end do
+   end subroutine boole_layer_points
+
+   pure subroutine boole_layer_combine(r5, dz, dpa, intz_dpa)
+      !$acc routine seq
+      !! Boole weights of the five sub-point density anomalies `r5` (top
+      !! to bottom): `dpa = g*dz*<rho'>` and the first moment from the top.
+      real(wp), intent(in)  :: r5(N_BOOLE)
+         !! Density anomaly at the five sub-points (kg/m^3).
+      real(wp), intent(in)  :: dz
+         !! Layer thickness (m).
+      real(wp), intent(out) :: dpa
+         !! g * int rho' dz over the layer (Pa).
+      real(wp), intent(out) :: intz_dpa
+         !! 0.5 * g * dz^2 * bracket (Pa*m), first moment from the top.
+
+      real(wp) :: rho_anom
+
+      rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r5(1) + r5(5)) &
+                                   + 32.0_wp*(r5(2) + r5(4)) + 12.0_wp*r5(3))
+      dpa = GRAVITY*dz*rho_anom
+      intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
+                                       - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
+   end subroutine boole_layer_combine
+
+   pure subroutine boole_dpa_intz_layer_wright(rho0, rho_ref, e_top, dz, &
+                                               t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                                               parabolic, dpa, intz_dpa)
+      !$acc routine seq
+      !! `boole_dpa_intz_layer` specialised to Wright (1997): the same five
+      !! sub-points and weights, with the density written inline
+      !! (`wright_rho`, the expression `eos_density_point` evaluates) --
+      !! no `eos_t` handle, no per-point variant dispatch.  The caller
+      !! selects this twin ONCE, outside its loops.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top, dz
+         !! Shallower-interface height / layer thickness (m).
+      real(wp), intent(in)  :: t_t, t_b, t_mean, s_t, s_b, s_mean
+         !! T / S top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa, intz_dpa
+         !! As `boole_dpa_intz_layer`.
+
+      real(wp) :: t5(N_BOOLE), s5(N_BOOLE), p5(N_BOOLE), r5(N_BOOLE)
+      integer  :: n
+
+      call boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                              parabolic, t5, s5, p5)
+      do n = 1, N_BOOLE
+         r5(n) = wright_rho(t5(n), s5(n), p5(n)) - rho_ref
+      end do
+      call boole_layer_combine(r5, dz, dpa, intz_dpa)
+   end subroutine boole_dpa_intz_layer_wright
+
+   pure function wright_rho(t, s, p) result(rho)
+      !$acc routine seq
+      !! Wright (1997) in-situ density (kg/m^3) -- term for term the
+      !! Wright branch of `eos_density_point`, without the handle.
+      real(wp), intent(in) :: t, s, p
+         !! Temperature (degC), salinity (PSU), pressure (Pa).
+      real(wp) :: rho
+
+      real(wp) :: T_sq, alpha_0, p_0, lambda, p_plus_p0
+
+      T_sq = t*t
+      alpha_0 = WRIGHT_A0 + WRIGHT_A1*t + WRIGHT_A2*s
+      p_0 = WRIGHT_B0 + WRIGHT_B1*t + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*t + &
+            WRIGHT_B4*s + WRIGHT_B5*s*t
+      lambda = WRIGHT_C0 + WRIGHT_C1*t + WRIGHT_C2*T_sq + WRIGHT_C3*T_sq*t + &
+               WRIGHT_C4*s + WRIGHT_C5*s*t
+      p_plus_p0 = p + p_0
+      rho = p_plus_p0/(lambda + alpha_0*p_plus_p0)
+   end function wright_rho
+
    pure subroutine boole_dpa_face(eos, rho0, rho_ref, &
                                   e_top_l, e_top_r, dz_l, dz_r, &
                                   t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                   s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
-                                  parabolic, dpa_face)
+                                  dpa_l, dpa_r, parabolic, dpa_face)
       !$acc routine seq
       !! HORIZONTAL (cross-face) Boole quadrature of the layer pressure
       !! increment `dpa = g * int rho' dz` — the face integral the FV
@@ -437,9 +567,17 @@ contains
       !! a resting linear-EOS/linear-stratification column under ANY
       !! layer geometry — the algorithm's defining property.
       !!
-      !! COST: 5 sub-columns x 5 sub-points = 25 EOS evaluations per face
-      !! per layer, against 0 for the trapezoid.  `reconstruct_for_pressure`
-      !! is opt-in and already the expensive branch.
+      !! THE END POINTS ARE THE COLUMNS' OWN INTEGRALS.  At `w = 0` and
+      !! `w = 1` the sub-column IS the left / right column, so its `dpa` is
+      !! the one Pass 1 already integrated; the caller passes it in
+      !! (`dpa_l` / `dpa_r`, recovered from the `pa` stack as MOM6
+      !! `int_density_dz_generic_plm` does) and only the three interior
+      !! sub-columns are integrated here.
+      !!
+      !! COST: 3 sub-columns x 5 sub-points = 15 EOS evaluations per face
+      !! per layer (25 before the end points were reused), against 0 for the
+      !! trapezoid.  `reconstruct_for_pressure` is opt-in and already the
+      !! expensive branch.
       type(eos_t), intent(in) :: eos
       real(wp), intent(in)  :: rho0
          !! Boussinesq reference density used in the pressure estimate.
@@ -458,6 +596,9 @@ contains
          !! Left column salinity triple.
       real(wp), intent(in)  :: s_t_r, s_b_r, s_m_r
          !! Right column salinity triple.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The left / right columns' own `g * int rho' dz` over the layer
+         !! (Pa) -- the `w = 0` / `w = 1` end points of the rule.
       logical, intent(in)  :: parabolic
          !! .true. -> the sub-column profiles carry the PPM curvature.
       real(wp), intent(out) :: dpa_face
@@ -468,8 +609,8 @@ contains
       real(wp), parameter :: BOOLE_W(N_BOOLE) = &
                              [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
 
-      acc = 0.0_wp
-      do m = 1, N_BOOLE
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      do m = 2, N_BOOLE - 1
          wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
          wl = 1.0_wp - wr
          call boole_dpa_intz_layer(eos, rho0, rho_ref, &
@@ -547,5 +688,55 @@ contains
       end do
       dpa_face = acc/90.0_wp
    end subroutine boole_dpa_face_pcm
+
+   pure subroutine boole_dpa_face_wright(rho0, rho_ref, &
+                                         e_top_l, e_top_r, dz_l, dz_r, &
+                                         t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
+                                         s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
+                                         dpa_l, dpa_r, parabolic, dpa_face)
+      !$acc routine seq
+      !! `boole_dpa_face` with the Wright (1997) vertical rule
+      !! `boole_dpa_intz_layer_wright` at each of the five sub-columns --
+      !! identical sub-columns, weights and summation order, no `eos_t`
+      !! handle.  15 inline Wright density evaluations per face per layer
+      !! (the end points are the columns' own `dpa`).
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top_l, e_top_r, dz_l, dz_r
+         !! Left / right shallower-interface heights and thicknesses (m).
+      real(wp), intent(in)  :: t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r
+         !! Left / right temperature triples (top, bottom, mean).
+      real(wp), intent(in)  :: s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r
+         !! Left / right salinity triples.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The left / right columns' own layer `dpa` (Pa), the end points.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      do m = 2, N_BOOLE - 1
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         call boole_dpa_intz_layer_wright(rho0, rho_ref, &
+                                          wl*e_top_l + wr*e_top_r, &
+                                          wl*dz_l + wr*dz_r, &
+                                          wl*t_t_l + wr*t_t_r, &
+                                          wl*t_b_l + wr*t_b_r, &
+                                          wl*t_m_l + wr*t_m_r, &
+                                          wl*s_t_l + wr*s_t_r, &
+                                          wl*s_b_l + wr*s_b_r, &
+                                          wl*s_m_l + wr*s_m_r, &
+                                          parabolic, dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine boole_dpa_face_wright
 
 end module rdb_ocean_pgf_reconstruct
