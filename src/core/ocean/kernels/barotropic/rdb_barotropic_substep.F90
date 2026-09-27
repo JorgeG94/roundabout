@@ -450,6 +450,9 @@ contains
          !! the halo fill corrects it, so closures are skipped here.
          !! Default .true. preserves single-rank bit-identity.
       logical :: per_x, per_y
+      logical :: per_x_tag, per_y_tag
+         !! The edge TAGS are periodic (whether the wrap is local or an MPI
+         !! exchange): a periodic edge is never a physical wall-like edge.
          !! Periodic-axis flags cached from bc%periodic_x/y before the
          !! `do concurrent` loops so they are loop-invariant scalars.
       logical :: do_fold
@@ -582,6 +585,8 @@ contains
       has_n = .true.
       per_x = .false.
       per_y = .false.
+      per_x_tag = .false.
+      per_y_tag = .false.
       do_fold = .false.
       ! Fold index constants (storage maps, Appendix A).
       nf_isum = 2*grid%nghost + grid%nx_phys + 1      ! centre/v i-map sum
@@ -611,6 +616,8 @@ contains
          bc_e = bc%east%bc_type
          bc_s = bc%south%bc_type
          bc_n = bc%north%bc_type
+         per_x_tag = bc%periodic_x
+         per_y_tag = bc%periodic_y
          per_x = bc%periodic_x .and. .not. ocean_halo_is_decomposed_x()
          per_y = bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
          do_fold = bc%north_fold
@@ -731,17 +738,20 @@ contains
 
       ! Physical-edge insets (see the ins_* declaration comment).  Needs the
       ! cached has_* / per_* / do_fold flags, so computed after the bc block.
-      ! Seams (has_* = .false.), periodic edges (local wrap owns the band),
-      ! and the tripolar fold keep inset 0 — full wide march.
+      ! Seams (has_* = .false.), periodic edges (the local wrap OR, on a
+      ! decomposed axis, the MPI exchange owns the band — `has_*` is .true.
+      ! at the domain's periodic edge, so the TAG decides, not `per_*`,
+      ! which is .false. there once the axis is decomposed), and the
+      ! tripolar fold keep inset 0 — full wide march.
       ins_w = 0
       ins_e = 0
       ins_s = 0
       ins_n = 0
       if (marchin) then
-         if (has_w .and. .not. per_x) ins_w = bt_halo
-         if (has_e .and. .not. per_x) ins_e = bt_halo
-         if (has_s .and. .not. per_y) ins_s = bt_halo
-         if (has_n .and. .not. (per_y .or. do_fold)) ins_n = bt_halo
+         if (has_w .and. .not. per_x_tag) ins_w = bt_halo
+         if (has_e .and. .not. per_x_tag) ins_e = bt_halo
+         if (has_s .and. .not. per_y_tag) ins_s = bt_halo
+         if (has_n .and. .not. (per_y_tag .or. do_fold)) ins_n = bt_halo
       end if
       ilo_c = 1 + ins_w
       ihi_c = nx - ins_e

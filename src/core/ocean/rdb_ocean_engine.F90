@@ -1133,7 +1133,8 @@ contains
                                        cfg%coriolis_f, &
                                        cfg%ocean%topo%coriolis_beta, &
                                        cfg%ocean%topo%coriolis_y_ref, &
-                                       cfg%ocean%grid%coriolis_scheme)
+                                       cfg%ocean%grid%coriolis_scheme, &
+                                       omega=cfg%ocean%grid%omega)
       end if
 
       call ocean_halo_exchange_ml_state(engine%state%multilayer)
