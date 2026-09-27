@@ -599,7 +599,8 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_efp_mpi core)
   set(MPI_TEST_REGIME_test_ocean_tripolar_fold_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
-  set(MPI_NETCDF_TESTS)
+  # Writes + reads NetCDF inputs (the per-rank windowed readers).
+  set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
   foreach(test ${MPI_TESTS})
     add_executable(${test} mpi/${test}.F90)
     target_include_directories(${test} PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -687,7 +688,7 @@ if(RDB_ENABLE_MPI)
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
-    PROPERTIES LABELS "ocean")
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
 endif()
 
 # --------------------------------------------------------------------------
