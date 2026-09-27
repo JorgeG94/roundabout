@@ -917,6 +917,16 @@ module rdb_config
          !! EOS (`wright`, `roquet_spv`); for `linear` in-situ and
          !! potential density coincide and the legacy path runs,
          !! bit-identical.
+         !!
+         !! Cost: under `wright` the layer integral is ANALYTIC (MOM6
+         !! `int_density_dz_wright`) — one polynomial evaluation per layer
+         !! and per cross-face sub-column.  Global 1-degree, 5 days, one
+         !! V100: `ocean_pgf` 1.9 s (`.false.`: 1.1 s; the retired Boole
+         !! path: 10.3 s), time loop +1.7 % over `.false.`.  Under
+         !! `roquet_spv` it is still the generic 5-point Boole quadrature
+         !! (MOM6 `int_density_dz_generic_pcm`): 5 EOS calls per layer + 15
+         !! per face — on `benchmark_ale` (CPU, gfortran) the PGF is ~78 %
+         !! of the run.
       logical :: p_top_in_bc = .false.
          !! Add the top-of-column load `multilayer_state_t%p_top` (Pa) to
          !! the FV_MOM6 pressure-stack surface boundary condition:
