@@ -1616,9 +1616,91 @@ contains
       !! row fraction `s = (lat_lonlat - phi_join)/(lat_top - phi_join)` in
       !! [0,1] drives the bipolar map (s=0 reproduces the join ring exactly
       !! -> C0 continuity; s=1 is the north-fold line).
+      !!
+      !! Decomposed tile (`nx_phys /= nx_global` or `ny_phys /= ny_global`):
+      !! the cap map, the supergrid assembler's edge extrapolation and the
+      !! fold/periodic ghost fill are all functions of the WHOLE grid, so a
+      !! tile cannot be built from its local extents (it used to be — each
+      !! rank then built a complete, wrong globe of its own size).  The
+      !! tile is instead cut out of the undecomposed grid: the whole grid is
+      !! assembled into a temporary `ocean_metrics_t` exactly as a single
+      !! rank would, and the tile's storage window — ghost rows and columns
+      !! included — is copied from it at the global offsets.  Every tile's
+      !! metrics are then bit-identical to the matching slice of the
+      !! single-rank grid, whatever the tile owns (a south neighbour's
+      !! rows, the folded north ghosts, the periodic columns).  Cost: one
+      !! transient global-size metric set per rank at configure time
+      !! (~20 `(ni_global, nj_global)` arrays + the 4x supergrid) — fine
+      !! for the north-south splits this serves; a distributed (px > 1)
+      !! hero-scale grid will want a tile-local construction instead.
       type(ocean_metrics_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in) :: lon_west, lat_south, dlon_deg, dlat_deg
+      real(wp), intent(in) :: rad_earth, phi_join, lon_pole
+
+      type(hgrid_t) :: gwhole
+      type(ocean_metrics_t) :: mwhole
+      integer :: io, jo
+
+      if (grid%nx_phys == grid%nx_global .and. grid%ny_phys == grid%ny_global) then
+         call metrics_fill_tripolar_whole(this, grid, lon_west, lat_south, dlat_deg, &
+                                          rad_earth, phi_join, lon_pole)
+         return
+      end if
+
+      call gwhole%init(grid%nx_global, grid%ny_global, grid%nghost, grid%dx, grid%dy)
+      call mwhole%init(gwhole)
+      call metrics_fill_tripolar_whole(mwhole, gwhole, lon_west, lat_south, dlat_deg, &
+                                       rad_earth, phi_join, lon_pole)
+      io = grid%i_offset_global
+      jo = grid%j_offset_global
+      call metrics_window_2d(this%dxT, mwhole%dxT, io, jo)
+      call metrics_window_2d(this%dyT, mwhole%dyT, io, jo)
+      call metrics_window_2d(this%areaT, mwhole%areaT, io, jo)
+      call metrics_window_2d(this%geolatT, mwhole%geolatT, io, jo)
+      call metrics_window_2d(this%geolonT, mwhole%geolonT, io, jo)
+      call metrics_window_2d(this%angle_dx, mwhole%angle_dx, io, jo)
+      call metrics_window_2d(this%dxCu, mwhole%dxCu, io, jo)
+      call metrics_window_2d(this%dyCu, mwhole%dyCu, io, jo)
+      call metrics_window_2d(this%areaCu, mwhole%areaCu, io, jo)
+      call metrics_window_2d(this%dy_cu, mwhole%dy_cu, io, jo)
+      call metrics_window_2d(this%dxCv, mwhole%dxCv, io, jo)
+      call metrics_window_2d(this%dyCv, mwhole%dyCv, io, jo)
+      call metrics_window_2d(this%areaCv, mwhole%areaCv, io, jo)
+      call metrics_window_2d(this%dx_cv, mwhole%dx_cv, io, jo)
+      call metrics_window_2d(this%dxBu, mwhole%dxBu, io, jo)
+      call metrics_window_2d(this%dyBu, mwhole%dyBu, io, jo)
+      call metrics_window_2d(this%areaBu, mwhole%areaBu, io, jo)
+      call metrics_window_2d(this%geolatBu, mwhole%geolatBu, io, jo)
+      call metrics_window_2d(this%geolonBu, mwhole%geolonBu, io, jo)
+      call mwhole%destroy()
+   end subroutine metrics_fill_tripolar
+
+   subroutine metrics_window_2d(tile, whole, io, jo)
+      !! Copy a tile's storage window (ghosts included) out of the
+      !! undecomposed array: `tile(i, j) = whole(i + io, j + jo)`.  The
+      !! stagger is carried by the shapes — a face/corner array is one
+      !! wider on both sides, so the same offsets address it.
+      real(wp), intent(inout) :: tile(:, :)
+      real(wp), intent(in) :: whole(:, :)
+      integer, intent(in) :: io, jo
+         !! Global i / j offsets of the tile (`grid%i/j_offset_global`).
+      integer :: i, j
+      do j = 1, size(tile, 2)
+         do i = 1, size(tile, 1)
+            tile(i, j) = whole(i + io, j + jo)
+         end do
+      end do
+   end subroutine metrics_window_2d
+
+   subroutine metrics_fill_tripolar_whole(this, grid, lon_west, lat_south, &
+                                          dlat_deg, rad_earth, phi_join, lon_pole)
+      !! The undecomposed tripolar build behind `metrics_fill_tripolar`:
+      !! `grid` must hold the WHOLE grid (its local extents are the global
+      !! ones), so the fold and the periodic seam are both local.
+      type(ocean_metrics_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: lon_west, lat_south, dlat_deg
       real(wp), intent(in) :: rad_earth, phi_join, lon_pole
 
       real(wp), allocatable :: sg_x(:, :), sg_y(:, :)
@@ -1640,7 +1722,7 @@ contains
       call metrics_fold_periodic_ghosts(this, grid)
 
       deallocate (sg_x, sg_y, sg_dx, sg_dy, sg_area)
-   end subroutine metrics_fill_tripolar
+   end subroutine metrics_fill_tripolar_whole
 
    subroutine tripolar_supergrid_arrays(grid, lon_west, lat_south, dlat_deg, rad_earth, &
                                         phi_join, lon_pole, sg_x, sg_y, sg_dx, sg_dy, sg_area)

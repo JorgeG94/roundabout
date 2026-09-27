@@ -908,6 +908,18 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   updates its `vbt` and corner vorticity like an interior face. Metric +
   `f_corner` ghosts are folded once at configure. Kernels read full 2D
   metric arrays only.
+  **Decomposition:** north-south splits (`px = 1`, any `py`) are supported
+  and bit-identical to the single-rank run (`rdb_test_ocean_tripolar_fold_mpi`,
+  1/2/4 ranks — h, u, v, S, T, η and the configure-time metrics, ghost rows
+  included). Only the rank that owns the north edge folds
+  (`bc%north_fold` is rank-local); every other rank's north ghosts are an
+  MPI seam. The analytic `tripolar` generator cuts each tile out of the
+  whole grid (a transient global-size metric set per rank at configure).
+  **East-west splits (`px > 1`) are refused at configure** — the fold row
+  must be whole on one rank until the distributed fold exchange exists —
+  as is a tile shorter than `nghost + 1` rows (`ny/py`), and
+  `grid_config = "supergrid"` on more than one rank (the mosaic reader
+  loads the whole grid into one tile).
   The `supergrid` reader applies the SAME ghost-metric topology as the
   analytic `tripolar` (`metrics_fold_periodic_ghosts`) whenever the edge
   tags say periodic-x and/or `tripolar_fold`, spans the periodic seam

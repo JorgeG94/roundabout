@@ -16,7 +16,11 @@ module rdb_ocean_fold_apply
    !!     nghost+ny_phys+1 — see the `rdb_ocean_fold` header)
    !!
    !! Every routine no-ops when `bc%north_fold` is .false. ⇒ non-tripolar
-   !! runs stay bit-identical.
+   !! runs stay bit-identical.  `bc%north_fold` is RANK-LOCAL: true only on
+   !! the rank that owns the physical north edge (`has_north`), so on a
+   !! north-south split the other ranks leave their north ghosts to the MPI
+   !! exchange that precedes every call here (exchange → periodic wrap →
+   !! fold).  See the `rdb_ocean_fold` header for the decomposition limits.
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
