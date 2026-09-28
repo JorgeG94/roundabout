@@ -374,6 +374,30 @@ Per-rank diag + restart files (`<prefix>_rank_NNNNNN.nc`) — no gather. Optiona
   the truncation NaN-catch for the pattern); comparisons with NaN are FALSE, so
   `if (abs(u) > thresh)` guards also silently skip NaN — pair them with the
   catch, never rely on them to bound corrupted data.
+- **EFP/fixed-point reductions must propagate non-finite input** — same hazard
+  class as the NaN-blind clamp above, in the reduction layer instead of a
+  clamp. The device-callable EFP decompose (`rdb_ocean_console_stats::
+  efp_decompose_impl`) originally had NO NaN handling at all: a NaN summand
+  hit `int(NaN, int64)` (compiler-undefined) and the fixed-point bins it fed
+  reconstructed as a silent, plausible-looking finite number — observed as
+  the console printing `En 0.000E+00` / `Salt 0.000` / `Temp 0.000` on an
+  already-diverged (`Mass NaN`) run instead of aborting, which let twelve
+  tier-1 stability-matrix cells slip past their `completed;finite` XFAIL pin
+  once `reproducing_sums=.true.` became the default (a0755ada1). Fixed by
+  giving `efp_t` (`rdb_efp`) a `poison` counter: `efp_decompose`/
+  `efp_decompose_impl` set it (via `ieee_is_finite`, never a bare `>=`/`<`
+  comparison) for a NaN, `+-Inf`, or bin-1-overflowing summand,
+  `efp_plus`/`efp_minus` add it forward, `efp_to_real` returns
+  `ieee_value(x, ieee_quiet_nan)` whenever it is nonzero, and
+  `efp_to_transport`/`efp_from_transport` carry it through the SAME
+  `MPI_SUM` collective as the bins (`EFP_TRANSPORT_WIDTH`) so one poisoned
+  rank makes every rank read NaN identically. The plain-FP path
+  (`reproducing_sums=.false.`) already propagated NaN correctly through
+  ordinary IEEE `+`/`MPI_SUM` — nothing to fix there. Tests:
+  `tests/test_efp.F90` (`test_efp_poison_propagates_nan`/`_inf`,
+  `test_efp_poison_cross_rank_transport`, `test_efp_finite_path_bit_identical`),
+  `tests/test_ocean_console_stats_efp.F90`
+  (`test_efp_console_kernel_nan_propagates`), `tests/mpi/test_efp_mpi.F90`.
 - **Assumed-shape dummies in `do concurrent` kernels**: NVHPC walks the descriptor with per-launch memcpys; use explicit-shape args (`arr(nx,ny,nz)`); cadence-bounded code may waive with `! assumed-shape-ok: <reason>`; enforced diff-aware by pre-commit (`dc-assumed-shape`).
 - **A host-gated call that hands a state array to an EXTERNAL subroutine still costs, even when never taken**: passing e.g. `ms%mass_flux_x_layer` as an `intent(inout)` actual makes nvfortran treat the array as escaping and pessimises *every* `do concurrent` in the calling routine. Measured at **+4.8%** total solver time (600×600×50 ocean, all of it in `ocean_continuity`, 8.97 → 10.58 s) for a `call porous_narrow_3d(...)` sitting behind `if (metrics%use_porous)` with the knob OFF. Fix: write the guarded pass INLINE as a `do concurrent` in the same routine. A same-module helper does **not** help — it is the call, not the module boundary. (Not the extra dummy arguments either: removing them recovered nothing.) Suspect this whenever an "inert, host-gated" addition shows up in a profile.
 - **Never wrap a `do concurrent` kernel in `associate` over a derived-type component**: under `-qopenmp` (how ifx maps `do concurrent` onto threads) ifx 2025.0/2026.0 evaluates an ASSOCIATE name whose selector is an allocatable component of a DT dummy as **zero** inside the loop body — silently, when the body also has a branch chain calling an inlinable `pure` module function. It killed the whole Coriolis term in `coriolis_adv_compute_tendencies_sadourny` (`f_corner` read as 0 ⇒ dead `dv/dt`, then NaN in the long runs) while gfortran and nvfortran were correct. NVHPC has the sibling failure with `!$omp target` inside `associate` over mapped workspaces. Spell the components out. Reproducer + writeup on the project wiki.

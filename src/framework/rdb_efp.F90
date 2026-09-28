@@ -37,14 +37,40 @@ module rdb_efp
    !! **Do NOT** widen `EFP_PREC_WIDTH` without re-deriving `EFP_MAX_RANKS`
    !! and `EFP_MAX_SUMMANDS` -- both are `parameter`s computed FROM it, and
    !! `test_efp_bounds` pins the arithmetic.
+   !!
+   !! **Non-finite propagation.** A fixed-point decomposition has nowhere to
+   !! put a NaN or `+-Inf` -- `int(NaN, int64)` is compiler-undefined, and
+   !! the naive fallback (zero the bins, matching a NaN's "no value"
+   !! intuition) is exactly the wrong choice for a REDUCTION: it makes a
+   !! poisoned summand silently vanish, and the reconstructed total comes
+   !! back as a plausible finite number instead of aborting -- the same
+   !! hazard class as CLAUDE.md's NaN-blind `if/else` clamp gotcha, just in
+   !! the reduction layer. `efp_t` therefore carries a `poison` counter
+   !! alongside its bins (see the type's own docstring): every entry point
+   !! (`efp_decompose`/`efp_from_real`/`efp_plus`/`efp_minus`/`efp_to_real`/
+   !! `efp_to_transport`/`efp_from_transport`) propagates it, so a single
+   !! NaN/`+-Inf`/bin-1-overflow summand ANYWHERE in an accumulation --
+   !! local or cross-rank, through `halo_allreduce_efp_list` -- makes
+   !! `efp_to_real` return a quiet NaN, identically on every rank, instead
+   !! of laundering the corruption into "0.000" or a saturated-but-finite
+   !! value. This was a real regression, not a hypothetical: once
+   !! `&ocean_diag_nml reproducing_sums` became the console default
+   !! (a0755ada1), the in-module device duplicate
+   !! `rdb_ocean_console_stats::efp_decompose_impl` had NO non-finite
+   !! handling at all, so a blown-up run's console printed finite-looking
+   !! `En`/`Salt`/`Temp` columns instead of the NaN a diverged run must
+   !! show -- see that module's `efp_decompose_impl` docstring and
+   !! `tests/test_efp.F90`'s `test_efp_poison_propagates_nan`/`_inf`.
    use, intrinsic :: iso_fortran_env, only: int64, real64
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite, &
+                                                                               ieee_value, ieee_quiet_nan
    implicit none
    private
 
    public :: efp_t
    public :: EFP_DIGITS, EFP_PREC_WIDTH, EFP_GUARD_WIDTH
    public :: EFP_MAX_SUMMANDS, EFP_MAX_RANKS
+   public :: EFP_TRANSPORT_WIDTH
    public :: efp_decompose, efp_carry, efp_regularize
    public :: efp_from_real, efp_to_real
    public :: efp_plus, efp_minus, efp_real_diff
@@ -71,6 +97,13 @@ module rdb_efp
       !! exactly: after a local `efp_carry`, bins 2..6 satisfy
       !! `|e(n)| < 2**P`, so a partial sum over `EFP_MAX_RANKS` ranks stays
       !! `<= 2**53`, the largest exactly-representable double integer.
+   integer, parameter :: EFP_TRANSPORT_WIDTH = EFP_DIGITS + 1
+      !! Reals transported per `efp_t` value by `efp_to_transport`/
+      !! `efp_from_transport`: the `EFP_DIGITS` fixed-point bins plus ONE
+      !! extra slot for the non-finite "poison" counter (`efp_t%poison`,
+      !! see its docstring). Callers that size their own send/recv buffers
+      !! (`halo_allreduce_efp_list`) MUST use this, not `EFP_DIGITS`,
+      !! or the poison slot silently aliases the next value's bin 1.
 
    ! -- fixed-point bin weights pr(n) = 2**(P*(3-n)), n = 1..6, and their
    ! exact reciprocals I_pr(n) = 2**(-P*(3-n)).  Six NAMED SCALARS (not an
@@ -106,6 +139,27 @@ module rdb_efp
       !! requires `v` to be reachable from both.  Tests asserting bit-
       !! identity compare `v(:)` directly, never the reconstructed real.
       integer(int64) :: v(EFP_DIGITS) = 0_int64
+      integer(int64) :: poison = 0_int64
+         !! Non-finite "poison" counter -- the number of NaN / +-Inf /
+         !! bin-1-overflow summands folded into this value so far (0 =
+         !! clean). `efp_decompose`/`efp_from_real` seed it from `is_nan
+         !! .or. is_ovf`; `efp_plus`/`efp_minus` add it forward (never
+         !! reset it); `efp_to_real` returns a quiet NaN whenever it is
+         !! nonzero, INSTEAD OF reconstructing a value from `v(:)`.  This
+         !! is the fix for the EFP fixed-point path laundering a non-finite
+         !! summand into a plausible finite number (0 comes out of a NaN
+         !! decompose's zeroed bins, a saturated bin 1 comes out of an
+         !! overflowing one) -- the exact hazard class CLAUDE.md's
+         !! NaN-blind-clamp gotcha describes, just in the reduction layer
+         !! instead of a clamp. `efp_to_transport`/`efp_from_transport`
+         !! carry it in the SAME collective as the bins (see
+         !! `EFP_TRANSPORT_WIDTH`), summed by the same `MPI_SUM`: one
+         !! poisoned rank makes the transported count nonzero on every
+         !! rank, so every rank's `efp_to_real` reports NaN identically --
+         !! never a rank-dependent branch. A plain count (not a saturating
+         !! flag) because it costs nothing extra (still an exact double
+         !! under `MPI_SUM` at any realistic magnitude) and is simpler to
+         !! reason about than a boolean OR chain.
    end type efp_t
 
 contains
@@ -123,7 +177,14 @@ contains
       !! independent of `ieee_arithmetic`'s import list elsewhere.
       !! `is_ovf` is set when `|r| >= pr(1) * huge(1_int64)` -- the largest
       !! magnitude bin 1 can represent -- and `e` is truncated to that
-      !! bound rather than silently wrapping.
+      !! bound rather than silently wrapping. `+-Inf` is caught by the SAME
+      !! `is_ovf` flag via an explicit `ieee_is_finite` check (not by
+      !! falling through the magnitude comparison below): a relaxed-FP
+      !! build (`-fast`, no `-Kieee`) is not guaranteed to keep a plain
+      !! `>=` comparison against Infinity well-behaved under aggressive
+      !! reassociation, the same hazard CLAUDE.md's NaN-blind if/else-clamp
+      !! gotcha documents for `if/else` chains -- `ieee_is_finite` is the
+      !! dedicated bit-pattern test and is not subject to it.
       real(real64), intent(in) :: r
       integer(int64), intent(out) :: e(EFP_DIGITS)
       logical, intent(out) :: is_nan
@@ -139,6 +200,18 @@ contains
       is_ovf = .false.
       e = 0_int64
       if (is_nan) return
+
+      if (.not. ieee_is_finite(r)) then
+         ! +-Inf: bin 1's ceiling is exceeded by construction. `sign(MAX_E1,
+         ! r)` is well-defined for an infinity (its sign bit is real).
+         ! Callers (`efp_from_real`) fold `is_ovf` into the poison counter,
+         ! so the saturated bin below is never actually read back out --
+         ! it exists only so `efp_carry`/`efp_regularize` see a normal
+         ! int64, not an attempted NaN-to-integer conversion.
+         is_ovf = .true.
+         e(1) = int(sign(MAX_E1, r), int64)
+         return
+      end if
 
       s = 1.0_real64
       rs = r
@@ -240,13 +313,17 @@ contains
    end subroutine efp_regularize
 
    pure function efp_from_real(r) result(a)
-      !! `real64 -> efp_t`.  Wraps `efp_decompose`, discarding the NaN /
-      !! overflow flags (callers needing them should call `efp_decompose`
-      !! directly).
+      !! `real64 -> efp_t`.  Wraps `efp_decompose`; unlike the pre-fix
+      !! version, the NaN / overflow flags are NOT discarded -- they seed
+      !! `a%poison` (nonzero iff `is_nan .or. is_ovf`), so a poisoned
+      !! summand still taints every later `efp_plus`/`efp_to_real` even
+      !! though the flags themselves aren't returned here (callers needing
+      !! the raw flags call `efp_decompose` directly).
       real(real64), intent(in) :: r
       type(efp_t) :: a
       logical :: is_nan, is_ovf
       call efp_decompose(r, a%v, is_nan, is_ovf)
+      a%poison = merge(1_int64, 0_int64, is_nan .or. is_ovf)
    end function efp_from_real
 
    pure function efp_to_real(a) result(r)
@@ -254,9 +331,19 @@ contains
       !! the argument) -- `pure` with `intent(in)`, per
       !! `FORTRAN_STYLE.md`'s "default new procedures to pure" (MOM6's
       !! `EFP_to_real` instead mutates its `intent(inout)` argument).
+      !!
+      !! `a%poison /= 0` short-circuits to a quiet NaN -- see `efp_t`'s
+      !! docstring for why: this is what turns a non-finite input anywhere
+      !! in the accumulation into a NaN OUTPUT, instead of the fixed-point
+      !! bins (zeroed by a NaN decompose, or saturated by an overflow one)
+      !! silently reconstructing a plausible finite value.
       type(efp_t), intent(in) :: a
       real(real64) :: r
       integer(int64) :: e(EFP_DIGITS)
+      if (a%poison /= 0_int64) then
+         r = ieee_value(r, ieee_quiet_nan)
+         return
+      end if
       e = a%v
       call efp_regularize(e)
       r = real(e(1), real64)*EFP_PR1 + real(e(2), real64)*EFP_PR2 &
@@ -284,20 +371,29 @@ contains
       !! forces every bin to share the overall sign, which -- like
       !! ordinary sign-magnitude fixed-radix representations -- IS
       !! unique for a given value, closing that gap.
+      !! Non-finite propagation: `c%poison = a%poison + b%poison`, so a
+      !! poisoned operand on EITHER side stays poisoned in the result (see
+      !! `efp_t`'s docstring) -- purely additive, so it composes correctly
+      !! through any accumulation order, matching the order-invariance
+      !! this function otherwise guarantees.
       type(efp_t), intent(in) :: a, b
       type(efp_t) :: c
       c%v = a%v + b%v
       call efp_regularize(c%v)
+      c%poison = a%poison + b%poison
    end function efp_plus
 
    pure function efp_minus(a, b) result(c)
       !! Exact bin-wise integer subtraction, regularised.  See `efp_plus`
       !! for why regularisation (not mere carry) is required for
-      !! bit-for-bit order invariance.
+      !! bit-for-bit order invariance, and for the `poison` propagation
+      !! (additive here too -- subtraction of a poisoned operand is still
+      !! poisoned, never "cancels" back to clean).
       type(efp_t), intent(in) :: a, b
       type(efp_t) :: c
       c%v = a%v - b%v
       call efp_regularize(c%v)
+      c%poison = a%poison + b%poison
    end function efp_minus
 
    pure function efp_real_diff(a, b) result(r)
@@ -313,28 +409,37 @@ contains
    end function efp_real_diff
 
    pure subroutine efp_to_transport(list, buf)
-      !! Pack a list of `efp_t` values into a flat `real64(6*n)` buffer for
-      !! a single collective (`halo_allreduce_efp_list`).  Each bin is
-      !! transported as an EXACTLY-representable double (see
-      !! `EFP_MAX_RANKS`): `buf((i-1)*EFP_DIGITS + n) = real(list(i)%v(n))`.
+      !! Pack a list of `efp_t` values into a flat
+      !! `real64(EFP_TRANSPORT_WIDTH*n)` buffer for a single collective
+      !! (`halo_allreduce_efp_list`).  Each bin, PLUS the `poison` counter,
+      !! is transported as an EXACTLY-representable double (see
+      !! `EFP_MAX_RANKS`):
+      !! `buf((i-1)*EFP_TRANSPORT_WIDTH + n) = real(list(i)%v(n))` for
+      !! `n = 1..EFP_DIGITS`, and
+      !! `buf((i-1)*EFP_TRANSPORT_WIDTH + EFP_DIGITS+1) = real(list(i)%poison)`.
+      !! Summing `poison` through the SAME `MPI_SUM` collective as the bins
+      !! is what makes a poisoned rank's contribution reach every other
+      !! rank identically -- see `efp_t`'s docstring.
       type(efp_t), intent(in) :: list(:)
       real(real64), intent(out) :: buf(:)
       integer :: i, n
       do i = 1, size(list)
          do n = 1, EFP_DIGITS
-            buf((i - 1)*EFP_DIGITS + n) = real(list(i)%v(n), real64)
+            buf((i - 1)*EFP_TRANSPORT_WIDTH + n) = real(list(i)%v(n), real64)
          end do
+         buf((i - 1)*EFP_TRANSPORT_WIDTH + EFP_DIGITS + 1) = real(list(i)%poison, real64)
       end do
    end subroutine efp_to_transport
 
    pure subroutine efp_from_transport(buf, list, ok)
-      !! Inverse of `efp_to_transport`: unpack a flat `real64(6*n)` buffer
-      !! (post-collective, still exact integers as doubles) back into
-      !! `efp_t` values, converting each bin back to `int64` and carrying.
-      !! `ok = .false.` iff any unpacked double is not an exact integer
-      !! (would indicate the transport-exactness bound was violated) --
-      !! the caller (`halo_allreduce_efp_list`) turns that into a fail-loud
-      !! `error stop`, never a silent truncation.
+      !! Inverse of `efp_to_transport`: unpack a flat
+      !! `real64(EFP_TRANSPORT_WIDTH*n)` buffer (post-collective, still
+      !! exact integers as doubles) back into `efp_t` values, converting
+      !! each bin AND the summed `poison` counter back to `int64` and
+      !! carrying the bins.  `ok = .false.` iff any unpacked double is not
+      !! an exact integer (would indicate the transport-exactness bound
+      !! was violated) -- the caller (`halo_allreduce_efp_list`) turns that
+      !! into a fail-loud `error stop`, never a silent truncation.
       real(real64), intent(in) :: buf(:)
       type(efp_t), intent(out) :: list(:)
       logical, intent(out) :: ok
@@ -344,14 +449,20 @@ contains
       ok = .true.
       do i = 1, size(list)
          do n = 1, EFP_DIGITS
-            val = buf((i - 1)*EFP_DIGITS + n)
+            val = buf((i - 1)*EFP_TRANSPORT_WIDTH + n)
             if (val /= aint(val)) ok = .false.
             list(i)%v(n) = int(val, int64)
          end do
+         val = buf((i - 1)*EFP_TRANSPORT_WIDTH + EFP_DIGITS + 1)
+         if (val /= aint(val)) ok = .false.
+         list(i)%poison = int(val, int64)
          ! Regularise (not merely carry) so the post-combine bins are the
          ! SAME canonical representation a single-rank EFP sum of the
          ! whole field would produce -- see `efp_plus`'s docstring for why
-         ! carry alone is not bit-for-bit order-invariant.
+         ! carry alone is not bit-for-bit order-invariant. Harmless (and
+         ! still needed for the transport-exactness `ok` semantics) even
+         ! when `poison /= 0`, since `efp_to_real` never reads `v(:)` in
+         ! that case.
          call efp_regularize(list(i)%v)
       end do
    end subroutine efp_from_transport

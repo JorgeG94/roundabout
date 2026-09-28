@@ -61,6 +61,17 @@ module rdb_multilayer_state
          !! every rank count.
       integer(int64) :: mass_out_efp(EFP_DIGITS) = 0_int64
          !! This rank's `mass_out` as EFP bins (`rdb_efp` layout).
+      integer(int64) :: mass_out_efp_poison = 0_int64
+         !! Non-finite counter for `mass_out_efp`, mirroring `efp_t%poison`
+         !! (this accumulator is a raw bin array, not an `efp_t`, since it
+         !! is a standalone module-level running total rather than a
+         !! collective-combined value -- see `efp_t`'s docstring in
+         !! `rdb_efp`). `ocean_accumulate_mass_out` adds a slab's poison
+         !! count here the same way it adds the slab's carried bins;
+         !! `ocean_console_stats_report` folds it into
+         !! `efp_local(IX_MOUT)%poison` so a NaN/Inf flux_h_layer poisons
+         !! the console's `Mass out` column instead of laundering into a
+         !! plausible finite number.
       logical :: mass_out_tracked = .false.
          !! Set once the dyn step has accumulated `mass_out`, so the console
          !! only activates the mass budget on a path that feeds it.

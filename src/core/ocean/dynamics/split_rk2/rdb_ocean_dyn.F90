@@ -2317,7 +2317,7 @@ contains
       real(wp), intent(in) :: dt, weight
       integer :: i, j, k, nz, nx, ny, i_lo, i_hi, j_lo, j_hi
       real(wp) :: acc
-      integer(int64) :: e1, e2, e3, e4, e5, e6, d1, d2, d3, d4, d5, d6
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison, d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val, scale, colsum
 
@@ -2354,8 +2354,9 @@ contains
          e4 = 0_int64
          e5 = 0_int64
          e6 = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6) &
-         !$acc&         private(val, colsum, d1, d2, d3, d4, d5, d6) present(flux_h_layer, areaT)
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&  private(val, colsum, d1, d2, d3, d4, d5, d6, dpoison) present(flux_h_layer, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                colsum = 0.0_real64
@@ -2364,18 +2365,20 @@ contains
                   colsum = colsum + real(flux_h_layer(i, j, k), real64)
                end do
                val = scale*colsum*real(areaT(i, j), real64)
-               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2
                e3 = e3 + d3
                e4 = e4 + d4
                e5 = e5 + d5
                e6 = e6 + d6
+               epoison = epoison + dpoison
             end do
          end do
          slab_e = [e1, e2, e3, e4, e5, e6]
          call efp_carry(slab_e)
          ms%mass_out_efp = ms%mass_out_efp + slab_e
+         ms%mass_out_efp_poison = ms%mass_out_efp_poison + epoison
          call efp_carry(ms%mass_out_efp)
       end if
    end subroutine ocean_accumulate_mass_out

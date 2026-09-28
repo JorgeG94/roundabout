@@ -16,13 +16,23 @@
 !!   * `test_efp_transport_roundtrip` -- `efp_to_transport`/`efp_from_transport`
 !!     (the single-rank leg of the cross-rank combine; the multi-rank leg is
 !!     `tests/mpi/test_efp_mpi.F90`).
+!!   * `test_efp_poison_propagates_nan`/`_inf` -- the NaN-laundering fix: a
+!!     NaN or +-Inf (or bin-1-overflowing finite) summand anywhere in an EFP
+!!     accumulation must make the reduced `efp_to_real` result NaN, never a
+!!     plausible finite number.
+!!   * `test_efp_poison_cross_rank_transport` -- the poison counter survives
+!!     `efp_to_transport`/`efp_from_transport` (what `halo_allreduce_efp_list`
+!!     does around its collective) bit-for-bit.
+!!   * `test_efp_finite_path_bit_identical` -- the regression guard: an
+!!     all-finite accumulation's bins are UNCHANGED by this fix.
 module test_efp
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: iso_fortran_env, only: int64, real64, real128
    use lcg_deterministic, only: lcg_next, lcg_unit
-   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan, &
+                                                                               ieee_positive_inf, ieee_negative_inf
    use rdb_efp, only: efp_t, EFP_DIGITS, EFP_PREC_WIDTH, EFP_GUARD_WIDTH, &
-                      EFP_MAX_SUMMANDS, EFP_MAX_RANKS, &
+                      EFP_MAX_SUMMANDS, EFP_MAX_RANKS, EFP_TRANSPORT_WIDTH, &
                       efp_decompose, efp_from_real, efp_to_real, &
                       efp_plus, efp_minus, efp_real_diff, &
                       efp_to_transport, efp_from_transport
@@ -41,7 +51,11 @@ contains
                   new_unittest("efp_algebra", test_efp_algebra), &
                   new_unittest("efp_bounds", test_efp_bounds), &
                   new_unittest("efp_nan_overflow_flags", test_efp_nan_overflow_flags), &
-                  new_unittest("efp_transport_roundtrip", test_efp_transport_roundtrip) &
+                  new_unittest("efp_transport_roundtrip", test_efp_transport_roundtrip), &
+                  new_unittest("efp_poison_propagates_nan", test_efp_poison_propagates_nan), &
+                  new_unittest("efp_poison_propagates_inf", test_efp_poison_propagates_inf), &
+                  new_unittest("efp_poison_cross_rank_transport", test_efp_poison_cross_rank_transport), &
+                  new_unittest("efp_finite_path_bit_identical", test_efp_finite_path_bit_identical) &
                   ]
    end subroutine collect_efp_tests
 
@@ -389,7 +403,7 @@ contains
       !! itself is `tests/mpi/test_efp_mpi.F90`.
       type(error_type), allocatable, intent(out) :: error
       type(efp_t) :: list_in(3), list_out(3)
-      real(real64) :: buf(3*EFP_DIGITS)
+      real(real64) :: buf(3*EFP_TRANSPORT_WIDTH)
       logical :: ok
       integer :: i
 
@@ -406,7 +420,180 @@ contains
          call check(error, all(list_in(i)%v == list_out(i)%v), &
                     "transport round-trip must reproduce the original bins exactly")
          if (allocated(error)) return
+         call check(error, list_in(i)%poison == list_out(i)%poison, &
+                    "transport round-trip must reproduce the poison counter exactly")
+         if (allocated(error)) return
       end do
    end subroutine test_efp_transport_roundtrip
+
+   subroutine test_efp_poison_propagates_nan(error)
+      !! The headline fix: a NaN anywhere in an EFP accumulation must make
+      !! the FINAL reduced value read as NaN -- never a plausible finite
+      !! number (the pre-fix bug: a NaN summand decomposed to zeroed bins,
+      !! which then reconstructed as a silent 0.0). Three checks: (a) a
+      !! single NaN via `efp_from_real` is poisoned and reads back NaN,
+      !! (b) folding one NaN into an otherwise-normal running sum poisons
+      !! the WHOLE accumulator (order of accumulation does not matter --
+      !! `efp_plus` is commutative in poison, per `test_efp_order_invariant`'s
+      !! bit-identity property), and (c) `efp_real_diff` against a clean
+      !! reference is also NaN, not a finite "drift".
+      type(error_type), allocatable, intent(out) :: error
+      real(real64) :: nan_val, r
+      type(efp_t) :: a, acc, ref
+      integer :: i
+
+      nan_val = ieee_value(1.0_real64, ieee_quiet_nan)
+
+      ! (a) A lone NaN.
+      a = efp_from_real(nan_val)
+      call check(error, a%poison /= 0_int64, "efp_from_real(NaN) must set poison /= 0")
+      if (allocated(error)) return
+      r = efp_to_real(a)
+      call check(error, ieee_is_nan(r), "efp_to_real of a poisoned efp_t must be NaN")
+      if (allocated(error)) return
+
+      ! (b) One NaN folded into a 100-element otherwise-clean running sum,
+      ! at an arbitrary position (not first, not last).
+      acc = efp_from_real(0.0_real64)
+      do i = 1, 100
+         if (i == 37) then
+            acc = efp_plus(acc, efp_from_real(nan_val))
+         else
+            acc = efp_plus(acc, efp_from_real(real(i, real64)))
+         end if
+      end do
+      call check(error, acc%poison /= 0_int64, &
+                 "one NaN summand among 100 must poison the whole accumulation")
+      if (allocated(error)) return
+      r = efp_to_real(acc)
+      call check(error, ieee_is_nan(r), &
+                 "efp_to_real must read NaN for an accumulation containing one NaN summand, " &
+                 //"never a plausible finite total (e.g. the clean sum of the other 99 terms)")
+      if (allocated(error)) return
+
+      ! (c) efp_real_diff against a clean reference is also NaN.
+      ref = efp_from_real(5050.0_real64)
+      r = efp_real_diff(acc, ref)
+      call check(error, ieee_is_nan(r), &
+                 "efp_real_diff must read NaN when either operand is poisoned")
+   end subroutine test_efp_poison_propagates_nan
+
+   subroutine test_efp_poison_propagates_inf(error)
+      !! `+Inf`/`-Inf` and a magnitude beyond bin 1's representable ceiling
+      !! are treated the SAME as NaN (documented choice: "NaN, not a
+      !! saturated-but-finite value" -- CLAUDE.md's NaN-blind-clamp hazard
+      !! class applies equally to a silently-saturated overflow).
+      type(error_type), allocatable, intent(out) :: error
+      real(real64) :: pos_inf, neg_inf, huge_val, r
+      type(efp_t) :: a
+
+      pos_inf = ieee_value(1.0_real64, ieee_positive_inf)
+      a = efp_from_real(pos_inf)
+      call check(error, a%poison /= 0_int64, "efp_from_real(+Inf) must set poison /= 0")
+      if (allocated(error)) return
+      r = efp_to_real(a)
+      call check(error, ieee_is_nan(r), "efp_to_real of a +Inf-poisoned efp_t must be NaN")
+      if (allocated(error)) return
+
+      neg_inf = ieee_value(1.0_real64, ieee_negative_inf)
+      a = efp_from_real(neg_inf)
+      call check(error, a%poison /= 0_int64, "efp_from_real(-Inf) must set poison /= 0")
+      if (allocated(error)) return
+      r = efp_to_real(a)
+      call check(error, ieee_is_nan(r), "efp_to_real of a -Inf-poisoned efp_t must be NaN")
+      if (allocated(error)) return
+
+      ! Finite but beyond bin 1's ceiling (same magnitude table as
+      ! `test_efp_nan_overflow_flags`).
+      huge_val = 2.0_real64**(2*EFP_PREC_WIDTH)*real(huge(0_int64), real64)*10.0_real64
+      a = efp_from_real(huge_val)
+      call check(error, a%poison /= 0_int64, &
+                 "efp_from_real of a bin-1-overflowing finite value must set poison /= 0")
+      if (allocated(error)) return
+      r = efp_to_real(a)
+      call check(error, ieee_is_nan(r), &
+                 "efp_to_real of a bin-1-overflow-poisoned efp_t must be NaN, " &
+                 //"never the silently-saturated finite value")
+   end subroutine test_efp_poison_propagates_inf
+
+   subroutine test_efp_poison_cross_rank_transport(error)
+      !! Single-rank leg of the cross-rank NaN-propagation contract (the
+      !! multi-rank leg is `tests/mpi/test_efp_mpi.F90`): pack a poisoned
+      !! and a clean `efp_t` through `efp_to_transport`/`efp_from_transport`
+      !! (what `halo_allreduce_efp_list` does around the collective) and
+      !! confirm the poison counter survives the round trip bit-for-bit,
+      !! so a poisoned rank's contribution cannot silently disappear in
+      !! the packed transport buffer.
+      type(error_type), allocatable, intent(out) :: error
+      type(efp_t) :: list_in(2), list_out(2)
+      real(real64) :: buf(2*EFP_TRANSPORT_WIDTH)
+      logical :: ok
+      real(real64) :: nan_val, r
+
+      nan_val = ieee_value(1.0_real64, ieee_quiet_nan)
+      list_in(1) = efp_from_real(42.0_real64)
+      list_in(2) = efp_from_real(nan_val)
+
+      call efp_to_transport(list_in, buf)
+      call efp_from_transport(buf, list_out, ok)
+
+      call check(error, ok, "efp_from_transport must report ok (poison rides as an exact 0/1 double)")
+      if (allocated(error)) return
+      call check(error, list_out(1)%poison == 0_int64, &
+                 "the clean value's poison counter must survive transport as 0")
+      if (allocated(error)) return
+      call check(error, list_out(2)%poison /= 0_int64, &
+                 "the poisoned value's poison counter must survive transport as nonzero")
+      if (allocated(error)) return
+      r = efp_to_real(list_out(2))
+      call check(error, ieee_is_nan(r), &
+                 "the poisoned value must still read NaN after a transport round-trip")
+   end subroutine test_efp_poison_cross_rank_transport
+
+   subroutine test_efp_finite_path_bit_identical(error)
+      !! The bit-identity guarantee for the UNCHANGED case: an all-finite
+      !! accumulation (no NaN/Inf/overflow anywhere) must produce EXACTLY
+      !! the same bins as before this fix -- `poison` stays 0 throughout,
+      !! so it never perturbs `efp_plus`/`efp_regularize`/`efp_to_real`'s
+      !! arithmetic on the bins. Re-runs `test_efp_order_invariant`'s
+      !! forward/backward accumulation and checks the reconstructed real
+      !! against a directly-summed double reference at a tolerance an
+      !! order-perturbed sum could not meet by chance.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: n = 1000
+      real(real64), allocatable :: vals(:)
+      integer(int64) :: seed
+      integer :: i
+      type(efp_t) :: fwd, bwd
+      real(real64) :: ref
+
+      allocate (vals(n))
+      seed = 24681357_int64
+      do i = 1, n
+         seed = seed + 1_int64
+         vals(i) = lcg_value(seed)
+      end do
+
+      fwd = efp_from_real(0.0_real64)
+      ref = 0.0_real64
+      do i = 1, n
+         fwd = efp_plus(fwd, efp_from_real(vals(i)))
+         ref = ref + vals(i)
+      end do
+      bwd = efp_from_real(0.0_real64)
+      do i = n, 1, -1
+         bwd = efp_plus(bwd, efp_from_real(vals(i)))
+      end do
+
+      call check(error, fwd%poison == 0_int64 .and. bwd%poison == 0_int64, &
+                 "an all-finite accumulation must leave poison at 0")
+      if (allocated(error)) return
+      call check(error, all(fwd%v == bwd%v), &
+                 "an all-finite forward/backward accumulation must stay bit-identical bins " &
+                 //"(poison must not perturb the bin arithmetic)")
+      if (allocated(error)) return
+      call check(error, abs(efp_to_real(fwd) - ref) < 1.0e-6_real64*abs(ref), &
+                 "an all-finite EFP total must still agree with a plain double reference sum")
+   end subroutine test_efp_finite_path_bit_identical
 
 end module test_efp
