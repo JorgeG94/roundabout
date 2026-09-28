@@ -248,7 +248,11 @@ contains
                   new_unittest("sloping_lid_residual_matches_formula", test_slope_formula), &
                   new_unittest("load_off_control_at_the_pgf", test_load_off_control), &
                   new_unittest("trim_ic_root_is_the_displaced_weight", test_trim_root), &
-                  new_unittest("trim_ic_balances_the_depth_mean_pfu", test_trim_balances_pfu) &
+                  new_unittest("trim_ic_balances_the_depth_mean_pfu", test_trim_balances_pfu), &
+                  new_unittest("trim_ic_uniform_rho_rest_end_to_end", &
+                               test_trim_uniform_rho_rest), &
+                  new_unittest("trim_ic_uniform_rho_pfu_is_roundoff", &
+                               test_trim_balances_pfu_uniform_rho) &
                   ]
    end subroutine collect_ocean_cavity_load_tests
 
@@ -548,6 +552,125 @@ contains
                  "removing the stratification must remove the residual, not just "// &
                  "shrink it — N^2 = 0 makes every trapezoid error G(K) vanish")
    end subroutine test_rest_uniform
+
+   function rest_nml_trim_uniform() result(nml)
+      !! `rest_nml`, but TRIMMED (`&ocean_cavity_dyn_nml
+      !! trim_ic_for_p_surf = .true.`) with a uniform, unstratified
+      !! density `rho_surf /= rho_ref`: `&ocean_zinit_nml source = "linear"`
+      !! with `lin_dt_dz = 0` (uniform T everywhere, under the ice and in
+      !! the open ocean alike) and `&ocean_ic_nml T_ref` offset from
+      !! `lin_t_ref` so `rho_surf = rho_0 - alpha_T*(lin_t_ref - T_ref)
+      !! /= rho_0`. This is `vcm_lid_slope_sigma_unstrat`
+      !! (`tests/regression/vcoord_matrix.py`) at unit-test scale: `f = 0`
+      !! (as `rest_nml`) so a residual force integrates cleanly to `a*t`
+      !! rather than a geostrophic amplitude `a/f`.
+      character(len=:), allocatable :: nml
+      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+            "&grid_nml nx = 32, ny = 6, nghost = 2, dx = 2000.0, dy = 2000.0 /"// &
+            new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 10 /"//new_line("a")// &
+            "&time_nml t_end = 1.0e7, dt_fixed = 300.0 /"//new_line("a")// &
+            "&ocean_topo_nml max_depth = 1000.0, taux_magnitude = 0.0 /"//new_line("a")// &
+            "&physics_nml coriolis_f = 0.0 /"//new_line("a")// &
+            "&tracer_nml initial_salinity = 35.0, T_init_bottom = 10.0, "// &
+            "T_init_surface = 10.0 /"//new_line("a")// &
+            "&ocean_ic_nml alpha_T = 0.2, beta_S = 0.0, T_ref = 8.0, S_ref = 35.0 /"// &
+            new_line("a")// &
+            "&ocean_zinit_nml enable = .true., source = 'linear', "// &
+            "lin_t_ref = 10.0, lin_dt_dz = 0.0, lin_s_ref = 35.0, lin_ds_dz = 0.0 /"// &
+            new_line("a")// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
+            "&ocean_bt_nml split_scheme = 'pred_corr', auto_n_inner = .false., "// &
+            "n_inner = 24 /"//new_line("a")// &
+            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+            "draft_depth = 190.0, draft_slope = 1.0e-3, draft_x0 = -10000.0, "// &
+            "trim_ic_for_p_surf = .true. /"//new_line("a")// &
+            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+            "&output_nml output_to_file = .false. /"//new_line("a")
+   end function rest_nml_trim_uniform
+
+   subroutine test_trim_uniform_rho_rest(error)
+      !! THE END-TO-END REGRESSION for the `g_bt` / free-surface-gravity
+      !! mismatch fixed in `configure_ocean_pgf` (2026-09-28): a sloping
+      !! ice lid, uniform density `rho_surf /= rho_ref`, TRIMMED to rest
+      !! under the MOM6 barotropic split (`&ocean_bt_nml bc_pgf_forcing`,
+      !! default) — exactly `vcm_lid_slope_sigma_unstrat`'s geometry.
+      !!
+      !! The raw PGF face force at this state is round-off
+      !! (`trim_ic_balances_the_depth_mean_pfu_uniform_rho`); what this
+      !! test catches is a level up. `barotropic_workstate_t%g_bt`
+      !! defaults to the struct literal `9.81_wp`, while the slow PGF's
+      !! shed free-surface term (`pgf_free_surface_gravity`,
+      !! `set_fast_forcing_eta_pf`) is built from the real `GRAVITY`
+      !! constant (`9.80665_wp`). Before the fix, `configure_ocean_pgf`
+      !! only overwrote `g_bt` with `gfs_scale*GRAVITY` when
+      !! `gfs_scale < 1`, so the DEFAULT `gfs_scale = 1.0` case (this one)
+      !! kept the stale `9.81`.  The barotropic fast loop's own live
+      !! `-g_bt*grad(eta)` then did not exactly cancel the shed
+      !! `+g_pf*grad(eta)` forcing, leaving a REAL, uncancelled
+      !! `(g_bt - GRAVITY)*grad(eta_trim)` acceleration at a motionless
+      !! state — invisible where `eta` has no static gradient (every
+      !! ordinary run), but the trimmed cavity's `eta_trim` has exactly
+      !! that.  Measured before the fix: `vcm_lid_slope_sigma_unstrat`
+      !! peak En 9.997e-13 m^2/s^2; after, 3.24e-20.
+      type(error_type), allocatable, intent(out) :: error
+      type(c_ptr) :: handle, ptr
+      integer(c_int) :: status, nx, ny, nz, gen, nxp, nyp, nzp, ngc
+      real(wp), pointer :: u3(:, :, :), v3(:, :, :)
+      character(len=:), allocatable :: nml
+      real(wp) :: umax, vmax, bound
+      logical :: ok
+      integer :: ng
+
+      ok = .false.
+      umax = 0.0_wp
+      vmax = 0.0_wp
+      handle = c_null_ptr
+      nml = rest_nml_trim_uniform()
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      call check(error, status == OCEAN_STATUS_OK, &
+                 "trimmed uniform-density cavity failed to configure")
+      if (allocated(error)) return
+
+      status = rdb_ocean_step(handle, int(N_STEPS, c_int))
+      if (status == OCEAN_STATUS_OK) status = rdb_ocean_refresh_host(handle)
+      call check(error, status == OCEAN_STATUS_OK, &
+                 "trimmed uniform-density cavity failed to step")
+      if (allocated(error)) then
+         status = rdb_ocean_destroy(handle)
+         return
+      end if
+
+      status = rdb_ocean_get_grid_info(handle, nxp, nyp, nzp, ngc)
+      ng = int(ngc)
+      status = rdb_ocean_get_u_face_x_layer_ptr(handle, ptr, nx, ny, nz, gen)
+      call c_f_pointer(ptr, u3, [int(nx), int(ny), int(nz)])
+      status = rdb_ocean_get_v_face_y_layer_ptr(handle, ptr, nx, ny, nz, gen)
+      call c_f_pointer(ptr, v3, [int(nx), int(ny), int(nz)])
+      ! Strictly interior faces: wall faces are hard-zeroed, the ghost
+      ! band is not a solution anywhere (same convention as
+      ! `run_rest_case`).
+      umax = maxval(abs(u3(ng + 2:ng + int(nxp), ng + 1:ng + int(nyp), :)))
+      vmax = maxval(abs(v3(ng + 1:ng + int(nxp), ng + 2:ng + int(nyp), :)))
+      ok = all(ieee_is_finite(u3)) .and. all(ieee_is_finite(v3))
+      status = rdb_ocean_destroy(handle)
+      call check(error, ok .and. status == OCEAN_STATUS_OK, &
+                 "trimmed uniform-density cavity must stay finite")
+      if (allocated(error)) return
+
+      ! Round-off floor — same order-of-magnitude scaling as
+      ! `test_rest_uniform`'s bound (the pa(nz+1) surface-BC
+      ! cancellation's own rounding); NOT fitted to the measurement.
+      bound = REST_SAFETY*(epsilon(1.0_wp)*RHO_0*GRAVITY*BED* &
+                           sqrt(real(NZ_ML, wp)))*T_TOTAL/(RHO_0*DXY)
+      call check(error, umax <= bound, &
+                 "trimmed, uniform-density cavity must be at the round-off floor "// &
+                 "-- a live g_bt/GRAVITY mismatch shows up here as a REAL "// &
+                 "grad(eta_trim)-proportional barotropic forcing, not truncation")
+      if (allocated(error)) return
+      call check(error, vmax <= bound, "and the same meridionally")
+   end subroutine test_trim_uniform_rho_rest
 
    ! ==================================================================
    ! PGF-level unit cases
@@ -893,22 +1016,31 @@ contains
                  "the deepest trim on the ISOMIP+ COLD profile is -4.80 cm")
    end subroutine test_trim_root
 
-   pure subroutine seed_trim_column(ms, b, water, trimmed)
+   pure subroutine seed_trim_column(ms, b, water, trimmed, drho_dz_in)
       !! The `cavity_sloping_lid_rest` resting state across a strip of
       !! columns (draft stepping by `DRAFT_STEP_T`), `NZ_T` sigma layers,
       !! the layer density sampled at each layer centre's GEOPOTENTIAL
       !! height (flat isopycnals), the Boussinesq-isostatic load — and,
       !! when `trimmed`, the column top moved to `-z_draft + eta_trim`.
+      !!
+      !! `drho_dz_in` (default `DRHO_DZ_T`) overrides the vertical
+      !! gradient while keeping the SAME `RHO_S_T` surface value — passing
+      !! `0.0_wp` gives the uniform-density (`vcm_lid_slope_sigma_unstrat`)
+      !! case: `rho_surf /= rho_ref` (the load's reference density) but
+      !! `N^2 = 0` everywhere, column and face alike.
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(out) :: b(:, :)
       real(wp), intent(out) :: water(:, :)
          !! The seeded water column, trim included.
       logical, intent(in) :: trimmed
+      real(wp), intent(in), optional :: drho_dz_in
       integer :: i, j, k, nx, ny
       real(wp), allocatable :: zd(:, :), eta(:, :)
-      real(wp) :: e_low
+      real(wp) :: e_low, drho_dz
       logical :: ok
 
+      drho_dz = DRHO_DZ_T
+      if (present(drho_dz_in)) drho_dz = drho_dz_in
       nx = size(ms%p_top, 1)
       ny = size(ms%p_top, 2)
       allocate (zd(nx, ny), eta(nx, ny))
@@ -921,14 +1053,14 @@ contains
       end do
       eta = 0.0_wp
       if (trimmed) call cavity_trim_eta_linear_impl(eta, ok, zd, water, 40.0_wp, &
-                                                    RHO_REF_T, RHO_S_T, DRHO_DZ_T, nx, ny)
+                                                    RHO_REF_T, RHO_S_T, drho_dz, nx, ny)
       do j = 1, ny
          do i = 1, nx
             water(i, j) = water(i, j) + eta(i, j)
             e_low = -BED_T
             do k = 1, NZ_T
                ms%h_layer(i, j, k) = water(i, j)/real(NZ_T, wp)
-               ms%rho_layer(i, j, k) = RHO_S_T + DRHO_DZ_T*(e_low + 0.5_wp*ms%h_layer(i, j, k))
+               ms%rho_layer(i, j, k) = RHO_S_T + drho_dz*(e_low + 0.5_wp*ms%h_layer(i, j, k))
                e_low = e_low + ms%h_layer(i, j, k)
             end do
             ms%p_top(i, j) = (RHO_REF_T*GRAVITY)*zd(i, j)
@@ -1044,6 +1176,65 @@ contains
       call pgf_raw%destroy(); call pgf_trim%destroy()
       call ms_raw%destroy(); call ms_trim%destroy()
    end subroutine test_trim_balances_pfu
+
+   subroutine test_trim_balances_pfu_uniform_rho(error)
+      !! `test_trim_balances_pfu`, cloned for UNIFORM density
+      !! (`drho_dz_in = 0`, same `RHO_S_T /= RHO_REF_T` surface value) —
+      !! the raw-PGF half of the `vcm_lid_slope_sigma_unstrat` defect
+      !! investigation (2026-09-28).  With `N^2 = 0` every `G(K)`
+      !! quadrature term in the trimmed case's own derivation is
+      !! identically zero (not merely small), so the FV_MOM6 face force
+      !! must land at ROUND-OFF, not at a bounded truncation term —
+      !! confirming the raw pressure-gradient stack was never the bug:
+      !! the defect (fixed alongside this test, `configure_ocean_pgf`'s
+      !! `bt_work%g_bt`) lives one level up, in the barotropic split's
+      !! free-surface gravity, which this PGF-only harness does not
+      !! exercise at all.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t) :: ms_trim
+      type(ocean_pressure_force_t) :: pgf_trim
+      type(hgrid_t) :: grid
+      real(wp), allocatable :: b(:, :), w_trim(:, :)
+      real(wp) :: mean_trim, hsum_t, roundoff_bound
+      integer :: i, j, k, nx, ny
+
+      checks: block
+         call grid%init(30, 4, NG_U, DX_T, DX_T)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         ms_trim%nz_ml = NZ_T
+         call ms_trim%init(grid)
+         allocate (b(nx, ny), w_trim(nx, ny))
+         call seed_trim_column(ms_trim, b, w_trim, .true., drho_dz_in=0.0_wp)
+         call make_pgf_t(grid, pgf_trim)
+         call run_pgf_u(grid, ms_trim, pgf_trim, b)
+
+         ! Round-off floor for a `pa` stack built from
+         ! O(RHO_REF_T*GRAVITY*BED_T) products, turned into an
+         ! acceleration by the Pass-3 `/(rho0*dx)` divisor. Generous
+         ! (1e4x epsilon) — the point is "no O(D) or O(D^3) term
+         ! survives", not a tight ulp count.
+         roundoff_bound = 1.0e4_wp*epsilon(1.0_wp)*RHO_REF_T*GRAVITY*BED_T/(RHO_REF_T*DX_T)
+         do j = 3, ny - 1
+            do i = 3, nx - 1
+               mean_trim = 0.0_wp; hsum_t = 0.0_wp
+               do k = 1, NZ_T
+                  mean_trim = mean_trim + &
+                              0.5_wp*(ms_trim%h_layer(i - 1, j, k) + ms_trim%h_layer(i, j, k))* &
+                              pgf_trim%dpdx_face%data(i, j, k)
+                  hsum_t = hsum_t + &
+                           0.5_wp*(ms_trim%h_layer(i - 1, j, k) + ms_trim%h_layer(i, j, k))
+               end do
+               mean_trim = mean_trim/hsum_t
+               call check(error, abs(mean_trim) <= roundoff_bound, &
+                          "uniform density (N^2 = 0): the trimmed depth-mean face "// &
+                          "force must be at round-off, not a bounded truncation term")
+               if (allocated(error)) exit checks
+            end do
+         end do
+      end block checks
+      call pgf_trim%destroy(); call ms_trim%destroy()
+   end subroutine test_trim_balances_pfu_uniform_rho
 
    subroutine make_pgf_t(grid, pgf)
       !! FV_MOM6 with the load in the top BC, at the trimmed case's rho_ref.
