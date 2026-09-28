@@ -223,22 +223,23 @@ map for SSH), a built-in bitmap font, PPM frames, then `ffmpeg` to MP4
 
 ## 4. What the year shows
 
-Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-25,
-code `f995eeef2` (the MOM6 barotropic split, `&ocean_bt_nml bc_pgf_forcing`,
-plus the FV_MOM6 in-situ density): 365 days, 17 520 steps, 4637 s wall
-(12.7 s per simulated day), 10.4 GB of device memory.
+Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-28,
+on main `df34a995d` plus the barotropic gravity fix (`g_bt` = GRAVITY under
+FV_MOM6): 365 days, 17 520 steps, 4056 s wall
+(11.1 s per simulated day), 10.4 GB of device memory. The speed column is from the previous reference year (before the
+gravity fix), whose En differs from this one by at most 0.3 %.
 
 | day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s) and where |
 |---:|---:|---:|---:|---:|---:|---|
-| 1 | 5.764e-04 | 0.046 | -1.80e-14 | -5.6e-16 | -2.4e-16 | 0.59, Cape Hatteras shelf, 30 m cell |
-| 10 | 5.166e-04 | 0.238 | -1.80e-13 | -3.7e-15 | -3.3e-15 | 0.85, Taiwan Strait, 17 m cell |
-| 30 | 5.067e-04 | 0.239 | -5.41e-13 | -1.2e-14 | -9.8e-15 | 0.80, North Carolina shelf, 16 m cell |
+| 1 | 5.765e-04 | 0.046 | -1.80e-14 | -5.2e-16 | -4.2e-16 | 0.59, Cape Hatteras shelf, 30 m cell |
+| 10 | 5.166e-04 | 0.238 | -1.80e-13 | -3.8e-15 | -3.4e-15 | 0.85, Taiwan Strait, 17 m cell |
+| 30 | 5.067e-04 | 0.239 | -5.41e-13 | -1.2e-14 | -1.0e-14 | 0.80, North Carolina shelf, 16 m cell |
 | 60 | 5.097e-04 | 0.224 | -1.08e-12 | -2.4e-14 | -2.1e-14 | 0.70, Taiwan Strait |
 | 90 | 5.100e-04 | 0.220 | -1.62e-12 | -3.7e-14 | -3.2e-14 | 0.65, Taiwan Strait |
-| 180 | 4.614e-04 | 0.146 | -3.25e-12 | -7.3e-14 | -6.4e-14 | 0.67, North Carolina shelf |
-| 240 | 4.390e-04 | 0.112 | -4.33e-12 | -9.7e-14 | -8.4e-14 | 0.67, Bering Strait, 42 m cell |
-| 300 | 4.172e-04 | 0.087 | -5.41e-12 | -1.2e-13 | -1.0e-13 | 0.69, Bering Strait |
-| 365 | 3.941e-04 | 0.066 | -6.58e-12 | -1.5e-13 | -1.2e-13 | 0.71, Bering Strait |
+| 180 | 4.615e-04 | 0.146 | -3.25e-12 | -7.3e-14 | -6.4e-14 | 0.67, North Carolina shelf |
+| 240 | 4.388e-04 | 0.112 | -4.33e-12 | -9.7e-14 | -8.4e-14 | 0.67, Bering Strait, 42 m cell |
+| 300 | 4.164e-04 | 0.087 | -5.41e-12 | -1.2e-13 | -1.0e-13 | 0.69, Bering Strait |
+| 365 | 3.938e-04 | 0.066 | -6.58e-12 | -1.5e-13 | -1.2e-13 | 0.71, Bering Strait |
 
 (Speeds are the daily means of the diagnostic file's one top-10 m level;
 the file carries no deeper velocity.)
