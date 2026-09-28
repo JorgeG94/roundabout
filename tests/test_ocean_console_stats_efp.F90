@@ -21,9 +21,14 @@
 !!     same state must produce a Mass/KE/Salt/Heat total that agrees with the
 !!     FP path to ~1e-9 relative, and must populate the EFP reference
 !!     (`exact_sums = .true.`).
+!!   * `test_efp_console_kernel_nan_propagates` — the NaN-laundering
+!!     regression this PR fixes: a NaN `h_layer` cell must reduce
+!!     `compute_total_h_efp` to NaN (via `efp_to_real`), never a finite
+!!     (e.g. "0.000"-looking) value.
 module test_ocean_console_stats_efp
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: iso_fortran_env, only: int64, real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
@@ -59,7 +64,9 @@ contains
                   new_unittest("console_reproducing_sums_off_bit_identical", &
                                test_console_reproducing_sums_off_bit_identical), &
                   new_unittest("console_reproducing_sums_true_agrees_with_fp", &
-                               test_console_reproducing_sums_true_agrees_with_fp) &
+                               test_console_reproducing_sums_true_agrees_with_fp), &
+                  new_unittest("efp_console_kernel_nan_propagates", &
+                               test_efp_console_kernel_nan_propagates) &
                   ]
    end subroutine collect_ocean_console_stats_efp_tests
 
@@ -103,19 +110,26 @@ contains
                                  1.0e-16_real64, -1.0e-16_real64, 0.0_real64]
       integer :: i
       integer(int64) :: e(6)
-      integer(int64) :: e1, e2, e3, e4, e5, e6
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
       logical :: is_nan, is_ovf
-      logical :: ok
+      logical :: ok, ok_poison
+      integer(int64) :: expect_poison
 
       ok = .true.
+      ok_poison = .true.
       do i = 1, size(table)
          call efp_decompose(table(i), e, is_nan, is_ovf)
-         call efp_decompose_impl(table(i), e1, e2, e3, e4, e5, e6)
+         call efp_decompose_impl(table(i), e1, e2, e3, e4, e5, e6, epoison)
          if (e(1) /= e1 .or. e(2) /= e2 .or. e(3) /= e3 .or. &
              e(4) /= e4 .or. e(5) /= e5 .or. e(6) /= e6) ok = .false.
+         expect_poison = merge(1_int64, 0_int64, is_nan .or. is_ovf)
+         if (epoison /= expect_poison) ok_poison = .false.
       end do
       call check(error, ok, &
                  "efp_decompose_impl must match rdb_efp::efp_decompose bin-for-bit")
+      if (allocated(error)) return
+      call check(error, ok_poison, &
+                 "efp_decompose_impl's poison flag must match is_nan .or. is_ovf from the canonical decompose")
    end subroutine test_efp_impl_matches_canonical
 
    subroutine test_efp_kernels_match_fp_kernels(error)
@@ -318,5 +332,57 @@ contains
       call check(error, abs(stats_efp%heat0 - stats_fp%heat0) <= 1.0e-9_wp*abs(stats_fp%heat0), &
                  "EFP-path Heat total must agree with the FP-path total to 1e-9 relative")
    end subroutine test_console_reproducing_sums_true_agrees_with_fp
+
+   subroutine test_efp_console_kernel_nan_propagates(error)
+      !! The regression this PR fixes: `vcm_rx0_040_lagrangian` (tier-1
+      !! stability matrix) blew up to an all-NaN column, but under
+      !! `reproducing_sums = .true.` the console printed `En 0.000E+00`
+      !! `Salt 0.000` `Temp 0.000` instead of NaN -- the fixed-point EFP
+      !! path was laundering a NaN summand into a plausible finite number
+      !! (`efp_decompose_impl` had no NaN handling at all; a NaN input hit
+      !! `int(NaN, int64)`, compiler-undefined behaviour). This poisons ONE
+      !! interior cell of `h_layer` with NaN and asserts the reduced
+      !! `compute_total_h_efp` total reads back as NaN via `efp_to_real`
+      !! -- never a finite "0.000"-looking value -- so the console's own
+      !! `panic_on_nan` guard (`rdb_console_stats.F90`) actually sees the
+      !! poisoned state it is supposed to abort on.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      type(efp_t) :: h_efp_clean, h_efp_nan
+      real(wp) :: r
+
+      call setup_state(grid, state)
+      call ocean_state_enter_data(state)
+
+      ! Sanity: the clean field (no NaN yet) must reduce to a finite total.
+      h_efp_clean = compute_total_h_efp(state%multilayer%h_layer, state%metrics%areaT, grid%nghost)
+      r = real(efp_to_real(h_efp_clean), wp)
+      call check(error,.not. ieee_is_nan(r), &
+                 "compute_total_h_efp must reduce an all-finite field to a finite total")
+      if (allocated(error)) then
+         call ocean_state_exit_data(state); call state%destroy(); return
+      end if
+
+      ! Poison one interior (non-ghost) cell, refresh the device copy the
+      ! kernel actually reads (mem:separate contract: a host edit needs
+      ! `!$acc update device` to reach a `present(...)`-mapped array), and
+      ! re-reduce.
+      state%multilayer%h_layer(grid%nghost + 2, grid%nghost + 2, 1) = &
+         ieee_value(1.0_wp, ieee_quiet_nan)
+      !$acc update device(state%multilayer%h_layer)
+      h_efp_nan = compute_total_h_efp(state%multilayer%h_layer, state%metrics%areaT, grid%nghost)
+      r = real(efp_to_real(h_efp_nan), wp)
+
+      call ocean_state_exit_data(state)
+      call state%destroy()
+
+      call check(error, h_efp_nan%poison /= 0_int64, &
+                 "compute_total_h_efp must set poison /= 0 when a summand is NaN")
+      if (allocated(error)) return
+      call check(error, ieee_is_nan(r), &
+                 "a NaN h_layer cell must reduce compute_total_h_efp to NaN, " &
+                 //"never a finite (e.g. 0.000-looking) value")
+   end subroutine test_efp_console_kernel_nan_propagates
 
 end module test_ocean_console_stats_efp

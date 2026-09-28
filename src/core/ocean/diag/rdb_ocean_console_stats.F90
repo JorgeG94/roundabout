@@ -15,6 +15,7 @@ module rdb_ocean_console_stats
    !! can't follow inside an inlined reduction kernel). Initial values
    !! captured on the first call; later calls report relative drift.
    use, intrinsic :: iso_fortran_env, only: int64, real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, RHO_WATER
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -444,6 +445,7 @@ contains
          end if
          if (ms%mass_out_efp_on) then
             efp_local(IX_MOUT)%v = ms%mass_out_efp
+            efp_local(IX_MOUT)%poison = ms%mass_out_efp_poison
          else
             efp_local(IX_MOUT) = efp_from_real(real(ms%mass_out, real64))
          end if
@@ -899,28 +901,39 @@ contains
    ! (`halo_allreduce_efp_list`), and `docs/CAPABILITIES_AND_LIMITATIONS.md`
    ! for the achievable guarantee.
 
-   pure subroutine efp_decompose_impl(r, e1, e2, e3, e4, e5, e6)
+   pure subroutine efp_decompose_impl(r, e1, e2, e3, e4, e5, e6, epoison)
       !! In-module `!$acc routine seq` duplicate of `rdb_efp::efp_decompose`
-      !! -- six SCALAR outputs (not an `int64(6)` array) so the call sites
-      !! below can accumulate directly into six `reduction(+:e1..e6)`
-      !! clauses (OpenACC has no portable array reduction).  Duplicated
-      !! rather than called from `rdb_efp` because NVHPC's device codegen
-      !! does not inline a `pure !$acc routine seq` helper across a module
-      !! boundary (CLAUDE.md Gotchas); `test_efp_impl_matches_canonical`
-      !! (`RDB_ENABLE_TESTING`-gated) pins this copy bin-for-bit against
-      !! the canonical procedure over the same magnitude table --
-      !! `compute_ice_totals`'s docstring documents the identical pattern
-      !! for `ice_cell_concentration_impl`.
+      !! -- six SCALAR bin outputs (not an `int64(6)` array) so the call
+      !! sites below can accumulate directly into
+      !! `reduction(+:e1..e6,epoison)` clauses (OpenACC has no portable
+      !! array reduction).  Duplicated rather than called from `rdb_efp`
+      !! because NVHPC's device codegen does not inline a
+      !! `pure !$acc routine seq` helper across a module boundary (CLAUDE.md
+      !! Gotchas); `test_efp_impl_matches_canonical` (`RDB_ENABLE_TESTING`-
+      !! gated) pins this copy bin-for-bit against the canonical procedure
+      !! over the same magnitude table -- `compute_ice_totals`'s docstring
+      !! documents the identical pattern for `ice_cell_concentration_impl`.
       !!
-      !! No NaN / overflow flags (unlike the canonical `efp_decompose`):
-      !! console summands here are physical products (`h*areaT`,
-      !! `hTr*areaT`, kinetic energy) already covered by the console's own
-      !! NaN panic (`rdb_console_stats.F90`'s `panic_on_nan`); this
-      !! duplicate exists purely for the well-behaved-value bin arithmetic
-      !! the pinning test exercises.
+      !! `epoison` is the device-reduction twin of `rdb_efp::efp_t%poison`:
+      !! 1 when `r` is NaN, +-Inf, or exceeds bin 1's representable
+      !! ceiling, 0 otherwise -- summed by the caller's OWN
+      !! `reduction(+:epoison)` across the k-slab, and from there folded
+      !! into the running `efp_t%poison` counter (`compute_total_h_efp`
+      !! etc.) so a non-finite console summand (a NaN'd `h_layer` or
+      !! `u_face_x_layer`, the diagnosed vcm_rx0_040_lagrangian failure
+      !! mode) makes the FINAL reduced total read as NaN via
+      !! `efp_to_real`, instead of the zeroed/saturated bins below
+      !! silently reconstructing a plausible finite number -- the
+      !! console's own NaN panic (`rdb_console_stats.F90`'s
+      !! `panic_on_nan`) sees the poisoned value it is supposed to.
+      !! `ieee_is_finite` (not a `>=`/`<` comparison chain) is the guard,
+      !! per CLAUDE.md's NaN-blind-if/else-clamp gotcha: it is the
+      !! dedicated bit-pattern test and is not subject to `-fast`
+      !! reassociation.
       !$acc routine seq
       real(real64), intent(in) :: r
       integer(int64), intent(out) :: e1, e2, e3, e4, e5, e6
+      integer(int64), intent(out) :: epoison
       real(real64) :: rs, s
       real(real64), parameter :: PR1 = 2.0_real64**(2*EFP_PREC_WIDTH)
       real(real64), parameter :: PR2 = 2.0_real64**(1*EFP_PREC_WIDTH)
@@ -934,12 +947,37 @@ contains
       real(real64), parameter :: IPR4 = 1.0_real64/PR4
       real(real64), parameter :: IPR5 = 1.0_real64/PR5
       real(real64), parameter :: IPR6 = 1.0_real64/PR6
+      real(real64), parameter :: MAX_E1 = real(huge(0_int64), real64)
+         !! Same bin-1 ceiling as `rdb_efp::efp_decompose`'s `MAX_E1`.
+
+      e1 = 0_int64
+      e2 = 0_int64
+      e3 = 0_int64
+      e4 = 0_int64
+      e5 = 0_int64
+      e6 = 0_int64
+      epoison = 0_int64
+
+      if (.not. ieee_is_finite(r)) then
+         ! Covers NaN and +-Inf alike: zeroed bins (matching the canonical
+         ! `efp_decompose`'s NaN branch) plus the poison flag -- never an
+         ! `int(NaN, int64)` conversion, which is compiler-undefined and is
+         ! exactly how a NaN summand used to launder into "0.000" on the
+         ! console (see rdb_efp's module docstring / CLAUDE.md Gotchas).
+         epoison = 1_int64
+         return
+      end if
 
       s = 1.0_real64
       rs = r
       if (rs < 0.0_real64) then
          s = -1.0_real64
          rs = -rs
+      end if
+
+      if (rs*IPR1 >= MAX_E1) then
+         epoison = 1_int64
+         return
       end if
 
       e1 = int(s*aint(rs*IPR1), int64)
@@ -988,8 +1026,8 @@ contains
       integer, intent(in) :: nghost
       type(efp_t) :: total
       integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
-      integer(int64) :: e1, e2, e3, e4, e5, e6
-      integer(int64) :: d1, d2, d3, d4, d5, d6
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
 
@@ -1003,6 +1041,7 @@ contains
       call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_h_efp")
 
       total%v = 0_int64
+      total%poison = 0_int64
       do k = 1, nz
          e1 = 0_int64
          e2 = 0_int64
@@ -1010,24 +1049,27 @@ contains
          e4 = 0_int64
          e5 = 0_int64
          e6 = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6) present(h_layer, areaT)
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(h_layer, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val = real(h_layer(i, j, k), real64)*real(areaT(i, j), real64)
-               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2
                e3 = e3 + d3
                e4 = e4 + d4
                e5 = e5 + d5
                e6 = e6 + d6
+               epoison = epoison + dpoison
             end do
          end do
          slab_e = [e1, e2, e3, e4, e5, e6]
          call efp_carry(slab_e)
          total%v = total%v + slab_e
          call efp_carry(total%v)
+         total%poison = total%poison + epoison
       end do
    end function compute_total_h_efp
 
@@ -1040,8 +1082,8 @@ contains
       integer, intent(in) :: nghost
       type(efp_t) :: total
       integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
-      integer(int64) :: e1, e2, e3, e4, e5, e6
-      integer(int64) :: d1, d2, d3, d4, d5, d6
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
 
@@ -1055,6 +1097,7 @@ contains
       call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_tracer_efp")
 
       total%v = 0_int64
+      total%poison = 0_int64
       do k = 1, nz
          e1 = 0_int64
          e2 = 0_int64
@@ -1062,23 +1105,26 @@ contains
          e4 = 0_int64
          e5 = 0_int64
          e6 = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6) present(hTr, areaT)
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val = real(hTr(i, j, k), real64)*real(areaT(i, j), real64)
-               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2
                e3 = e3 + d3
                e4 = e4 + d4
                e5 = e5 + d5
                e6 = e6 + d6
+               epoison = epoison + dpoison
             end do
          end do
          slab_e = [e1, e2, e3, e4, e5, e6]
          call efp_carry(slab_e)
          total%v = total%v + slab_e
+         total%poison = total%poison + epoison
          call efp_carry(total%v)
       end do
    end function compute_total_tracer_efp
@@ -1093,8 +1139,8 @@ contains
       integer, intent(in) :: nghost
       type(efp_t) :: total
       integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
-      integer(int64) :: e1, e2, e3, e4, e5, e6
-      integer(int64) :: d1, d2, d3, d4, d5, d6
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
       real(wp) :: uc, vc
@@ -1109,6 +1155,7 @@ contains
       call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_ke_efp")
 
       total%v = 0_int64
+      total%poison = 0_int64
       do k = 1, nz
          e1 = 0_int64
          e2 = 0_int64
@@ -1116,26 +1163,29 @@ contains
          e4 = 0_int64
          e5 = 0_int64
          e6 = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6) &
-         !$acc&         private(val, uc, vc, d1, d2, d3, d4, d5, d6) &
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, uc, vc, d1, d2, d3, d4, d5, d6, dpoison) &
          !$acc&         present(h_layer, u_face, v_face, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                uc = 0.5_wp*(u_face(i, j, k) + u_face(i + 1, j, k))
                vc = 0.5_wp*(v_face(i, j, k) + v_face(i, j + 1, k))
                val = real(0.5_wp*h_layer(i, j, k)*(uc*uc + vc*vc)*areaT(i, j), real64)
-               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2
                e3 = e3 + d3
                e4 = e4 + d4
                e5 = e5 + d5
                e6 = e6 + d6
+               epoison = epoison + dpoison
             end do
          end do
          slab_e = [e1, e2, e3, e4, e5, e6]
          call efp_carry(slab_e)
          total%v = total%v + slab_e
+         total%poison = total%poison + epoison
          call efp_carry(total%v)
       end do
    end function compute_total_ke_efp
@@ -1157,12 +1207,12 @@ contains
       integer, intent(in) :: ncat, nghost
       type(efp_t), intent(out) :: wet_area_efp, ci_area_efp, hi_area_efp
       integer :: i, j, c, nx, ny, i_lo, i_hi, j_lo, j_hi
-      integer(int64) :: ew1, ew2, ew3, ew4, ew5, ew6
-      integer(int64) :: ec1, ec2, ec3, ec4, ec5, ec6
-      integer(int64) :: eh1, eh2, eh3, eh4, eh5, eh6
-      integer(int64) :: dw1, dw2, dw3, dw4, dw5, dw6
-      integer(int64) :: dc1, dc2, dc3, dc4, dc5, dc6
-      integer(int64) :: dh1, dh2, dh3, dh4, dh5, dh6
+      integer(int64) :: ew1, ew2, ew3, ew4, ew5, ew6, ewp
+      integer(int64) :: ec1, ec2, ec3, ec4, ec5, ec6, ecp
+      integer(int64) :: eh1, eh2, eh3, eh4, eh5, eh6, ehp
+      integer(int64) :: dw1, dw2, dw3, dw4, dw5, dw6, dwp
+      integer(int64) :: dc1, dc2, dc3, dc4, dc5, dc6, dcp
+      integer(int64) :: dh1, dh2, dh3, dh4, dh5, dh6, dhp
       real(real64) :: val_w, val_c, val_h
       real(wp) :: ci, mice
 
@@ -1180,78 +1230,85 @@ contains
       ew4 = 0_int64
       ew5 = 0_int64
       ew6 = 0_int64
+      ewp = 0_int64
       ec1 = 0_int64
       ec2 = 0_int64
       ec3 = 0_int64
       ec4 = 0_int64
       ec5 = 0_int64
       ec6 = 0_int64
+      ecp = 0_int64
       eh1 = 0_int64
       eh2 = 0_int64
       eh3 = 0_int64
       eh4 = 0_int64
       eh5 = 0_int64
       eh6 = 0_int64
+      ehp = 0_int64
 
       if (ncat == 1) then
          !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ec1,ec2,ec3,ec4,ec5,ec6, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6) &
+         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
+         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
          !$acc&    private(ci, mice, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6) present(wet_T, areaT, m_ice)
+         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
+         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
+         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) present(wet_T, areaT, m_ice)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val_w = real(wet_T(i, j)*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6)
+               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
                ew1 = ew1 + dw1
                ew2 = ew2 + dw2
                ew3 = ew3 + dw3
                ew4 = ew4 + dw4
                ew5 = ew5 + dw5
                ew6 = ew6 + dw6
+               ewp = ewp + dwp
                if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) then
                   mice = m_ice(i, j, 1)
                   ci = 1.0_wp
                   val_c = real(ci*areaT(i, j), real64)
                   val_h = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6)
+                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6, dcp)
                   ec1 = ec1 + dc1
                   ec2 = ec2 + dc2
                   ec3 = ec3 + dc3
                   ec4 = ec4 + dc4
                   ec5 = ec5 + dc5
                   ec6 = ec6 + dc6
-                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6)
+                  ecp = ecp + dcp
+                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6, dhp)
                   eh1 = eh1 + dh1
                   eh2 = eh2 + dh2
                   eh3 = eh3 + dh3
                   eh4 = eh4 + dh4
                   eh5 = eh5 + dh5
                   eh6 = eh6 + dh6
+                  ehp = ehp + dhp
                end if
             end do
          end do
       else
          !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ec1,ec2,ec3,ec4,ec5,ec6, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6) &
+         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
+         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
          !$acc&    private(ci, mice, c, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6) &
+         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
+         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
+         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) &
          !$acc&    present(wet_T, areaT, part_size, m_ice)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val_w = real(wet_T(i, j)*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6)
+               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
                ew1 = ew1 + dw1
                ew2 = ew2 + dw2
                ew3 = ew3 + dw3
                ew4 = ew4 + dw4
                ew5 = ew5 + dw5
                ew6 = ew6 + dw6
+               ewp = ewp + dwp
                if (wet_T(i, j) > 0.5_wp) then
                   mice = 0.0_wp
                   ci = 0.0_wp
@@ -1262,30 +1319,35 @@ contains
                   ci = min(1.0_wp, ci)
                   val_c = real(ci*areaT(i, j), real64)
                   val_h = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6)
+                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6, dcp)
                   ec1 = ec1 + dc1
                   ec2 = ec2 + dc2
                   ec3 = ec3 + dc3
                   ec4 = ec4 + dc4
                   ec5 = ec5 + dc5
                   ec6 = ec6 + dc6
-                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6)
+                  ecp = ecp + dcp
+                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6, dhp)
                   eh1 = eh1 + dh1
                   eh2 = eh2 + dh2
                   eh3 = eh3 + dh3
                   eh4 = eh4 + dh4
                   eh5 = eh5 + dh5
                   eh6 = eh6 + dh6
+                  ehp = ehp + dhp
                end if
             end do
          end do
       end if
 
       wet_area_efp%v = [ew1, ew2, ew3, ew4, ew5, ew6]
+      wet_area_efp%poison = ewp
       call efp_carry(wet_area_efp%v)
       ci_area_efp%v = [ec1, ec2, ec3, ec4, ec5, ec6]
+      ci_area_efp%poison = ecp
       call efp_carry(ci_area_efp%v)
       hi_area_efp%v = [eh1, eh2, eh3, eh4, eh5, eh6]
+      hi_area_efp%poison = ehp
       call efp_carry(hi_area_efp%v)
    end subroutine compute_ice_totals_efp
 

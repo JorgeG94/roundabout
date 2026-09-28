@@ -24,7 +24,7 @@ module rdb_halo
                           isend, irecv, waitall, allreduce, MPI_MIN, MPI_MAX, MPI_SUM, &
                           HALO_ISEND_N, HALO_IRECV_N
    use rdb_comm_env, only: comm_env_compute_comm
-   use rdb_efp, only: efp_t, EFP_DIGITS, EFP_MAX_RANKS, &
+   use rdb_efp, only: efp_t, EFP_DIGITS, EFP_TRANSPORT_WIDTH, EFP_MAX_RANKS, &
                       efp_to_transport, efp_from_transport, efp_carry, &
                       efp_bin1_within_transport_bound
    use pic_logger, only: logger => global_logger
@@ -1152,13 +1152,25 @@ contains
       !! Non-in-place — `local_list` and `global_list` must be distinct
       !! actual arguments, matching `halo_allreduce_sum`'s aliasing
       !! contract.
+      !!
+      !! Non-finite propagation: `efp_to_transport`/`efp_from_transport`
+      !! carry each value's `poison` counter through the SAME `MPI_SUM` as
+      !! the bins (`EFP_TRANSPORT_WIDTH`, not `EFP_DIGITS`, per value), so
+      !! a NaN/+-Inf/overflow summand on ANY rank makes `global_list(i)`
+      !! read as NaN via `efp_to_real` on EVERY rank -- never a
+      !! rank-dependent result. A NaN-poisoned local value decomposes to
+      !! zeroed bins (`v(1) = 0`), so it sails through guard 2 below and is
+      !! resolved by the poison counter alone; an overflow-poisoned local
+      !! value instead saturates `v(1)` and typically TRIPS guard 2
+      !! itself at >1 rank -- a louder, equally fail-loud outcome, just
+      !! from a different guard.
       type(efp_t), intent(in) :: local_list(:)
       type(efp_t), intent(out) :: global_list(:)
       integer, intent(in) :: nval
 
       type(comm_t) :: comm
       integer :: num_ranks, i
-      real(real64) :: sendbuf(EFP_DIGITS*nval), recvbuf(EFP_DIGITS*nval)
+      real(real64) :: sendbuf(EFP_TRANSPORT_WIDTH*nval), recvbuf(EFP_TRANSPORT_WIDTH*nval)
       logical :: transport_ok
 
       comm = comm_env_compute_comm()
@@ -1194,7 +1206,7 @@ contains
       end do
 
       call efp_to_transport(local_list(1:nval), sendbuf)
-      call allreduce(comm, sendbuf, recvbuf, EFP_DIGITS*nval, op=MPI_SUM)
+      call allreduce(comm, sendbuf, recvbuf, EFP_TRANSPORT_WIDTH*nval, op=MPI_SUM)
 
       call efp_from_transport(recvbuf, global_list(1:nval), transport_ok)
       if (.not. transport_ok) then

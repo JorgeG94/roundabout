@@ -25,6 +25,7 @@
 #ifdef RDB_ENABLE_MPI
 program test_efp_mpi
    use, intrinsic :: iso_fortran_env, only: int64, real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
    use rdb_constants, only: wp
    use rdb_efp, only: efp_t, efp_from_real, efp_plus, efp_to_real
    use rdb_halo, only: halo_allreduce_efp_list, halo_allreduce_sum
@@ -155,6 +156,32 @@ program test_efp_mpi
          //"build; EFP correctness checks (a) and (b) still enforced", &
          global_fp_sum, ref_real
    end if
+
+   ! ---- NaN propagation: ONE rank (rank 0) poisons its local contribution
+   ! with a NaN; every rank's combined result must read NaN identically --
+   ! never a rank-dependent branch, and never a plausible finite number (the
+   ! bug this PR fixes -- see `rdb_efp`'s module docstring). Reuses the
+   ! i-split local sums built above, all-reduced through the SAME collective.
+   block
+      type(efp_t) :: local_nan(1), global_nan(1)
+      real(real64) :: r
+      local_nan(1) = local_efp_i
+      if (rank == 0) then
+         local_nan(1) = efp_plus(local_nan(1), efp_from_real(ieee_value(1.0_real64, ieee_quiet_nan)))
+      end if
+      call halo_allreduce_efp_list(local_nan, global_nan, 1)
+      r = efp_to_real(global_nan(1))
+      if (.not. ieee_is_nan(r)) then
+         n_fail = n_fail + 1
+         write (*, *) "Rank", rank, ": FAIL: a NaN on rank 0 must make EVERY rank's " &
+            //"combined EFP total read as NaN, got", r
+      end if
+      if (global_nan(1)%poison == 0_int64) then
+         n_fail = n_fail + 1
+         write (*, *) "Rank", rank, ": FAIL: the combined poison counter must be nonzero " &
+            //"on every rank when any rank contributed a NaN"
+      end if
+   end block
 
    comm = comm_env_compute_comm()
    call comm%barrier()
