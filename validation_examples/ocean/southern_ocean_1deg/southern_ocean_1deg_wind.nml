@@ -1,0 +1,206 @@
+! Southern Ocean 1-degree, WIND-FORCED — a regional cut of the OM_1deg
+! tripolar grid, from the Antarctic coast to 30.02 S, spun up for two
+! simulated years under JRA55-do wind stress.  Same physics, vertical grid,
+! time step and closures as ../global_1deg/global_1deg_wind.nml; the ONLY
+! differences are the domain (Southern Ocean instead of global) and the
+! open north edge (a sponge relaxing T/S/u/v to the WOA13 initial state
+! instead of the global grid's tripolar Arctic cap).  See README.md here
+! for how the inputs were cut, why 30.02 S, and what the run shows.
+!
+! GRID      OM_1deg supergrid ocean_hgrid.nc, cut to tracer rows j=0..96
+!           (360 x 97 T points): row j=0 is the Antarctic coastal wall at
+!           77.88 S (the SAME south wall the global grid uses), row j=96's
+!           north face sits at 30.02 S, a clean supergrid q-row (no
+!           straddled cell).  Periodic east-west (the full longitude
+!           circle is kept, so the periodic seam is untouched); NO
+!           tripolar fold (the cut stops well south of the Arctic cap).
+! BATHY     OM_1deg topog.nc, same y-cut, same MOM6 OM_1deg limits
+!           (MINIMUM_DEPTH 9.5 m, MAXIMUM_DEPTH 6500 m, MASKING_DEPTH 0).
+! VERTICAL  50 z_fixed levels, tanh-stretched from 2 m at the surface to
+!           ~255 m at depth, partial-step faces closed
+!           (zfixed_closed_faces) — identical to the global run.
+! IC        WOA13 decav January potential temperature + salinity, same
+!           y-cut, nearest-neighbour onto the model grid offline, linear
+!           in depth in-model (&ocean_zinit_nml source = "file").
+! NORTH BC  &ocean_bc_nml north = "sponge": OBC_SPONGE falls through to a
+!           WALL at the outermost row (no barotropic through-flow at the
+!           domain edge) with a 5-cell (~5 degree) interior band relaxing
+!           momentum toward u_ref/v_ref (both zero: the WOA13 state is at
+!           rest) and T/S toward the WOA13 snapshot (&ocean_sponge_nml
+!           target_source = "ic", the SAME file &ocean_zinit_nml seeds
+!           from) — a wall-plus-sponge, chosen over an open (Flather)
+!           edge because this cut has no parent-model boundary TIME
+!           SERIES to feed an OPEN edge's data_eta/data_u; relaxing to
+!           the (time-constant) WOA13 climatology is the honest version
+!           of "the rest of the ocean is out there" available from the
+!           inputs at hand.  SSH is not separately restored: the real
+!           sponge's interior-thickness relaxation (relax_h) is not
+!           implemented (v1); the wall face already pins the barotropic
+!           mode at the edge.
+! FORCING   wind stress only, identical file + reader to the global run,
+!           just windowed to this domain's y-range by the same
+!           tools/om1deg_subset.f90 cut (§ Inputs in README.md).  NO heat
+!           or freshwater flux, NO sea ice: T and S change by transport,
+!           mixing and the sponge only.
+!
+! INPUT FILES are read from ./INPUT/ relative to the run directory --
+! link it to the cut Southern Ocean data directory:
+!
+!     ln -s /home/jorge/nci/cdx/data/OM_1deg_southern INPUT
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 360
+   ny     = 97
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   t_end        = 730.0
+   time_unit    = "day"
+   dt_fixed     = 1800.0       ! MOM6 OM_1deg DT, unchanged
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_dataovr_nml
+   ! JRA55-do 1958 daily-mean wind stress, same reader as the global run,
+   ! windowed to this domain's y-range.
+   enable       = .true.
+   time_mode    = "cyclic"
+   cycle_period = 31536000.0   ! 365 days
+   t_offset     = 0.0
+   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var    = "taux"
+   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var    = "tauy"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   vcoord_type            = "z_fixed"
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6500.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file = "INPUT/bathy_om1deg.nc"
+   output_dir      = "./output"
+   output_to_file  = .false.
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"           ! Antarctica -- already land-walled by the bathymetry
+   north = "sponge"         ! open ocean edge at 30.02 S: wall + interior relax band
+   sponge_width    = 5      ! ~5 degrees at this resolution
+   sponge_strength = 1.1574074e-4  ! gamma0 = 1/(10 day), same pattern as isomip_plus
+/
+
+&ocean_sponge_nml
+   enable        = .true.
+   damp_source   = "band"
+   target_source = "ic"     ! relax to the WOA13 January snapshot (= the IC)
+   relax_uv      = .true.   ! momentum toward u_ref/v_ref = 0 (WOA13 IC is at rest)
+   relax_tracers = .true.   ! T/S toward the WOA13 snapshot
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_woa13_jan.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0                ! MOM6 OM_1deg MAXVEL
+/
+
+&ocean_coriolis_nml
+   form = "sadourny_energy"
+/
+
+&ocean_hvisc_nml
+   ! OM_1deg: Smagorinsky Laplacian (0.15) + biharmonic (0.06), bounded --
+   ! the global run's values unchanged (nu_h = 2000 floor, ah_max at its
+   ! 10000 default).  The first attempt at this namelist blew up at day 573
+   ! with exactly these values; the cause was NOT the viscosity but a model
+   ! defect: the north sponge's outer face was open to the layer mass flux
+   ! (only the barotropic mode treated OBC_SPONGE as a wall), so ~0.9 Sv
+   ! drained out of the ghost row until its column lost its top z_fixed
+   ! layers.  Fixed in the model; see README.md Sec. 5.
+   nu_h            = 2000.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   ! Distributed over the bottom 10 m (MOM6 OM_1deg HBBL = 10, DRAG_BG_VEL
+   ! = 0.1).  NOT optional under z_fixed -- see global_1deg_wind.nml's note.
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.       ! per-wet-cell barotropic CFL (MOM6 set_dtbt)
+/
+
+&ocean_eos_nml
+   eos = "wright"
+/
+
+&ocean_diag_nml
+   ! Daily surface snapshots for the movie and the ACC diagnostics:
+   ! SSH, top-10 m mean u/v/T (T doubling as SST) plus the vertical
+   ! relative vorticity at the same near-surface level, and the
+   ! depth-integrated transport for the Drake Passage / ACC section.
+   ! One conservative z_fixed output level (0-10 m) keeps every layered
+   ! field effectively 2-D; KE is turned off to keep the file small over
+   ! two years of daily output.
+   enabled          = .true.
+   filename         = "southern_ocean_1deg_wind"
+   dt_out           = 1.0        ! day (time_unit)
+   vgrid            = "z_fixed"
+   z_levels         = 10.0
+   n_z_levels       = 1
+   output_precision = "single"
+   diags            = "KE:off  vorticity_z  transport_x  transport_y"
+/
+
+&logging_nml
+   status_interval = 1.0        ! day (time_unit)
+/
