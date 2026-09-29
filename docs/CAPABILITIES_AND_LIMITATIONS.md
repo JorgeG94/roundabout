@@ -974,8 +974,10 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   per-edge tags → driver → kernels). Shipped types: WALL (default),
   OPEN (Flather + per-layer zero-gradient baroclinic anomaly), TIDAL
   (multi-constituent η), CLAMPED (Dirichlet η/u/v + per-tracer inflow
-  values), CHAPMAN (scalar edge-mean Orlanski), SPONGE (momentum decay
-  + optional tracer relaxation via `sponge_relax_tracers`), and
+  values), CHAPMAN (scalar edge-mean Orlanski), SPONGE (a closed WALL
+  at the outer face — every no-normal-flow closure reads the tag through
+  `ocean_bc_outer_face_tag` — plus an interior band of momentum decay
+  and optional tracer relaxation via `sponge_relax_tracers`), and
   **PERIODIC** (per-axis ghost-wrap reentrant boundary; requires
   `nghost >= 3`, paired edges; bit-exact seam — a circularly shifted
   IC reproduces the shifted solution bit-for-bit). NESTED behaves as

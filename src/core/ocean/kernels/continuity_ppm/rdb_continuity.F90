@@ -25,7 +25,8 @@ module rdb_continuity
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_CLAMPED, OBC_PERIODIC
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_CLAMPED, OBC_PERIODIC, &
+                                       ocean_bc_outer_face_tag
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d, &
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
@@ -1253,8 +1254,8 @@ contains
       has_w_flux = .true.
       has_e_flux = .true.
       if (present(bc)) then
-         bc_w_tag = bc%west%bc_type
-         bc_e_tag = bc%east%bc_type
+         bc_w_tag = ocean_bc_outer_face_tag(bc%west%bc_type)
+         bc_e_tag = ocean_bc_outer_face_tag(bc%east%bc_type)
          has_w_flux = bc%has_west
          has_e_flux = bc%has_east
       end if
@@ -1811,8 +1812,8 @@ contains
       has_s_flux = .true.
       has_n_flux = .true.
       if (present(bc)) then
-         bc_s_tag = bc%south%bc_type
-         bc_n_tag = bc%north%bc_type
+         bc_s_tag = ocean_bc_outer_face_tag(bc%south%bc_type)
+         bc_n_tag = ocean_bc_outer_face_tag(bc%north%bc_type)
          has_s_flux = bc%has_south
          has_n_flux = bc%has_north
       end if
@@ -2622,8 +2623,8 @@ contains
          bc_w_tag = OBC_WALL
          bc_e_tag = OBC_WALL
          if (present(bc)) then
-            bc_w_tag = bc%west%bc_type
-            bc_e_tag = bc%east%bc_type
+            bc_w_tag = ocean_bc_outer_face_tag(bc%west%bc_type)
+            bc_e_tag = ocean_bc_outer_face_tag(bc%east%bc_type)
             if (.not. bc%has_west) bc_w_tag = OBC_PERIODIC
             if (.not. bc%has_east) bc_e_tag = OBC_PERIODIC
          end if
@@ -2745,8 +2746,8 @@ contains
          bc_s_tag = OBC_WALL
          bc_n_tag = OBC_WALL
          if (present(bc)) then
-            bc_s_tag = bc%south%bc_type
-            bc_n_tag = bc%north%bc_type
+            bc_s_tag = ocean_bc_outer_face_tag(bc%south%bc_type)
+            bc_n_tag = ocean_bc_outer_face_tag(bc%north%bc_type)
             if (.not. bc%has_south) bc_s_tag = OBC_PERIODIC
             if (.not. bc%has_north) bc_n_tag = OBC_PERIODIC
          end if

@@ -44,7 +44,7 @@ module test_ocean_dyn_split
                             ocean_dyn_step
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
                                        ocean_bc_state_destroy, OBC_OPEN, OBC_SPONGE, OBC_TIDAL, &
-                                       OBC_CLAMPED, OBC_CHAPMAN
+                                       OBC_CLAMPED, OBC_CHAPMAN, OBC_WALL
    use rdb_ocean_sponge, only: ocean_sponge_apply, ocean_sponge_t
    use rdb_ocean_budgets, only: ocean_budgets_t, BUDGET_MASS
    implicit none
@@ -68,6 +68,8 @@ contains
                                test_obc_open_via_driver), &
                   new_unittest("split_obc_sponge_kernel_damps_band", &
                                test_obc_sponge_kernel), &
+                  new_unittest("split_obc_sponge_outer_face_is_a_wall", &
+                               test_obc_sponge_outer_face_is_wall), &
                   new_unittest("split_obc_tidal_via_driver", &
                                test_obc_tidal_via_driver), &
                   new_unittest("split_obc_clamped_via_driver", &
@@ -656,6 +658,165 @@ contains
       call destroy_all(ms_ref, ct_r, cor_r, pgf_r, hv_r, bd_r, ss_r, va_r, hd_r, vd_r, vmix_r, eos_r, dyn_r)
       call destroy_all(ms_obc, ct_o, cor_o, pgf_o, hv_o, bd_o, ss_o, va_o, hd_o, vd_o, vmix_o, eos_o, dyn_o)
    end subroutine test_obc_open_via_driver
+
+   subroutine test_obc_sponge_outer_face_is_wall(error)
+      !! `OBC_SPONGE` is a WALL at its outer face (the relaxation band is
+      !! interior), so with a zero-width band a sponge edge must be
+      !! BIT-IDENTICAL to a wall edge through the full split step, and the
+      !! physical-domain mass must be conserved to round-off.
+      !!
+      !! The regression: the barotropic substep closed the sponge face
+      !! (its `select case` default) but every slow-path closure compared
+      !! the raw tag with `OBC_WALL` — the continuity never zeroed the
+      !! layer flux through the face, and the ghost row beyond it acted as
+      !! an unbudgeted mass reservoir.  The Southern Ocean 1-degree cut
+      !! (north = "sponge") drew ~0.9 Sv through it until the ghost column
+      !! drained and the run blew up at day 573.  The IC here puts a
+      !! surface bump ACROSS the north face (ghost rows included) and a
+      !! sheared northward flow just inside it, so an open face moves mass
+      !! within a few steps.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid_w, grid_s
+      type(ocean_metrics_t) :: metrics_w, metrics_s
+      type(multilayer_state_t) :: ms_w, ms_s
+      type(continuity_t) :: ct_w, ct_s
+      type(coriolis_adv_t) :: cor_w, cor_s
+      type(ocean_pressure_force_t) :: pgf_w, pgf_s
+      type(ocean_horizontal_viscosity_t) :: hv_w, hv_s
+      type(ocean_bottom_drag_t) :: bd_w, bd_s
+      type(ocean_surface_stress_t) :: ss_w, ss_s
+      type(ocean_vertical_advection_t) :: va_w, va_s
+      type(ocean_hdiff_tracer_t) :: hd_w, hd_s
+      type(ocean_vdiff_t) :: vd_w, vd_s
+      type(ocean_vmix_t) :: vmix_w, vmix_s
+      type(eos_t) :: eos_w, eos_s
+      type(ocean_dyn_t) :: dyn_w, dyn_s
+      type(ocean_bc_state_t) :: bc_w, bc_s
+      integer, parameter :: NX_PHYS = 12, NY_PHYS = 8
+      integer, parameter :: N_INNER = 10
+      integer, parameter :: N_STEPS = 20
+      real(wp), parameter :: H0 = 50.0_wp
+      real(wp), parameter :: A_ETA = 0.4_wp
+      real(wp), parameter :: V0 = 0.05_wp
+      real(wp), parameter :: F_C = 1.0e-2_wp
+      real(wp) :: dt_outer, mass0, mass_s, dh, du, dv, dS
+      real(wp) :: yy
+      integer :: i, j, k, step, ng, j_n_face, i0, i1, j0, j1
+
+      checks: block
+         call make_grid(grid_w, NX_PHYS, NY_PHYS, 1.0_wp, 1.0_wp)
+         call make_grid(grid_s, NX_PHYS, NY_PHYS, 1.0_wp, 1.0_wp)
+         ng = grid_w%nghost
+         j_n_face = ng + NY_PHYS + 1
+         i0 = ng + 1; i1 = ng + NX_PHYS
+         j0 = ng + 1; j1 = ng + NY_PHYS
+
+         ms_w%nz_ml = NZ; ms_s%nz_ml = NZ
+         call ms_w%init(grid_w); call ms_s%init(grid_s)
+         call ct_w%init(grid_w, nz_ml=NZ); call ct_s%init(grid_s, nz_ml=NZ)
+         cor_w%f_0 = F_C; cor_s%f_0 = F_C
+         call cor_w%init(grid_w, nz_ml=NZ); call cor_s%init(grid_s, nz_ml=NZ)
+         call pgf_w%init(grid_w, nz_ml=NZ); call pgf_s%init(grid_s, nz_ml=NZ)
+         call hv_w%init(grid_w, nz_ml=NZ); call hv_s%init(grid_s, nz_ml=NZ)
+         call bd_w%init(grid_w, nz_ml=NZ); call bd_s%init(grid_s, nz_ml=NZ)
+         call ss_w%init(grid_w, nz_ml=NZ); call ss_s%init(grid_s, nz_ml=NZ)
+         call va_w%init(grid_w, nz_ml=NZ); call va_s%init(grid_s, nz_ml=NZ)
+         call hd_w%init(grid_w, nz_ml=NZ); call hd_s%init(grid_s, nz_ml=NZ)
+         call vd_w%init(grid_w, nz_ml=NZ); call vd_s%init(grid_s, nz_ml=NZ)
+         call vmix_w%init(grid_w, nz_ml=NZ); call vmix_s%init(grid_s, nz_ml=NZ)
+         call eos_w%init(grid_w); call eos_s%init(grid_s)
+         call dyn_w%init(grid_w, nz_ml=NZ); call dyn_s%init(grid_s, nz_ml=NZ)
+         call ocean_bc_state_init(bc_w, grid_w, nz_ml=NZ)
+         call ocean_bc_state_init(bc_s, grid_s, nz_ml=NZ)
+         bc_w%north%bc_type = OBC_WALL
+         ! Zero-width band: the relaxation is inert, only the outer-face
+         ! closure is under test.
+         bc_s%north%bc_type = OBC_SPONGE
+         bc_s%north%sponge_width = 0
+
+         ! Surface bump centred ON the north face: the ghost rows carry
+         ! the upper half, so an open face sees a pressure gradient and a
+         ! thickness contrast across it.  Salinity varies in y (ghosts
+         ! included) so an open face would also exchange tracer.
+         do j = 1, grid_w%ny_total
+            yy = real(j - j_n_face, wp) + 0.5_wp
+            do i = 1, grid_w%nx_total
+               do k = 1, NZ
+                  ms_w%h_layer(i, j, k) = H0/real(NZ, wp)
+               end do
+               ms_w%h_layer(i, j, NZ) = ms_w%h_layer(i, j, NZ) + A_ETA*exp(-(yy/2.0_wp)**2)
+               do k = 1, NZ
+                  ms_w%tracers(ms_w%idx_salinity)%hTr(i, j, k) = ms_w%h_layer(i, j, k)* &
+                                                                 (eos_w%S_ref + 0.1_wp*real(j, wp))
+                  ms_w%tracers(ms_w%idx_temperature)%hTr(i, j, k) = ms_w%h_layer(i, j, k)* &
+                                                                    (eos_w%T_ref + real(k, wp))
+               end do
+            end do
+         end do
+         ms_w%u_face_x_layer = 0.0_wp
+         ms_w%v_face_y_layer = 0.0_wp
+         ! Northward, sheared flow on the last interior face row.  The
+         ! outer face itself starts at rest (as a model run does): the
+         ! bump's pressure gradient across it is what drives a face
+         ! velocity, and an open face then carries it as a flux.
+         do k = 1, NZ
+            ms_w%v_face_y_layer(:, j_n_face - 1, k) = V0*real(k, wp)
+         end do
+         ms_s%h_layer = ms_w%h_layer
+         ms_s%tracers(ms_s%idx_salinity)%hTr = ms_w%tracers(ms_w%idx_salinity)%hTr
+         ms_s%tracers(ms_s%idx_temperature)%hTr = ms_w%tracers(ms_w%idx_temperature)%hTr
+         ms_s%u_face_x_layer = ms_w%u_face_x_layer
+         ms_s%v_face_y_layer = ms_w%v_face_y_layer
+         dyn_w%bt_work%bt_H_ref = H0; dyn_s%bt_work%bt_H_ref = H0
+
+         mass0 = sum(ms_s%h_layer(i0:i1, j0:j1, :))
+         dt_outer = 0.5_wp/sqrt(GRAVITY*H0)*real(N_INNER, wp)*0.5_wp
+
+         call map_in(grid_w, metrics_w, ms_w, ct_w, cor_w, pgf_w, hv_w, bd_w, ss_w, va_w, hd_w, &
+                     vd_w, vmix_w, dyn_w)
+         do step = 1, N_STEPS
+            call ocean_dyn_step_split( &
+               grid_w, metrics_w, dyn_w, eos_w, cor_w, ct_w, pgf_w, hv_w, bd_w, ss_w, &
+               va_w, hd_w, vd_w, vmix_w, ms_w, dt_outer, N_INNER, bc=bc_w)
+         end do
+         call map_out(metrics_w, ms_w, ct_w, cor_w, pgf_w, hv_w, bd_w, ss_w, va_w, hd_w, vd_w, &
+                      vmix_w, dyn_w)
+
+         call map_in(grid_s, metrics_s, ms_s, ct_s, cor_s, pgf_s, hv_s, bd_s, ss_s, va_s, hd_s, &
+                     vd_s, vmix_s, dyn_s)
+         do step = 1, N_STEPS
+            call ocean_dyn_step_split( &
+               grid_s, metrics_s, dyn_s, eos_s, cor_s, ct_s, pgf_s, hv_s, bd_s, ss_s, &
+               va_s, hd_s, vd_s, vmix_s, ms_s, dt_outer, N_INNER, bc=bc_s)
+         end do
+         call map_out(metrics_s, ms_s, ct_s, cor_s, pgf_s, hv_s, bd_s, ss_s, va_s, hd_s, vd_s, &
+                      vmix_s, dyn_s)
+
+         ! (1) Physical-domain mass is conserved: nothing crossed the face.
+         mass_s = sum(ms_s%h_layer(i0:i1, j0:j1, :))
+         call check(error, abs(mass_s - mass0) <= 1.0e-12_wp*mass0, &
+                    "sponge edge leaked mass through its outer face: relative drift "// &
+                    "exceeds 1e-12 of the physical-domain volume")
+         if (allocated(error)) exit checks
+
+         ! (2) A zero-width sponge edge IS a wall edge, bit for bit.
+         dh = maxval(abs(ms_s%h_layer(i0:i1, j0:j1, :) - ms_w%h_layer(i0:i1, j0:j1, :)))
+         du = maxval(abs(ms_s%u_face_x_layer(i0:i1 + 1, j0:j1, :) - &
+                         ms_w%u_face_x_layer(i0:i1 + 1, j0:j1, :)))
+         dv = maxval(abs(ms_s%v_face_y_layer(i0:i1, j0:j1, :) - &
+                         ms_w%v_face_y_layer(i0:i1, j0:j1, :)))
+         dS = maxval(abs(ms_s%tracers(ms_s%idx_salinity)%hTr(i0:i1, j0:j1, :) - &
+                         ms_w%tracers(ms_w%idx_salinity)%hTr(i0:i1, j0:j1, :)))
+         call check(error, dh == 0.0_wp .and. du == 0.0_wp .and. dv == 0.0_wp .and. dS == 0.0_wp, &
+                    "zero-width sponge edge must be bit-identical to a wall edge "// &
+                    "(h/u/v/hS differ in the physical domain)")
+
+      end block checks
+      call ocean_bc_state_destroy(bc_w)
+      call ocean_bc_state_destroy(bc_s)
+      call destroy_all(ms_w, ct_w, cor_w, pgf_w, hv_w, bd_w, ss_w, va_w, hd_w, vd_w, vmix_w, eos_w, dyn_w)
+      call destroy_all(ms_s, ct_s, cor_s, pgf_s, hv_s, bd_s, ss_s, va_s, hd_s, vd_s, vmix_s, eos_s, dyn_s)
+   end subroutine test_obc_sponge_outer_face_is_wall
 
    subroutine test_obc_sponge_kernel(error)
       !! Kernel-level sponge test.  Tests `ocean_sponge_apply` directly

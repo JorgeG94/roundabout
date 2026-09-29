@@ -53,7 +53,7 @@ module rdb_ocean_setup
                                        ocean_bc_validate_fold, &
                                        OBC_WALL, OBC_PERIODIC, OBC_OPEN, OBC_TIDAL, &
                                        OBC_CHAPMAN, OBC_NESTED, OBC_CLAMPED, OBC_SPONGE, &
-                                       OBC_TRIPOLAR_FOLD, &
+                                       OBC_TRIPOLAR_FOLD, ocean_bc_outer_face_tag, &
                                        OBC_MAX_TIDAL_CONSTITUENTS, &
                                        ocean_bc_face_tag_t, &
                                        obc_tide_nodal_fill, obc_match_constituent
@@ -353,13 +353,13 @@ contains
                                    ocean_state%bc%periodic_y .and. .not. ocean_halo_is_decomposed_y(), &
                                    ocean_state%bc%north_fold, &
                                    mask_wall_velocity=cfg%ocean%bc%mask_wall_velocity, &
-                                   wall_west=(ocean_state%bc%west%bc_type == OBC_WALL &
+                                   wall_west=(ocean_bc_outer_face_tag(ocean_state%bc%west%bc_type) == OBC_WALL &
                                               .and. ocean_state%bc%has_west), &
-                                   wall_east=(ocean_state%bc%east%bc_type == OBC_WALL &
+                                   wall_east=(ocean_bc_outer_face_tag(ocean_state%bc%east%bc_type) == OBC_WALL &
                                               .and. ocean_state%bc%has_east), &
-                                   wall_south=(ocean_state%bc%south%bc_type == OBC_WALL &
+                                   wall_south=(ocean_bc_outer_face_tag(ocean_state%bc%south%bc_type) == OBC_WALL &
                                                .and. ocean_state%bc%has_south), &
-                                   wall_north=(ocean_state%bc%north%bc_type == OBC_WALL &
+                                   wall_north=(ocean_bc_outer_face_tag(ocean_state%bc%north%bc_type) == OBC_WALL &
                                                .and. ocean_state%bc%has_north))
 
       ! Hold land T-cells at finite reference values so masked arithmetic

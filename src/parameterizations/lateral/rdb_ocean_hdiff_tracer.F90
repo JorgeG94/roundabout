@@ -30,7 +30,7 @@ module rdb_ocean_hdiff_tracer
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, ocean_bc_outer_face_tag
    use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
@@ -175,10 +175,10 @@ contains
       wall_s = .true.
       wall_n = .true.
       if (present(bc)) then
-         wall_w = (bc%west%bc_type == OBC_WALL) .and. bc%has_west
-         wall_e = (bc%east%bc_type == OBC_WALL) .and. bc%has_east
-         wall_s = (bc%south%bc_type == OBC_WALL) .and. bc%has_south
-         wall_n = (bc%north%bc_type == OBC_WALL) .and. bc%has_north
+         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL) .and. bc%has_west
+         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL) .and. bc%has_east
+         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL) .and. bc%has_south
+         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL) .and. bc%has_north
       end if
 
       ! The mask actuals are chosen ONCE, outside the tracer loop: they are
