@@ -19,7 +19,7 @@ module rdb_ocean_redi
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_density_specvol_derivs
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, ocean_bc_outer_face_tag
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -947,10 +947,10 @@ contains
       wall_s = .true.
       wall_n = .true.
       if (present(bc)) then
-         wall_w = (bc%west%bc_type == OBC_WALL)
-         wall_e = (bc%east%bc_type == OBC_WALL)
-         wall_s = (bc%south%bc_type == OBC_WALL)
-         wall_n = (bc%north%bc_type == OBC_WALL)
+         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL)
+         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL)
+         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL)
+         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL)
       end if
 
       use_ext = present(khtr_u_ext) .and. present(khtr_v_ext)

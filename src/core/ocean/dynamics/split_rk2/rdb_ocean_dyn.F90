@@ -12,7 +12,8 @@ module rdb_ocean_dyn
                                        barotropic_workstate_exit_data_impl
    use rdb_barotropic_substep, only: barotropic_substep_nonlinear_interior
    use rdb_ocean_bt_wide, only: bt_wide_t, bt_wide_substep
-   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_SPONGE
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_SPONGE, &
+                                       ocean_bc_outer_face_tag
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, &
                                  ocean_periodic_wrap_centre_2d, &
                                  ocean_periodic_wrap_centre_3d, &
@@ -4482,10 +4483,10 @@ contains
       has_s_drv = .true.
       has_n_drv = .true.
       if (present(bc)) then
-         bc_w_drv = bc%west%bc_type
-         bc_e_drv = bc%east%bc_type
-         bc_s_drv = bc%south%bc_type
-         bc_n_drv = bc%north%bc_type
+         bc_w_drv = ocean_bc_outer_face_tag(bc%west%bc_type)
+         bc_e_drv = ocean_bc_outer_face_tag(bc%east%bc_type)
+         bc_s_drv = ocean_bc_outer_face_tag(bc%south%bc_type)
+         bc_n_drv = ocean_bc_outer_face_tag(bc%north%bc_type)
          has_w_drv = bc%has_west
          has_e_drv = bc%has_east
          has_s_drv = bc%has_south

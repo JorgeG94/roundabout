@@ -25,6 +25,7 @@ module rdb_ocean_boundary_types
    public :: ocean_bc_state_set_topology
    public :: ocean_bc_type_from_string
    public :: ocean_bc_has_tracer_open_edge
+   public :: ocean_bc_outer_face_tag
    public :: ocean_bc_validate_periodic
    public :: ocean_bc_validate_fold
    public :: obc_match_constituent
@@ -58,6 +59,8 @@ module rdb_ocean_boundary_types
    integer, parameter, public :: OBC_SPONGE = 8
       !! Relaxation band — BC kernel falls through to WALL at the outer face;
       !! the sponge kernel relaxes the interior band toward `data_*` targets.
+      !! Every no-normal-flow closure keyed on `OBC_WALL` must read the tag
+      !! through `ocean_bc_outer_face_tag`, which maps SPONGE to WALL.
    integer, parameter, public :: OBC_CHAPMAN = 9
       !! Orlanski radiation on η with implicit phase-speed estimation. Uses
       !! persistent `eta_old_<edge>` state across timesteps.
@@ -713,6 +716,26 @@ contains
             .or. edge_is_tracer_open(bc%south%bc_type) &
             .or. edge_is_tracer_open(bc%north%bc_type)
    end function ocean_bc_has_tracer_open_edge
+
+   pure integer function ocean_bc_outer_face_tag(bc_type) result(tag)
+      !! The tag an edge's OUTER FACE behaves as for the no-normal-flow
+      !! closures (mass-flux zeroing in the continuity, the `uhbt`/`vhbt`
+      !! wall reconciliation, the lateral tracer-diffusion walls).
+      !!
+      !! `OBC_SPONGE` is a WALL at its outer face — the relaxation band is
+      !! interior — so it maps to `OBC_WALL`; every other tag is returned
+      !! unchanged.  The barotropic substep already closes a sponge face
+      !! (its `select case` default), so a closure that compared the RAW tag
+      !! with `OBC_WALL` left the slow continuity open while the barotropic
+      !! mode was shut: the layer flux through the face was never zeroed and
+      !! the ghost row beyond it acted as an unbudgeted mass reservoir (the
+      !! Southern Ocean 1-degree cut drew ~0.9 Sv through it and blew up at
+      !! day 573 once the ghost column had drained below its top layers).
+      integer, intent(in) :: bc_type
+         !! Raw per-edge tag (`ocean_bc_face_tag_t%bc_type`).
+      tag = bc_type
+      if (bc_type == OBC_SPONGE) tag = OBC_WALL
+   end function ocean_bc_outer_face_tag
 
    pure logical function edge_is_tracer_open(bc_type) result(res)
       !! One-edge tracer-open test (module-internal helper).
