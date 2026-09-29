@@ -255,22 +255,43 @@ the movie renderer here) are committed to roundabout.
 ## 7. The movie — `southern_movie.py`
 
 South-polar-stereographic, centred on Antarctica, extending to the domain's
-own north edge (`--lat-edge`, default -30, matching the sponge). Main
-panel: surface relative vorticity normalised by the local Coriolis
-parameter (`zeta / |f|`, the diverging `BALANCE` colour map, symmetric
-limits from the run's own 98th-percentile |zeta/f|); a boxed speed inset
-(top-left, `INFERNO`) shows the top-10 m current; a day label; and — when
-the diagnostic file carries `transport_x` (it does here) — a Drake Passage
-transport time strip along the bottom, computed live from the same file
-(no separate table needed). Standard library only: reuses
-`../global_1deg/global_movie.py`'s `Canvas`/font/colour tables/`encode`
-(`ffmpeg`) and `tools/om1deg_prepare_inputs.py`'s NetCDF-3 reader.
+own north edge (`--lat-edge`, default -30, matching the sponge). Two
+independently selectable panels, `--main FIELD` and `--inset FIELD`
+(`FIELD` one of `vorticity` / `speed` / `ssh`; **default `--main speed
+--inset ssh`**):
+
+* `vorticity` — surface relative vorticity normalised by the local
+  Coriolis parameter (`zeta / |f|`, diverging `BALANCE` colour map,
+  symmetric limits from the run's own 98th-percentile |zeta/f|).
+* `speed` — top-10 m current speed (sequential `INFERNO` colour map,
+  `[0, --speed-max]`; `--speed-max` defaults to the run's own
+  99.5th-percentile |u|).
+* `ssh` — sea-surface-height anomaly about the AREA-WEIGHTED domain mean
+  (recomputed every frame; diverging `BALANCE` colour map, symmetric
+  `+/- --ssh-max`; `--ssh-max` defaults to the run's own 99.5th-percentile
+  |anomaly|).
+
+All colour limits are sampled once across the run (~100 frames) and held
+fixed for every frame. The main panel is the full-size disc on the right;
+the inset is a proper-size (300 px) second disc in its own column to the
+left — never overlapping the main disc — with its own box, colorbar and
+label. Every panel's colorbar/label states the field name and its units.
+A day label, the title, and — when the diagnostic file carries
+`transport_x` (it does here) — a Drake Passage transport time strip along
+the bottom, computed live from the same file (no separate table needed).
+Standard library only: reuses `../global_1deg/global_movie.py`'s
+`Canvas`/font/colour tables/`encode` (`ffmpeg`) and
+`tools/om1deg_prepare_inputs.py`'s NetCDF-3 reader.
 
 ```bash
 module load netcdf-c   # nccopy flattens the diagnostic file
 python3 southern_movie.py \
     RUN/output/southern_ocean_1deg_wind_rank_000000.nc movie_frames \
     --data /home/jorge/nci/cdx/data/OM_1deg_southern --fps60
+# select the panels explicitly, e.g. the original vorticity + speed view:
+python3 southern_movie.py RUN/output/....nc movie_frames \
+    --data /home/jorge/nci/cdx/data/OM_1deg_southern \
+    --main vorticity --inset speed --fps60
 ```
 
 Produces `movie_frames/southern_ocean_1deg_wind.mp4` (+`.gif`), the 60 fps
@@ -281,7 +302,24 @@ is nearest-cell (flood-filled owner per pixel), not the bilinear-in-
 index-space remap `global_movie.BilinearLatLonMap` does for the
 equirectangular global movies — that construction is written for a lon-lat
 rectangle target; a bilinear polar version needs its own pixel ->
-(lat, lon) inverse and is a reasonable follow-up, not done here.
+(lat, lon) inverse and is a reasonable follow-up, not done here. The grid's
+i-index IS smoothly periodic in longitude (checked directly against
+`ocean_hgrid.nc`) and this flood fill is correctly non-periodic in PIXEL
+space, since a polar disc image has no left/right wrap.
+
+**Fixed: the pole-void seam.** This is a regional cut that stops at the
+domain's south WALL (`lat ~ -77.8`, well short of the geographic pole), so
+the disc's centre — poleward of that wall — has no model data at all, at
+any longitude. The nearest-cell flood fill used to fill that gap with
+whichever boundary-ring cell's pixel-space breadth-first search reached it
+first, which near the projection singularity (`rho -> 0`) is not the same
+as shortest physical distance: an open-ocean cell near the Ross Sea sector
+(`lon ~ -180`) used to win a wide fan of pixels reaching the disc centre,
+cutting a false open-water wedge through what should be — and, at the
+model's own south wall, IS — solid Antarctica. `PolarSouthMap` now masks
+every pixel closer to the projection centre than the southernmost real
+grid row's projected radius to LAND explicitly, instead of leaving it to
+flood-fill happenstance.
 
 ## 8. Known limits
 
