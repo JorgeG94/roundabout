@@ -249,8 +249,12 @@ contains
                   new_unittest("load_off_control_at_the_pgf", test_load_off_control), &
                   new_unittest("trim_ic_root_is_the_displaced_weight", test_trim_root), &
                   new_unittest("trim_ic_balances_the_depth_mean_pfu", test_trim_balances_pfu), &
+#ifndef RDB_NO_NETCDF
+                  ! Seeds through &ocean_zinit_nml, whose reader (rdb_ocean_z_init) is
+                  ! only compiled with RDB_ENABLE_NETCDF=ON -- even source="linear".
                   new_unittest("trim_ic_uniform_rho_rest_end_to_end", &
                                test_trim_uniform_rho_rest), &
+#endif
                   new_unittest("trim_ic_uniform_rho_pfu_is_roundoff", &
                                test_trim_balances_pfu_uniform_rho) &
                   ]
