@@ -94,10 +94,13 @@ module rdb_ocean_horizontal_viscosity
          !! header for the operator form.
       logical :: no_slip = .false.
          !! Coastal lateral BC selector (shared with the lateral-mix /
-         !! Coriolis kernels).  Only consulted on the `stress_tensor`
-         !! path: `.false.` (free-slip) masks the corner shear stress
-         !! by `wet_q`; `.true.` (no-slip) by `2 - wet_q`.  All-wet ⇒
-         !! factor ≡ 1 ⇒ bit-identical.
+         !! Coriolis kernels).  `.false.` (free-slip) masks the corner
+         !! shear stress by `wet_q`; `.true.` (no-slip) by `2 - wet_q` —
+         !! on the `stress_tensor` path AND on the velocity-Laplacian
+         !! paths (scalar `nu_h` and the flow-aware face closures), whose
+         !! corner (shear) fluxes carry the same factor.  The biharmonic
+         !! add-on is always free-slip (`wet_q`; MOM6 refuses NOSLIP with
+         !! BIHARMONIC).  All-wet ⇒ factor ≡ 1 ⇒ bit-identical.
       real(wp) :: bound_coef = 0.8_wp
          !! CFL safety coefficient for the per-cell viscosity limiter
          !! (MOM6 `HORVISC_BOUND_COEF`).  Consulted on the
@@ -413,7 +416,7 @@ contains
          !! responsible for CFL in that case.
 
       integer :: nx, ny, nz
-      real(wp) :: nu_h, nu_4, dt_local
+      real(wp) :: nu_h, nu_4, dt_local, slip_ns
       logical :: use_face_visc
 
       nx = grid%nx_total
@@ -421,6 +424,9 @@ contains
       nz = ms%nz_ml
       nu_h = this%nu_h
       nu_4 = this%nu_4
+      ! Coastal slip selector for the velocity-Laplacian corner fluxes
+      ! (0 = free-slip, 1 = no-slip); hoisted so no kernel reads `this`.
+      slip_ns = merge(1.0_wp, 0.0_wp, this%no_slip)
 
       ! dt for the per-cell CFL clamps (harmonic BOUND_KH on the
       ! stress-tensor path, biharmonic on the add-on below).  Defaults
@@ -526,6 +532,7 @@ contains
                metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
                this%bound_kh, this%bound_coef, dt_local, &
                metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%wet_q, slip_ns, &
                nx, ny, nz, metrics%open_u, metrics%open_v)
          else
             call hvisc_compute_face_impl( &
@@ -536,6 +543,7 @@ contains
                metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
                this%bound_kh, this%bound_coef, dt_local, &
                metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%wet_q, slip_ns, &
                nx, ny, nz)
          end if
       else
@@ -548,6 +556,7 @@ contains
                metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
                this%bound_kh, this%bound_coef, dt_local, &
                metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%wet_q, slip_ns, &
                nx, ny, nz, metrics%open_u, metrics%open_v)
          else
             call hvisc_compute_scalar_impl( &
@@ -558,6 +567,7 @@ contains
                metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
                this%bound_kh, this%bound_coef, dt_local, &
                metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%wet_q, slip_ns, &
                nx, ny, nz)
          end if
       end if
@@ -586,7 +596,7 @@ contains
                this%du_visc%data, this%dv_visc%data, &
                lateral_mix%nu4_face_x, lateral_mix%nu4_face_y, &
                this%bound_coef, dt_local, &
-               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
                metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
                metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
                nx, ny, nz)
@@ -599,7 +609,7 @@ contains
             this%lap_u%data, this%lap_v%data, &
             this%du_visc%data, this%dv_visc%data, &
             nu_4, this%bound_coef, dt_local, &
-            metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+            metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
             metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
             metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
             nx, ny, nz)
@@ -611,7 +621,7 @@ contains
                                            dy_dxT, dx_dyBu, iareaCu, &
                                            dx_dyT, dy_dxBu, iareaCv, &
                                            bound_kh, bound_coef, dt, &
-                                           idxCu, idyCu, idxCv, idyCv, &
+                                           idxCu, idyCu, idxCv, idyCv, wet_q, ns, &
                                            nx, ny, nz, open_u, open_v)
       !! Per-face metric Laplacian × spatially-varying viscosity.
       !! Explicit-shape dummies so NVHPC stdpar emits a device kernel
@@ -629,6 +639,17 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+         !! Bu-corner wet mask (`metrics%wet_q`).  Each corner (shear) flux of
+         !! the velocity Laplacian is scaled by the slip factor
+         !! `(1 - 2·ns)·wet_q + 2·ns` -- the same C1 factor the Smagorinsky
+         !! strain, the Coriolis corner vorticity and the stress-tensor path
+         !! use (MOM6 `sh_xy = mask2dBu·(dvdx+dudy)` free-slip, `(2-mask2dBu)`
+         !! no-slip).  Free-slip: a land corner carries NO shear flux, so the
+         !! zero stored at a land face never acts as a Dirichlet-0 wall.
+         !! All-wet corner => factor 1 => bit-identical.
+      real(wp), intent(in)    :: ns
+         !! 1 = no-slip (`&ocean_hvisc_nml no_slip`), 0 = free-slip.
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
          !! Per-layer 0/1 u-face open mask
          !! (`&vcoord_nml zfixed_closed_faces`).  ABSENT (the default
@@ -655,10 +676,12 @@ contains
       real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
          !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
-      real(wp) :: lap_u, lap_v, nu_eff, idt
+      real(wp) :: lap_u, lap_v, nu_eff, idt, sa, sb
 
       idt = 0.0_wp
       if (dt > 0.0_wp) idt = 1.0_wp/dt
+      sa = 1.0_wp - 2.0_wp*ns
+      sb = 2.0_wp*ns
 
       ! u-face Laplacian interior + zero boundaries (curvilinear FV form)
       if (present(open_u)) then
@@ -666,8 +689,8 @@ contains
             lap_u = iareaCu(i, j)*( &
                     (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k))*open_u(i + 1, j, k) - &
                      dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))*open_u(i - 1, j, k)) + &
-                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
-                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
+                    (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
+                     dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
             nu_eff = ah_face_x(i, j, k)
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
@@ -679,8 +702,8 @@ contains
             lap_u = iareaCu(i, j)*( &
                     (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
                      dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+                    (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                     dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))))
             nu_eff = ah_face_x(i, j, k)
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
@@ -703,8 +726,8 @@ contains
             lap_v = iareaCv(i, j)*( &
                     (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k))*open_v(i, j + 1, k) - &
                      dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))*open_v(i, j - 1, k)) + &
-                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
-                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
+                    (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
+                     dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
             nu_eff = ah_face_y(i, j, k)
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
@@ -716,8 +739,8 @@ contains
             lap_v = iareaCv(i, j)*( &
                     (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
                      dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+                    (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                     dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))))
             nu_eff = ah_face_y(i, j, k)
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
@@ -740,7 +763,7 @@ contains
                                              dy_dxT, dx_dyBu, iareaCu, &
                                              dx_dyT, dy_dxBu, iareaCv, &
                                              bound_kh, bound_coef, dt, &
-                                             idxCu, idyCu, idxCv, idyCv, &
+                                             idxCu, idyCu, idxCv, idyCv, wet_q, ns, &
                                              nx, ny, nz, open_u, open_v)
       !! Per-face metric Laplacian × scalar viscosity.  Used when no
       !! lateral-mix closure is active — falls back to constant
@@ -758,6 +781,17 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+         !! Bu-corner wet mask (`metrics%wet_q`).  Each corner (shear) flux of
+         !! the velocity Laplacian is scaled by the slip factor
+         !! `(1 - 2·ns)·wet_q + 2·ns` -- the same C1 factor the Smagorinsky
+         !! strain, the Coriolis corner vorticity and the stress-tensor path
+         !! use (MOM6 `sh_xy = mask2dBu·(dvdx+dudy)` free-slip, `(2-mask2dBu)`
+         !! no-slip).  Free-slip: a land corner carries NO shear flux, so the
+         !! zero stored at a land face never acts as a Dirichlet-0 wall.
+         !! All-wet corner => factor 1 => bit-identical.
+      real(wp), intent(in)    :: ns
+         !! 1 = no-slip (`&ocean_hvisc_nml no_slip`), 0 = free-slip.
       real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
          !! Per-layer 0/1 u-face open mask
          !! (`&vcoord_nml zfixed_closed_faces`) — the FREE-SLIP closure
@@ -768,10 +802,12 @@ contains
       real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
          !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
-      real(wp) :: lap_u, lap_v, nu_eff, idt
+      real(wp) :: lap_u, lap_v, nu_eff, idt, sa, sb
 
       idt = 0.0_wp
       if (dt > 0.0_wp) idt = 1.0_wp/dt
+      sa = 1.0_wp - 2.0_wp*ns
+      sb = 2.0_wp*ns
 
       if (nu_h <= 0.0_wp) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
@@ -788,8 +824,8 @@ contains
             lap_u = iareaCu(i, j)*( &
                     (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k))*open_u(i + 1, j, k) - &
                      dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))*open_u(i - 1, j, k)) + &
-                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
-                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
+                    (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
+                     dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
             nu_eff = nu_h
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
@@ -801,8 +837,8 @@ contains
             lap_u = iareaCu(i, j)*( &
                     (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
                      dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-                    (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                     dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+                    (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                     dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))))
             nu_eff = nu_h
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
@@ -824,8 +860,8 @@ contains
             lap_v = iareaCv(i, j)*( &
                     (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k))*open_v(i, j + 1, k) - &
                      dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))*open_v(i, j - 1, k)) + &
-                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
-                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
+                    (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
+                     dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
             nu_eff = nu_h
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
@@ -837,8 +873,8 @@ contains
             lap_v = iareaCv(i, j)*( &
                     (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
                      dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-                    (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                     dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+                    (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                     dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))))
             nu_eff = nu_h
             if (bound_kh) then
                nu_eff = min(nu_eff, hvisc_kh_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
@@ -859,7 +895,7 @@ contains
    pure subroutine hvisc_compute_biharmonic_impl(u_face, v_face, lap_u, lap_v, &
                                                  du_visc, dv_visc, &
                                                  nu_4, bound_coef, dt, &
-                                                 idxCu, idyCu, idxCv, idyCv, &
+                                                 idxCu, idyCu, idxCv, idyCv, wet_q, &
                                                  dy_dxT, dx_dyBu, iareaCu, &
                                                  dx_dyT, dy_dxBu, iareaCv, &
                                                  nx, ny, nz)
@@ -895,11 +931,21 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+         !! Bu-corner wet mask (`metrics%wet_q`).  BOTH chained Laplacians mask
+         !! their corner (shear) fluxes by it -- free-slip, MOM6
+         !! `sh_xy = mask2dBu·(...)` for `Del2u` and `str_xy·mask2dBu` for the
+         !! biharmonic stress.  Unmasked, the zero stored at a land face read
+         !! as a Dirichlet-0 wall and the k^4 operator rang against it at every
+         !! staircase step.  Always free-slip: MOM6 refuses NOSLIP with
+         !! BIHARMONIC.  All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
       integer :: i, j, k
-      real(wp) :: l_u, l_v, idt, nu4_u, nu4_v
+      real(wp) :: l_u, l_v, idt, nu4_u, nu4_v, sa, sb
       idt = 1.0_wp/dt
+      sa = 1.0_wp
+      sb = 0.0_wp
 
       ! ---- Pass 1: lap_u, lap_v at interior u-faces and v-faces ----
       ! Wall BC on the intermediate Laplacian: MIRROR (Neumann),
@@ -915,8 +961,8 @@ contains
          l_u = iareaCu(i, j)*( &
                (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
                 dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-               (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+               (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))))
          lap_u(i, j, k) = l_u
       end do
       do concurrent(k=1:nz, j=1:ny)
@@ -932,8 +978,8 @@ contains
          l_v = iareaCv(i, j)*( &
                (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
                 dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-               (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+               (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))))
          lap_v(i, j, k) = l_v
       end do
       do concurrent(k=1:nz, i=1:nx)
@@ -953,8 +999,8 @@ contains
          l_u = iareaCu(i, j)*( &
                (dy_dxT(i, j)*(lap_u(i + 1, j, k) - lap_u(i, j, k)) - &
                 dy_dxT(i - 1, j)*(lap_u(i, j, k) - lap_u(i - 1, j, k))) + &
-               (dx_dyBu(i, j + 1)*(lap_u(i, j + 1, k) - lap_u(i, j, k)) - &
-                dx_dyBu(i, j)*(lap_u(i, j, k) - lap_u(i, j - 1, k))))
+               (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(lap_u(i, j + 1, k) - lap_u(i, j, k)) - &
+                dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(lap_u(i, j, k) - lap_u(i, j - 1, k))))
          nu4_u = min(nu_4, hvisc_nu4_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
          du_visc(i, j, k) = du_visc(i, j, k) - nu4_u*l_u
       end do
@@ -963,8 +1009,8 @@ contains
          l_v = iareaCv(i, j)*( &
                (dx_dyT(i, j)*(lap_v(i, j + 1, k) - lap_v(i, j, k)) - &
                 dx_dyT(i, j - 1)*(lap_v(i, j, k) - lap_v(i, j - 1, k))) + &
-               (dy_dxBu(i + 1, j)*(lap_v(i + 1, j, k) - lap_v(i, j, k)) - &
-                dy_dxBu(i, j)*(lap_v(i, j, k) - lap_v(i - 1, j, k))))
+               (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(lap_v(i + 1, j, k) - lap_v(i, j, k)) - &
+                dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(lap_v(i, j, k) - lap_v(i - 1, j, k))))
          nu4_v = min(nu_4, hvisc_nu4_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
          dv_visc(i, j, k) = dv_visc(i, j, k) - nu4_v*l_v
       end do
@@ -974,7 +1020,7 @@ contains
                                                       du_visc, dv_visc, &
                                                       nu4_face_x, nu4_face_y, &
                                                       bound_coef, dt, &
-                                                      idxCu, idyCu, idxCv, idyCv, &
+                                                      idxCu, idyCu, idxCv, idyCv, wet_q, &
                                                       dy_dxT, dx_dyBu, iareaCu, &
                                                       dx_dyT, dy_dxBu, iareaCv, &
                                                       nx, ny, nz)
@@ -997,19 +1043,29 @@ contains
       real(wp), intent(in)    :: bound_coef, dt
       real(wp), intent(in)    :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in)    :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+         !! Bu-corner wet mask (`metrics%wet_q`).  BOTH chained Laplacians mask
+         !! their corner (shear) fluxes by it -- free-slip, MOM6
+         !! `sh_xy = mask2dBu·(...)` for `Del2u` and `str_xy·mask2dBu` for the
+         !! biharmonic stress.  Unmasked, the zero stored at a land face read
+         !! as a Dirichlet-0 wall and the k^4 operator rang against it at every
+         !! staircase step.  Always free-slip: MOM6 refuses NOSLIP with
+         !! BIHARMONIC.  All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
       integer :: i, j, k
-      real(wp) :: l_u, l_v, idt, nu4_u, nu4_v
+      real(wp) :: l_u, l_v, idt, nu4_u, nu4_v, sa, sb
       idt = 1.0_wp/dt
+      sa = 1.0_wp
+      sb = 0.0_wp
 
       ! ---- Pass 1: lap_u, lap_v at interior u/v faces (metric FV) ----
       do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(l_u)
          l_u = iareaCu(i, j)*( &
                (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k)) - &
                 dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))) + &
-               (dx_dyBu(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
-                dx_dyBu(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))))
+               (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(u_face(i, j + 1, k) - u_face(i, j, k)) - &
+                dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(u_face(i, j, k) - u_face(i, j - 1, k))))
          lap_u(i, j, k) = l_u
       end do
       do concurrent(k=1:nz, j=1:ny)
@@ -1025,8 +1081,8 @@ contains
          l_v = iareaCv(i, j)*( &
                (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k)) - &
                 dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))) + &
-               (dy_dxBu(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
-                dy_dxBu(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))))
+               (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(v_face(i + 1, j, k) - v_face(i, j, k)) - &
+                dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(v_face(i, j, k) - v_face(i - 1, j, k))))
          lap_v(i, j, k) = l_v
       end do
       do concurrent(k=1:nz, i=1:nx)
@@ -1045,8 +1101,8 @@ contains
          l_u = iareaCu(i, j)*( &
                (dy_dxT(i, j)*(lap_u(i + 1, j, k) - lap_u(i, j, k)) - &
                 dy_dxT(i - 1, j)*(lap_u(i, j, k) - lap_u(i - 1, j, k))) + &
-               (dx_dyBu(i, j + 1)*(lap_u(i, j + 1, k) - lap_u(i, j, k)) - &
-                dx_dyBu(i, j)*(lap_u(i, j, k) - lap_u(i, j - 1, k))))
+               (dx_dyBu(i, j + 1)*(sa*wet_q(i, j + 1) + sb)*(lap_u(i, j + 1, k) - lap_u(i, j, k)) - &
+                dx_dyBu(i, j)*(sa*wet_q(i, j) + sb)*(lap_u(i, j, k) - lap_u(i, j - 1, k))))
          nu4_u = min(nu4_face_x(i, j, k), &
                      hvisc_nu4_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
          du_visc(i, j, k) = du_visc(i, j, k) - nu4_u*l_u
@@ -1056,8 +1112,8 @@ contains
          l_v = iareaCv(i, j)*( &
                (dx_dyT(i, j)*(lap_v(i, j + 1, k) - lap_v(i, j, k)) - &
                 dx_dyT(i, j - 1)*(lap_v(i, j, k) - lap_v(i, j - 1, k))) + &
-               (dy_dxBu(i + 1, j)*(lap_v(i + 1, j, k) - lap_v(i, j, k)) - &
-                dy_dxBu(i, j)*(lap_v(i, j, k) - lap_v(i - 1, j, k))))
+               (dy_dxBu(i + 1, j)*(sa*wet_q(i + 1, j) + sb)*(lap_v(i + 1, j, k) - lap_v(i, j, k)) - &
+                dy_dxBu(i, j)*(sa*wet_q(i, j) + sb)*(lap_v(i, j, k) - lap_v(i - 1, j, k))))
          nu4_v = min(nu4_face_y(i, j, k), &
                      hvisc_nu4_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
          dv_visc(i, j, k) = dv_visc(i, j, k) - nu4_v*l_v

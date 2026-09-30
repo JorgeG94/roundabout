@@ -89,7 +89,15 @@ ceiling `bound_coef·0.125/(dt·(1/dx²+1/dy²))`, `test_ocean_hvisc_kh_bound`) 
 load-bearing on the split-explicit ocean path, where an over-large `ν_h·dt/dx²`
 anti-damps grid-scale barotropic gravity modes through the frozen `F_bt` forcing
 (see `src/core/ocean/README.md`); the Lagrangian double-gyre configs run it with
-`bound_coef = 0.15`. The ocean tensor form is free-slip. The ocean `lateral_closure` knob is **fail-loud** — a
+`bound_coef = 0.15`. The ocean tensor form is free-slip. So are the
+velocity-form Laplacian and biharmonic kernels: every corner (shear) flux of
+both chained Laplacians is scaled by the C1 slip factor
+`(1-2·ns)·wet_q + 2·ns` (MOM6 `sh_xy = mask2dBu·(...)`), so the zero stored at
+a land face is never read as a Dirichlet-0 wall. Before 2026-09-30 it was, which
+made every coast partially no-slip and let the biharmonic ring against each
+staircase step. The harmonic kernels honour `no_slip`; the biharmonic kernel is
+always free-slip, since MOM6 refuses NOSLIP with BIHARMONIC.
+(`validation_examples/ocean/coastal_noise_box`). The ocean `lateral_closure` knob is **fail-loud** — a
 tag with no dispatcher kernel (or a mistyped/garbage string) aborts at configure
 (`validate_config` → `lateral_closure_is_implemented`) instead of silently
 falling back to background-only viscosity. `leith_biharm` fills the per-face
