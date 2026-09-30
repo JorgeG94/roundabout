@@ -28,6 +28,13 @@
 !!     (static land mask), beta plane, `2gyre` wind, sigma;
 !!   * periodic_channel_zstar — re-entrant channel over a seamount on z*
 !!     (ALE remap every step), with porous barriers;
+!!   * periodic_sponge — re-entrant channel, periodic west/east, with a
+!!     relaxing sponge band on the closed north edge; besides the usual
+!!     bitwise field comparison, its closed-budget mass/salt/heat totals
+!!     are also compared bit-for-bit against the single-rank SERIAL
+!!     reference (`check_periodic_sponge_serial_out`) — the regression
+!!     gate for the periodic-seam / sponge-seam-ghost bug (see its
+!!     docstring);
 !!   * open_obc — tidal west edge (eta target) + Flather east edge,
 !!     zstar_sigma, over a seamount;
 !!   * spherical — lon-lat sector, planetary Coriolis, spoon basin, Wright
@@ -65,7 +72,8 @@ program test_ocean_decomp_bitid_mpi
    use rdb_ocean_state, only: ocean_state_build_restart_registry
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
-                           comm_env_rank, comm_env_size, comm_env_compute_comm
+                           comm_env_rank, comm_env_size, comm_env_compute_comm, &
+                           comm_env_push_compute_comm, comm_env_pop_compute_comm
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
@@ -318,6 +326,8 @@ contains
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       type(console_stats_t) :: cstats
+      type(comm_t) :: real_comm, self_comm
+      logical :: pushed_self_comm
       integer :: ierr, n
       real(wp) :: t
 
@@ -343,36 +353,57 @@ contains
          ! Closed-budget mass/salt/heat out+src at the final step, EFP-reduced
          ! (reproducing_sums default on) so it is order-invariant across rank
          ! counts -- the periodic-seam / tripolar-fold regression this test
-         ! case exists for (see `compare_budget`).  A fresh `cstats` per call
-         ! is fine: `budget_out` is computed independently of the t=0
-         ! reference `cstats` latches internally.
+         ! case exists for (see `compare_budget` and
+         ! `check_periodic_sponge_serial_out`).  A fresh `cstats` per call is
+         ! fine: `budget_out` is computed independently of the t=0 reference
+         ! `cstats` latches internally.
          !
-         ! HAZARD (found in review): `ocean_console_stats_report` takes no
-         ! `compute_size` -- it is COLLECTIVE over whatever the REAL
-         ! communicator is (`comm_env_setup_roles`), regardless of the
-         ! logical `csize`/`crank` the caller is emulating.  The serial
-         ! REFERENCE call below always passes `csize=1, crank=0` to
-         ! `engine_setup` so every physical rank independently computes a
-         ! full, non-decomposed copy of the SAME problem -- calling the
-         ! collective report from inside that call would allreduce across
-         ! every physical rank's independent copy (an `nprocs`-fold bogus
-         ! sum for the mass/salt/heat totals feeding `bud`), not the single
-         ! logical rank the reference is standing in for.  It is safe ONLY
-         ! when the logical size this call is emulating equals the REAL
-         ! physical size (`csize == nprocs`): always true for the decomposed
-         ! `px x py` runs (`csize` is literally the real launch size there),
-         ! and true for the reference only when the whole job is launched
-         ! at `nprocs == 1` (ctest's np=1 leg), where the reference's own
-         ! `csize=1` collective is trivially correct.  `snap%bud` stays its
-         ! default (all-zero, `*_active=.false.`) when this is skipped;
-         ! `run_case` only compares budgets it knows were computed safely.
-         if (csize == nprocs) then
-            call ocean_console_stats_report(cstats, engine%grid, engine%state%metrics, &
-                                            engine%state%multilayer, t, DT, N_STEPS, &
-                                            compute_rank=crank, reproducing_sums=.true., &
-                                            budget_stage_weight=ocean_budget_stage_weight( &
-                                            engine%state%dyn%split_scheme == SPLIT_SCHEME_PRED_CORR), &
-                                            budget_out=snap%bud)
+         ! HAZARD (found in review, fixed by the comm_env push/pop seam):
+         ! `ocean_console_stats_report` takes no `compute_size` -- it is
+         ! COLLECTIVE over whatever `comm_env_compute_comm()` returns, the
+         ! REAL job communicator, regardless of the logical `csize`/`crank`
+         ! the caller is emulating.  The serial REFERENCE call below always
+         ! passes `csize=1, crank=0` to `engine_setup` so every physical rank
+         ! independently computes a full, non-decomposed copy of the SAME
+         ! problem -- calling the collective report unmodified from inside
+         ! that call would allreduce across every physical rank's
+         ! independent copy (an `nprocs`-fold bogus sum for the
+         ! mass/salt/heat totals feeding `bud`), not the single logical rank
+         ! the reference is standing in for.
+         !
+         ! Fix: when `csize == 1` (the serial-reference call, on ANY real
+         ! `nprocs`), push a per-rank SELF-communicator
+         ! (`comm_env_push_compute_comm`, `src/comm/rdb_comm_env.F90`) around
+         ! the report so its collective becomes an identity op over each
+         ! rank's own independent copy instead of allreducing `nprocs`
+         ! copies together, then pop it back off.  When `csize == nprocs`
+         ! (a real decomposed `px x py` run), the real communicator already
+         ! IS the right scope and no override is needed.  Either way
+         ! `snap%bud` now comes out correctly populated (`*_active=.true.`)
+         ! on every launch size, which is what lets
+         ! `check_periodic_sponge_serial_out` compare the reference against
+         ! every decomposed factorization bit-for-bit at nprocs=1, 2 AND 4
+         ! (previously it could only run the old, thresholded check at
+         ! nprocs==1, where the reference's own trivial `csize=1` collective
+         ! happened to already be correct).
+         pushed_self_comm = .false.
+         if (csize == 1) then
+            real_comm = comm_env_compute_comm()
+            self_comm = real_comm%split_by(real_comm%rank())
+            call comm_env_push_compute_comm(self_comm)
+            pushed_self_comm = .true.
+         else if (csize /= nprocs) then
+            error stop "run_one: csize must be 1 (serial reference) or nprocs (decomposed run)"
+         end if
+         call ocean_console_stats_report(cstats, engine%grid, engine%state%metrics, &
+                                         engine%state%multilayer, t, DT, N_STEPS, &
+                                         compute_rank=crank, reproducing_sums=.true., &
+                                         budget_stage_weight=ocean_budget_stage_weight( &
+                                         engine%state%dyn%split_scheme == SPLIT_SCHEME_PRED_CORR), &
+                                         budget_out=snap%bud)
+         if (pushed_self_comm) then
+            call comm_env_pop_compute_comm()
+            call self_comm%finalize()
          end if
          call take_snapshot(engine, snap)
          ok = .true.
@@ -490,15 +521,6 @@ contains
          n_fail = n_fail + 1
          return
       end if
-      ! Real single-rank launch (ctest np=1): `ref`'s budget was computed
-      ! safely (csize == nprocs == 1, see the hazard note in `run_one`) and
-      ! IS the historical bug's exact scenario -- a genuinely undecomposed
-      ! run, no MPI seam anywhere, so a periodic axis's local wrap is the
-      ! ONLY thing that can keep the sponge-relaxed seam consistent.  This
-      ! is the one place in THIS binary that can re-detect the original
-      ! bug (see `compare_budget`'s docstring for why the decomposed
-      ! factorizations below cannot).
-      if (nprocs == 1) call check_periodic_sponge_serial_out(label, scheme, ref%bud)
 
       nbud = 0
       do px = nprocs, 1, -1
@@ -527,6 +549,11 @@ contains
          end if
          if (sum(glob) > 0) n_fail = n_fail + 1
       end do
+      ! The real regression gate: the single-rank reference's budget
+      ! against every decomposed factorization, bit-for-bit, at whatever
+      ! `nprocs` this launch is (1, 2, or 4 under ctest) -- see the
+      ! subroutine's own docstring.
+      call check_periodic_sponge_serial_out(label, scheme, ref%bud, buds(1:nbud))
       ! Every collected `dec%bud` above has `csize == nprocs` (always true
       ! for the decomposed loop), so its collective was safe regardless of
       ! `nprocs`; comparing them to each other is meaningful once nprocs > 1
@@ -552,7 +579,8 @@ contains
       !! fired the seam-ghost refresh for EVERY entry compared here, both
       !! before and after the fix -- a mismatch here is a regression in
       !! the general refresh mechanism, not a re-detection of the original
-      !! single-rank bug.  Only a genuinely undecomposed run (nprocs == 1,
+      !! single-rank bug.  Only a genuinely undecomposed run (the serial
+      !! reference, compared against these decomposed factorizations by
       !! `check_periodic_sponge_serial_out` below) exercises the code path
       !! the fix changed.
       type(conservation_budget_t), intent(in) :: buds(:)
@@ -580,64 +608,116 @@ contains
       end if
    end subroutine compare_budget
 
-   subroutine check_periodic_sponge_serial_out(label, scheme, bud)
-      !! The real single-rank regression for the periodic-seam / sponge bug:
-      !! on "periodic_sponge" (periodic west/east, a relaxing sponge band
-      !! on the closed north edge) at a genuinely undecomposed nprocs == 1
-      !! launch, the closed-budget `mass_out` must stay near a WALL-EDGE
-      !! CONTROL's own -- the same namelist with west/east = "wall" instead
-      !! of "periodic", so there is no periodic seam at all and the old
-      !! gate (`ocean_halo_is_decomposed_x() .or. ..._y()`, both false on a
-      !! real single rank) was never wrong there.  The bug left the
-      !! periodic-seam ghost columns un-relaxed after the sponge touched
-      !! only the tile's physical cells, so the corrector's advection saw a
-      !! spurious mass/salt jump at the seam that the control cannot have
-      !! (the real Southern Ocean 1-degree case: Salt out 1.6e8 on 1 rank
-      !! vs -81 on 2 ranks -- this toy grid/duration reaches nothing like
-      !! that magnitude, but `mass_out` still separates monotonically:
-      !! broken is consistently LARGER than fixed on both split schemes,
-      !! see the commit message).  `mass_out` is used rather than
-      !! `salt_out` because the latter is noisy at this scale under
-      !! `pred_corr` (its own resting-state round-off floor, see CLAUDE.md,
-      !! dominates before the seam term does); `mass_out` is monotonic on
-      !! both schemes. `sponge_width` is deliberately narrow (3 cells,
-      !! `<=` the smallest per-rank tile at any tested `px x py`): a wider
-      !! band that crosses an uneven y-decomposition tile boundary (found
-      !! at `sponge_width = 6`, `1x4`: the legacy band sponge does not
-      !! handle a band split across ranks) is a SEPARATE, pre-existing
+   subroutine check_periodic_sponge_serial_out(label, scheme, ref_bud, dec_buds)
+      !! The real regression gate for the periodic-seam / sponge bug, on
+      !! "periodic_sponge" (periodic west/east, a relaxing sponge band on
+      !! the closed north edge): the closed-budget mass/salt/heat totals
+      !! (`out` AND `src`, AND their `*_active` gating flags) of the
+      !! genuinely undecomposed SERIAL REFERENCE must equal, BIT FOR BIT,
+      !! the same totals from every decomposed `px x py` factorization of
+      !! the SAME real launch. The EFP
+      !! reproducing-sums path (`reproducing_sums=.true.`, the default) is
+      !! what makes that an EXACT identity on any compiler/toolchain/rank
+      !! count rather than a round-off-level agreement -- no threshold,
+      !! calibrated or otherwise, is needed or wanted here.
+      !!
+      !! Before the fix (the post-sponge seam-ghost refresh in
+      !! `rdb_ocean_dyn.F90`, gated on
+      !! `ocean_halo_is_decomposed_x() .or. ..._y()`), a real single-rank
+      !! launch (`nprocs == 1`) skipped that refresh entirely -- both
+      !! `ocean_halo_is_decomposed_{x,y}()` are false with no MPI seam at
+      !! all -- so the reference's periodic-seam ghost columns kept the
+      !! UN-relaxed value after the sponge touched only the tile's
+      !! physical cells, and the corrector's advection read the stale
+      !! ghosts before the next exchange: the reference's closed-budget
+      !! totals came out WRONG BY ORDERS OF MAGNITUDE relative to any
+      !! decomposed run of the same problem (the real Southern Ocean
+      !! 1-degree case: Salt out 1.6e8 on 1 rank vs -81 on 2 ranks). That
+      !! is exactly what this bitwise comparison catches, with no need to
+      !! calibrate a margin against noise: reference and decomposed
+      !! budgets of the SAME physical problem are either identical (fixed)
+      !! or wildly different (broken), never "close but outside a
+      !! threshold".
+      !!
+      !! `sponge_width` (set in `case_nml`) is deliberately narrow (3
+      !! cells, `<=` the smallest per-rank tile at any tested `px x py`):
+      !! a wider band that crosses an uneven y-decomposition tile boundary
+      !! (found at `sponge_width = 6`, `1x4`: the legacy band sponge does
+      !! not handle a band split across ranks) is a SEPARATE, pre-existing
       !! defect this case must not also exercise.
       !!
-      !! Thresholds are PER-SCHEME (`ssp_rk2`'s own noise floor sits an
-      !! order above `pred_corr`'s, CLAUDE.md's split-scheme section) and
-      !! are pinned directly to measured before/after `mass_out` on this
-      !! exact namelist (gfortran, default flags):
-      !!   pred_corr: fixed 9.2255E-05, broken 1.5045E-04 (1.6x)
-      !!   ssp_rk2:   fixed 8.3477E-06, broken 1.6591E-04 (19.9x)
-      !! Each threshold sits above its scheme's fixed value and below its
-      !! broken value.
+      !! `run_one`'s comm-override seam (`comm_env_push_compute_comm`,
+      !! `src/comm/rdb_comm_env.F90`) is what makes `ref_bud` safe to trust
+      !! here at EVERY `nprocs` the suite runs at (1, 2, 4), not just
+      !! `nprocs == 1` as before: the reference engine always runs with
+      !! `csize == 1` on every physical rank, and the console's collective
+      !! is now scoped to a per-rank self-communicator for that call, so
+      !! it is never contaminated by the real job size.
+      !!
+      !! At `nprocs == 1` there is no decomposed factorization to compare
+      !! against (the `px x py` loop only ever produces 1x1, the SAME run
+      !! as the reference) -- there this can only assert the reference
+      !! budget came out finite and marked active, which is still a
+      !! meaningful smoke check (a NaN/inactive budget here is itself a
+      !! regression).
       character(len=*), intent(in) :: label, scheme
-      type(conservation_budget_t), intent(in) :: bud
-      real(wp) :: tol
+      type(conservation_budget_t), intent(in) :: ref_bud
+      type(conservation_budget_t), intent(in) :: dec_buds(:)
+      integer :: k, nbad
 
       if (trim(label) /= "periodic_sponge") return
-      if (.not. bud%mass_active) return
 
-      select case (trim(scheme))
-      case ("pred_corr")
-         tol = 1.2e-4_wp
-      case ("ssp_rk2")
-         tol = 4.0e-5_wp
-      case default
-         return
-      end select
-
-      if (abs(bud%mass_out) > tol) then
+      if (.not. ref_bud%mass_active) then
          n_fail = n_fail + 1
-         write (*, '(5a,es14.6,a,es14.6)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
-            ": |mass_out|=", abs(bud%mass_out), " exceeds ", tol
+         write (*, '(4a,i0)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
+            ": reference budget was never computed (mass_active=.false.) on rank ", rank
+         return
+      end if
+      if (.not. (ieee_is_finite(ref_bud%mass_out) .and. ieee_is_finite(ref_bud%salt_out) .and. &
+                 ieee_is_finite(ref_bud%heat_out) .and. ieee_is_finite(ref_bud%mass_src) .and. &
+                 ieee_is_finite(ref_bud%salt_src) .and. ieee_is_finite(ref_bud%heat_src))) then
+         n_fail = n_fail + 1
+         write (*, '(4a,i0)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
+            ": reference budget has a non-finite mass/salt/heat term on rank ", rank
+         return
+      end if
+
+      if (size(dec_buds) == 0) then
+         if (rank == 0) write (*, '(4a)') "case ", trim(label), "/", trim(scheme), &
+            " serial-out: reference budget finite (no decomposed layout to compare at nprocs=1)"
+         return
+      end if
+
+      nbad = 0
+      do k = 1, size(dec_buds)
+         if (dec_buds(k)%mass_active .neqv. ref_bud%mass_active .or. &
+             dec_buds(k)%salt_active .neqv. ref_bud%salt_active .or. &
+             dec_buds(k)%heat_active .neqv. ref_bud%heat_active) then
+            nbad = nbad + 1
+            cycle
+         end if
+         if (.not. dec_buds(k)%mass_active) then
+            nbad = nbad + 1
+            cycle
+         end if
+         if (transfer(dec_buds(k)%mass_out, 0_int64) /= transfer(ref_bud%mass_out, 0_int64) .or. &
+             transfer(dec_buds(k)%salt_out, 0_int64) /= transfer(ref_bud%salt_out, 0_int64) .or. &
+             transfer(dec_buds(k)%heat_out, 0_int64) /= transfer(ref_bud%heat_out, 0_int64) .or. &
+             transfer(dec_buds(k)%mass_src, 0_int64) /= transfer(ref_bud%mass_src, 0_int64) .or. &
+             transfer(dec_buds(k)%salt_src, 0_int64) /= transfer(ref_bud%salt_src, 0_int64) .or. &
+             transfer(dec_buds(k)%heat_src, 0_int64) /= transfer(ref_bud%heat_src, 0_int64)) then
+            nbad = nbad + 1
+         end if
+      end do
+
+      if (nbad > 0) then
+         n_fail = n_fail + nbad
+         if (rank == 0) write (*, '(5a,i0,a,i0,a)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
+            ": ", nbad, " of ", size(dec_buds), " decomposed factorization(s) disagree "// &
+            "bit-for-bit with the single-rank reference's closed mass/salt/heat budget"
       else if (rank == 0) then
          write (*, '(4a)') "case ", trim(label), "/", trim(scheme), &
-            " serial (1 rank) out: below the fixed/broken separation bound (ok)"
+            " serial-out: reference budget bit-identical to every decomposed factorization"
       end if
    end subroutine check_periodic_sponge_serial_out
 

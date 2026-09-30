@@ -18,6 +18,12 @@ module rdb_comm_env
    !! a dedicated I/O server (no GPU, no solver). All solver/decomp/halo
    !! operations use compute_comm (excludes I/O ranks). When disabled,
    !! compute_comm = comm_world (current behavior, no overhead).
+   !!
+   !! `comm_env_push_compute_comm` / `comm_env_pop_compute_comm` are a
+   !! TEST/TOOLING-ONLY seam: a one-level override of what
+   !! `comm_env_compute_comm()` returns, for tests that need a collective
+   !! to run over something other than the real job communicator (see
+   !! their docstrings below). Production code never calls them.
 
    use rdb_constants, only: wp
    use pic_mpi_lib, only: comm_t, comm_world, pic_mpi_init, pic_mpi_finalize, &
@@ -55,6 +61,8 @@ module rdb_comm_env
    public :: comm_env_compute_size
    public :: comm_env_node_compute_ranks
    public :: comm_env_node_n_compute
+   public :: comm_env_push_compute_comm
+   public :: comm_env_pop_compute_comm
 
    type(comm_t), save :: comm_global
       !! Global MPI communicator (cached after init)
@@ -76,6 +84,18 @@ module rdb_comm_env
       !! Number of compute ranks on this node
    integer, save, allocatable :: cached_node_compute_ranks(:)
       !! World ranks of compute processes on this node
+
+   integer, parameter :: COMPUTE_COMM_OVERRIDE_MAX_DEPTH = 1
+      !! TEST/TOOLING-ONLY.  One-level stack depth for
+      !! `comm_env_push_compute_comm` / `comm_env_pop_compute_comm` — see
+      !! their docstrings.  Kept at 1 deliberately: nothing in production
+      !! code nests the override, and a deeper stack would hide a
+      !! forgotten pop instead of failing loud on the very next push.
+   type(comm_t), save :: compute_comm_override
+      !! TEST/TOOLING-ONLY override payload (valid only while
+      !! `compute_comm_override_depth == 1`).
+   integer, save :: compute_comm_override_depth = 0
+      !! TEST/TOOLING-ONLY override stack depth, 0 or 1.
 
 contains
 
@@ -281,13 +301,68 @@ contains
       !! Return the compute-only communicator
       !! Falls back to comm_world() if comm_env_init has not been called
       !! (e.g. tests that use raw MPI_Init).
+      !!
+      !! TEST/TOOLING-ONLY: when `comm_env_push_compute_comm` has an
+      !! override active, that override is returned instead — every
+      !! caller reads this function fresh at call time (none of
+      !! `rdb_halo`/`rdb_ocean_halo` cache the result across calls), so
+      !! the override is visible to every collective issued while it is
+      !! pushed, with no other code change required.
       type(comm_t) :: comm
-      if (cached_rank >= 0) then
+      if (compute_comm_override_depth > 0) then
+         comm = compute_comm_override
+      else if (cached_rank >= 0) then
          comm = comm_compute
       else
          comm = comm_world()
       end if
    end function comm_env_compute_comm
+
+   subroutine comm_env_push_compute_comm(comm)
+      !! TEST/TOOLING-ONLY.  Temporarily overrides what
+      !! `comm_env_compute_comm()` returns to `comm`, until the matching
+      !! `comm_env_pop_compute_comm()`.
+      !!
+      !! Exists so a test can run a genuinely serial "reference" engine
+      !! (`compute_size=1`) on EVERY physical rank while still calling a
+      !! COLLECTIVE report (`ocean_console_stats_report`, which always
+      !! reduces over `comm_env_compute_comm()`, the real job
+      !! communicator): pushing a per-rank self-communicator around that
+      !! one call makes the collective an identity op on each rank's own
+      !! copy instead of allreducing `nprocs` independent serial replicas
+      !! into one bogus sum.  See
+      !! `tests/mpi/test_ocean_decomp_bitid_mpi.F90`'s
+      !! `check_periodic_sponge_serial_out` for the call site and
+      !! `run_one`'s HAZARD comment for the full story.
+      !!
+      !! NOT for production code paths — it exists purely to let a test
+      !! stand up an alternate communicator around a fixed call without
+      !! threading a `comm` argument through every intermediate routine.
+      !! One-level only: a push while an override is already active is a
+      !! bug in the caller (a missing pop, or an attempt to nest) and
+      !! fails loud rather than silently discarding or stacking past
+      !! `COMPUTE_COMM_OVERRIDE_MAX_DEPTH`.
+      type(comm_t), intent(in) :: comm
+      if (compute_comm_override_depth >= COMPUTE_COMM_OVERRIDE_MAX_DEPTH) then
+         error stop "comm_env_push_compute_comm: override already active "// &
+            "(one-level stack) -- call comm_env_pop_compute_comm first"
+      end if
+      compute_comm_override = comm
+      compute_comm_override_depth = compute_comm_override_depth + 1
+   end subroutine comm_env_push_compute_comm
+
+   subroutine comm_env_pop_compute_comm()
+      !! TEST/TOOLING-ONLY.  Pops the override pushed by
+      !! `comm_env_push_compute_comm`, restoring `comm_env_compute_comm()`
+      !! to the real compute communicator.  Fails loud on pop-without-push
+      !! (a bug in the caller, not a state this seam should absorb
+      !! silently).  Does NOT finalize the popped communicator -- the
+      !! pusher owns that (e.g. freeing a self-comm built for the push).
+      if (compute_comm_override_depth <= 0) then
+         error stop "comm_env_pop_compute_comm: no override active (pop without push)"
+      end if
+      compute_comm_override_depth = compute_comm_override_depth - 1
+   end subroutine comm_env_pop_compute_comm
 
    function comm_env_global_comm() result(comm)
       !! Return the cached global (world) communicator.
