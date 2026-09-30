@@ -362,8 +362,12 @@ contains
                                   standard_name=trim(entry%standard_name), &
                                   time_op=time_op, dt_out=dt_out, &
                                   output_vgrid=ocoord, remap=remap, is_extensive=.false., &
-                                  has_missing=(diag_mask_vanished_is_on() .and. &
-                                               ocoord /= DIAG_VGRID_DENSITY))
+                                  ! `vorticity_z` writes `DIAG_MISSING_VALUE` at every land
+                                  ! T-cell on this (remapped, layered) path too, so it must
+                                  ! advertise `_FillValue` here as well as below.
+                                  has_missing=((diag_mask_vanished_is_on() .and. &
+                                                ocoord /= DIAG_VGRID_DENSITY) .or. &
+                                               trim(entry%name) == "vorticity_z"))
       else
          ! Every cavity entry writes the NaN sentinel outside the cover
          ! (`cavity_mask_impl`), so the NetCDF variable must advertise a
