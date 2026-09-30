@@ -17,7 +17,8 @@ module rdb_ocean_diag_derived
    use rdb_ocean_diag, only: ocean_diag_t, diag_fill_proc, diag_remap_proc, &
                              DIAG_OP_MEAN, DIAG_OP_INSTANT, DIAG_OP_UNSET, &
                              DIAG_VGRID_LAYER, DIAG_VGRID_SURFACE, DIAG_COORD_UNSET, &
-                             DIAG_VGRID_DENSITY, diag_spec_t, parse_diag_spec
+                             DIAG_VGRID_DENSITY, diag_spec_t, parse_diag_spec, &
+                             DIAG_MISSING_VALUE
    use rdb_ocean_diag_fills, only: register_default_diags, is_canonical_diag_name, &
                                    coord_remap_proc, diag_mask_vanished_is_on, &
                                    canonical_diag_gate_hint
@@ -36,7 +37,7 @@ module rdb_ocean_diag_derived
    public :: derived_entry_t
    public :: register_derived, apply_diag_selection
    public :: derived_catalog_size, derived_catalog_name, derived_catalog_requires
-   public :: fill_h_layer, fill_rho_layer, fill_vorticity_z
+   public :: fill_h_layer, fill_rho_layer, fill_vorticity_z, fill_vorticity_z_impl
    public :: fill_ke_total, fill_transport_x, fill_transport_y
    public :: fill_mld_density
    public :: fill_ice_speed, fill_ice_u, fill_ice_v
@@ -369,12 +370,16 @@ contains
          ! `_FillValue` — unconditionally, not via
          ! `diag_mask_vanished_is_on()`, which gates the REMAP path's
          ! below-target fill and has nothing to do with a calving front.
+         ! `vorticity_z` writes the same `DIAG_MISSING_VALUE` sentinel at
+         ! every land T-cell (`fill_vorticity_z_impl`) regardless of
+         ! `mask_vanished_layers`, so it advertises unconditionally too.
          call state%diag%register(name=trim(entry%name), units=trim(entry%units), &
                                   fill=entry%fill, n1=nx, n2=ny, n3=n3, &
                                   long_name=trim(entry%long_name), &
                                   standard_name=trim(entry%standard_name), &
                                   time_op=time_op, dt_out=dt_out, &
-                                  has_missing=(entry%requires /= DERIVED_REQ_NONE))
+                                  has_missing=(entry%requires /= DERIVED_REQ_NONE .or. &
+                                               trim(entry%name) == "vorticity_z"))
       end if
    end subroutine register_derived
 
@@ -571,8 +576,13 @@ contains
    end subroutine copy3_impl
 
    subroutine fill_vorticity_z(state_handle, buf)
-      !! Relative vorticity ζ = ∂v/∂x − ∂u/∂y, averaged from the four
-      !! surrounding C-grid corners onto the cell centre.
+      !! The model's OWN relative vorticity ζ = ∂v/∂x − ∂u/∂y, at the same
+      !! C-grid corners `coriolis_adv` computes it at (circulation/area
+      !! form, C1 slip factor), averaged corner -> cell centre.  See
+      !! `fill_vorticity_z_impl` for the formula and why it replaced a
+      !! centred T-point stencil that differenced ocean velocity straight
+      !! against the zero stored at land faces (a spurious no-slip-like
+      !! vorticity sheet at every coast, even under the free-slip default).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -583,42 +593,92 @@ contains
          end if
          call fill_vorticity_z_impl(state%multilayer%u_face_x_layer, &
                                     state%multilayer%v_face_y_layer, &
-                                    state%metrics%idxT, &
-                                    state%metrics%idyT, &
+                                    state%metrics%dyCv, &
+                                    state%metrics%dxCu, &
+                                    state%metrics%wet_q, &
+                                    state%metrics%wet_T, &
+                                    state%metrics%iareaBu, &
+                                    state%coriolis_adv%no_slip, &
                                     state%multilayer%nz_ml, buf)
       end select
    end subroutine fill_vorticity_z
 
-   pure subroutine fill_vorticity_z_impl(u_face, v_face, idxT, idyT, nz_ml, buf)
+   pure subroutine fill_vorticity_z_impl(u_face, v_face, dyCv, dxCu, wet_q, wet_T, &
+                                         iareaBu, no_slip, nz_ml, buf)
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);
-      ! face-sized u_face/v_face have nx+1/ny+1 dims; size() min-clips at call.
-      !! Cell-centred relative vorticity using per-cell metric inverses
-      !! `idxT`/`idyT` (= 1/dx, 1/dy on uniform Cartesian); the 0.25
-      !! corner-average factor folds into the per-cell scale.
-      real(wp), intent(in)    :: u_face(:, :, :), v_face(:, :, :)
+      ! face-sized u_face/v_face and the Cv/Cu/Bu metrics carry the natural
+      ! (nx[+1], ny[+1]) C-grid stagger; size() min-clips at call.
+      !! Cell-centred relative vorticity that MIRRORS the dynamics' own
+      !! corner ζ bit-for-bit — the shared `rdb_rvc_zeta_corner` body
+      !! (`src/shared_module_utilities/rdb_rel_vort_corner.inc`), the same
+      !! circulation-form formula `coriolis_adv_compute_tendencies` Pass 1
+      !! evaluates inline for its `q_corner` scratch
+      !! (`src/core/ocean/kernels/coriolis_adv/rdb_coriolis_adv.F90`), incl.
+      !! the C1 slip factor: `no_slip=.false.` (default, free-slip) masks a
+      !! land corner (`wet_q=0`) to zero rel-vort; `.true.` (no-slip) gives
+      !! it the `2-wet_q` image-vorticity value instead.
+      !!
+      !! The 4 corners of each T-cell (SW=(i,j), SE=(i+1,j), NW=(i,j+1),
+      !! NE=(i+1,j+1) in the corner-storage convention `q_corner(i,j)` sits
+      !! at (i-1/2,j-1/2)) are averaged onto the cell centre with a plain
+      !! `0.25*(sw+se+nw+ne)` — the SAME fixed-count average the dynamics
+      !! itself uses to interpolate `q_corner` onto a u/v-face
+      !! (`zeta_at_u = 0.5*(q_corner(i,j)+q_corner(i,j+1))`), just over 4
+      !! corners instead of 2.  It is deliberately NOT re-weighted by
+      !! `wet_q`: each corner's OWN value already carries the correct
+      !! land/coast physics via the C1 factor above (free-slip -> exactly
+      !! 0 at a land corner, so it dilutes a coastal cell's average toward
+      !! 0 the same way the dynamics' own face-average does; no-slip -> the
+      !! nonzero image-vorticity value, so the boundary condition actually
+      !! reaches the diagnostic instead of being masked out a second time
+      !! by a wet-only divisor). A land cell (`wet_T=0`) reports
+      !! `DIAG_MISSING_VALUE`.
+      real(wp), intent(in)    :: u_face(:, :, :), v_face(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       ! assumed-shape-ok: diag fill — cadence-bounded (once per output frame)
-      real(wp), intent(in)    :: idxT(:, :), idyT(:, :)
+      real(wp), intent(in)    :: dyCv(:, :), dxCu(:, :), wet_q(:, :), wet_T(:, :)  ! assumed-shape-ok: diag fill
+      real(wp), intent(in)    :: iareaBu(:, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      logical, intent(in)     :: no_slip
       integer, intent(in)    :: nz_ml
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer :: i, j, k, nx, ny, nz
-      real(wp) :: inv_dx, inv_dy, dvdx, dudy
+      real(wp) :: ns, z_sw, z_se, z_nw, z_ne
       call zero3_impl(buf)
-      nx = min(size(buf, 1), size(u_face, 1) - 1, size(idxT, 1))
-      ny = min(size(buf, 2), size(v_face, 2) - 1, size(idyT, 2))
+      nx = min(size(buf, 1), size(wet_T, 1))
+      ny = min(size(buf, 2), size(wet_T, 2))
       nz = min(size(buf, 3), nz_ml)
-      ! Interior cells only (i in [2, nx-1], j in [2, ny-1]) so the
-      ! ±1 stencil stays in bounds; the rim stays at the zero seed.
+      ns = merge(1.0_wp, 0.0_wp, no_slip)
+      ! Interior cells only (i in [2, nx-1], j in [2, ny-1]), matching the
+      ! predecessor stencil's rim convention: the ±1 corner reach needs
+      ! i-1/i+1 and j-1/j+1 in bounds, so the outer rim stays at the zero
+      ! seed exactly as before this fix (an orthogonal, pre-existing
+      ! limitation of the diag's domain coverage, not part of the bug).
       do concurrent(k=1:nz, j=2:ny - 1, i=2:nx - 1) &
-         local(dvdx, dudy, inv_dx, inv_dy)
-         inv_dx = 0.25_wp*idxT(i, j)
-         inv_dy = 0.25_wp*idyT(i, j)
-         dvdx = inv_dx*( &
-                v_face(i + 1, j, k) - v_face(i - 1, j, k) + &
-                v_face(i + 1, j + 1, k) - v_face(i - 1, j + 1, k))
-         dudy = inv_dy*( &
-                u_face(i, j + 1, k) - u_face(i, j - 1, k) + &
-                u_face(i + 1, j + 1, k) - u_face(i + 1, j - 1, k))
-         buf(i, j, k) = dvdx - dudy
+         local(z_sw, z_se, z_nw, z_ne)
+         if (wet_T(i, j) > 0.5_wp) then
+            z_sw = rdb_rvc_zeta_corner(v_face(i, j, k), v_face(i - 1, j, k), &
+                                       dyCv(i, j), dyCv(i - 1, j), &
+                                       u_face(i, j, k), u_face(i, j - 1, k), &
+                                       dxCu(i, j), dxCu(i, j - 1), &
+                                       iareaBu(i, j), wet_q(i, j), ns)
+            z_se = rdb_rvc_zeta_corner(v_face(i + 1, j, k), v_face(i, j, k), &
+                                       dyCv(i + 1, j), dyCv(i, j), &
+                                       u_face(i + 1, j, k), u_face(i + 1, j - 1, k), &
+                                       dxCu(i + 1, j), dxCu(i + 1, j - 1), &
+                                       iareaBu(i + 1, j), wet_q(i + 1, j), ns)
+            z_nw = rdb_rvc_zeta_corner(v_face(i, j + 1, k), v_face(i - 1, j + 1, k), &
+                                       dyCv(i, j + 1), dyCv(i - 1, j + 1), &
+                                       u_face(i, j + 1, k), u_face(i, j, k), &
+                                       dxCu(i, j + 1), dxCu(i, j), &
+                                       iareaBu(i, j + 1), wet_q(i, j + 1), ns)
+            z_ne = rdb_rvc_zeta_corner(v_face(i + 1, j + 1, k), v_face(i, j + 1, k), &
+                                       dyCv(i + 1, j + 1), dyCv(i, j + 1), &
+                                       u_face(i + 1, j + 1, k), u_face(i + 1, j, k), &
+                                       dxCu(i + 1, j + 1), dxCu(i + 1, j), &
+                                       iareaBu(i + 1, j + 1), wet_q(i + 1, j + 1), ns)
+            buf(i, j, k) = 0.25_wp*((z_sw + z_se) + (z_nw + z_ne))
+         else
+            buf(i, j, k) = DIAG_MISSING_VALUE
+         end if
       end do
    end subroutine fill_vorticity_z_impl
 
@@ -1254,5 +1314,6 @@ contains
    end subroutine fill_ice_v_impl
 
 #include "rdb_vanished_layer.inc"
+#include "rdb_rel_vort_corner.inc"
 
 end module rdb_ocean_diag_derived
