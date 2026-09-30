@@ -2140,7 +2140,7 @@ contains
          nz = ms%nz_ml
          ! u-faces: i straddles centres i-1 and i; safe range i=2..nx_uface-1
          ! (both-sided-vanished test as an inner `if`, not a DC mask — masked
-         ! headers are not auto-convertible by tools/dc_to_omp.py)
+         ! headers fail tools/dc_audit.py --strict)
          do concurrent(k=1:nz, j=1:ny_uface, i=2:nx_uface - 1)
             if (max(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k)) <= vt) then
                ms%u_face_x_layer(i, j, k) = 0.0_wp
@@ -2557,7 +2557,7 @@ contains
       ! faces — their adjacent interior index would be out of range.
       ! Safe inner range: i=2..nx_face-1 (both i-1 and i are in 1..nx_centre).
       ! Both-sided-vanished test as an inner `if`, not a DC mask — masked
-      ! headers are not auto-convertible by tools/dc_to_omp.py.
+      ! headers fail tools/dc_audit.py --strict.
       do concurrent(k=1:nz, j=1:ny_uface, i=2:nx_face - 1)
          if (max(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k)) <= vanish_tol) then
             ms%u_face_x_layer(i, j, k) = 0.0_wp

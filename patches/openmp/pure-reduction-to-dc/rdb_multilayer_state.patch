@@ -1,0 +1,57 @@
+--- a/src/core/rdb_multilayer_state.F90	2026-09-29 19:16:00.637863776 -0500
++++ b/src/core/rdb_multilayer_state.F90	2026-09-29 19:16:00.668863281 -0500
+@@ -546,32 +546,29 @@
+       ! already present]`, which is a no-op for the production state (mapped by
+       ! `enter_data`) and still correct for a host-only unit test.  `present(...)`
+       ! here would make the test abort with a present-table lookup failure.
+-      !$omp target teams distribute parallel do collapse(2) private(k, k_top, k_don, c_live) &
+-      !$omp   reduction(+:n_bad) reduction(max:worst)
+-      do j = 1, ny
+-         do i = 1, nx
+-            k_top = 0
+-            !$acc loop seq
+-            do k = nz, 1, -1
+-               if (rdb_vl_is_live(h_layer(i, j, k))) then
+-                  k_top = k
+-                  exit
+-               end if
+-            end do
+-            k_don = k_top
+-            !$acc loop seq
+-            do k = nz, 1, -1
+-               if (rdb_vl_is_live(h_layer(i, j, k))) then
+-                  k_don = k
+-               else
+-                  c_live = 0.0_wp
+-                  if (k_don > 0) c_live = hTr(i, j, k_don)/h_layer(i, j, k_don)
+-                  if (.not. rdb_vl_holds_live_conc(hTr(i, j, k), h_layer(i, j, k), c_live)) then
+-                     n_bad = n_bad + 1
+-                     worst = max(worst, abs(hTr(i, j, k) - h_layer(i, j, k)*c_live))
+-                  end if
++      do concurrent(j=1:ny, i=1:nx) local(k, k_top, k_don, c_live) &
++         reduce(+:n_bad) reduce(max:worst)
++         k_top = 0
++         !$acc loop seq
++         do k = nz, 1, -1
++            if (rdb_vl_is_live(h_layer(i, j, k))) then
++               k_top = k
++               exit
++            end if
++         end do
++         k_don = k_top
++         !$acc loop seq
++         do k = nz, 1, -1
++            if (rdb_vl_is_live(h_layer(i, j, k))) then
++               k_don = k
++            else
++               c_live = 0.0_wp
++               if (k_don > 0) c_live = hTr(i, j, k_don)/h_layer(i, j, k_don)
++               if (.not. rdb_vl_holds_live_conc(hTr(i, j, k), h_layer(i, j, k), c_live)) then
++                  n_bad = n_bad + 1
++                  worst = max(worst, abs(hTr(i, j, k) - h_layer(i, j, k)*c_live))
+                end if
+-            end do
++            end if
+          end do
+       end do
+    end subroutine scan_vanished_one_impl

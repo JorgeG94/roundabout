@@ -1,0 +1,45 @@
+--- a/src/ALE/rdb_ocean_remap.F90	2026-09-29 19:18:16.956737977 -0500
++++ b/src/ALE/rdb_ocean_remap.F90	2026-09-29 19:18:16.986737537 -0500
+@@ -729,26 +729,23 @@
+       n_bad = 0
+       worst_rel = 0.0_wp
+       worst_neg = 0.0_wp
+-      !$omp target teams distribute parallel do collapse(2) &
+-      !$omp   reduction(+:n_bad) reduction(max:worst_rel) reduction(min:worst_neg) &
+-      !$omp   private(k, s_old, s_new, rel, hmin)
+-      do j = 1, ny
+-         do i = 1, nx
+-            s_old = 0.0_wp
+-            s_new = 0.0_wp
+-            hmin = 0.0_wp
+-            do k = 1, nz
+-               s_old = s_old + h_old(i, j, k)
+-               s_new = s_new + h_new(i, j, k)
+-               hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
+-            end do
+-            ! Relative to the LARGER total, so a land column (both zero)
+-            ! scores 0 rather than tripping on a 0/0.
+-            rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
+-            worst_rel = max(worst_rel, rel)
+-            worst_neg = min(worst_neg, hmin)
+-            if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
++      do concurrent(j=1:ny, i=1:nx) &
++         local(k, s_old, s_new, rel, hmin) &
++         reduce(+:n_bad) reduce(max:worst_rel) reduce(min:worst_neg)
++         s_old = 0.0_wp
++         s_new = 0.0_wp
++         hmin = 0.0_wp
++         do k = 1, nz
++            s_old = s_old + h_old(i, j, k)
++            s_new = s_new + h_new(i, j, k)
++            hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
+          end do
++         ! Relative to the LARGER total, so a land column (both zero)
++         ! scores 0 rather than tripping on a 0/0.
++         rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
++         worst_rel = max(worst_rel, rel)
++         worst_neg = min(worst_neg, hmin)
++         if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
+       end do
+    end subroutine ocean_remap_scan_preconditions
+ 

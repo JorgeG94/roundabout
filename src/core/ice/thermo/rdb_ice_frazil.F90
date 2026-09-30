@@ -93,7 +93,7 @@ contains
       !! skipped — the division for a PHYSICAL T/S gates on
       !! `H_VANISHED` per the thin-layer taxonomy.  The conditional
       !! write uses an inner `if`, NOT a `do concurrent` mask header
-      !! (masked DC headers break tools/dc_to_omp.py).
+      !! (masked DC headers fail tools/dc_audit.py --strict).
       integer, intent(in) :: nghost, nz, nx, ny
       real(wp), intent(inout) :: hTr_T(nx, ny, nz)
       real(wp), intent(in) :: hTr_S(nx, ny, nz)
