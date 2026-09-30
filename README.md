@@ -26,8 +26,16 @@ See [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.m
 
 ## Backend Strategy
 
-The idea is to use standard Fortran parallelism as much as possible and OpenACC where it can't be helped. We have
-a CI and a linter to make sure any openacc directive is portable to OpenMP for AMD and Intel GPUs.
+Parallelism is **`do concurrent`, everywhere** — there is no full-OpenMP port, and `do concurrent`
+is never rewritten to an `!$omp` worksharing construct. GPU offload goes through NVHPC's
+`-stdpar=gpu`, plus a thin layer of OpenACC directives for the handful of things `do concurrent`
+alone can't express (reductions, explicit device data management). For compilers without an
+OpenACC path (gfortran, Intel ifx, AMD/LLVM flang), those `!$acc` directives are auto-translated to
+their OpenMP equivalents by `tools/acc_to_omp.py` — `do concurrent` itself is left untouched, since
+each of those compilers has its own way of mapping `do concurrent` to a device or to host threads.
+The translated tree is regenerated and CI-verified (build + `ctest -R rdb`) on every push to `main`;
+see `.github/workflows/sync-dc-openmp.yml`. We also run a linter (`openmp-portability-lint.yml`) to
+catch `!$acc` shapes that are known to break under that translation before they land.
 
 - **`do concurrent`** for all data-parallel loops — offloads to GPU with `-stdpar=gpu`, runs threaded with `-stdpar=multicore`, or runs serially without flags
 - **`!$acc parallel loop reduction(...)`** for reduction loops (CFL timestep, CG dot products) — inert comments on non-OpenACC compilers, falls back to sequential
@@ -42,18 +50,15 @@ No vendor-specific extensions — the same source compiles with NVHPC (GPU + mul
 | **Serial** | nvfortran | (none) | sequential | sequential |
 | **CPU (gcc)** | gfortran | `-ftree-parallelize-loops=N` | threaded | sequential |
 
-You can use the alternative backends if you checkout the branches:
-
-- auto/dc-openmp
-- auto/openmp
+For a non-NVHPC compiler, check out the auto-generated branch instead of building `main` directly:
 
 ### auto/dc-openmp
 
-Automatically generated from the main branch upon Pull-Request. It uses OpenMP of data mvoement and do concurrent for compute.
-
-### auto/openmp
-
-Automatically generated from the main branch upon Pull-Request. It uses OpenMP of both data movement and compute.
+Regenerated from `main` and force-pushed on every push to `main` (see `tools/regen_dc_openmp.sh`
+and `.github/workflows/sync-dc-openmp.yml`). `do concurrent` is kept exactly as written; only the
+`!$acc` data-movement and reduction directives become `!$omp` equivalents
+(`-DRDB_PARALLEL_BACKEND=openmp`). This is the ONLY alternative-backend branch — do concurrent is
+never rewritten, so there is no separate "full OpenMP" branch.
 
 
 ## Contributing setup

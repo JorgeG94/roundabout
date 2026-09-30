@@ -134,7 +134,7 @@ partitioner in this tree.
 
 ### GPU Parallelism
 
-All data-parallel loops use `do concurrent`. Reductions use `!$acc parallel loop reduction(...)` (inert comment on non-OpenACC compilers). `!$acc enter/exit data` / `!$acc update` is used directly — no `#ifdef` wrapping. State arrays stay device-resident; only diagnostic output triggers D→H transfers. `RDB_GPU_OFFLOAD` is reserved for CUDA-aware MPI selection + multi-GPU build-config guard.
+All data-parallel loops use `do concurrent`. GPU offload is NVHPC `-stdpar=gpu` plus a thin layer of OpenACC directives for what `do concurrent` alone can't express: reductions use `!$acc parallel loop reduction(...)` (inert comment on non-OpenACC compilers), and `!$acc enter/exit data` / `!$acc update` is used directly — no `#ifdef` wrapping. State arrays stay device-resident; only diagnostic output triggers D→H transfers. `RDB_GPU_OFFLOAD` is reserved for CUDA-aware MPI selection + multi-GPU build-config guard. There is **no full-OpenMP port** — `do concurrent` is never rewritten to an `!$omp` worksharing construct. For compilers without an OpenACC path, `tools/acc_to_omp.py` auto-translates the `!$acc` directives to `!$omp` equivalents (`do concurrent` untouched); the result is regenerated and CI-verified (build + `ctest -R rdb` under gfortran `-fopenmp`) on every push to `main` onto branch `auto/dc-openmp` (`.github/workflows/sync-dc-openmp.yml`).
 
 ### Vertical Layer Convention (load-bearing)
 
