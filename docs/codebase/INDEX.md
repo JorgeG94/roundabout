@@ -2,9 +2,12 @@
 
 GPU-native 3D hydrostatic ocean solver (Arakawa C-grid). The canonical source is
 Fortran `do concurrent` + OpenACC (portable across NVHPC GPU/
-multicore, gfortran, ifx); an OpenMP-target variant for Intel/AMD GPUs is
-generated from that same source by the acc→omp transformer (`tools/acc_to_omp.py`
-/ `tools/dc_to_omp.py`, pushed to the `auto/*` branches).
+multicore, gfortran, ifx). There is no full-OpenMP port — `do concurrent` is
+never rewritten. For compilers without an OpenACC path, an OpenMP-target
+variant is generated from that same source by the acc→omp transformer
+(`tools/acc_to_omp.py`, `do concurrent` kept verbatim), regenerated and
+CI-verified on every push to `main`, and pushed to the `auto/dc-openmp`
+branch.
 
 > **Where to read first** depends on what you're working on:
 >
