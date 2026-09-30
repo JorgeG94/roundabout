@@ -1,0 +1,218 @@
+! Southern Ocean 1/4-degree, WIND-FORCED, MPI (4 GPUs) -- an eddy-resolving
+! cut of the MOM6 OM4_025 tripolar grid, from the Antarctic coast to about
+! 30 S, spun up for two simulated years under JRA55-do wind stress.
+!
+! Same recipe as ../southern_ocean_1deg/southern_ocean_1deg_wind.nml (same
+! south wall, same north OBC_SPONGE-as-wall-plus-relaxation, same wind
+! source, same vertical grid family, same EOS/PGF/drag physics), scaled from
+! MOM6 OM_1deg to OM4_025 the way MOM6 itself scales between the two: see
+! README.md Sec. 3 for every physics choice against its OM4_025 MOM_input
+! counterpart.  GM/Redi are kept off (the 1-degree config's choice) even
+! though OM4_025 itself runs THICKNESSDIFFUSE=True -- documented deviation,
+! README.md Sec. 3.
+!
+! GRID      OM4_025 supergrid ocean_hgrid.nc, cut to tracer rows j=0..377
+!           (1440 x 378 T points): row j=0 is the Antarctic coastal wall
+!           (the grid's own south row -- NOT a uniform-latitude circle here,
+!           see README.md Sec. 2), row j=377's north face sits at the
+!           supergrid's own q-row nearest 30 S (29.915 S, node row 756).
+!           Periodic east-west (the full longitude circle is kept); NO
+!           tripolar fold (the cut stops well south of the Arctic cap).
+! BATHY     OM4_025 ocean_topog.nc, same y-cut, MOM6 OM4_025 limits applied
+!           in place by tools/om_topo_limit.f90 (MINIMUM_DEPTH 9.5 m,
+!           MAXIMUM_DEPTH 6500 m, MASKING_DEPTH 0 -- 299 wet cells raised,
+!           212 capped, out of 397580 wet).
+! VERTICAL  50 z_fixed levels, tanh-stretched from 2 m at the surface to
+!           ~255 m at depth, partial-step faces closed -- the SAME nominal
+!           profile as the 1-degree runs (task brief: the stretched profile
+!           is fine at this resolution too).
+! IC        WOA05 annual potential temperature + salinity, ALREADY on the
+!           OM4_025 model grid (GFDL's own OM4 IC source), same y-cut, no
+!           horizontal interpolation -- only the vertical fill-gap repair
+!           tools/om_zclim_to_zinit.f90 does (WOA standard levels stop
+!           above the local sea floor at most points; repaired by constant
+!           extrapolation from the deepest valid level, README.md Sec. 4).
+! NORTH BC  &ocean_bc_nml north = "sponge": OBC_SPONGE falls through to a
+!           WALL at the outermost row with a 20-cell (~5 degree, scaled
+!           from the 1-degree run's 5-cell/~5-degree band for the 4x finer
+!           grid) interior band relaxing momentum toward u_ref/v_ref (both
+!           zero) and T/S toward the WOA05 snapshot (&ocean_sponge_nml
+!           target_source = "ic").
+! FORCING   JRA55-do 1958 daily-mean wind stress, regridded directly onto
+!           THIS domain's cut supergrid by tools/om1deg_wind_regrid.f90
+!           (already grid-size-generic -- no source change needed, see
+!           README.md Sec. 5) -- wind stress only, no heat/freshwater flux,
+!           no sea ice.
+! MPI       4 ranks, one GPU each (CUDA_VISIBLE_DEVICES pinned per rank
+!           before MPI_Init -- CLAUDE.md "Multi-GPU one node"); &mpi_nml
+!           px/py chosen from the decomposition timing test, README.md
+!           Sec. 6.
+!
+! INPUT FILES are read from ./INPUT/ relative to the run directory --
+! link it to the derived Southern Ocean 1/4-degree data directory:
+!
+!     ln -s /home/jorge/nci/cdx/data/OM4_025_southern INPUT
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&mpi_nml
+   px = 4                    ! east-west split wins the timing test, README Sec. 6:
+   py = 1                    ! 4x1 8.17 s / 1x4 9.21 s / 2x2 9.37 s (48 steps, compute-only)
+/
+
+&grid_nml
+   nx     = 1440
+   ny     = 378
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   t_end        = 730.0
+   time_unit    = "day"
+   dt_fixed     = 900.0        ! MOM6 OM4_025 DT
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_dataovr_nml
+   ! JRA55-do 1958 daily-mean wind stress, regridded directly onto this
+   ! domain's cut supergrid (no separate windowing step needed).
+   enable       = .true.
+   time_mode    = "cyclic"
+   cycle_period = 31536000.0   ! 365 days
+   t_offset     = 0.0
+   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var    = "taux"
+   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var    = "tauy"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   vcoord_type            = "z_fixed"
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6500.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file = "INPUT/ocean_topog.nc"
+   output_dir      = "./output"
+   output_to_file  = .false.
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"            ! Antarctica -- already land-walled by the bathymetry
+   north = "sponge"          ! open ocean edge near 30 S: wall + interior relax band
+   sponge_width    = 20      ! ~5 degrees at 1/4-degree resolution (4x the 1-degree run's 5)
+   sponge_strength = 1.1574074e-4  ! gamma0 = 1/(10 day), same as the 1-degree run
+/
+
+&ocean_sponge_nml
+   enable        = .true.
+   damp_source   = "band"
+   target_source = "ic"      ! relax to the WOA05 snapshot (= the IC)
+   relax_uv      = .true.    ! momentum toward u_ref/v_ref = 0 (WOA05 IC is at rest)
+   relax_tracers = .true.    ! T/S toward the WOA05 snapshot
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_woa05_jan.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"        ! MOM6 PressureForce_AFV, MASS_WEIGHT_IN_PRESSURE_GRADIENT = True
+   maxvel = 6.0               ! MOM6 OM4_025 MAXVEL
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"          ! MOM6 OM4_025 CORIOLIS_SCHEME = SADOURNY75_ENSTRO (enstrophy form)
+/
+
+&ocean_hvisc_nml
+   ! OM4_025: LAPLACIAN = True (Smagorinsky) as a backstop + SMAGORINSKY_AH
+   ! biharmonic (SMAG_BI_CONST = 0.06, matched exactly) as the main closure,
+   ! per the task brief. The Laplacian floor is scaled down from the
+   ! 1-degree run's nu_h = 2000 m^2/s roughly as dx^2: dx ~ 27.5 km at 1/4
+   ! degree vs ~110 km at 1 degree, (27.5/110)^2 * 2000 = 125 m^2/s; picked
+   ! 150 m^2/s, inside the brief's 125-250 m^2/s band.
+   nu_h            = 150.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06     ! MOM6 OM4_025 SMAG_BI_CONST
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   ! MOM6 OM4_025: BOTTOMDRAGLAW default CDRAG = 3.0e-3 (not overridden in
+   ! MOM_input), HBBL = 10.0, DRAG_BG_VEL = 0.1 -- all matched exactly.
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.       ! per-wet-cell barotropic CFL (MOM6 set_dtbt)
+/
+
+&ocean_eos_nml
+   eos = "wright"              ! MOM6 OM4_025 EQN_OF_STATE = "WRIGHT" (exact match)
+/
+
+&ocean_gm_nml
+   enable = .false.            ! kept off per the task brief (OM4_025 itself runs
+                                ! THICKNESSDIFFUSE = True; documented deviation, README Sec. 3)
+/
+
+&ocean_diag_nml
+   ! Daily surface snapshots: SSH, top-10 m mean u/v/T (T doubling as SST),
+   ! surface relative vorticity, depth-integrated transport for Drake
+   ! Passage / ACC sections. One conservative z_fixed output level (0-10 m)
+   ! keeps every layered field effectively 2-D; KE off to keep the file
+   ! size sane over two years of daily output at this resolution (see
+   ! README.md Sec. 7 for the size estimate).
+   enabled          = .true.
+   filename         = "southern_ocean_025_wind"
+   dt_out           = 1.0        ! day (time_unit)
+   vgrid            = "z_fixed"
+   z_levels         = 10.0
+   n_z_levels       = 1
+   output_precision = "single"
+   diags            = "KE:off  vorticity_z  transport_x  transport_y"
+/
+
+&logging_nml
+   status_interval = 1.0        ! day (time_unit)
+/

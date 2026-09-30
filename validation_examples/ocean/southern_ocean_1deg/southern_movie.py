@@ -406,7 +406,8 @@ def flatten(diag, out, names):
 
 def frames_from_diag(diag_nc, out_dir, data_dir, every=1, size=900, lat_edge=-30.0,
                      main_field="speed", inset_field="ssh", speed_max=None,
-                     ssh_max=None, title=None, drake_lon=-67.5, drake_lat=(-70.0, -52.0)):
+                     ssh_max=None, title=None, drake_lon=-67.5, drake_lat=(-70.0, -52.0),
+                     bathy_name="bathy_om1deg.nc"):
     os.makedirs(out_dir, exist_ok=True)
     flat = os.path.join(out_dir, "diag_nc3.nc")
     names = ["time_SSH", "SSH", "time_u", "u", "time_v", "v",
@@ -415,7 +416,7 @@ def frames_from_diag(diag_nc, out_dir, data_dir, every=1, size=900, lat_edge=-30
     nc = NC3(flat)
     kw = {"title": title} if title else {}
     r = SouthernFrameRenderer(os.path.join(data_dir, "ocean_hgrid.nc"),
-                              os.path.join(data_dir, "bathy_om1deg.nc"),
+                              os.path.join(data_dir, bathy_name),
                               main_field=main_field, inset_field=inset_field,
                               size=size, lat_edge=lat_edge, **kw)
     nt, nyg, nxg = nc.shape("vorticity_z")
@@ -503,7 +504,11 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("diag_nc")
     ap.add_argument("out_dir")
-    ap.add_argument("--data", required=True, help="OM_1deg_southern data directory")
+    ap.add_argument("--data", required=True, help="OM_1deg_southern (or other cut) data directory")
+    ap.add_argument("--bathy", default="bathy_om1deg.nc",
+                    help="bathymetry file name inside --data (classic NetCDF-3, a 'depth(y,x)' "
+                    "variable is all this script reads) -- e.g. 'ocean_topog.nc' for a raw "
+                    "MOM6-style topog file instead of the preprocessed OM_1deg one")
     ap.add_argument("--every", type=int, default=1)
     ap.add_argument("--stem", default="southern_ocean_1deg_wind")
     ap.add_argument("--size", type=int, default=900, help="square canvas side, px")
@@ -524,7 +529,8 @@ if __name__ == "__main__":
     ap.add_argument("--keep-frames", action="store_true")
     a = ap.parse_args()
     nfr, drake = frames_from_diag(a.diag_nc, a.out_dir, a.data, a.every, a.size, a.lat_edge,
-                                  a.main, a.inset, a.speed_max, a.ssh_max, a.title)
+                                  a.main, a.inset, a.speed_max, a.ssh_max, a.title,
+                                  bathy_name=a.bathy)
     print(f"{nfr} frames in {a.out_dir}; Drake series: {len(drake)} days")
     mp4, gif = encode(a.out_dir, os.path.join(a.out_dir, a.stem), fps=a.fps)
     print("encoded:", mp4, gif)

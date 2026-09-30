@@ -19,13 +19,14 @@ program om1deg_subset
    !! indices kept. A dimension named on the command line is truncated to
    !! that range; every other dimension (and every variable that does not
    !! carry a truncated dimension) is copied in full. Handles the `NF90_CHAR`
-   !! / `NF90_FLOAT` / `NF90_DOUBLE` variable ranks 1-3 that these four input
-   !! files use; anything else is a fail-loud `error stop` naming the
-   !! offending variable, not a silent skip.
+   !! / `NF90_FLOAT` / `NF90_DOUBLE` variable ranks 1-3 (plus rank-1
+   !! `NF90_INT`, e.g. a bathymetry file's `iEdit`/`jEdit` edit-list
+   !! variables) that these input files use; anything else is a fail-loud
+   !! `error stop` naming the offending variable, not a silent skip.
    use, intrinsic :: iso_fortran_env, only: real32, real64, error_unit, output_unit
    use netcdf, only: nf90_open, nf90_close, nf90_create, nf90_enddef, nf90_noerr, &
                      nf90_nowrite, nf90_clobber, nf90_64bit_offset, nf90_global, &
-                     nf90_double, nf90_float, nf90_char, nf90_max_name, &
+                     nf90_double, nf90_float, nf90_char, nf90_int, nf90_max_name, &
                      nf90_inquire, nf90_inquire_dimension, nf90_inquire_variable, &
                      nf90_inq_attname, nf90_copy_att, nf90_def_dim, nf90_def_var, &
                      nf90_get_var, nf90_put_var, nf90_put_att, nf90_strerror
@@ -191,6 +192,13 @@ program om1deg_subset
             error stop 1
          end if
          call copy_char_1d(ncid_in, v, ncid_out, v, vdimids, in_dim_start0, in_dim_count)
+      case (nf90_int)
+         if (vndims /= 1) then
+            write (error_unit, "(a,a)") "om1deg_subset: only rank-1 int supported: ", &
+               trim(vname)
+            stop 1
+         end if
+         call copy_i4_1d(ncid_in, v, ncid_out, v, vdimids, in_dim_start0, in_dim_count)
       case default
          write (error_unit, "(a,a)") "om1deg_subset: unsupported NetCDF type for ", &
             trim(vname)
@@ -306,5 +314,18 @@ contains
       call check(nf90_put_var(ncout, vout, buf), "put_var char_1d")
       deallocate (buf)
    end subroutine copy_char_1d
+
+   subroutine copy_i4_1d(ncin, vin, ncout, vout, dimids, start0, cnt)
+      integer, intent(in) :: ncin, vin, ncout, vout
+      integer, intent(in) :: dimids(:), start0(:), cnt(:)
+      integer, allocatable :: buf(:)
+      integer :: st(1), ct(1)
+      st(1) = start0(dimids(1)) + 1
+      ct(1) = cnt(dimids(1))
+      allocate (buf(ct(1)))
+      call check(nf90_get_var(ncin, vin, buf, start=st, count=ct), "get_var i4_1d")
+      call check(nf90_put_var(ncout, vout, buf), "put_var i4_1d")
+      deallocate (buf)
+   end subroutine copy_i4_1d
 
 end program om1deg_subset
