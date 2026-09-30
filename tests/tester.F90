@@ -177,6 +177,8 @@ program rdb_tests
    use test_ocean_tracer_adv, only: ocean_tracer_adv_collect => collect_ocean_tracer_adv_tests
    use test_ocean_conservation_salt_heat, only: ocean_conservation_salt_heat_collect => &
                                                 collect_ocean_conservation_salt_heat_tests
+   use test_ocean_budget_periodic_sponge_serial, only: ocean_budget_periodic_sponge_serial_collect => &
+                                                       collect_ocean_budget_periodic_sponge_serial_tests
    use test_ocean_dyn_multilayer, only: ocean_dyn_multilayer_collect => collect_ocean_dyn_multilayer_tests
    use test_ocean_hvisc, only: ocean_hvisc_collect => collect_ocean_hvisc_tests
    use test_ocean_hvisc_resoln, only: ocean_hvisc_resoln_collect => collect_ocean_hvisc_resoln_tests
@@ -358,6 +360,8 @@ program rdb_tests
                 new_testsuite("safe_math", safe_math_collect), &
                 new_testsuite("ocean_tracer_adv", ocean_tracer_adv_collect), &
                 new_testsuite("ocean_conservation_salt_heat", ocean_conservation_salt_heat_collect), &
+                new_testsuite("ocean_budget_periodic_sponge_serial", &
+                              ocean_budget_periodic_sponge_serial_collect), &
                 new_testsuite("ocean_dyn_multilayer", ocean_dyn_multilayer_collect), &
                 new_testsuite("ocean_hvisc", ocean_hvisc_collect), &
                 new_testsuite("ocean_hvisc_resoln", ocean_hvisc_resoln_collect), &
