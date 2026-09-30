@@ -91,7 +91,12 @@ FIELD_META = {
 
 
 def vorticity_ratio(zeta, f_abs):
-    return [z / f if f > 1e-12 else float("nan") for z, f in zip(zeta, f_abs)]
+    # |zeta| > 1e10 is the diag's land sentinel (DIAG_MISSING_VALUE = 1e20).
+    # The stdlib NC3 reader does not apply _FillValue, and files written
+    # before vorticity_z advertised it on every path carry it unflagged, so
+    # treat it as missing here rather than letting it set the colour range.
+    return [z / f if f > 1e-12 and abs(z) < 1e10 else float("nan")
+            for z, f in zip(zeta, f_abs)]
 
 
 def area_weighted_mean(values, area, wet):
