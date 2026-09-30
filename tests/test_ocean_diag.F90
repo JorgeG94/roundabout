@@ -18,14 +18,15 @@ module test_ocean_diag
                              DIAG_OP_MAX, DIAG_OP_MIN, DIAG_OP_INTEGRAL, &
                              DIAG_VGRID_Z_FIXED, DIAG_OP_UNSET, &
                              DIAG_VGRID_SIGMA, DIAG_VGRID_LAYER, DIAG_COORD_UNSET, &
-                             DIAG_VGRID_DENSITY, &
+                             DIAG_VGRID_DENSITY, DIAG_MISSING_VALUE, &
                              diag_spec_t, parse_diag_spec
    use rdb_ocean_diag_fills, only: register_default_diags, fill_ssh, fill_ke, &
                                    fill_temperature, remap_layer_to_z, &
                                    set_diag_remap_method, is_canonical_diag_name, &
                                    set_diag_mask_vanished, canonical_diag_gate_hint
    use rdb_ocean_diag_derived, only: register_derived, apply_diag_selection, &
-                                     derived_catalog_size, derived_catalog_name
+                                     derived_catalog_size, derived_catalog_name, &
+                                     fill_vorticity_z_impl
    use rdb_ocean_diag_mask, only: diag_mask_t, diag_mask_global, &
                                   diag_mask_bbox, diag_mask_h_section, &
                                   diag_mask_v_section
@@ -93,6 +94,8 @@ contains
                   new_unittest("derived_h_layer_direct_copy", test_derived_h_layer), &
                   new_unittest("derived_rho_layer_direct_copy", test_derived_rho_layer), &
                   new_unittest("derived_vorticity_z_rigid_rotation", test_derived_vorticity), &
+                  new_unittest("vorticity_z_free_slip_wall_no_sheet", test_vorticity_free_slip_wall), &
+                  new_unittest("vorticity_z_no_slip_wall_image_vorticity", test_vorticity_no_slip_wall), &
                   new_unittest("derived_ke_total_uniform_flow", test_derived_ke_total), &
                   new_unittest("derived_transport_x_uniform_flow", test_derived_transport_x), &
                   new_unittest("derived_transport_y_uniform_flow", test_derived_transport_y), &
@@ -1441,6 +1444,21 @@ contains
       !!   u(face_x) = -Ω · y_centre_at_face
       !!   v(face_y) = +Ω · x_centre_at_face
       !! ⇒ ζ = ∂v/∂x − ∂u/∂y = 2Ω at every cell centre, to FP.
+      !!
+      !! `setup_state` never applies a land mask (`wet_T`/`wet_q` default
+      !! to 1 everywhere — `rdb_ocean_metrics`'s allocation default), so
+      !! this all-wet case exercises `fill_vorticity_z_impl`'s NEW
+      !! corner-circulation formula (mirroring
+      !! `coriolis_adv_compute_tendencies`'s `q_corner`, see
+      !! `rdb_rvc_zeta_corner` in
+      !! `src/shared_module_utilities/rdb_rel_vort_corner.inc`) at its
+      !! C1 slip factor's identity value (`wet_q≡1` ⇒ factor≡1 regardless
+      !! of `no_slip`): on this rigid-rotation field ζ is spatially
+      !! CONSTANT, so the old centred-stencil answer and the new 4-corner
+      !! average agree exactly — this case alone cannot distinguish the
+      !! two formulas; `test_vorticity_free_slip_wall` /
+      !! `test_vorticity_no_slip_wall` below exercise the part that
+      !! changed (the coastal treatment).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
@@ -1485,6 +1503,149 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_derived_vorticity
+
+   subroutine test_vorticity_free_slip_wall(error)
+      !! Coastal analytical, direct `fill_vorticity_z_impl` call (bypasses
+      !! `register_derived`/grid setup — hand-built C-grid metric arrays,
+      !! `dx=dy=1`): a single interior land row (row 3 of 6) splits an
+      !! otherwise-uniform along-wall flow `u ≡ U0`, `v ≡ 0` into a south
+      !! shelf (rows 1-2) and a north shelf (rows 4-6), exactly the
+      !! "differences ocean velocity against the land faces' zero" bug
+      !! this fix removes: the OLD centred T-point stencil read a
+      !! constant-U0 `u_face` two cells away with NO land mask, so it saw
+      !! `du/dy = 0` in the wet interior but injected a spurious jump at
+      !! the coast anyway wherever ITS ±1-cell reach crossed the land row
+      !! (a no-slip-like sheet even under the free-slip default — the
+      !! reported bug).  The face metrics here are masked exactly the way
+      !! `metrics_apply_land_mask` masks them at setup (spec §14 C3):
+      !! `dxCu`/`dyCv` are 0 at every face touching the land row, and
+      !! `wet_q` is 0 at every corner touching it.
+      !!
+      !! Free-slip (`no_slip=.false.`, this test): the C1 factor
+      !! `(1-2·ns)·wet_q + 2·ns` is `wet_q` itself, so BOTH coastal cells
+      !! (row 2, immediately south of the wall; row 4, immediately north)
+      !! must read EXACTLY ζ=0 — no coastal sheet — because there is no
+      !! real shear in the wet interior (`u` is the same `U0` on every wet
+      !! row) and the wall corners contribute a masked zero rather than a
+      !! spurious jump.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: u_face(6, 6, 1), v_face(5, 7, 1)
+      real(wp) :: dyCv(5, 7), dxCu(6, 6), wet_q(6, 7), wet_T(5, 6), iareaBu(6, 7)
+      real(wp) :: buf(5, 6, 1)
+      checks: block
+         call build_wall_metrics(land_row=3, u_face=u_face, v_face=v_face, &
+                                 dyCv=dyCv, dxCu=dxCu, wet_q=wet_q, wet_T=wet_T, &
+                                 iareaBu=iareaBu)
+         call fill_vorticity_z_impl(u_face, v_face, dyCv, dxCu, wet_q, wet_T, &
+                                    iareaBu, .false., 1, buf)
+         call check(error, abs(buf(3, 2, 1)) < 1.0e-12_wp, &
+                    "free-slip: south-shelf coastal cell (row 2) must read zeta=0")
+         if (allocated(error)) exit checks
+         call check(error, abs(buf(3, 4, 1)) < 1.0e-12_wp, &
+                    "free-slip: north-shelf coastal cell (row 4) must read zeta=0")
+         if (allocated(error)) exit checks
+         call check(error, abs(buf(3, 3, 1) - DIAG_MISSING_VALUE) < 1.0e-6_wp, &
+                    "the land row itself must carry DIAG_MISSING_VALUE")
+      end block checks
+   end subroutine test_vorticity_free_slip_wall
+
+   subroutine test_vorticity_no_slip_wall(error)
+      !! Same wall geometry as `test_vorticity_free_slip_wall`, `no_slip
+      !! = .true.`: the C1 factor at a wall corner becomes the MOM6 image-
+      !! vorticity value `2 - wet_q = 2`, so the along-wall shear the
+      !! no-slip condition implies is no longer masked away. Closed-form
+      !! (dx=dy=1, `U0` the uniform wet-interior speed, `iareaBu·dxCu =
+      !! U0/dy` at an unmasked u-face): the wall contributes
+      !! `2·U0/dy` at each of its 2 wall-touching corners, straight-
+      !! averaged with the 2 zero (no-shear, interior) corners over the
+      !! 4-corner cell stencil ⇒ the coastal cell reads ±U0 (dy=1) — the
+      !! sign flips across the wall (a rigid wall with the same tangential
+      !! speed on both sides induces oppositely-signed image vorticity,
+      !! mirrored across the boundary; see `fill_vorticity_z_impl`'s
+      !! docstring for why the average is NOT re-weighted by `wet_q`
+      !! a second time).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: U0 = 2.0_wp
+      real(wp) :: u_face(6, 6, 1), v_face(5, 7, 1)
+      real(wp) :: dyCv(5, 7), dxCu(6, 6), wet_q(6, 7), wet_T(5, 6), iareaBu(6, 7)
+      real(wp) :: buf(5, 6, 1)
+      checks: block
+         call build_wall_metrics(land_row=3, u_face=u_face, v_face=v_face, &
+                                 dyCv=dyCv, dxCu=dxCu, wet_q=wet_q, wet_T=wet_T, &
+                                 iareaBu=iareaBu, u0_in=U0)
+         call fill_vorticity_z_impl(u_face, v_face, dyCv, dxCu, wet_q, wet_T, &
+                                    iareaBu, .true., 1, buf)
+         call check(error, abs(buf(3, 2, 1) - U0) < 1.0e-12_wp, &
+                    "no-slip: south-shelf coastal cell (row 2) must read +U0/dy")
+         if (allocated(error)) exit checks
+         call check(error, abs(buf(3, 4, 1) + U0) < 1.0e-12_wp, &
+                    "no-slip: north-shelf coastal cell (row 4) must read -U0/dy")
+      end block checks
+   end subroutine test_vorticity_no_slip_wall
+
+   subroutine build_wall_metrics(land_row, u_face, v_face, dyCv, dxCu, wet_q, &
+                                 wet_T, iareaBu, u0_in)
+      !! Hand-built 5x6 (nx=5,ny=6) C-grid metric set (dx=dy=1) with ONE
+      !! interior land row (`land_row`) and uniform along-wall flow
+      !! `u=U0` (default 1), `v=0` elsewhere — shared by the two coastal
+      !! `vorticity_z` tests above.  Mirrors exactly what
+      !! `metrics_apply_land_mask` (spec §14 C3) would produce: `dxCu`/
+      !! `dyCv` zeroed at every face touching the land row, `wet_q` zeroed
+      !! at every corner touching it.  nx=5, ny=6 so the fill's own
+      !! computable range `i in [2,4], j in [2,5]` reaches both coastal
+      !! rows (`land_row-1`, `land_row+1`) with a valid ±1 corner stencil.
+      integer, intent(in) :: land_row
+      real(wp), intent(out) :: u_face(6, 6, 1), v_face(5, 7, 1)
+      real(wp), intent(out) :: dyCv(5, 7), dxCu(6, 6), wet_q(6, 7), wet_T(5, 6)
+      real(wp), intent(out) :: iareaBu(6, 7)
+      real(wp), intent(in), optional :: u0_in
+      real(wp) :: u0
+      integer :: i, j
+      u0 = 1.0_wp
+      if (present(u0_in)) u0 = u0_in
+
+      wet_T = 1.0_wp
+      wet_T(:, land_row) = 0.0_wp
+
+      u_face = u0
+      v_face = 0.0_wp
+      iareaBu = 1.0_wp
+
+      ! dxCu(i,j): u-face i, row j; masked where the row is land.
+      do j = 1, 6
+         do i = 1, 6
+            if (j == land_row) then
+               dxCu(i, j) = 0.0_wp
+            else
+               dxCu(i, j) = 1.0_wp
+            end if
+         end do
+      end do
+
+      ! dyCv(i,j): v-face j, column i; masked where either abutting row
+      ! (j-1, j) is the land row.
+      do j = 1, 7
+         do i = 1, 5
+            if (j - 1 == land_row .or. j == land_row) then
+               dyCv(i, j) = 0.0_wp
+            else
+               dyCv(i, j) = 1.0_wp
+            end if
+         end do
+      end do
+
+      ! wet_q(i,j): corner touching T-rows (j-1, j); masked where either
+      ! is the land row (column-uniform here — no x-land).
+      do j = 1, 7
+         do i = 1, 6
+            if (j - 1 == land_row .or. j == land_row) then
+               wet_q(i, j) = 0.0_wp
+            else
+               wet_q(i, j) = 1.0_wp
+            end if
+         end do
+      end do
+   end subroutine build_wall_metrics
 
    subroutine test_derived_ke_total(error)
       !! Uniform flow + uniform thickness:
