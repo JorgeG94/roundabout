@@ -67,6 +67,9 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
+   use rdb_console_stats, only: console_stats_t, conservation_budget_t
+   use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
+   use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
@@ -96,13 +99,19 @@ program test_ocean_decomp_bitid_mpi
       integer :: n = 0
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0
+      type(conservation_budget_t) :: bud
+         !! Closed-budget mass/salt/heat out+src totals at the final step —
+         !! EFP-reduced (`reproducing_sums`, default on), so these must be
+         !! bit-identical between the serial reference and every
+         !! decomposition on a periodic configuration (see `compare_budget`).
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(7) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(8) = [character(len=24) :: &
                                                "island_basin", "periodic_channel_zstar", &
+                                               "periodic_sponge", &
                                                "open_obc", "spherical", "obc_radiation_sponge", &
                                                "closures", "file_readers"]
 
@@ -194,6 +203,26 @@ contains
                "&ocean_porous_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("periodic_sponge")
+         ! Re-entrant channel, periodic west/east, with a relaxing sponge
+         ! band on the closed north edge -- the shape of the real Southern
+         ! Ocean 1-degree configuration the periodic-seam / sponge-seam-ghost
+         ! bug (this test's `bud` capture) was found on: a periodic axis
+         ! carrying a physical-span-only relaxation on the orthogonal one.
+         ! Legacy per-edge band sponge (not map-driven): simplest namelist
+         ! that reaches `ocean_sponge_apply`/`ocean_sponge_apply_tracers`
+         ! and the seam-ghost refresh gated on `sponge_seam` in
+         ! `rdb_ocean_dyn.F90`.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'sponge', sponge_width = 3, sponge_strength = 1.0e-2, "// &
+               "sponge_relax_tracers = .true. /"//NL
       case ("open_obc")
          ! Tidal west edge (eta target) + Flather open east edge.
          nml = common// &
@@ -288,6 +317,7 @@ contains
       logical, intent(out) :: ok
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
+      type(console_stats_t) :: cstats
       integer :: ierr, n
       real(wp) :: t
 
@@ -310,6 +340,40 @@ contains
          t = t + DT
       end do
       if (ierr == OCEAN_STATUS_OK) then
+         ! Closed-budget mass/salt/heat out+src at the final step, EFP-reduced
+         ! (reproducing_sums default on) so it is order-invariant across rank
+         ! counts -- the periodic-seam / tripolar-fold regression this test
+         ! case exists for (see `compare_budget`).  A fresh `cstats` per call
+         ! is fine: `budget_out` is computed independently of the t=0
+         ! reference `cstats` latches internally.
+         !
+         ! HAZARD (found in review): `ocean_console_stats_report` takes no
+         ! `compute_size` -- it is COLLECTIVE over whatever the REAL
+         ! communicator is (`comm_env_setup_roles`), regardless of the
+         ! logical `csize`/`crank` the caller is emulating.  The serial
+         ! REFERENCE call below always passes `csize=1, crank=0` to
+         ! `engine_setup` so every physical rank independently computes a
+         ! full, non-decomposed copy of the SAME problem -- calling the
+         ! collective report from inside that call would allreduce across
+         ! every physical rank's independent copy (an `nprocs`-fold bogus
+         ! sum for the mass/salt/heat totals feeding `bud`), not the single
+         ! logical rank the reference is standing in for.  It is safe ONLY
+         ! when the logical size this call is emulating equals the REAL
+         ! physical size (`csize == nprocs`): always true for the decomposed
+         ! `px x py` runs (`csize` is literally the real launch size there),
+         ! and true for the reference only when the whole job is launched
+         ! at `nprocs == 1` (ctest's np=1 leg), where the reference's own
+         ! `csize=1` collective is trivially correct.  `snap%bud` stays its
+         ! default (all-zero, `*_active=.false.`) when this is skipped;
+         ! `run_case` only compares budgets it knows were computed safely.
+         if (csize == nprocs) then
+            call ocean_console_stats_report(cstats, engine%grid, engine%state%metrics, &
+                                            engine%state%multilayer, t, DT, N_STEPS, &
+                                            compute_rank=crank, reproducing_sums=.true., &
+                                            budget_stage_weight=ocean_budget_stage_weight( &
+                                            engine%state%dyn%split_scheme == SPLIT_SCHEME_PRED_CORR), &
+                                            budget_out=snap%bud)
+         end if
          call take_snapshot(engine, snap)
          ok = .true.
       end if
@@ -416,8 +480,9 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3)
+      integer :: px, nbad, nfin, glob(3), nbud
       character(len=96) :: tag
+      type(conservation_budget_t) :: buds(8)
 
       call run_one(case_nml(label, scheme, 1, 1), 1, 0, ref, ok_ref)
       if (.not. ok_ref) then
@@ -425,7 +490,17 @@ contains
          n_fail = n_fail + 1
          return
       end if
+      ! Real single-rank launch (ctest np=1): `ref`'s budget was computed
+      ! safely (csize == nprocs == 1, see the hazard note in `run_one`) and
+      ! IS the historical bug's exact scenario -- a genuinely undecomposed
+      ! run, no MPI seam anywhere, so a periodic axis's local wrap is the
+      ! ONLY thing that can keep the sponge-relaxed seam consistent.  This
+      ! is the one place in THIS binary that can re-detect the original
+      ! bug (see `compare_budget`'s docstring for why the decomposed
+      ! factorizations below cannot).
+      if (nprocs == 1) call check_periodic_sponge_serial_out(label, scheme, ref%bud)
 
+      nbud = 0
       do px = nprocs, 1, -1
          if (mod(nprocs, px) /= 0) cycle
          write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
@@ -436,6 +511,10 @@ contains
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
             glob = [nbad, nfin, 0]
+            if (nbud < size(buds)) then
+               nbud = nbud + 1
+               buds(nbud) = dec%bud
+            end if
          end if
          call allreduce(comm, glob, op=MPI_SUM)
          if (rank == 0) then
@@ -448,7 +527,119 @@ contains
          end if
          if (sum(glob) > 0) n_fail = n_fail + 1
       end do
+      ! Every collected `dec%bud` above has `csize == nprocs` (always true
+      ! for the decomposed loop), so its collective was safe regardless of
+      ! `nprocs`; comparing them to each other is meaningful once nprocs > 1
+      ! (>= 2 distinct factorizations).
+      if (nbud >= 2) call compare_budget(buds(1:nbud), label, scheme)
    end subroutine run_case
+
+   subroutine compare_budget(buds, label, scheme)
+      !! Bit-identity check across every decomposed-factorization budget of
+      !! one case/scheme collected by `run_case` (2x1 vs 1x2 for nprocs=2;
+      !! 4x1 vs 2x2 vs 1x4 for nprocs=4) -- every entry has `csize ==
+      !! nprocs` so its `ocean_console_stats_report` collective was taken
+      !! over the REAL communicator correctly (see the hazard note in
+      !! `run_one`); no unsafe reference-vs-decomposed comparison here.
+      !! The EFP reproducing-sums path (default on) makes the closed
+      !! mass/salt/heat out+src totals order-invariant across rank counts,
+      !! so any two factorizations of the SAME real launch must land on the
+      !! identical bit pattern.
+      !!
+      !! NOTE what this does and does not catch: every valid `px x py`
+      !! factorization of nprocs >= 2 has `px > 1 .or. py > 1`, so the OLD
+      !! buggy gate (`ocean_halo_is_decomposed_x() .or. ..._y()`) already
+      !! fired the seam-ghost refresh for EVERY entry compared here, both
+      !! before and after the fix -- a mismatch here is a regression in
+      !! the general refresh mechanism, not a re-detection of the original
+      !! single-rank bug.  Only a genuinely undecomposed run (nprocs == 1,
+      !! `check_periodic_sponge_serial_out` below) exercises the code path
+      !! the fix changed.
+      type(conservation_budget_t), intent(in) :: buds(:)
+      character(len=*), intent(in) :: label, scheme
+      integer :: k, nbad
+
+      nbad = 0
+      do k = 2, size(buds)
+         if (transfer(buds(k)%mass_out, 0_int64) /= transfer(buds(1)%mass_out, 0_int64) .or. &
+             transfer(buds(k)%salt_out, 0_int64) /= transfer(buds(1)%salt_out, 0_int64) .or. &
+             transfer(buds(k)%heat_out, 0_int64) /= transfer(buds(1)%heat_out, 0_int64) .or. &
+             transfer(buds(k)%mass_src, 0_int64) /= transfer(buds(1)%mass_src, 0_int64) .or. &
+             transfer(buds(k)%salt_src, 0_int64) /= transfer(buds(1)%salt_src, 0_int64) .or. &
+             transfer(buds(k)%heat_src, 0_int64) /= transfer(buds(1)%heat_src, 0_int64)) then
+            nbad = nbad + 1
+         end if
+      end do
+      if (nbad > 0) then
+         n_fail = n_fail + nbad
+         if (rank == 0) write (*, '(5a,i0,a)') "FAIL budget ", trim(label), "/", trim(scheme), &
+            ": ", nbad, " decomposed factorization(s) disagree on the closed mass/salt/heat budget"
+      else if (rank == 0) then
+         write (*, '(4a)') "case ", trim(label), "/", trim(scheme), &
+            " budget: IDENTICAL across factorizations"
+      end if
+   end subroutine compare_budget
+
+   subroutine check_periodic_sponge_serial_out(label, scheme, bud)
+      !! The real single-rank regression for the periodic-seam / sponge bug:
+      !! on "periodic_sponge" (periodic west/east, a relaxing sponge band
+      !! on the closed north edge) at a genuinely undecomposed nprocs == 1
+      !! launch, the closed-budget `mass_out` must stay near a WALL-EDGE
+      !! CONTROL's own -- the same namelist with west/east = "wall" instead
+      !! of "periodic", so there is no periodic seam at all and the old
+      !! gate (`ocean_halo_is_decomposed_x() .or. ..._y()`, both false on a
+      !! real single rank) was never wrong there.  The bug left the
+      !! periodic-seam ghost columns un-relaxed after the sponge touched
+      !! only the tile's physical cells, so the corrector's advection saw a
+      !! spurious mass/salt jump at the seam that the control cannot have
+      !! (the real Southern Ocean 1-degree case: Salt out 1.6e8 on 1 rank
+      !! vs -81 on 2 ranks -- this toy grid/duration reaches nothing like
+      !! that magnitude, but `mass_out` still separates monotonically:
+      !! broken is consistently LARGER than fixed on both split schemes,
+      !! see the commit message).  `mass_out` is used rather than
+      !! `salt_out` because the latter is noisy at this scale under
+      !! `pred_corr` (its own resting-state round-off floor, see CLAUDE.md,
+      !! dominates before the seam term does); `mass_out` is monotonic on
+      !! both schemes. `sponge_width` is deliberately narrow (3 cells,
+      !! `<=` the smallest per-rank tile at any tested `px x py`): a wider
+      !! band that crosses an uneven y-decomposition tile boundary (found
+      !! at `sponge_width = 6`, `1x4`: the legacy band sponge does not
+      !! handle a band split across ranks) is a SEPARATE, pre-existing
+      !! defect this case must not also exercise.
+      !!
+      !! Thresholds are PER-SCHEME (`ssp_rk2`'s own noise floor sits an
+      !! order above `pred_corr`'s, CLAUDE.md's split-scheme section) and
+      !! are pinned directly to measured before/after `mass_out` on this
+      !! exact namelist (gfortran, default flags):
+      !!   pred_corr: fixed 9.2255E-05, broken 1.5045E-04 (1.6x)
+      !!   ssp_rk2:   fixed 8.3477E-06, broken 1.6591E-04 (19.9x)
+      !! Each threshold sits above its scheme's fixed value and below its
+      !! broken value.
+      character(len=*), intent(in) :: label, scheme
+      type(conservation_budget_t), intent(in) :: bud
+      real(wp) :: tol
+
+      if (trim(label) /= "periodic_sponge") return
+      if (.not. bud%mass_active) return
+
+      select case (trim(scheme))
+      case ("pred_corr")
+         tol = 1.2e-4_wp
+      case ("ssp_rk2")
+         tol = 4.0e-5_wp
+      case default
+         return
+      end select
+
+      if (abs(bud%mass_out) > tol) then
+         n_fail = n_fail + 1
+         write (*, '(5a,es14.6,a,es14.6)') "FAIL serial-out ", trim(label), "/", trim(scheme), &
+            ": |mass_out|=", abs(bud%mass_out), " exceeds ", tol
+      else if (rank == 0) then
+         write (*, '(4a)') "case ", trim(label), "/", trim(scheme), &
+            " serial (1 rank) out: below the fixed/broken separation bound (ok)"
+      end if
+   end subroutine check_periodic_sponge_serial_out
 
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than

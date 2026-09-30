@@ -526,9 +526,19 @@ row per day in `wind_main449_daily.txt` there).
   relative), heat 3.5e11 J of 5.0e21 (7e-11 relative). It is larger than
   the unforced year's (mass 52 kg, salt 7.1e9, heat 5.6e10 J): some flux in
   this closed domain, larger when the flow is stronger, is booked as
-  boundary flow, with the tripolar fold seam the first suspect. It is not a
-  leak in the budget sense, since `Error` stays at round-off, but it is
-  worth one look.
+  boundary flow. **Measured, not the tripolar fold**: a single-rank 2-day
+  re-run of both namelists (`gfortran`/nvfortran cc70 agree; `state`/`En`
+  0.000% against `reference_daily.csv`) gives day-2 `out` of mass 1.45 kg /
+  salt -62.6 / heat -3.84 (unforced) vs mass 0.067 kg / salt 602 / heat
+  -11.1 (wind-forced) — both already at round-off-telescoping SCALE
+  (relative to the ~1e21-1e22 totals, 1e-20 to 1e-23) after only 2 of 365
+  days, growing with total solver work (more arithmetic ⇒ more accumulated
+  round-off) rather than with anything fold-specific: the sign flips
+  between runs and between quantities, salt grew but mass shrank going
+  from unforced to wind-forced, which a systematic per-step fold leak
+  would not do. Earlier wording blamed the fold as "the first suspect";
+  that was speculation made before this measurement, not evidence for it.
+  It is not a leak in the budget sense, since `Error` stays at round-off.
 * **The fastest surface water** (top-10 m daily mean) is **2.99 m/s on day
   71**, on the Antarctic coast at 86.5° E, 66.5° S, under the katabatic
   winds; it lasts a day. Other near-2 m/s maxima sit at single coastal

@@ -274,7 +274,7 @@ contains
                                          cfl_vanish_tol, heat_budget_frazil, &
                                          ice_part_size, ice_m_ice, ice_ncat, &
                                          compute_rank, reproducing_sums, &
-                                         budget_stage_weight)
+                                         budget_stage_weight, budget_out)
       !! Compute current totals + means + max-CFL and emit a MOM6-style
       !! console block via the shared `console_stats_report` formatter.
       !!
@@ -356,6 +356,17 @@ contains
          !! tracer update fills the accumulators once per step rather than
          !! twice; without it the reported `src`/`out` are exactly half and
          !! the closed-budget residual reads ~5e-4 instead of ~1e-13.
+      type(conservation_budget_t), intent(out), optional :: budget_out
+         !! Hands the computed closed-budget totals (`mass_out`/`salt_out`/
+         !! `heat_out`/`*_src`/`*_active`, section (d) below) back to the
+         !! caller instead of only formatting them into the printed console
+         !! line.  Absent ⇒ inert (no behaviour change; existing callers are
+         !! untouched).  Consumer: `tests/mpi/test_ocean_decomp_bitid_mpi`'s
+         !! `periodic_channel_zstar` case asserts these are bit-identical
+         !! between the serial reference and every `px x py` factorisation —
+         !! the EFP `reproducing_sums` path (default on) makes the boundary
+         !! `out` terms order-invariant across rank counts, exactly like the
+         !! totals.
 
       ! (a) per-rank local sums; (b) global after allreduce; (c) derive.
       real(wp) :: total_h, raw_ke, raw_heat, raw_salt, raw_age, max_cfl
@@ -689,6 +700,8 @@ contains
          bud%heat_out = ocean_budget_out(b_heat_adv, b_heat_hdiff, stage_weight=bud_w)
          bud%heat_active = .true.
       end if
+
+      if (present(budget_out)) budget_out = bud
 
       ! ---- (e) hand off to the shared MOM6-style formatter ----------------
       ! COLLECTIVE: all ranks call it (its NaN/CFL panic error-stops on every

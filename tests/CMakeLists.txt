@@ -263,6 +263,7 @@ set(RDB_TESTS
     "test_remap_nonuniform|test_remap_nonuniform|collect_remap_nonuniform_tests|remap_nonuniform|core"
     "test_ocean_tracer_adv|test_ocean_tracer_adv|collect_ocean_tracer_adv_tests|ocean_tracer_adv|ocean"
     "test_ocean_conservation_salt_heat|test_ocean_conservation_salt_heat|collect_ocean_conservation_salt_heat_tests|ocean_conservation_salt_heat|ocean"
+    "test_ocean_budget_periodic_sponge_serial|test_ocean_budget_periodic_sponge_serial|collect_ocean_budget_periodic_sponge_serial_tests|ocean_budget_periodic_sponge_serial|ocean"
     "test_ocean_min_thickness|test_ocean_min_thickness|collect_ocean_min_thickness_tests|ocean_min_thickness|ocean"
     "test_ocean_continuity_positive|test_ocean_continuity_positive|collect_ocean_continuity_positive_tests|ocean_continuity_positive|ocean"
     "test_ocean_dyn_multilayer|test_ocean_dyn_multilayer|collect_ocean_dyn_multilayer_tests|ocean_dyn_multilayer|ocean"

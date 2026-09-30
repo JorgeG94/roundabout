@@ -3478,16 +3478,25 @@ contains
       if (present(bc)) then
          call ocean_obc_fill_ghosts(grid, bc, ms)
          ! The fill writes the open-edge ghost rows/columns over this tile's
-         ! PHYSICAL span only; the corner cells beyond an MPI seam (a seam
-         ! ghost column x an open-edge ghost row) are the neighbour's fill,
-         ! which only an exchange delivers.  The Lie-split advection's first
-         ! pass reads them (serial: an ordinary open-edge ghost cell), so a
-         ! decomposed OBC run diverged at the seam x open-edge corner.
-         ! Collective: the gate is the GLOBAL tags.
-         if (ocean_obc_any_open_edge(bc) .and. &
-             (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
+         ! PHYSICAL span only; the corner cells beyond a seam -- an MPI seam
+         ! ghost column, OR the local wrap of an UNDECOMPOSED periodic axis
+         ! orthogonal to the open edge -- x an open-edge ghost row) are
+         ! someone else's fill (the neighbour rank's, or this tile's own
+         ! periodic mirror), which only a refresh delivers.  The Lie-split
+         ! advection's first pass reads them, so this must run whenever an
+         ! edge is open-ish, D0-unconditional (as the sponge refresh below):
+         ! `ocean_halo_centre` / `refresh_tracer_ghosts` already no-op on a
+         ! single-rank non-periodic axis, locally re-wrap a single-rank
+         ! periodic one, and exchange messages when decomposed. Gating this
+         ! on `ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()`
+         ! (as before) skipped it on a single-rank run with an open edge on
+         ! one axis and periodicity on the other -- the same seam x
+         ! open-edge corner bug the decomposed case was fixed for, just
+         ! without an MPI rank to expose it. Collective when decomposed (the
+         ! gate is the GLOBAL tags); a plain call otherwise.
+         if (ocean_obc_any_open_edge(bc)) then
             call ocean_halo_centre(ms%h_layer, ms%nz_ml)
-            call refresh_tracer_ghosts(grid, ms)
+            call refresh_tracer_ghosts(grid, ms, bc=bc)
          end if
       end if
 
@@ -4901,14 +4910,21 @@ contains
       if (present(bc)) then
          call ocean_obc_apply_baroclinic(grid, bc, dyn%bt_work, ms, dt)
          ! The open-edge face values were just rewritten on this tile's
-         ! physical rows only; the same faces in a neighbour's seam ghost
-         ! rows still hold the pre-OBC velocity, and the boundary-layer
-         ! scheme below (KPP u*, shear) reads them before the stage-end
-         ! exchange.  Refresh the seam ghosts so a decomposed OBC run sees
-         ! what the serial run sees (the gate is the GLOBAL tags: every
-         ! rank takes the collective).
-         if (ocean_obc_any_open_edge(bc) .and. &
-             (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
+         ! physical rows only; the same faces in a seam ghost -- a
+         ! neighbour rank's copy, OR this tile's own local wrap of an
+         ! UNDECOMPOSED periodic axis orthogonal to the open edge -- still
+         ! hold the pre-OBC velocity, and the boundary-layer scheme below
+         ! (KPP u*, shear) reads them before the stage-end exchange.
+         ! Refresh the seam ghosts D0-unconditionally (as the sponge
+         ! refresh below): `ocean_halo_face_x`/`_y` already no-op on a
+         ! single-rank non-periodic axis, locally re-wrap a single-rank
+         ! periodic one, and exchange messages when decomposed. Gating this
+         ! on `ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()`
+         ! (as before) skipped it on a single-rank run with an open edge on
+         ! one axis and periodicity on the other. Collective when
+         ! decomposed (the gate is the GLOBAL tags); a plain call
+         ! otherwise.
+         if (ocean_obc_any_open_edge(bc)) then
             call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
             call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
          end if
@@ -4928,22 +4944,41 @@ contains
          call ocean_sponge_apply_tracers(grid, bc, ms, dt)
       end if
       ! Both sponges relax this tile's PHYSICAL cells only; the copies of
-      ! those cells in a neighbour's seam ghosts keep the un-relaxed value,
-      ! and the boundary-layer scheme and the corrector's advection read
-      ! them before the stage-end exchange.  Refresh the seam ghosts on a
-      ! decomposed run (collective: the gate is rank-uniform).
-      if (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()) then
-         sponge_seam = sponge_maps_on
-         if (present(bc)) then
-            sponge_seam = sponge_seam .or. &
-                          any([bc%west%bc_type, bc%east%bc_type, bc%south%bc_type, &
-                               bc%north%bc_type] == OBC_SPONGE)
-         end if
-         if (sponge_seam) then
-            call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
-            call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
-            call refresh_tracer_ghosts(grid, ms)
-         end if
+      ! those cells in a neighbour's seam ghosts -- an MPI seam OR the
+      ! local wrap of an UNDECOMPOSED periodic axis -- keep the
+      ! un-relaxed value, and the boundary-layer scheme and the
+      ! corrector's advection read them before the stage-end exchange.
+      ! Refresh the seam ghosts UNCONDITIONALLY (D0): `ocean_halo_face_x`
+      ! / `ocean_halo_face_y` / `refresh_tracer_ghosts` already no-op on a
+      ! single-rank non-periodic axis, locally re-wrap a single-rank
+      ! periodic one (`ocean_halo_face_x_3d`'s `oh_decomp%px == 1 .and.
+      ! oh_periodic_x` branch), and exchange messages when decomposed --
+      ! see `ocean_halo_exchange_ml_state`'s docstring for the same
+      ! three-way contract.  Gating this call on
+      ! `ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()`
+      ! (as before) skipped it entirely on a single-rank PERIODIC run: the
+      ! sponge's relaxed physical-column values never reached the
+      ! periodic-seam ghost columns that `tracer_advect_zonal`'s PPM
+      ! stencil reads on the NEXT step, so the seam face saw a stale,
+      ! un-relaxed neighbour on one side and the fresh, relaxed value on
+      ! the other -- the two representations of the same physical face no
+      ! longer telescoped to round-off, and the console `out` column
+      ! diverged from the (correctly refreshed) decomposed answer by many
+      ! orders of magnitude despite `Error` staying near round-off (the
+      ! divergence is bookkeeping-only, not a real leak: state itself
+      ! stays bit-identical to a decomposed run once the ghosts are kept
+      ! fresh here).  Collective when decomposed (the gate is
+      ! rank-uniform); a plain, non-collective call otherwise.
+      sponge_seam = sponge_maps_on
+      if (present(bc)) then
+         sponge_seam = sponge_seam .or. &
+                       any([bc%west%bc_type, bc%east%bc_type, bc%south%bc_type, &
+                            bc%north%bc_type] == OBC_SPONGE)
+      end if
+      if (sponge_seam) then
+         call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
+         call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
+         call refresh_tracer_ghosts(grid, ms, bc=bc)
       end if
 
       ! ---- 8. Surface tracer fluxes (heat / salt) ----
