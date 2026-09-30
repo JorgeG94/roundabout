@@ -107,22 +107,36 @@ def main():
                     help="'ly04' (Large & Yeager 2004 neutral 10 m) or a constant, e.g. 1.2e-3")
     ap.add_argument("--om1deg", default=None, help="OM_1deg directory (default $RDB_DATA_DIR/OM_1deg)")
     ap.add_argument("--jra", default=None, help="JRA55-do directory (default $RDB_DATA_DIR/JRA55do)")
+    ap.add_argument("--hgrid", default=None,
+                    help="supergrid file to regrid onto (default <om1deg>/ocean_hgrid.nc) -- "
+                    "pass any cut/other-resolution supergrid (om1deg_wind_regrid.f90 sizes its "
+                    "output from THIS file, not from --om1deg) to build a wind-stress file for a "
+                    "different domain without copying this script")
     ap.add_argument("--out", default=None,
-                    help="output file (default <om1deg>/wind_jra55do_<year>_<avg>h.nc)")
+                    help="output file (default <om1deg>/wind_jra55do_<year>_<avg>h.nc, or "
+                    "next to --hgrid if given without --om1deg)")
     ap.add_argument("--fc", default=os.environ.get("FC", "gfortran"), help="Fortran compiler")
     ap.add_argument("--build-dir", default=None,
                     help="where the helper is compiled (default: a temporary directory)")
     args = ap.parse_args()
 
-    if (args.om1deg is None or args.jra is None) and not root:
+    if (args.om1deg is None or args.jra is None) and not root and args.hgrid is None:
         ap.error("set RDB_DATA_DIR or pass both --om1deg and --jra")
-    om1deg = os.path.abspath(args.om1deg or os.path.join(root, "OM_1deg"))
+    if args.jra is None and not root:
+        ap.error("--jra (or RDB_DATA_DIR) is required")
     jra = os.path.abspath(args.jra or os.path.join(root, "JRA55do"))
     if args.cd != "ly04":
         float(args.cd)  # fail early on a typo
+    hgrid = os.path.abspath(args.hgrid) if args.hgrid else None
+    if args.om1deg is not None or (hgrid is None and root):
+        om1deg = os.path.abspath(args.om1deg or os.path.join(root, "OM_1deg"))
+        if hgrid is None:
+            hgrid = os.path.join(om1deg, "ocean_hgrid.nc")
+        out_default_dir = om1deg
+    else:
+        out_default_dir = os.path.dirname(hgrid)
     out = os.path.abspath(args.out or os.path.join(
-        om1deg, f"wind_jra55do_{args.year}_{args.avg_hours}h.nc"))
-    hgrid = os.path.join(om1deg, "ocean_hgrid.nc")
+        out_default_dir, f"wind_jra55do_{args.year}_{args.avg_hours}h.nc"))
     uas, vas = jra_file(jra, "uas", args.year), jra_file(jra, "vas", args.year)
 
     tmp = None
