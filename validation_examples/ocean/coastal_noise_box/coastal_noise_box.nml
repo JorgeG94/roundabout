@@ -1,0 +1,158 @@
+! Coastal-noise box: a minutes-scale reproducer of the 1/4-degree Southern
+! Ocean run's coastal / sponge-band vorticity symptoms (README.md).
+!
+! GEOMETRY  1/4-degree spherical re-entrant channel, 40 x 20 degrees
+!           (160 x 80 cells, 0-40 E, 66-46 S), periodic east-west.
+!           South: a sinusoidal STAIRCASE coast (one 40-degree period,
+!           +-2.5 degrees of latitude => stair steps at every angle) with a
+!           400 m -> 4000 m continental slope over 300 km, plus a round
+!           120 km island at (20 E, 55 S) with its own slope.  North: an
+!           OBC_SPONGE wall with a 20-row (5-degree) band.
+! PHYSICS   the southern_ocean_025_wind.nml stack: z_fixed 50-level tanh
+!           grid (2 m at the top) with closed partial-step faces,
+!           Wright EOS, FV-MOM6 PGF, SADOURNY75_ENSTRO Coriolis,
+!           Smagorinsky Laplacian (nu_h floor 150) + SMAGORINSKY_AH
+!           biharmonic (0.06), quadratic drag, dt = 900 s.
+! FORCING   0.1 Pa uniform westerly wind stress; the IC carries a zonal
+!           baroclinic front at 54 S (make_inputs.py) so the box is
+!           energetic within days instead of months.
+! COST      30 days in ~2 min on one V100.
+!
+! Inputs:   python3 make_inputs.py   (writes bathy.nc + ic.nc, stdlib only)
+! Run:      CUDA_VISIBLE_DEVICES=0 <build>/rdb coastal_noise_box.nml
+! Metrics:  python3 metrics.py .     (reads output/restart_rank_000000.nc)
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 160
+   ny     = 80
+   dx     = 0.25
+   dy     = 0.25
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "spherical"
+   lon_west        = 0.0
+   lat_south       = -66.0
+   rad_earth       = 6371000.0
+   coriolis_scheme = "planetary"
+   omega           = 7.2921e-05
+/
+
+&time_nml
+   t_end        = 30.0
+   time_unit    = "day"
+   dt_fixed     = 900.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.1
+   wind_stress_y = 0.0
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   vcoord_type            = "z_fixed"
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config = "file"
+   max_depth   = 4000.0
+   wind_config = "constant"
+/
+
+&output_nml
+   output_dir       = "./output"
+   output_to_file   = .false.
+   restart_interval = 2592000.0   ! the final-state restart is what metrics.py reads
+   bathymetry_file  = "bathy.nc"
+/
+
+&ocean_bc_nml
+   west            = "periodic"
+   east            = "periodic"
+   south           = "wall"
+   north           = "sponge"
+   sponge_width    = 20
+   sponge_strength = 1.1574074e-4   ! 1/(10 day), as the 1/4-degree run
+/
+
+&ocean_sponge_nml
+   enable        = .true.
+   damp_source   = "band"
+   target_source = "ic"
+   relax_uv      = .true.
+   relax_tracers = .true.
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "ic.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"
+/
+
+&ocean_hvisc_nml
+   nu_h            = 150.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.
+/
+
+&ocean_eos_nml
+   eos = "wright"
+/
+
+&ocean_gm_nml
+   enable = .false.
+/
+
+&ocean_diag_nml
+   enabled          = .true.
+   filename         = "coastal_noise_box"
+   dt_out           = 1.0
+   vgrid            = "z_fixed"
+   z_levels         = 10.0
+   n_z_levels       = 1
+   output_precision = "single"
+   diags            = "KE:off  vorticity_z"
+/
+
+&logging_nml
+   status_interval = 1.0
+/
