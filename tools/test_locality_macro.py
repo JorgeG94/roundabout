@@ -70,21 +70,3 @@ def test_statement_separator_semicolon_preserved():
     # A real `;` between two statements is not the macro's false branch.
     src = "a = 1; b = 2"
     assert u(src) == src
-
-
-def test_dc_to_omp_emits_private_through_macro(tmp_path):
-    dc_to_omp = _load("dc_to_omp")
-    f = tmp_path / "m.F90"
-    f.write_text(
-        "subroutine k(n, a)\n"
-        "  integer :: i, n\n"
-        "  real :: a(n), tmp\n"
-        "  do concurrent (i=1:n) DO_LOCALITY(local(tmp))\n"
-        "    tmp = a(i)\n"
-        "    a(i) = tmp\n"
-        "  end do\n"
-        "end subroutine k\n")
-    lines, n = dc_to_omp.transform_lines(f.read_text().splitlines(), "gpu")
-    out = "\n".join(lines)
-    assert n == 1
-    assert "private(tmp)" in out

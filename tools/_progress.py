@@ -1,9 +1,8 @@
 """Tiny stdlib-only progress bar for the source-translation tools.
 
-Used by `dc_audit.py`, `acc_to_omp.py` and `dc_to_omp.py`, which each sweep the
-whole tree (~1500 files) and, in `dc_to_omp`'s case, run an unbounded
-whole-program fixpoint — long enough that a silent terminal is indistinguishable
-from a hang.
+Used by `dc_audit.py`, `acc_to_omp.py` and `omp_optional_map.py`, which each
+sweep the whole tree (~1500 files) — long enough that a silent terminal is
+indistinguishable from a hang.
 
 Deliberately dependency-free (no tqdm): the repo rule is to use only what the
 loaded module environment already provides.

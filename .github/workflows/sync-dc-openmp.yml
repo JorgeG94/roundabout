@@ -1,0 +1,137 @@
+name: Sync auto/dc-openmp from main
+
+# Regenerates the dc-openmp variant branch from main on every push,
+# force-pushes the translated tree, then BUILDS + TESTS it with gfortran
+# `-fopenmp` so the translation can't rot silently on a branch nobody looks
+# at until someone needs it.
+#
+#   auto/dc-openmp — !$acc -> !$omp, do concurrent KEPT verbatim (see
+#     tools/regen_dc_openmp.sh's header for the full contract).
+#
+# There is NO full-OpenMP variant: `do concurrent` is never rewritten to an
+# `!$omp` worksharing construct. The `dc_to_omp.py` rewriter and the
+# `auto/openmp` / `auto/openmp-cpu` branches it used to feed were retired —
+# the only translator left in the pipeline is `acc_to_omp.py`
+# (+ `omp_optional_map.py` for the OPTIONAL-dummy device-map guard).
+#
+# Verification compiler: gfortran, via `fortran-lang/setup-fortran` (same
+# action + gcc-15 pin as the `portability.yml` tier-0 matrix). It is the
+# cheapest leg that meaningfully exercises the translation: `do concurrent`
+# is untouched Fortran on this branch, so the only NEW thing this build has
+# to accept is the emitted `!$omp target ...` data/reduction directives,
+# which gfortran compiles under plain `-fopenmp` and runs on its host
+# device (no offload target, no extra install, no oneAPI download). ifx
+# (`fortran-lang/setup-fortran`, `compiler: intel`) would exercise a second
+# `!$omp` frontend for about the same cost as its leg in `portability.yml` --
+# deliberately left OUT of this workflow to keep it to one extra job per
+# push to `main`; wire it in the same way as that leg if the dc-openmp path
+# ever needs its own Intel-specific coverage.
+#
+# NetCDF is OFF in the verify job on purpose: this job's only question is
+# "did the !$acc -> !$omp translation break", not "does the physics still
+# validate" -- portability.yml's gcc/ifx/nvhpc legs already answer the
+# second question, with NetCDF on, on the UNTRANSLATED tree. Skipping the
+# netcdf-fortran build keeps this leg cheap.
+#
+# To reproduce locally:
+#   bash tools/regen_dc_openmp.sh
+#   cmake -B build_omp -S . -DRDB_PARALLEL_BACKEND=openmp -DRDB_ENABLE_GPU=OFF \
+#         -DRDB_ENABLE_THREADS=ON -DRDB_ENABLE_NETCDF=OFF
+#   cmake --build build_omp -j
+#   cd build_omp && ctest -R rdb --output-on-failure
+#
+# Nobody should edit auto/dc-openmp manually; all OpenMP-side fixes live as
+# patches under patches/openmp/ or as translator improvements in
+# tools/acc_to_omp.py.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'app/**'
+      - 'benchmarks/**'
+      - 'tests/**'
+      - 'tools/acc_to_omp.py'
+      - 'tools/dc_audit.py'
+      - 'tools/omp_optional_map.py'
+      - 'tools/regen_dc_openmp.sh'
+      - 'patches/openmp/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-dc-openmp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    name: Regenerate auto/dc-openmp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Regenerate dc-openmp tree
+        run: bash tools/regen_dc_openmp.sh dc-openmp-target
+
+      - name: Commit and force-push to auto/dc-openmp
+        run: |
+          git config user.name "roundabout-bot"
+          git config user.email "bot@rdb.invalid"
+          git checkout -B auto/dc-openmp
+          git add -A
+          git commit -m "regen dc-openmp-target from $(git rev-parse main)"
+          git push --force origin auto/dc-openmp
+
+  verify:
+    name: Build + test auto/dc-openmp (gfortran -fopenmp)
+    needs: regenerate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout auto/dc-openmp
+        uses: actions/checkout@v4
+        with:
+          ref: auto/dc-openmp
+
+      - name: Set up Fortran compiler
+        uses: fortran-lang/setup-fortran@v1.9.0
+        id: setup-fortran
+        with:
+          compiler: gcc
+          version: 15
+
+      - name: Report toolchain
+        run: |
+          echo "FC=${{ env.FC }}"
+          ${{ env.FC }} --version
+
+      - name: Configure
+        run: >-
+          cmake -B build_omp -S .
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_Fortran_COMPILER=${{ env.FC }}
+          -DRDB_PARALLEL_BACKEND=openmp
+          -DRDB_ENABLE_GPU=OFF
+          -DRDB_ENABLE_THREADS=ON
+          -DRDB_ENABLE_MPI=OFF
+          -DRDB_ENABLE_NETCDF=OFF
+          -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build_omp --parallel
+
+      # No `-j`: matches every other ctest invocation in this repo's CI --
+      # several tests share process-global state.
+      - name: Test
+        working-directory: build_omp
+        run: ctest -R rdb --output-on-failure

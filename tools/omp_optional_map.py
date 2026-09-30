@@ -20,11 +20,11 @@ bounds; an explicit-shape dummy has no box to check.  Naming the argument in
 an explicit `map()` clause takes the guarded path, and the OpenMP rule that a
 map of an absent optional dummy is ignored then applies.
 
-This runs as a POST-PASS over the already-translated tree, so it covers target
-regions emitted by BOTH translators — `dc_to_omp.py` (from `do concurrent`)
-and `acc_to_omp.py` (from `!$acc parallel loop`, which carry `reduction`).
-`main` is untouched: OpenACC resolves these references through the host
-present-table and never hits the bug.
+This runs as a POST-PASS over the already-translated tree, so it covers every
+target region `acc_to_omp.py` emits (`!$acc enter/exit data`, `!$acc update`,
+and `!$acc parallel loop`, which carry `reduction`). `main` is untouched:
+OpenACC resolves these references through the host present-table and never
+hits the bug.
 
 Map type follows the dummy's intent: `to` for `intent(in)`, `tofrom`
 otherwise.  For an argument that is already device-resident (the normal case
