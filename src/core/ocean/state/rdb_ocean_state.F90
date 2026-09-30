@@ -1425,19 +1425,41 @@ contains
       ! those layer centres: exact by construction, first remap an
       ! identity, no step-1 regrid shock.
       !
-      ! Fenced to the cavity so every existing `z_fixed` namelist keeps
-      ! its sigma-style seed bit-for-bit; `z_fixed` × cavity is a
-      ! configuration `validate_config` refused outright until now.
+      ! The same holds WITHOUT a cavity whenever the T/S come from the
+      ! GEOPOTENTIAL `&ocean_zinit_nml` overlay: a sigma-style seed puts
+      ! layer `k` of a column of depth `H` at `(nz-k+1/2)*H/nz`, the zinit
+      ! profile is evaluated THERE, and only the step-1 regrid moves it onto
+      ! the `z_fixed` layers.  Anything snapshotted from the seed in between
+      ! is then indexed on the wrong layers -- the `&ocean_sponge_nml
+      ! target_source = "ic"` reference is (`ocean_sponge_snapshot_reference`
+      ! runs right after this seed), so the sponge relaxed layer `k` of the
+      ! 50-level tanh grid toward the zinit value hundreds of metres deeper,
+      ! and toward a DIFFERENT depth in every column of a different `H`: a
+      ! grid-scale, bathymetry-following horizontal density forcing across
+      ! the whole band (measured: the band's surface layers pulled 5-6 degC
+      ! cold, domain-mean T -0.55 degC in 5 days on the coastal-noise box).
+      ! Seeding on the target makes the overlay exact and the snapshot
+      ! consistent.  `z_fixed` WITHOUT zinit keeps the sigma-style seed: its
+      ! `&tracer_nml` IC is defined PER LAYER INDEX, so moving the layers
+      ! would change what that IC means.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
                                           water, nz_ml, &
                                           cfg%ocean%topo%max_depth, &
                                           cfg%ocean%isopycnal%angstrom_h)
-      else if (state%metrics%use_cavity .and. &
+      else if ((state%metrics%use_cavity .or. cfg%ocean%zinit%enable) .and. &
                parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .and. &
                cfg%ocean%topo%max_depth > 0.0_wp) then
          block
             real(wp) :: h_min_seed
+            real(wp), allocatable :: z_top_seed(:, :)
+            ! Column-top depth: the ice draft under a cavity, else `z = 0`
+            ! (`metrics%z_draft` is only a `(1,1)` placeholder then).
+            if (state%metrics%use_cavity) then
+               z_top_seed = state%metrics%z_draft
+            else
+               allocate (z_top_seed(nx, ny), source=0.0_wp)
+            end if
             ! `zstar_h_min` comes off the SLOT, not off `cfg`: there is
             ! one source of truth for the filler thickness and it is the
             ! one the running target builder will use.  `engine_setup`
@@ -1454,13 +1476,13 @@ contains
             ! for the same one-source-of-truth reason as `zstar_h_min`.
             if (state%vcoord%is_init .and. state%vcoord%z_fixed_use_profile) then
                call ocean_vcoord_z_fixed_target(state%multilayer%h_layer, water, eta_trim, &
-                                                state%metrics%z_draft, nx, ny, nz_ml, &
+                                                z_top_seed, nx, ny, nz_ml, &
                                                 cfg%ocean%topo%max_depth/real(nz_ml, wp), &
                                                 .true., state%vcoord%z_fixed_zi, &
                                                 state%vcoord%z_fixed_dz, h_min_seed)
             else
                call ocean_vcoord_z_fixed_target_uniform(state%multilayer%h_layer, water, &
-                                                        eta_trim, state%metrics%z_draft, &
+                                                        eta_trim, z_top_seed, &
                                                         nx, ny, nz_ml, &
                                                         cfg%ocean%topo%max_depth/real(nz_ml, wp), &
                                                         h_min_seed)

@@ -65,6 +65,13 @@ module rdb_ocean_sponge
    !!      `remapping_core_h`). Valid because Roundabout's ALE remap pins
    !!      layer depths to the coordinate every thermo step; the residual
    !!      motion is far below the target's own vertical resolution.
+   !!      It also needs the SEED to be on the coordinate already: the
+   !!      snapshot runs before the first regrid.  `z_fixed` +
+   !!      `&ocean_zinit_nml` seeds on its target for exactly this reason
+   !!      (`ocean_state_seed_from_cfg`).  Coordinates whose seed is not
+   !!      their target still snapshot on the seed layers.  `z_fixed` with a
+   !!      per-layer-index `&tracer_nml` IC is one; `zstar_full`, `rho` and
+   !!      `hycom` have not been checked.
    !!      `target_source="linear_z"` does NOT take that shortcut — it
    !!      rebuilds the profile on the live geometry every outer step,
    !!      which is cheaper here than a remap because the source is a
