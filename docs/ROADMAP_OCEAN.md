@@ -161,7 +161,8 @@ ice-shell / shelf-cavity interface kernel, and a polar validation campaign.
   same weights, so the two cancel exactly (MOM6 `ubt_Cor`); evaluating it at
   stage entry instead pumped a barotropic seiche. Both vertical-friction
   tridiagonals gained an `nz = 1` path, and `scratch_3d` buffers are attached
-  device-zeroed rather than as allocator leftovers.
+  holding their host payload (zero from `init`) rather than as allocator
+  leftovers.
 - [ ] `[E]` **`ssp_rk2` residual growth** — Heun amplifies oscillatory modes at
   `(ω·Δt)⁴`, so a stratified rest state manufactures internal-wave energy. Gated
   by `validation_examples/ocean/eady/resting_stratified_channel.nml`, which every
