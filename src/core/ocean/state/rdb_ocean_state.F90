@@ -2025,6 +2025,24 @@ contains
                                  size(state%multilayer%h_av_layer, 1), &
                                  size(state%multilayer%h_av_layer, 2), optional=.true.)
          end if
+         ! --- pred_corr carried viscous tendency.  The predictor does NOT
+         !     recompute the lateral viscosity: it reuses the previous
+         !     step's corrector `du_visc`/`dv_visc` (MOM6 `diffu(u[n-1])`,
+         !     `rdb_ocean_dyn`'s `is_pred` gate), so these buffers are
+         !     CARRIED STATE under pred_corr, not scratch.  Unregistered,
+         !     the first post-restart predictor read the device-zeroed
+         !     payload -- one step with no lateral viscosity in any column
+         !     -- and the resume was not bit-exact (found on the 1/4-degree
+         !     Southern Ocean, 2026-10-01; the restart gate ran inviscid).
+         !     Under ssp_rk2 they are recomputed before every read, so
+         !     restoring them is inert.  `optional=.true.`: an older
+         !     checkpoint still resumes, with the old one-step defect.
+         if (allocated(state%hvisc%du_visc%data)) then
+            call register_full_3d_opt(reg, "hvisc_du_visc", state%hvisc%du_visc%data)
+         end if
+         if (allocated(state%hvisc%dv_visc%data)) then
+            call register_full_3d_opt(reg, "hvisc_dv_visc", state%hvisc%dv_visc%data)
+         end if
       end if
 
       ! --- rho_layer (review #2): diagnosed each stage, but NOT
@@ -2326,6 +2344,15 @@ contains
       real(wp), target, intent(in) :: arr(:, :, :)
       call reg%register_3d(tag, arr, 0, size(arr, 1), size(arr, 2))
    end subroutine register_full_3d
+
+   subroutine register_full_3d_opt(reg, tag, arr)
+      !! `register_full_3d`, but OPTIONAL on read: a checkpoint written
+      !! before the field was registered still resumes.
+      type(restart_registry_t), intent(inout) :: reg
+      character(len=*), intent(in) :: tag
+      real(wp), target, intent(in) :: arr(:, :, :)
+      call reg%register_3d(tag, arr, 0, size(arr, 1), size(arr, 2), optional=.true.)
+   end subroutine register_full_3d_opt
 
 #ifndef RDB_NO_NETCDF
    subroutine ocean_state_fill_restart_metadata(state, grid, meta)
