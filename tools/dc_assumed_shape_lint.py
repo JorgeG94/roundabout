@@ -45,7 +45,7 @@ Options:
                  workflow is the authoritative gate.
 
 References:
-  - FORTRAN_STYLE.md §GPU / do concurrent — explicit-shape rule
+  - FORTRAN_STYLE.md §Do Concurrent + OpenACC — explicit-shape dummies in kernels
   - CLAUDE.md Gotchas — "Assumed-shape dummies in do concurrent kernels"
   - Memory: feedback_nvhpc_explicit_shape_kernels
 """

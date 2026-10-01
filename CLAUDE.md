@@ -407,12 +407,12 @@ Per-rank diag + restart files (`<prefix>_rank_NNNNNN.nc`) — no gather. Optiona
 
 ## Coding Conventions
 
-- File prefix: `rdb_` for modules, `test_` / `test_rdb_` for tests. Extensions: `.F90`.
+- File prefix: `rdb_` for modules, `test_` for tests (`tests/test_<name>.F90`, MPI tests in `tests/mpi/`). Extensions: `.F90`.
 - Types: `_t` suffix. Constants: UPPERCASE. Everything else: snake_case.
 - `use` always with `only:`. `implicit none`, `private` by default, explicit `public`. FORD docs: `!!` after declarations.
 - Intrinsic modules need the modifier: `use, intrinsic :: iso_fortran_env, only: ...` (fortitude rule C122). Same for `iso_c_binding`.
 - No `print *` — use `pic_logger` (`global_logger`).
-- **Default new procedures to `pure`** — make a new function/subroutine `pure` unless it genuinely needs a side effect (I/O, logging, MPI, mutating module state, lazy `allocate`). Pure is the norm here; non-pure is the justified exception. See `FORTRAN_STYLE.md` §Pure and Elemental Procedures.
+- **Default new procedures to `pure`** — make a new function/subroutine `pure` unless it genuinely needs a side effect (I/O, logging, MPI, mutating module state, lazy `allocate`). Pure is the norm here; non-pure is the justified exception. See `FORTRAN_STYLE.md` §Pure by Default.
 - Working precision: `wp` from `rdb_constants` (currently `real64`).
 - MPI portability: `#ifdef USE_LEGACY_MPI` selects `use mpi` vs `use mpi_f08`.
 - Dependencies: `pic` (types, strings, timers, logger), `pic-mpi`, `test-drive`, NetCDF-Fortran.
