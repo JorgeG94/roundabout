@@ -286,7 +286,7 @@ contains
       fold = ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD
    end function tags_north_fold
 
-   subroutine configure_ocean_land_mask(cfg, ocean_state, grid, compute_rank)
+   subroutine configure_ocean_land_mask(cfg, ocean_state, grid, compute_rank, warm_restart)
       !! Derive the static C-grid land masks from the seeded T-cell
       !! `wet_mask` and zero the 6 face metrics at land faces
       !! (`metrics_apply_land_mask`).  Run AFTER `configure_ocean_metrics`
@@ -302,6 +302,12 @@ contains
       type(ocean_state_t), intent(inout) :: ocean_state
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
+      logical, intent(in), optional :: warm_restart
+         !! `.true.` when the prognostic state was just read from a
+         !! checkpoint: the land-state seed below is then SKIPPED (the
+         !! masks and metrics are still derived).  Absent ⇒ cold start.
+
+      logical :: seed_land
 
       ! Multi-rank seam ghost fill of wet_mask (O3 land x decomp): a subdomain
       ! seam that bisects a continent needs the NEIGHBOUR rank's wet_T in the
@@ -366,7 +372,19 @@ contains
       ! never multiplies 0 by a NaN (0*NaN = NaN).  Land h_layer is floored
       ! to H_VANISHED (never 0), tracers held at the IC reference, layer +
       ! face velocities zeroed on land.
-      call ocean_state_seed_land_cells(ocean_state, grid)
+      !
+      ! Cold start only.  The seed is the land state's INITIAL value, not an
+      ! invariant the step maintains: the ALE remap regrids a land column
+      ! like any other (a `z_fixed` land column leaves step 1 as `nz-1`
+      ! `zstar_h_min` fillers over a bed cell holding the rest of its
+      ! `nz·H_VANISHED`), and the checkpoint saves that state verbatim.
+      ! Re-seeding after a restart read rewrote every land column back to
+      ! uniform `H_VANISHED` -- column total unchanged, layout not -- so the
+      ! resumed run was not the run that wrote the file (1/4-degree Southern
+      ! Ocean, 2026-10-01: 56 046 land columns x 50 layers per rank).
+      seed_land = .true.
+      if (present(warm_restart)) seed_land = .not. warm_restart
+      if (seed_land) call ocean_state_seed_land_cells(ocean_state, grid)
 
       if (compute_rank == 0) then
          associate (unused => cfg%ocean%grid%grid_config)

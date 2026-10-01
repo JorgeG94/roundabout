@@ -212,6 +212,10 @@ module rdb_ocean_engine
          !! can gate its `state%diag%step` call without needing `cfg`.
       logical :: device_mapped = .false.
          !! True between `engine_enter_data` and `engine_exit_data`.
+      logical :: warm_restart = .false.
+         !! Latched by `engine_setup`: the prognostic state came from a
+         !! checkpoint, ghosts included, so no setup pass may re-derive its
+         !! halo (see the init-time wrap in `engine_setup`).
       logical :: is_setup = .false.
          !! True once `engine_setup` has completed (host-side only;
          !! device mapping is a separate step).
@@ -551,6 +555,7 @@ contains
       if (present(restart_file)) then
          if (len_trim(restart_file) > 0) then
             did_restart = .true.
+            engine%warm_restart = .true.
 #ifndef RDB_NO_NETCDF
             if (len_trim(restart_file) >= 3 .and. &
                 restart_file(len_trim(restart_file) - 2:len_trim(restart_file)) == ".nc") then
@@ -830,9 +835,23 @@ contains
             engine%grid%nx_total, engine%grid%ny_total, &
             engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
             engine%state%bc%periodic_x, engine%state%bc%periodic_y)
-         call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         ! The PROGNOSTIC state is wrapped on a cold start only: a
+         ! checkpoint holds FULL local arrays, ghosts included, exactly as
+         ! the run that wrote it carried them into its next step (see the
+         ! ghost-cell policy in `ocean_state_build_restart_registry`).
+         ! Those ghosts are not a pure function of the owned interior at a
+         ! step boundary -- the duplicated seam faces of `u` hold each
+         ! tile's own update -- so re-deriving them here resumed a
+         ! DIFFERENT state from the one the writer stepped on (1/4-degree
+         ! Southern Ocean, 4x1 periodic, 2026-10-01).  Static geometry
+         ! (`b`, the draft, `bt_H_ref`) is wrapped either way.
+         if (.not. did_restart) then
+            call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         end if
          call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b)
-         call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         if (.not. did_restart) then
+            call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
+         end if
          ! The ice draft is bathymetry-class static geometry, so it takes
          ! the bathymetry's ghost treatment VERBATIM: the analytic setter
          ! already filled the ghosts, and the wrap/fold then overwrites
@@ -887,7 +906,11 @@ contains
          call ocean_halo_centre(engine%state%metrics%z_draft, device_resident=.false.)
          call ocean_halo_centre(engine%state%metrics%cover_frac, device_resident=.false.)
       end if
-      call ocean_halo_exchange_ml_state(engine%state%multilayer, device_resident=.false.)
+      ! Prognostic halo: cold start only, for the reason given at the wrap
+      ! above -- a checkpoint already carries the writer's halo columns.
+      if (.not. did_restart) then
+         call ocean_halo_exchange_ml_state(engine%state%multilayer, device_resident=.false.)
+      end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
@@ -908,7 +931,8 @@ contains
 
       ! Static land masking: derive the C-grid face/corner masks from the
       ! seeded wet_mask + zero the 6 face metrics at land faces.
-      call configure_ocean_land_mask(cfg, engine%state, engine%grid, rank)
+      call configure_ocean_land_mask(cfg, engine%state, engine%grid, rank, &
+                                     warm_restart=did_restart)
 
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive
       ! number / Munk-layer resolution / ah_max-clamps-nu_h): MUST run
@@ -1210,7 +1234,16 @@ contains
                                        omega=cfg%ocean%grid%omega)
       end if
 
-      call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      ! The prognostic exchange is a WARM-UP (it opens the device-path
+      ! handles outside any timed region), but it is not content-neutral:
+      ! at a step boundary the duplicated seam faces of `u` hold each
+      ! tile's own update and the exchange overwrites them.  On a cold
+      ! start that is harmless (the seed is seam-consistent); on a warm
+      ! restart it rewrote the checkpointed state before the first step.
+      ! Skip it there -- the first step's own exchange opens the handles.
+      if (.not. engine%warm_restart) then
+         call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_bt_group_2d(engine%state%dyn%bt_work%bt_eta, &
                                      engine%state%dyn%bt_work%bt_ubt, &
@@ -1645,6 +1678,7 @@ contains
       call engine%geo%destroy()
       call engine%state%destroy()
       engine%is_setup = .false.
+      engine%warm_restart = .false.
    end subroutine engine_teardown
 
 end module rdb_ocean_engine
