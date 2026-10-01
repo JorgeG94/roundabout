@@ -250,6 +250,13 @@ table) — second only to the barotropic solver itself.
 
 ## 7. Stability, budgets
 
+**The build.** The 2-year results below (Secs. 7-8) came from this branch
+combined with the five fixes they depend on, all now on `main`: the sponge
+outer-face wall (#82), the periodic-seam ghost refresh (#84), the free-slip
+viscosity and the `z_fixed` + zinit on-target seed (#88), and the
+`vorticity_z` diagnostic (#86). This branch alone does not reproduce them;
+`main` with this PR (and #83 under it) merged does.
+
 **730 days, 70080 steps, zero NaN / truncation / limiter / error-stop
 events** (grepped the full `run.log`). Wall time: 21689.56 s compute /
 21696.58 s total (**~6.03 h** on 4 V100s) — **29.71 s/simulated day**,
