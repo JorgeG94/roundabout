@@ -157,12 +157,13 @@ contains
       !! does not parse instead of crashing in the list-directed read.
       integer, intent(in) :: pos
       character(len=*), intent(in) :: what
-      character(len=256) :: txt
+      character(len=256) :: txt, msg
       integer :: ios
       call get_command_argument(pos, txt)
-      read (txt, *, iostat=ios) val
+      read (txt, *, iostat=ios, iomsg=msg) val
       if (ios /= 0) then
-         write (error_unit, "(a)") "om_topo_limit: "//what//" is not a number: '"//trim(txt)//"'"
+         write (error_unit, "(a)") "om_topo_limit: "//what//" is not a number: '"//trim(txt)// &
+            "' ("//trim(msg)//")"
          error stop 1
       end if
    end function real_arg
