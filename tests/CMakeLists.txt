@@ -297,6 +297,7 @@ set(RDB_TESTS
     "test_ocean_obc_eta_ghost|test_ocean_obc_eta_ghost|collect_ocean_obc_eta_ghost_tests|ocean_obc_eta_ghost|ocean"
     "test_ocean_driver_diag|test_ocean_driver_diag|collect_ocean_driver_diag_tests|ocean_driver_diag|ocean"
     "test_ocean_restart|test_ocean_restart|collect_ocean_restart_tests|ocean_restart|ocean"
+    "test_ocean_restart_engine|test_ocean_restart_engine|collect_ocean_restart_engine_tests|ocean_restart_engine|ocean"
     "test_ocean_double_gyre_helpers|test_ocean_double_gyre_helpers|collect_ocean_double_gyre_helpers_tests|ocean_double_gyre_helpers|ocean"
     "test_ocean_analytical|test_ocean_analytical|collect_ocean_analytical_tests|ocean_analytical|ocean"
     # Split per-subtest (same source) so the heavy 20000-step geostrophic run is
@@ -385,6 +386,7 @@ set(NETCDF_TESTS
     test_ocean_data_forcing
     test_ocean_driver_diag
     test_ocean_restart
+    test_ocean_restart_engine
     test_ocean_ice_evp
     test_ocean_ice_restart
     test_driver_ocean)
@@ -408,6 +410,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_data_forcing
     test_ocean_driver_diag
     test_ocean_restart
+    test_ocean_restart_engine
     test_ocean_ice_restart
     test_driver_ocean)
 
