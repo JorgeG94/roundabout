@@ -1517,7 +1517,7 @@ contains
       !! Marked `pure` + `!$acc routine seq` so NVHPC can inline the
       !! body into the `do concurrent` callers without descriptor
       !! marshalling.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: h_a, h_b
       logical, intent(in) :: use_harmonic
       real(wp) :: dz

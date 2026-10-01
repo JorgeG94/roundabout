@@ -90,9 +90,9 @@ contains
    subroutine map_in(ms, vd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
    end subroutine map_in
 
@@ -100,9 +100,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------

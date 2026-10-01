@@ -68,7 +68,7 @@ contains
       real(wp), intent(in) :: fu(:, :), fv(:, :)
       integer, intent(in) :: mode
       real(wp), intent(in) :: eta(:, :)
-      !$acc enter data copyin(dyn, cor, fu, fv, eta)
+      !$omp target enter data map(to: dyn, cor, fu, fv, eta)
       call dyn%enter_data()
       call cor%enter_data()
       if (mode == 1) then
@@ -113,10 +113,10 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
       end if
-      !$acc update self(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
+      !$omp target update from(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv, eta)
+      !$omp target exit data map(delete: dyn, cor, fu, fv, eta)
    end subroutine run_variant
 
    subroutine test_absent_eq_zero(error)

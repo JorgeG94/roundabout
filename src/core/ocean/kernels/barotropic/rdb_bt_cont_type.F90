@@ -19,7 +19,7 @@ contains
    pure function find_uhbt(u, BTC) result(uhbt)
       !! Zonal mass transport through a u-face given face velocity `u`.
       !! C¹ continuous in `u` (cubic near zero, linear saturation beyond).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u
       type(local_BT_cont_u_type), intent(in) :: BTC
       real(wp) :: uhbt
@@ -41,7 +41,7 @@ contains
       !! Marginal zonal face area `d(uhbt)/du`. At `u = 0` returns the average
       !! of the two cubic-branch slopes (discontinuity harmless — only consumed
       !! via `max(…, h_neglect)`).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u
       type(local_BT_cont_u_type), intent(in) :: BTC
       real(wp) :: duhbt_du
@@ -137,7 +137,7 @@ contains
 
    pure function find_vhbt(v, BTC) result(vhbt)
       !! Meridional mirror of `find_uhbt`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: v
       type(local_BT_cont_v_type), intent(in) :: BTC
       real(wp) :: vhbt
@@ -157,7 +157,7 @@ contains
 
    pure function find_dvhbt_dv(v, BTC) result(dvhbt_dv)
       !! Meridional mirror of `find_duhbt_du`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: v
       type(local_BT_cont_v_type), intent(in) :: BTC
       real(wp) :: dvhbt_dv

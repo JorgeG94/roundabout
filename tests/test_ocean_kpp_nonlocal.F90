@@ -114,7 +114,7 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: sf
       real(wp), intent(in) :: dt
       logical, intent(in) :: do_apply
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call sf%enter_data()
@@ -122,12 +122,12 @@ contains
       if (do_apply) then
          call vmix_apply_nonlocal_tendencies(grid, vmix, ms, dt)
       end if
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, &
-      !$acc&            vmix%gamma_t, vmix%gamma_s)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth, &
+      !$omp&            vmix%gamma_t, vmix%gamma_s)
       call sf%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_overlay
 
    ! -----------------------------------------------------------------

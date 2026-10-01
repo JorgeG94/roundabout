@@ -202,10 +202,10 @@ contains
    subroutine ocean_tidal_mixing_enter_data_impl(this)
       type(ocean_tidal_mixing_t), intent(inout) :: this
       if (allocated(this%e_in)) then
-         !$acc enter data copyin(this%e_in)
+         !$omp target enter data map(to: this%e_in)
       end if
       if (allocated(this%kd_int)) then
-         !$acc enter data copyin(this%kd_int)
+         !$omp target enter data map(to: this%kd_int)
       end if
    end subroutine ocean_tidal_mixing_enter_data_impl
 
@@ -220,10 +220,10 @@ contains
    subroutine ocean_tidal_mixing_exit_data_impl(this)
       type(ocean_tidal_mixing_t), intent(inout) :: this
       if (allocated(this%kd_int)) then
-         !$acc exit data delete(this%kd_int)
+         !$omp target exit data map(delete: this%kd_int)
       end if
       if (allocated(this%e_in)) then
-         !$acc exit data delete(this%e_in)
+         !$omp target exit data map(delete: this%e_in)
       end if
    end subroutine ocean_tidal_mixing_exit_data_impl
 

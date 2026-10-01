@@ -640,7 +640,7 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%recon_T_b)
       call scratch_3d_buffer_enter_data_impl(this%recon_S_t)
       call scratch_3d_buffer_enter_data_impl(this%recon_S_b)
-      !$acc enter data copyin(this%b)
+      !$omp target enter data map(to: this%b)
    end subroutine ocean_pressure_force_enter_data_impl
 
    subroutine ocean_pressure_force_exit_data(this)
@@ -670,7 +670,7 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%recon_T_b)
       call scratch_3d_buffer_exit_data_impl(this%recon_S_t)
       call scratch_3d_buffer_exit_data_impl(this%recon_S_b)
-      !$acc exit data delete(this%b)
+      !$omp target exit data map(delete: this%b)
    end subroutine ocean_pressure_force_exit_data_impl
 
    pure subroutine ocean_pressure_force_compute(grid, metrics, pgf, ms, eos)
@@ -1067,7 +1067,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       nz = ms%nz_ml
 
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
          ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + &
                                       dt*pgf%dpdx_face%data(i, j, k)
@@ -1076,9 +1076,9 @@ contains
          ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + &
                                       dt*pgf%dpdy_face%data(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_pressure_force_apply
 
@@ -2294,7 +2294,7 @@ contains
    end subroutine compute_fv_mom6_insitu_pcm_impl
 
    pure function recon_layer_mean(hq, h) result(q)
-      !$acc routine seq
+      !$omp declare target
       !! Layer-mean tracer from the thickness-weighted prognostic,
       !! `q = hq/h`, with the D4 vanished-layer floor.  Same gate as the
       !! reconstruct kernel's Pass 0/1 (`H_VANISHED`, not `1e-10`): during
@@ -2313,7 +2313,7 @@ contains
    end function recon_layer_mean
 
    pure subroutine wright_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! ANALYTIC vertical integral of the Wright (1997) in-situ density
       !! anomaly over one constant-T/S (PCM) layer — MOM6
       !! `int_density_dz_wright` (reduced-range coefficients, MOM6
@@ -2392,7 +2392,7 @@ contains
                                        t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
                                        hwt_ll, hwt_lr, hwt_rr, hwt_rl, &
                                        rho0, rho_ref, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! Cross-face 5-point Boole quadrature of the layer `dpa` for a PCM
       !! column pair with the ANALYTIC Wright vertical integral at every
       !! lateral sub-column (MOM6 `int_density_dz_wright`, `intx_dpa` /
@@ -2449,7 +2449,7 @@ contains
    end subroutine wright_pcm_dpa_face
 
    pure subroutine roquet_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! Vertical integral of the Roquet et al. (2015) SpV in-situ density
       !! anomaly over one constant-T/S (PCM) layer: the 5-point Boole rule
       !! of `boole_dpa_intz_layer` (MOM6 `int_density_dz_generic_pcm`, which
@@ -2524,7 +2524,7 @@ contains
                                        t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
                                        hwt_ll, hwt_lr, hwt_rr, hwt_rl, &
                                        rho0, rho_ref, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! Cross-face 5-point Boole quadrature of the layer `dpa` for a PCM
       !! column pair under Roquet SpV (`intx_dpa` / `inty_dpa`): the Roquet
       !! twin of `wright_pcm_dpa_face`, and `boole_dpa_face_pcm` with the
@@ -2580,7 +2580,7 @@ contains
    ! slower on the global 1-degree Pass 0).
 
    pure subroutine boundary_edges_linear(h_self, h_nbr, q_self, dq_up, q_t, q_b)
-      !$acc routine seq
+      !$omp declare target
       !! Linear-exact one-sided edge pair for a BOUNDARY layer (k=1 or
       !! k=nz), where a centred slope has no second neighbour.
       !!
@@ -2629,7 +2629,7 @@ contains
    end subroutine boundary_edges_linear
 
    pure subroutine plm_edges_layer(k, nz, h_dn, h_c, h_up, q_dn, q_c, q_up, q_t, q_b)
-      !$acc routine seq
+      !$omp declare target
       !! PLM top/bottom edge values of ONE layer `k` of a layer-mean field
       !! `q`, via a two-stage h-weighted van-Leer slope (White, Adcroft &
       !! Hallberg 2009 §2).  Returns the SHALLOWER edge in `q_t` (toward
@@ -2705,7 +2705,7 @@ contains
 
    pure subroutine ppm_interface_values(m, nz, h0, h1, h2, h3, s0, s1, s2, s3, &
                                         t0, t1, t2, t3, edge_s, edge_t)
-      !$acc routine seq
+      !$omp declare target
       !! The PPM estimates of salinity and temperature at the interface
       !! between layer `m` (deeper) and `m+1` (shallower), `1 <= m <= nz-1`,
       !! from the four-layer stencil `m-1 .. m+2` (thicknesses `h0..h3`,
@@ -2777,7 +2777,7 @@ contains
    end subroutine ppm_interface_values
 
    pure subroutine ppm_limit_edges(q_m1, q_c, q_p1, ql_raw, qr_raw, q_t, q_b)
-      !$acc routine seq
+      !$omp declare target
       !! The PPM edge limiter of one interior layer: clip both interface
       !! estimates into the monotone bounds of the three adjacent means,
       !! flatten a local extremum to PCM, and apply the Colella & Woodward
@@ -2820,7 +2820,7 @@ contains
                                    s_m2, s_m1, s_c, s_p1, s_p2, &
                                    t_m2, t_m1, t_c, t_p1, t_p2, &
                                    s_top, s_bot, t_top, t_bot)
-      !$acc routine seq
+      !$omp declare target
       !! PPM top/bottom edge values of salinity and temperature in ONE layer
       !! `k`: the implicit-h4 interface estimates (`ppm_interface_values`)
       !! + the Colella & Woodward (1984) limiter (`ppm_limit_edges`).
@@ -2892,7 +2892,7 @@ contains
 
    pure subroutine boole_layer_points(rho0, e_top, dz, t_t, t_b, t_mean, &
                                       s_t, s_b, s_mean, parabolic, t5, s5, p5)
-      !$acc routine seq
+      !$omp declare target
       !! The five sub-point (T, S, p) triples of the in-layer Boole rule,
       !! top (n = 1) to bottom (n = 5), for the per-EOS twins -- the same
       !! points `boole_dpa_intz_layer` writes out in place.
@@ -2939,7 +2939,7 @@ contains
    end subroutine boole_layer_points
 
    pure subroutine boole_layer_combine(r5, dz, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! Boole weights of the five sub-point density anomalies `r5` (top
       !! to bottom): `dpa = g*dz*<rho'>` and the first moment from the top.
       real(wp), intent(in)  :: r5(N_BOOLE)
@@ -2963,7 +2963,7 @@ contains
    pure subroutine boole_dpa_intz_layer_wright(rho0, rho_ref, e_top, dz, &
                                                t_t, t_b, t_mean, s_t, s_b, s_mean, &
                                                parabolic, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! `boole_dpa_intz_layer` specialised to Wright (1997): the same five
       !! sub-points and weights, with the density written inline
       !! (`wright_rho`, the expression `eos_density_point` evaluates) --
@@ -2993,7 +2993,7 @@ contains
    end subroutine boole_dpa_intz_layer_wright
 
    pure function wright_rho(t, s, p) result(rho)
-      !$acc routine seq
+      !$omp declare target
       !! Wright (1997) in-situ density (kg/m^3) -- term for term the
       !! Wright branch of `eos_density_point`, without the handle.
       real(wp), intent(in) :: t, s, p
@@ -3017,7 +3017,7 @@ contains
                                          t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                          s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
                                          dpa_l, dpa_r, parabolic, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! `boole_dpa_face` with the Wright (1997) vertical rule
       !! `boole_dpa_intz_layer_wright` at each of the five sub-columns --
       !! identical sub-columns, weights and summation order, no `eos_t`
@@ -3066,7 +3066,7 @@ contains
    pure subroutine roquet_recon_dpa_intz(rho0, rho_ref, e_top, dz, &
                                          t_t, t_b, t_mean, s_t, s_b, s_mean, &
                                          parabolic, dpa, intz_dpa)
-      !$acc routine seq
+      !$omp declare target
       !! `boole_dpa_intz_layer` (the reconstruct-for-pressure in-layer 5-point
       !! Boole rule over a PLM / PPM T/S profile) specialised to Roquet SpV:
       !! the same five sub-points, weights and summation order, with the
@@ -3125,7 +3125,7 @@ contains
                                          t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                          s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
                                          dpa_l, dpa_r, parabolic, dpa_face)
-      !$acc routine seq
+      !$omp declare target
       !! `boole_dpa_face` (the reconstruct-for-pressure cross-face 5-point
       !! Boole rule) with the Roquet vertical rule `roquet_recon_dpa_intz` at
       !! the three interior sub-columns -- identical sub-columns, weights and
@@ -3174,7 +3174,7 @@ contains
    pure subroutine fv_mom6_mass_weights(mass_weight, e_bed_l, e_bed_r, e_top_l, e_top_r, &
                                         h_l, h_r, h_neglect, &
                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl)
-      !$acc routine seq
+      !$omp declare target
       !! MOM6 near-bottom `hWght` mass-weighting fractions of one face
       !! (`MASS_WEIGHT_IN_PRESSURE_GRADIENT`): the distance by which the
       !! layer top of one column sits below the other column's bed, scaled
@@ -3215,7 +3215,7 @@ contains
    end subroutine fv_mom6_mass_weights
 
    pure function recon_rho_surf(pa_k, pa_kp1, h_surf, rho_ref) result(rho_surf)
-      !$acc routine seq
+      !$omp declare target
       !! Recover the layer-mean surface density from the reconstructed
       !! pressure-anomaly stack: dpa(nz) = pa(nz) - pa(nz+1) =
       !! (rho_surf - rho_ref)*g*h_surf, so rho_surf = rho_ref + dpa/(g*h).

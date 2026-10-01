@@ -65,14 +65,14 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
-      !$acc update self(vmix%kv, vmix%kt)
+      !$omp target update from(vmix%kv, vmix%kt)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_pp81
 
    ! -----------------------------------------------------------------

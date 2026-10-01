@@ -92,7 +92,7 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: n
       integer :: s
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       do s = 1, n
@@ -102,11 +102,11 @@ contains
                  hS => ms%tracers(ms%idx_salinity)%hTr, &
                  hbud => ms%heat_budget_surface, &
                  sbud => ms%salt_budget_surface)
-         !$acc update self(hT, hS, hbud, sbud)
+         !$omp target update from(hT, hS, hbud, sbud)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_restore
 
    !> Forward-Euler discrete oracle: X_N = X* + (X0 − X*)·(1 − lam·dt)^N.

@@ -483,10 +483,10 @@ contains
             call wrapx_centre(fld(:, :, k), nxt, nyt)
          end do
 
-         !$acc enter data copyin(fld)
+         !$omp target enter data map(to: fld)
          call fold_north_centre(fld, nxt, nyt, nz, NI, NJ, NGHOST)
-         !$acc update self(fld)
-         !$acc exit data delete(fld)
+         !$omp target update from(fld)
+         !$omp target exit data map(delete: fld)
 
          jlo = NGHOST + NJ + 1
          do k = 1, nz

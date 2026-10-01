@@ -569,56 +569,56 @@ contains
 
    subroutine barotropic_workstate_enter_data_impl(this)
       type(barotropic_workstate_t), intent(inout) :: this
-      !$acc enter data copyin(this%bt_eta, this%bt_H_ref)
-      !$acc enter data copyin(this%bt_ubt, this%bt_vbt)
-      !$acc enter data copyin(this%eta_sum, this%ubt_sum, this%vbt_sum)
-      !$acc enter data copyin(this%uhbt_sum, this%vhbt_sum, this%bt_uhbt, this%bt_vhbt)
-      !$acc enter data copyin(this%bt_ubt_end, this%bt_vbt_end, this%bt_eta_end)
-      !$acc enter data copyin(this%bt_zeta_corner, this%bt_ke_centre, this%bt_eta_new)
-      !$acc enter data copyin(this%cor_ref_u, this%cor_ref_v)
-      !$acc enter data copyin(this%bt_ubt_prev, this%bt_vbt_prev)
+      !$omp target enter data map(to: this%bt_eta, this%bt_H_ref)
+      !$omp target enter data map(to: this%bt_ubt, this%bt_vbt)
+      !$omp target enter data map(to: this%eta_sum, this%ubt_sum, this%vbt_sum)
+      !$omp target enter data map(to: this%uhbt_sum, this%vhbt_sum, this%bt_uhbt, this%bt_vhbt)
+      !$omp target enter data map(to: this%bt_ubt_end, this%bt_vbt_end, this%bt_eta_end)
+      !$omp target enter data map(to: this%bt_zeta_corner, this%bt_ke_centre, this%bt_eta_new)
+      !$omp target enter data map(to: this%cor_ref_u, this%cor_ref_v)
+      !$omp target enter data map(to: this%bt_ubt_prev, this%bt_vbt_prev)
       ! bt_rem_u/v: always present (barotropic-only path uses them too)
-      !$acc enter data copyin(this%bt_rem_u, this%bt_rem_v)
+      !$omp target enter data map(to: this%bt_rem_u, this%bt_rem_v)
       ! Wave-drag piston-velocity maps: filled on the host at configure
       ! time and never written on the device, so this MUST be `copyin`
       ! (not `create`) — see CLAUDE.md gotcha (2).  Lazy: allocated only
       ! when `lwd_enable`.
       if (allocated(this%lwd_drag_u)) then
-         !$acc enter data copyin(this%lwd_drag_u, this%lwd_drag_v)
+         !$omp target enter data map(to: this%lwd_drag_u, this%lwd_drag_v)
       end if
       if (allocated(this%F_slow_u)) then
-         !$acc enter data copyin(this%F_slow_u, this%F_slow_v)
-         !$acc enter data copyin(this%F_bt_u, this%F_bt_v)
-         !$acc enter data copyin(this%F_bt_u_fast, this%F_bt_v_fast)
-         !$acc enter data copyin(this%ubt_at_n, this%vbt_at_n)
-         !$acc enter data copyin(this%pbce)
-         !$acc enter data copyin(this%gtot_E, this%gtot_W, this%gtot_N, this%gtot_S)
-         !$acc enter data copyin(this%e_anom, this%eta_PF)
-         !$acc enter data copyin(this%visc_rem_u, this%visc_rem_v)
+         !$omp target enter data map(to: this%F_slow_u, this%F_slow_v)
+         !$omp target enter data map(to: this%F_bt_u, this%F_bt_v)
+         !$omp target enter data map(to: this%F_bt_u_fast, this%F_bt_v_fast)
+         !$omp target enter data map(to: this%ubt_at_n, this%vbt_at_n)
+         !$omp target enter data map(to: this%pbce)
+         !$omp target enter data map(to: this%gtot_E, this%gtot_W, this%gtot_N, this%gtot_S)
+         !$omp target enter data map(to: this%e_anom, this%eta_PF)
+         !$omp target enter data map(to: this%visc_rem_u, this%visc_rem_v)
       end if
       ! BTCL_u/v are arrays of derived type with POD scalar components,
       ! so copying the array body is enough (parent before components
       ! on enter, reverse on exit).
       if (allocated(this%BTCL_u)) then
-         !$acc enter data copyin(this%BTCL_u)
+         !$omp target enter data map(to: this%BTCL_u)
       end if
       if (allocated(this%BTCL_v)) then
-         !$acc enter data copyin(this%BTCL_v)
+         !$omp target enter data map(to: this%BTCL_v)
       end if
       ! Upstream-h-face slots — same lazy pattern as BTCL_u/v.
       if (allocated(this%h_face_up_x)) then
-         !$acc enter data copyin(this%h_face_up_x)
+         !$omp target enter data map(to: this%h_face_up_x)
       end if
       if (allocated(this%h_face_up_y)) then
-         !$acc enter data copyin(this%h_face_up_y)
+         !$omp target enter data map(to: this%h_face_up_y)
       end if
       ! Wet/dry workspaces — same lazy pattern (allocated only when
       ! `wetdry_enable`); missing this attach = the per-launch memcpy
       ! explosion foot-gun, so every wd_* array is listed.
       if (allocated(this%wd_wet_dyn)) then
-         !$acc enter data copyin(this%wd_wet_dyn, this%wd_theta)
-         !$acc enter data copyin(this%wd_flux_x, this%wd_flux_y)
-         !$acc enter data copyin(this%wd_open_u, this%wd_open_v)
+         !$omp target enter data map(to: this%wd_wet_dyn, this%wd_theta)
+         !$omp target enter data map(to: this%wd_flux_x, this%wd_flux_y)
+         !$omp target enter data map(to: this%wd_open_u, this%wd_open_v)
       end if
    end subroutine barotropic_workstate_enter_data_impl
 
@@ -632,44 +632,44 @@ contains
 
    subroutine barotropic_workstate_exit_data_impl(this)
       type(barotropic_workstate_t), intent(inout) :: this
-      !$acc exit data delete(this%bt_eta, this%bt_H_ref)
-      !$acc exit data delete(this%bt_ubt, this%bt_vbt)
-      !$acc exit data delete(this%eta_sum, this%ubt_sum, this%vbt_sum)
-      !$acc exit data delete(this%uhbt_sum, this%vhbt_sum, this%bt_uhbt, this%bt_vhbt)
-      !$acc exit data delete(this%bt_ubt_end, this%bt_vbt_end, this%bt_eta_end)
-      !$acc exit data delete(this%cor_ref_u, this%cor_ref_v)
-      !$acc exit data delete(this%bt_zeta_corner, this%bt_ke_centre, this%bt_eta_new)
-      !$acc exit data delete(this%bt_ubt_prev, this%bt_vbt_prev)
-      !$acc exit data delete(this%bt_rem_u, this%bt_rem_v)
+      !$omp target exit data map(delete: this%bt_eta, this%bt_H_ref)
+      !$omp target exit data map(delete: this%bt_ubt, this%bt_vbt)
+      !$omp target exit data map(delete: this%eta_sum, this%ubt_sum, this%vbt_sum)
+      !$omp target exit data map(delete: this%uhbt_sum, this%vhbt_sum, this%bt_uhbt, this%bt_vhbt)
+      !$omp target exit data map(delete: this%bt_ubt_end, this%bt_vbt_end, this%bt_eta_end)
+      !$omp target exit data map(delete: this%cor_ref_u, this%cor_ref_v)
+      !$omp target exit data map(delete: this%bt_zeta_corner, this%bt_ke_centre, this%bt_eta_new)
+      !$omp target exit data map(delete: this%bt_ubt_prev, this%bt_vbt_prev)
+      !$omp target exit data map(delete: this%bt_rem_u, this%bt_rem_v)
       if (allocated(this%lwd_drag_u)) then
-         !$acc exit data delete(this%lwd_drag_u, this%lwd_drag_v)
+         !$omp target exit data map(delete: this%lwd_drag_u, this%lwd_drag_v)
       end if
       if (allocated(this%F_slow_u)) then
-         !$acc exit data delete(this%F_slow_u, this%F_slow_v)
-         !$acc exit data delete(this%F_bt_u, this%F_bt_v)
-         !$acc exit data delete(this%F_bt_u_fast, this%F_bt_v_fast)
-         !$acc exit data delete(this%ubt_at_n, this%vbt_at_n)
-         !$acc exit data delete(this%pbce)
-         !$acc exit data delete(this%gtot_E, this%gtot_W, this%gtot_N, this%gtot_S)
-         !$acc exit data delete(this%e_anom, this%eta_PF)
-         !$acc exit data delete(this%visc_rem_u, this%visc_rem_v)
+         !$omp target exit data map(delete: this%F_slow_u, this%F_slow_v)
+         !$omp target exit data map(delete: this%F_bt_u, this%F_bt_v)
+         !$omp target exit data map(delete: this%F_bt_u_fast, this%F_bt_v_fast)
+         !$omp target exit data map(delete: this%ubt_at_n, this%vbt_at_n)
+         !$omp target exit data map(delete: this%pbce)
+         !$omp target exit data map(delete: this%gtot_E, this%gtot_W, this%gtot_N, this%gtot_S)
+         !$omp target exit data map(delete: this%e_anom, this%eta_PF)
+         !$omp target exit data map(delete: this%visc_rem_u, this%visc_rem_v)
       end if
       if (allocated(this%BTCL_u)) then
-         !$acc exit data delete(this%BTCL_u)
+         !$omp target exit data map(delete: this%BTCL_u)
       end if
       if (allocated(this%BTCL_v)) then
-         !$acc exit data delete(this%BTCL_v)
+         !$omp target exit data map(delete: this%BTCL_v)
       end if
       if (allocated(this%h_face_up_x)) then
-         !$acc exit data delete(this%h_face_up_x)
+         !$omp target exit data map(delete: this%h_face_up_x)
       end if
       if (allocated(this%h_face_up_y)) then
-         !$acc exit data delete(this%h_face_up_y)
+         !$omp target exit data map(delete: this%h_face_up_y)
       end if
       if (allocated(this%wd_wet_dyn)) then
-         !$acc exit data delete(this%wd_open_u, this%wd_open_v)
-         !$acc exit data delete(this%wd_flux_x, this%wd_flux_y)
-         !$acc exit data delete(this%wd_wet_dyn, this%wd_theta)
+         !$omp target exit data map(delete: this%wd_open_u, this%wd_open_v)
+         !$omp target exit data map(delete: this%wd_flux_x, this%wd_flux_y)
+         !$omp target exit data map(delete: this%wd_wet_dyn, this%wd_theta)
       end if
       ! Parent detach last — reverses the enter-data ordering.
    end subroutine barotropic_workstate_exit_data_impl

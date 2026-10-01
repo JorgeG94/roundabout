@@ -536,21 +536,21 @@ contains
          call setup_epbl(epbl, grid, NZ)
          epbl%epbl_sw_ctke = .true.
 
-         !$acc enter data copyin(ms, ss, sf, epbl)
+         !$omp target enter data map(to: ms, ss, sf, epbl)
          call ms%enter_data()
          call ss%enter_data()
          call sf%enter_data()
          call epbl%enter_data()
-         !$acc update device(sf%Q_heat)
+         !$omp target update to(sf%Q_heat)
          call epbl_compute(grid, epbl, ms, ss, 1800.0_wp, sf=sf)
          ! Pull COMPONENT arrays (never the whole DT) back to host.
-         !$acc update self(epbl%mld, epbl%kd_int)
-         !$acc update self(epbl%ctke_sw%data)
+         !$omp target update from(epbl%mld, epbl%kd_int)
+         !$omp target update from(epbl%ctke_sw%data)
          call sf%exit_data()
          call ss%exit_data()
          call epbl%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ss, sf, epbl)
+         !$omp target exit data map(delete: ms, ss, sf, epbl)
 
          i = grid%nx_total/2
          j = grid%ny_total/2
@@ -627,17 +627,17 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call sf%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
       call sf%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp
 
    subroutine run_epbl(grid, ms, epbl, ss, sf)
@@ -646,17 +646,17 @@ contains
       type(ocean_epbl_t), intent(inout) :: epbl
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, epbl, ss, sf)
+      !$omp target enter data map(to: ms, epbl, ss, sf)
       call ms%enter_data()
       call sf%enter_data()
       call epbl%enter_data()
       call epbl_compute(grid, epbl, ms, ss, 1800.0_wp, sf=sf)
-      !$acc update self(epbl%mld, epbl%kd_int)
-      !$acc update self(epbl%ctke_sw%data, epbl%dcolht_t%data)
+      !$omp target update from(epbl%mld, epbl%kd_int)
+      !$omp target update from(epbl%ctke_sw%data, epbl%dcolht_t%data)
       call epbl%exit_data()
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf)
+      !$omp target exit data map(delete: ms, epbl, ss, sf)
    end subroutine run_epbl
 
    subroutine cleanup_vmix(vmix)

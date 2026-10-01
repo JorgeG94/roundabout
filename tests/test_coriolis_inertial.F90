@@ -56,9 +56,9 @@ contains
       type(coriolis_adv_t), intent(inout) :: cor
       type(ocean_metrics_t), intent(inout) :: metrics
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(bs)
+      !$omp target enter data map(to: bs)
       call bs%enter_data()
-      !$acc enter data copyin(cor)
+      !$omp target enter data map(to: cor)
       call cor%enter_data()
    end subroutine map_in
 
@@ -67,9 +67,9 @@ contains
       type(coriolis_adv_t), intent(inout) :: cor
       type(ocean_metrics_t), intent(inout) :: metrics
       call cor%exit_data()
-      !$acc exit data delete(cor)
+      !$omp target exit data map(delete: cor)
       call bs%exit_data()
-      !$acc exit data delete(bs)
+      !$omp target exit data map(delete: bs)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 

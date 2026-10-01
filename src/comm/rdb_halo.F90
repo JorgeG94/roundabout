@@ -325,7 +325,7 @@ contains
       ! --- Pack on device ---
       if (.not. decomp%has_west) then
          rank_west = decomp_rank_from_coords(decomp%px, decomp%rx - 1, decomp%ry)
-         !$acc parallel loop collapse(2) present(hs_buf_send_west, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, ny_total
             do k = 1, nghost
                hs_buf_send_west((j - 1)*nghost + k) = fld(nghost + k, j)
@@ -335,7 +335,7 @@ contains
 
       if (.not. decomp%has_east) then
          rank_east = decomp_rank_from_coords(decomp%px, decomp%rx + 1, decomp%ry)
-         !$acc parallel loop collapse(2) present(hs_buf_send_east, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, ny_total
             do k = 1, nghost
                hs_buf_send_east((j - 1)*nghost + k) = fld(nghost + nx_local - nghost + k, j)
@@ -345,7 +345,7 @@ contains
 
       if (.not. decomp%has_south) then
          rank_south = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry - 1)
-         !$acc parallel loop collapse(2) present(hs_buf_send_south, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, nghost
             do i = 1, nx_total
                hs_buf_send_south((k - 1)*nx_total + i) = fld(i, nghost + k)
@@ -355,7 +355,7 @@ contains
 
       if (.not. decomp%has_north) then
          rank_north = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry + 1)
-         !$acc parallel loop collapse(2) present(hs_buf_send_north, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, nghost
             do i = 1, nx_total
                hs_buf_send_north((k - 1)*nx_total + i) = fld(i, nghost + ny_local - nghost + k)
@@ -367,46 +367,46 @@ contains
       nreq = 0
 
       if (.not. decomp%has_west) then
-         !$acc host_data use_device(hs_buf_send_west, hs_buf_recv_west)
+         !$omp target data use_device_addr(hs_buf_send_west, hs_buf_recv_west)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs_buf_send_west, strip_ew, rank_west, 1, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs_buf_recv_west, strip_ew, rank_west, 2, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_east) then
-         !$acc host_data use_device(hs_buf_send_east, hs_buf_recv_east)
+         !$omp target data use_device_addr(hs_buf_send_east, hs_buf_recv_east)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs_buf_send_east, strip_ew, rank_east, 2, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs_buf_recv_east, strip_ew, rank_east, 1, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_south) then
-         !$acc host_data use_device(hs_buf_send_south, hs_buf_recv_south)
+         !$omp target data use_device_addr(hs_buf_send_south, hs_buf_recv_south)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs_buf_send_south, strip_sn, rank_south, 3, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs_buf_recv_south, strip_sn, rank_south, 4, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_north) then
-         !$acc host_data use_device(hs_buf_send_north, hs_buf_recv_north)
+         !$omp target data use_device_addr(hs_buf_send_north, hs_buf_recv_north)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs_buf_send_north, strip_sn, rank_north, 4, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs_buf_recv_north, strip_sn, rank_north, 3, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (nreq > 0) call waitall(reqs(1:nreq), stats(1:nreq))
 
       ! --- Unpack on device ---
       if (.not. decomp%has_west) then
-         !$acc parallel loop collapse(2) present(hs_buf_recv_west, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, ny_total
             do k = 1, nghost
                fld(k, j) = hs_buf_recv_west((j - 1)*nghost + k)
@@ -415,7 +415,7 @@ contains
       end if
 
       if (.not. decomp%has_east) then
-         !$acc parallel loop collapse(2) present(hs_buf_recv_east, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, ny_total
             do k = 1, nghost
                fld(nghost + nx_local + k, j) = hs_buf_recv_east((j - 1)*nghost + k)
@@ -424,7 +424,7 @@ contains
       end if
 
       if (.not. decomp%has_south) then
-         !$acc parallel loop collapse(2) present(hs_buf_recv_south, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, nghost
             do i = 1, nx_total
                fld(i, k) = hs_buf_recv_south((k - 1)*nx_total + i)
@@ -433,7 +433,7 @@ contains
       end if
 
       if (.not. decomp%has_north) then
-         !$acc parallel loop collapse(2) present(hs_buf_recv_north, fld)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, nghost
             do i = 1, nx_total
                fld(i, nghost + ny_local + k) = hs_buf_recv_north((k - 1)*nx_total + i)
@@ -475,10 +475,10 @@ contains
       allocate (hs_buf_send_east(strip_ew), hs_buf_recv_east(strip_ew))
       allocate (hs_buf_send_south(strip_sn), hs_buf_recv_south(strip_sn))
       allocate (hs_buf_send_north(strip_sn), hs_buf_recv_north(strip_sn))
-      !$acc enter data create(hs_buf_send_west, hs_buf_recv_west, &
-      !$acc&                  hs_buf_send_east, hs_buf_recv_east, &
-      !$acc&                  hs_buf_send_south, hs_buf_recv_south, &
-      !$acc&                  hs_buf_send_north, hs_buf_recv_north)
+      !$omp target enter data map(alloc: hs_buf_send_west, hs_buf_recv_west, &
+      !$omp&                  hs_buf_send_east, hs_buf_recv_east, &
+      !$omp&                  hs_buf_send_south, hs_buf_recv_south, &
+      !$omp&                  hs_buf_send_north, hs_buf_recv_north)
 
       hs_nghost = nghost
       hs_nx_total = nx_total
@@ -490,10 +490,10 @@ contains
       !! Release the persistent halo buffers.  Idempotent.
       if (.not. allocated(hs_buf_send_west)) return
 
-      !$acc exit data delete(hs_buf_send_west, hs_buf_recv_west, &
-      !$acc&                 hs_buf_send_east, hs_buf_recv_east, &
-      !$acc&                 hs_buf_send_south, hs_buf_recv_south, &
-      !$acc&                 hs_buf_send_north, hs_buf_recv_north)
+      !$omp target exit data map(delete: hs_buf_send_west, hs_buf_recv_west, &
+      !$omp&                 hs_buf_send_east, hs_buf_recv_east, &
+      !$omp&                 hs_buf_send_south, hs_buf_recv_south, &
+      !$omp&                 hs_buf_send_north, hs_buf_recv_north)
       deallocate (hs_buf_send_west, hs_buf_recv_west)
       deallocate (hs_buf_send_east, hs_buf_recv_east)
       deallocate (hs_buf_send_south, hs_buf_recv_south)
@@ -533,22 +533,22 @@ contains
       if (.not. decomp%has_west) then
          ha%rank_west = decomp_rank_from_coords(decomp%px, decomp%rx - 1, decomp%ry)
          allocate (ha_buf_send_west(ha%strip_ew), ha_buf_recv_west(ha%strip_ew))
-         !$acc enter data create( ha_buf_send_west, ha_buf_recv_west)
+         !$omp target enter data map(alloc:  ha_buf_send_west, ha_buf_recv_west)
       end if
       if (.not. decomp%has_east) then
          ha%rank_east = decomp_rank_from_coords(decomp%px, decomp%rx + 1, decomp%ry)
          allocate (ha_buf_send_east(ha%strip_ew), ha_buf_recv_east(ha%strip_ew))
-         !$acc enter data create( ha_buf_send_east, ha_buf_recv_east)
+         !$omp target enter data map(alloc:  ha_buf_send_east, ha_buf_recv_east)
       end if
       if (.not. decomp%has_south) then
          ha%rank_south = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry - 1)
          allocate (ha_buf_send_south(ha%strip_sn), ha_buf_recv_south(ha%strip_sn))
-         !$acc enter data create( ha_buf_send_south, ha_buf_recv_south)
+         !$omp target enter data map(alloc:  ha_buf_send_south, ha_buf_recv_south)
       end if
       if (.not. decomp%has_north) then
          ha%rank_north = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry + 1)
          allocate (ha_buf_send_north(ha%strip_sn), ha_buf_recv_north(ha%strip_sn))
-         !$acc enter data create( ha_buf_send_north, ha_buf_recv_north)
+         !$omp target enter data map(alloc:  ha_buf_send_north, ha_buf_recv_north)
       end if
 
       ha%initialised = .true.
@@ -562,19 +562,19 @@ contains
       if (.not. ha%initialised) return
 
       if (allocated(ha_buf_send_west)) then
-         !$acc exit data delete( ha_buf_send_west, ha_buf_recv_west)
+         !$omp target exit data map(delete:  ha_buf_send_west, ha_buf_recv_west)
          deallocate (ha_buf_send_west, ha_buf_recv_west)
       end if
       if (allocated(ha_buf_send_east)) then
-         !$acc exit data delete( ha_buf_send_east, ha_buf_recv_east)
+         !$omp target exit data map(delete:  ha_buf_send_east, ha_buf_recv_east)
          deallocate (ha_buf_send_east, ha_buf_recv_east)
       end if
       if (allocated(ha_buf_send_south)) then
-         !$acc exit data delete( ha_buf_send_south, ha_buf_recv_south)
+         !$omp target exit data map(delete:  ha_buf_send_south, ha_buf_recv_south)
          deallocate (ha_buf_send_south, ha_buf_recv_south)
       end if
       if (allocated(ha_buf_send_north)) then
-         !$acc exit data delete( ha_buf_send_north, ha_buf_recv_north)
+         !$omp target exit data map(delete:  ha_buf_send_north, ha_buf_recv_north)
          deallocate (ha_buf_send_north, ha_buf_recv_north)
       end if
 
@@ -607,7 +607,7 @@ contains
 
       ! --- Pack all 4 fields into combined buffers on device ---
       if (.not. ha%decomp%has_west) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, nyt
             do k = 1, ng
                base = (j - 1)*ng + k
@@ -620,7 +620,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_east) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, nyt
             do k = 1, ng
                base = (j - 1)*ng + k
@@ -633,7 +633,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_south) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, ng
             do i = 1, nxt
                base = (k - 1)*nxt + i
@@ -646,7 +646,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_north) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, ng
             do i = 1, nxt
                base = (k - 1)*nxt + i
@@ -660,39 +660,39 @@ contains
 
       ! --- Post MPI Isend/Irecv with device pointers ---
       if (.not. ha%decomp%has_west) then
-         !$acc host_data use_device(ha_buf_send_west, ha_buf_recv_west)
+         !$omp target data use_device_addr(ha_buf_send_west, ha_buf_recv_west)
          ha%nreq = ha%nreq + 1
          call HALO_ISEND_N(comm, ha_buf_send_west, ha%strip_ew, ha%rank_west, 1, ha%reqs(ha%nreq))
          ha%nreq = ha%nreq + 1
          call HALO_IRECV_N(comm, ha_buf_recv_west, ha%strip_ew, ha%rank_west, 2, ha%reqs(ha%nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. ha%decomp%has_east) then
-         !$acc host_data use_device(ha_buf_send_east, ha_buf_recv_east)
+         !$omp target data use_device_addr(ha_buf_send_east, ha_buf_recv_east)
          ha%nreq = ha%nreq + 1
          call HALO_ISEND_N(comm, ha_buf_send_east, ha%strip_ew, ha%rank_east, 2, ha%reqs(ha%nreq))
          ha%nreq = ha%nreq + 1
          call HALO_IRECV_N(comm, ha_buf_recv_east, ha%strip_ew, ha%rank_east, 1, ha%reqs(ha%nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. ha%decomp%has_south) then
-         !$acc host_data use_device(ha_buf_send_south, ha_buf_recv_south)
+         !$omp target data use_device_addr(ha_buf_send_south, ha_buf_recv_south)
          ha%nreq = ha%nreq + 1
          call HALO_ISEND_N(comm, ha_buf_send_south, ha%strip_sn, ha%rank_south, 3, ha%reqs(ha%nreq))
          ha%nreq = ha%nreq + 1
          call HALO_IRECV_N(comm, ha_buf_recv_south, ha%strip_sn, ha%rank_south, 4, ha%reqs(ha%nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. ha%decomp%has_north) then
-         !$acc host_data use_device(ha_buf_send_north, ha_buf_recv_north)
+         !$omp target data use_device_addr(ha_buf_send_north, ha_buf_recv_north)
          ha%nreq = ha%nreq + 1
          call HALO_ISEND_N(comm, ha_buf_send_north, ha%strip_sn, ha%rank_north, 4, ha%reqs(ha%nreq))
          ha%nreq = ha%nreq + 1
          call HALO_IRECV_N(comm, ha_buf_recv_north, ha%strip_sn, ha%rank_north, 3, ha%reqs(ha%nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
    end subroutine halo_exchange_begin
@@ -721,7 +721,7 @@ contains
 
       ! --- Unpack all 4 fields from combined buffers on device ---
       if (.not. ha%decomp%has_west) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, nyt
             do k = 1, ng
                base = (j - 1)*ng + k
@@ -734,7 +734,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_east) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do j = 1, nyt
             do k = 1, ng
                base = (j - 1)*ng + k
@@ -747,7 +747,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_south) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, ng
             do i = 1, nxt
                base = (k - 1)*nxt + i
@@ -760,7 +760,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_north) then
-         !$acc parallel loop collapse(2)
+         !$omp target teams distribute parallel do collapse(2)
          do k = 1, ng
             do i = 1, nxt
                base = (k - 1)*nxt + i
@@ -870,7 +870,7 @@ contains
       ! --- Pack on device (all layers in a single kernel per direction) ---
       if (.not. decomp%has_west) then
          rank_west = decomp_rank_from_coords(decomp%px, decomp%rx - 1, decomp%ry)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_west, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do j = 1, ny_total
                do k = 1, nghost
@@ -882,7 +882,7 @@ contains
 
       if (.not. decomp%has_east) then
          rank_east = decomp_rank_from_coords(decomp%px, decomp%rx + 1, decomp%ry)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_east, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do j = 1, ny_total
                do k = 1, nghost
@@ -894,7 +894,7 @@ contains
 
       if (.not. decomp%has_south) then
          rank_south = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry - 1)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_south, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do k = 1, nghost
                do i = 1, nx_total
@@ -906,7 +906,7 @@ contains
 
       if (.not. decomp%has_north) then
          rank_north = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry + 1)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_north, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do k = 1, nghost
                do i = 1, nx_total
@@ -920,46 +920,46 @@ contains
       nreq = 0
 
       if (.not. decomp%has_west) then
-         !$acc host_data use_device(hs3_buf_send_west, hs3_buf_recv_west)
+         !$omp target data use_device_addr(hs3_buf_send_west, hs3_buf_recv_west)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs3_buf_send_west, strip_ew, rank_west, 1, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs3_buf_recv_west, strip_ew, rank_west, 2, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_east) then
-         !$acc host_data use_device(hs3_buf_send_east, hs3_buf_recv_east)
+         !$omp target data use_device_addr(hs3_buf_send_east, hs3_buf_recv_east)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs3_buf_send_east, strip_ew, rank_east, 2, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs3_buf_recv_east, strip_ew, rank_east, 1, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_south) then
-         !$acc host_data use_device(hs3_buf_send_south, hs3_buf_recv_south)
+         !$omp target data use_device_addr(hs3_buf_send_south, hs3_buf_recv_south)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs3_buf_send_south, strip_sn, rank_south, 3, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs3_buf_recv_south, strip_sn, rank_south, 4, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (.not. decomp%has_north) then
-         !$acc host_data use_device(hs3_buf_send_north, hs3_buf_recv_north)
+         !$omp target data use_device_addr(hs3_buf_send_north, hs3_buf_recv_north)
          nreq = nreq + 1
          call HALO_ISEND_N(comm, hs3_buf_send_north, strip_sn, rank_north, 4, reqs(nreq))
          nreq = nreq + 1
          call HALO_IRECV_N(comm, hs3_buf_recv_north, strip_sn, rank_north, 3, reqs(nreq))
-         !$acc end host_data
+         !$omp end target data
       end if
 
       if (nreq > 0) call waitall(reqs(1:nreq), stats(1:nreq))
 
       ! --- Unpack on device (all layers in a single kernel per direction) ---
       if (.not. decomp%has_west) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_west, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do j = 1, ny_total
                do k = 1, nghost
@@ -970,7 +970,7 @@ contains
       end if
 
       if (.not. decomp%has_east) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_east, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do j = 1, ny_total
                do k = 1, nghost
@@ -981,7 +981,7 @@ contains
       end if
 
       if (.not. decomp%has_south) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_south, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do k = 1, nghost
                do i = 1, nx_total
@@ -992,7 +992,7 @@ contains
       end if
 
       if (.not. decomp%has_north) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_north, fld)
+         !$omp target teams distribute parallel do collapse(3)
          do L = 1, nz
             do k = 1, nghost
                do i = 1, nx_total
@@ -1035,10 +1035,10 @@ contains
       allocate (hs3_buf_send_east(strip_ew), hs3_buf_recv_east(strip_ew))
       allocate (hs3_buf_send_south(strip_sn), hs3_buf_recv_south(strip_sn))
       allocate (hs3_buf_send_north(strip_sn), hs3_buf_recv_north(strip_sn))
-      !$acc enter data create(hs3_buf_send_west, hs3_buf_recv_west, &
-      !$acc&                  hs3_buf_send_east, hs3_buf_recv_east, &
-      !$acc&                  hs3_buf_send_south, hs3_buf_recv_south, &
-      !$acc&                  hs3_buf_send_north, hs3_buf_recv_north)
+      !$omp target enter data map(alloc: hs3_buf_send_west, hs3_buf_recv_west, &
+      !$omp&                  hs3_buf_send_east, hs3_buf_recv_east, &
+      !$omp&                  hs3_buf_send_south, hs3_buf_recv_south, &
+      !$omp&                  hs3_buf_send_north, hs3_buf_recv_north)
 
       hs3_nghost = nghost
       hs3_nx_total = nx_total
@@ -1051,10 +1051,10 @@ contains
       !! Release the persistent 3D halo buffers.  Idempotent.
       if (.not. allocated(hs3_buf_send_west)) return
 
-      !$acc exit data delete(hs3_buf_send_west, hs3_buf_recv_west, &
-      !$acc&                 hs3_buf_send_east, hs3_buf_recv_east, &
-      !$acc&                 hs3_buf_send_south, hs3_buf_recv_south, &
-      !$acc&                 hs3_buf_send_north, hs3_buf_recv_north)
+      !$omp target exit data map(delete: hs3_buf_send_west, hs3_buf_recv_west, &
+      !$omp&                 hs3_buf_send_east, hs3_buf_recv_east, &
+      !$omp&                 hs3_buf_send_south, hs3_buf_recv_south, &
+      !$omp&                 hs3_buf_send_north, hs3_buf_recv_north)
       deallocate (hs3_buf_send_west, hs3_buf_recv_west)
       deallocate (hs3_buf_send_east, hs3_buf_recv_east)
       deallocate (hs3_buf_send_south, hs3_buf_recv_south)

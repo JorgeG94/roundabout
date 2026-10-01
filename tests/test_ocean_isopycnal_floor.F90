@@ -53,9 +53,9 @@ contains
    subroutine map_in_ms(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in_ms
 
@@ -63,9 +63,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_ms
 
    ! -----------------------------------------------------------------
@@ -115,11 +115,11 @@ contains
          ! it on-device each step), so the host-set grounding flux above is NOT
          ! on the device — push it, else the -gpu=mem:separate kernel reads
          ! uninitialised device flux and the grounding cell never floors.
-         !$acc update device(ms%h_layer, ms%flux_h_layer, ms%mass_budget_continuity)
+         !$omp target update to(ms%h_layer, ms%flux_h_layer, ms%mass_budget_continuity)
 
          ! --- With floor active: floored cell == AH ---
          call continuity_apply_fluxes(ms, DT, h_min=AH)
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
 
          floored_expected = AH
          call check(error, &
@@ -138,10 +138,10 @@ contains
          ms%flux_h_layer = 0.0_wp
          ms%mass_budget_continuity = 0.0_wp
          ms%flux_h_layer(i_grnd, j_grnd, k_grnd) = LARGE_DIV
-         !$acc update device(ms%h_layer, ms%flux_h_layer, ms%mass_budget_continuity)
+         !$omp target update to(ms%h_layer, ms%flux_h_layer, ms%mass_budget_continuity)
 
          call continuity_apply_fluxes(ms, DT, h_min=0.0_wp)
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
 
          no_floor_expected = H_INIT - DT*LARGE_DIV
          call check(error, no_floor_expected < 0.0_wp, &
@@ -207,17 +207,17 @@ contains
          call map_in_ms(ms_ref, ct_ref)
          ! Push the host-set flux field (flux_h_layer is `create`-mapped) so the
          ! comparison exercises the real flux, not zeroed device scratch.
-         !$acc update device(ms_new%h_layer, ms_new%flux_h_layer, &
-         !$acc&              ms_new%mass_budget_continuity)
-         !$acc update device(ms_ref%h_layer, ms_ref%flux_h_layer, &
-         !$acc&              ms_ref%mass_budget_continuity)
+         !$omp target update to(ms_new%h_layer, ms_new%flux_h_layer, &
+         !$omp&              ms_new%mass_budget_continuity)
+         !$omp target update to(ms_ref%h_layer, ms_ref%flux_h_layer, &
+         !$omp&              ms_ref%mass_budget_continuity)
 
          ! New path with explicit h_min=0.
          call continuity_apply_fluxes(ms_new, DT, h_min=0.0_wp)
          ! Reference path with no h_min argument.
          call continuity_apply_fluxes(ms_ref, DT)
 
-         !$acc update self(ms_new%h_layer, ms_ref%h_layer)
+         !$omp target update from(ms_new%h_layer, ms_ref%h_layer)
 
          max_diff = maxval(abs(ms_new%h_layer - ms_ref%h_layer))
          call check(error, max_diff == 0.0_wp, &
@@ -289,13 +289,13 @@ contains
       call map_in_ms(ms_unfloored, ct2)
       ! Push host-set inputs (flux_h_layer is `create`-mapped) so the run does
       ! not depend on freshly-created device scratch happening to be zero.
-      !$acc update device(ms_floor%h_layer, ms_floor%flux_h_layer, &
-      !$acc&              ms_floor%mass_budget_continuity)
-      !$acc update device(ms_unfloored%h_layer, ms_unfloored%flux_h_layer, &
-      !$acc&              ms_unfloored%mass_budget_continuity)
+      !$omp target update to(ms_floor%h_layer, ms_floor%flux_h_layer, &
+      !$omp&              ms_floor%mass_budget_continuity)
+      !$omp target update to(ms_unfloored%h_layer, ms_unfloored%flux_h_layer, &
+      !$omp&              ms_unfloored%mass_budget_continuity)
       call continuity_apply_fluxes(ms_floor, DT, h_min=AH)
       call continuity_apply_fluxes(ms_unfloored, DT, h_min=0.0_wp)
-      !$acc update self(ms_floor%h_layer, ms_unfloored%h_layer)
+      !$omp target update from(ms_floor%h_layer, ms_unfloored%h_layer)
       call map_out_ms(ms_floor, ct1)
       call map_out_ms(ms_unfloored, ct2)
 
@@ -351,13 +351,13 @@ contains
       call map_in_ms(ms_unfloored, ct2)
       ! Push host-set inputs (flux_h_layer is `create`-mapped) so the benign run
       ! does not depend on freshly-created device scratch happening to be zero.
-      !$acc update device(ms_floor%h_layer, ms_floor%flux_h_layer, &
-      !$acc&              ms_floor%mass_budget_continuity)
-      !$acc update device(ms_unfloored%h_layer, ms_unfloored%flux_h_layer, &
-      !$acc&              ms_unfloored%mass_budget_continuity)
+      !$omp target update to(ms_floor%h_layer, ms_floor%flux_h_layer, &
+      !$omp&              ms_floor%mass_budget_continuity)
+      !$omp target update to(ms_unfloored%h_layer, ms_unfloored%flux_h_layer, &
+      !$omp&              ms_unfloored%mass_budget_continuity)
       call continuity_apply_fluxes(ms_floor, DT, h_min=AH)
       call continuity_apply_fluxes(ms_unfloored, DT, h_min=0.0_wp)
-      !$acc update self(ms_floor%h_layer, ms_unfloored%h_layer)
+      !$omp target update from(ms_floor%h_layer, ms_unfloored%h_layer)
       call map_out_ms(ms_floor, ct1)
       call map_out_ms(ms_unfloored, ct2)
 

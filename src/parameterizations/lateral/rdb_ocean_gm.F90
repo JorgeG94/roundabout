@@ -175,8 +175,8 @@ contains
    subroutine ocean_gm_enter_data_impl(this)
       type(ocean_gm_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%khth_u, this%khth_v)
-      !$acc enter data copyin(this%uhD, this%vhD, this%gm_src)
+      !$omp target enter data map(to: this%khth_u, this%khth_v)
+      !$omp target enter data map(to: this%uhD, this%vhD, this%gm_src)
    end subroutine ocean_gm_enter_data_impl
 
    subroutine ocean_gm_exit_data(this)
@@ -190,8 +190,8 @@ contains
    subroutine ocean_gm_exit_data_impl(this)
       type(ocean_gm_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%uhD, this%vhD, this%gm_src)
-      !$acc exit data delete(this%khth_u, this%khth_v)
+      !$omp target exit data map(delete: this%uhD, this%vhD, this%gm_src)
+      !$omp target exit data map(delete: this%khth_u, this%khth_v)
    end subroutine ocean_gm_exit_data_impl
 
    ! =================================================================
@@ -392,7 +392,7 @@ contains
    end subroutine gm_clamp_khth
 
    pure function gm_h_frac(h_avail_k, rsum_k) result(hf)
-      !$acc routine seq
+      !$omp declare target
       !! Donor mass fraction `h_avail(k)/rsum_above(k)` (0 when no mass is
       !! available above).  `rsum_above(k)` is the cumulative availability
       !! from the surface down to and including layer k, so `hf in [0,1]`.
@@ -552,7 +552,7 @@ contains
    end subroutine gm_column_y
 
    pure function gm_clamp_slope(s, smax) result(sc)
-      !$acc routine seq
+      !$omp declare target
       !! Clamp a slope to +/- smax (bounded slope for the PE release).
       real(wp), intent(in) :: s, smax
       real(wp) :: sc

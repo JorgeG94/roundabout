@@ -297,7 +297,7 @@ contains
       allocate (ci_scratch(nx, ny), source=0.0_wp)
       allocate (mis_scratch(nx, ny), source=0.0_wp)
       allocate (mice_scratch(nx, ny), source=0.0_wp)
-      !$acc enter data create(ci_scratch, mis_scratch, mice_scratch)
+      !$omp target enter data map(alloc: ci_scratch, mis_scratch, mice_scratch)
       ss_nx = nx
       ss_ny = ny
       stress_scratch_ready = .true.
@@ -308,7 +308,7 @@ contains
       !! already-clean workspace — the driver calls it unconditionally at
       !! ocean teardown, next to `ice_evp_cleanup`).
       if (.not. stress_scratch_ready) return
-      !$acc exit data delete(ci_scratch, mis_scratch, mice_scratch)
+      !$omp target exit data map(delete: ci_scratch, mis_scratch, mice_scratch)
       deallocate (ci_scratch, mis_scratch, mice_scratch)
       ss_nx = 0
       ss_ny = 0

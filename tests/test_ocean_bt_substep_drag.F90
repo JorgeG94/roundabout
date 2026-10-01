@@ -214,15 +214,15 @@ contains
          dyn%bt_work%bt_rem_u = 0.5_wp
          dyn%bt_work%bt_rem_v = 0.5_wp
 
-         !$acc enter data copyin(dyn, cor)
+         !$omp target enter data map(to: dyn, cor)
          call dyn%enter_data()
          call cor%enter_data()
          call barotropic_substep_nonlinear_interior(grid, metrics, dyn%bt_work, &
                                                     cor%f_corner, 1, DT_INNER)
-         !$acc update self(dyn%bt_work%bt_ubt)
+         !$omp target update from(dyn%bt_work%bt_ubt)
          call dyn%exit_data()
          call cor%exit_data()
-         !$acc exit data delete(dyn, cor)
+         !$omp target exit data map(delete: dyn, cor)
 
          ip = grid%nghost + 6; jp = grid%nghost + 4
          call check(error, dyn%bt_work%bt_ubt(ip, jp) == 0.5_wp*U0, &

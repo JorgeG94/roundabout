@@ -357,9 +357,9 @@ contains
       type(ocean_redi_t), intent(inout) :: rd
       type(eos_t), intent(in) :: eos
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(rd)
+      !$omp target enter data map(to: rd)
       call rd%enter_data()
    end subroutine map_in
 
@@ -378,12 +378,12 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_redi_t), intent(inout) :: rd
       ! Pull the updated tracers back to host.
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
       call rd%exit_data()
-      !$acc exit data delete(rd)
+      !$omp target exit data map(delete: rd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -686,10 +686,10 @@ contains
       if (use_ext) then
          allocate (khu(ni + 1, nj), source=khtr_ext_val)
          allocate (khv(ni, nj + 1), source=khtr_ext_val)
-         !$acc enter data copyin(khu, khv)
+         !$omp target enter data map(to: khu, khv)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=khu, khtr_v_ext=khv)
-         !$acc exit data delete(khu, khv)
+         !$omp target exit data map(delete: khu, khv)
          deallocate (khu, khv)
       else
          call run_redi(grid, metrics, eos, rd, ms)

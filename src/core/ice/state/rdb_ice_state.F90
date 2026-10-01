@@ -896,31 +896,31 @@ contains
       !! host-side allocation).
       type(ocean_sea_ice_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%frazil_heat, this%heat_budget_frazil)
-      !$acc enter data copyin(this%part_size, this%m_ice, this%m_snow)
-      !$acc enter data copyin(this%enth_ice, this%enth_snow, this%sal_ice)
-      !$acc enter data copyin(this%m_frozen_diag, this%salt_flux_diag)
-      !$acc enter data copyin(this%atm_sf0, this%atm_dsfdt, this%atm_sw_dn, this%atm_fprec)
-      !$acc enter data copyin(this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
-      !$acc enter data copyin(this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
-      !$acc enter data copyin(this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
-      !$acc enter data copyin(this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag, &
-      !$acc&                   this%fprec_ocn_diag)
-      !$acc enter data copyin(this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
-      !$acc enter data copyin(this%u_ice, this%v_ice)
-      !$acc enter data copyin(this%str_d, this%str_t, this%str_s)
-      !$acc enter data copyin(this%tau_a_x, this%tau_a_y)
-      !$acc enter data copyin(this%fxoc, this%fyoc)
-      !$acc enter data copyin(this%tau_ocn_x, this%tau_ocn_y)
+      !$omp target enter data map(to: this%frazil_heat, this%heat_budget_frazil)
+      !$omp target enter data map(to: this%part_size, this%m_ice, this%m_snow)
+      !$omp target enter data map(to: this%enth_ice, this%enth_snow, this%sal_ice)
+      !$omp target enter data map(to: this%m_frozen_diag, this%salt_flux_diag)
+      !$omp target enter data map(to: this%atm_sf0, this%atm_dsfdt, this%atm_sw_dn, this%atm_fprec)
+      !$omp target enter data map(to: this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
+      !$omp target enter data map(to: this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
+      !$omp target enter data map(to: this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
+      !$omp target enter data map(to: this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag, &
+      !$omp&                   this%fprec_ocn_diag)
+      !$omp target enter data map(to: this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
+      !$omp target enter data map(to: this%u_ice, this%v_ice)
+      !$omp target enter data map(to: this%str_d, this%str_t, this%str_s)
+      !$omp target enter data map(to: this%tau_a_x, this%tau_a_y)
+      !$omp target enter data map(to: this%fxoc, this%fyoc)
+      !$omp target enter data map(to: this%tau_ocn_x, this%tau_ocn_y)
       ! tau_ocn_valid: NEVER mapped (host-only, register_scalar contract).
       if (this%dynamics) call this%evp_ws%enter_data()
       if (this%transport) then
-         !$acc enter data create(this%mca_ice, this%mca_snow)
-         !$acc enter data create(this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
-         !$acc enter data create(this%htot_work, this%hl_x_work, this%hr_x_work)
-         !$acc enter data create(this%hl_y_work, this%hr_y_work)
-         !$acc enter data create(this%uhtot_work, this%vhtot_work)
-         !$acc enter data create(this%tr_flux_x_work, this%tr_flux_y_work)
+         !$omp target enter data map(alloc: this%mca_ice, this%mca_snow)
+         !$omp target enter data map(alloc: this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
+         !$omp target enter data map(alloc: this%htot_work, this%hl_x_work, this%hr_x_work)
+         !$omp target enter data map(alloc: this%hl_y_work, this%hr_y_work)
+         !$omp target enter data map(alloc: this%uhtot_work, this%vhtot_work)
+         !$omp target enter data map(alloc: this%tr_flux_x_work, this%tr_flux_y_work)
       end if
    end subroutine ocean_sea_ice_enter_data_impl
 
@@ -964,31 +964,31 @@ contains
       !! there is nothing to unmap.
       type(ocean_sea_ice_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data copyout(this%frazil_heat)
-      !$acc exit data delete(this%heat_budget_frazil)
-      !$acc exit data copyout(this%part_size, this%m_ice, this%m_snow)
-      !$acc exit data copyout(this%enth_ice, this%enth_snow, this%sal_ice)
-      !$acc exit data copyout(this%m_frozen_diag, this%salt_flux_diag)
-      !$acc exit data delete(this%atm_sf0, this%atm_dsfdt, this%atm_sw_dn, this%atm_fprec)
-      !$acc exit data delete(this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
-      !$acc exit data delete(this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
-      !$acc exit data delete(this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
-      !$acc exit data copyout(this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag)
-      !$acc exit data delete(this%fprec_ocn_diag)
-      !$acc exit data delete(this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
-      !$acc exit data copyout(this%u_ice, this%v_ice)
-      !$acc exit data copyout(this%str_d, this%str_t, this%str_s)
-      !$acc exit data delete(this%tau_a_x, this%tau_a_y)
-      !$acc exit data copyout(this%fxoc, this%fyoc)
-      !$acc exit data copyout(this%tau_ocn_x, this%tau_ocn_y)
+      !$omp target exit data map(from: this%frazil_heat)
+      !$omp target exit data map(delete: this%heat_budget_frazil)
+      !$omp target exit data map(from: this%part_size, this%m_ice, this%m_snow)
+      !$omp target exit data map(from: this%enth_ice, this%enth_snow, this%sal_ice)
+      !$omp target exit data map(from: this%m_frozen_diag, this%salt_flux_diag)
+      !$omp target exit data map(delete: this%atm_sf0, this%atm_dsfdt, this%atm_sw_dn, this%atm_fprec)
+      !$omp target exit data map(delete: this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
+      !$omp target exit data map(delete: this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
+      !$omp target exit data map(delete: this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
+      !$omp target exit data map(from: this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag)
+      !$omp target exit data map(delete: this%fprec_ocn_diag)
+      !$omp target exit data map(delete: this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
+      !$omp target exit data map(from: this%u_ice, this%v_ice)
+      !$omp target exit data map(from: this%str_d, this%str_t, this%str_s)
+      !$omp target exit data map(delete: this%tau_a_x, this%tau_a_y)
+      !$omp target exit data map(from: this%fxoc, this%fyoc)
+      !$omp target exit data map(from: this%tau_ocn_x, this%tau_ocn_y)
       if (this%dynamics) call this%evp_ws%exit_data()
       if (this%transport) then
-         !$acc exit data delete(this%mca_ice, this%mca_snow)
-         !$acc exit data delete(this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
-         !$acc exit data delete(this%htot_work, this%hl_x_work, this%hr_x_work)
-         !$acc exit data delete(this%hl_y_work, this%hr_y_work)
-         !$acc exit data delete(this%uhtot_work, this%vhtot_work)
-         !$acc exit data delete(this%tr_flux_x_work, this%tr_flux_y_work)
+         !$omp target exit data map(delete: this%mca_ice, this%mca_snow)
+         !$omp target exit data map(delete: this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
+         !$omp target exit data map(delete: this%htot_work, this%hl_x_work, this%hr_x_work)
+         !$omp target exit data map(delete: this%hl_y_work, this%hr_y_work)
+         !$omp target exit data map(delete: this%uhtot_work, this%vhtot_work)
+         !$omp target exit data map(delete: this%tr_flux_x_work, this%tr_flux_y_work)
       end if
    end subroutine ocean_sea_ice_exit_data_impl
 
@@ -1163,15 +1163,15 @@ contains
       !! shape as `ocean_sea_ice_enter_data_impl`, no associate-leaf needed.
       type(evp_workspace_t), intent(inout) :: this
       if (.not. allocated(this%mis_w)) return
-      !$acc enter data create(this%mis_w, this%mice_w, this%ci_w)
-      !$acc enter data create(this%mis_in_w, this%mice_in_w, this%ci_in_w)
-      !$acc enter data create(this%pres_mice_w, this%del_sh_min_pr_w)
-      !$acc enter data create(this%sh_dd_w, this%sh_dt_w, this%zeta_w, this%del_sh_w)
-      !$acc enter data create(this%mask_t_w)
-      !$acc enter data create(this%mi_u_w, this%mask_u_w, this%u_tmp_w)
-      !$acc enter data create(this%mi_v_w, this%mask_v_w)
-      !$acc enter data create(this%a_u_w, this%a_v_w)
-      !$acc enter data create(this%sh_ds_w, this%mi_ratio_a_q_w, this%q_w, this%mask_q_w)
+      !$omp target enter data map(alloc: this%mis_w, this%mice_w, this%ci_w)
+      !$omp target enter data map(alloc: this%mis_in_w, this%mice_in_w, this%ci_in_w)
+      !$omp target enter data map(alloc: this%pres_mice_w, this%del_sh_min_pr_w)
+      !$omp target enter data map(alloc: this%sh_dd_w, this%sh_dt_w, this%zeta_w, this%del_sh_w)
+      !$omp target enter data map(alloc: this%mask_t_w)
+      !$omp target enter data map(alloc: this%mi_u_w, this%mask_u_w, this%u_tmp_w)
+      !$omp target enter data map(alloc: this%mi_v_w, this%mask_v_w)
+      !$omp target enter data map(alloc: this%a_u_w, this%a_v_w)
+      !$omp target enter data map(alloc: this%sh_ds_w, this%mi_ratio_a_q_w, this%q_w, this%mask_q_w)
    end subroutine evp_workspace_enter_data_impl
 
    subroutine evp_workspace_exit_data(this)
@@ -1186,15 +1186,15 @@ contains
       !! Reverse of `enter_data_impl` — pure scratch, `delete` throughout.
       type(evp_workspace_t), intent(inout) :: this
       if (.not. allocated(this%mis_w)) return
-      !$acc exit data delete(this%mis_w, this%mice_w, this%ci_w)
-      !$acc exit data delete(this%mis_in_w, this%mice_in_w, this%ci_in_w)
-      !$acc exit data delete(this%pres_mice_w, this%del_sh_min_pr_w)
-      !$acc exit data delete(this%sh_dd_w, this%sh_dt_w, this%zeta_w, this%del_sh_w)
-      !$acc exit data delete(this%mask_t_w)
-      !$acc exit data delete(this%mi_u_w, this%mask_u_w, this%u_tmp_w)
-      !$acc exit data delete(this%mi_v_w, this%mask_v_w)
-      !$acc exit data delete(this%a_u_w, this%a_v_w)
-      !$acc exit data delete(this%sh_ds_w, this%mi_ratio_a_q_w, this%q_w, this%mask_q_w)
+      !$omp target exit data map(delete: this%mis_w, this%mice_w, this%ci_w)
+      !$omp target exit data map(delete: this%mis_in_w, this%mice_in_w, this%ci_in_w)
+      !$omp target exit data map(delete: this%pres_mice_w, this%del_sh_min_pr_w)
+      !$omp target exit data map(delete: this%sh_dd_w, this%sh_dt_w, this%zeta_w, this%del_sh_w)
+      !$omp target exit data map(delete: this%mask_t_w)
+      !$omp target exit data map(delete: this%mi_u_w, this%mask_u_w, this%u_tmp_w)
+      !$omp target exit data map(delete: this%mi_v_w, this%mask_v_w)
+      !$omp target exit data map(delete: this%a_u_w, this%a_v_w)
+      !$omp target exit data map(delete: this%sh_ds_w, this%mi_ratio_a_q_w, this%q_w, this%mask_q_w)
    end subroutine evp_workspace_exit_data_impl
 
    subroutine evp_workspace_destroy(this)

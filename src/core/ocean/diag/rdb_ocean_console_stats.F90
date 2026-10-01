@@ -773,7 +773,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      !$acc parallel loop collapse(3) reduction(+:acc) present(h_layer, areaT)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:acc)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
@@ -801,7 +801,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      !$acc parallel loop collapse(3) reduction(+:acc) present(hTr, areaT)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:acc)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
@@ -838,8 +838,8 @@ contains
       acc_c = 0.0_wp
       acc_h = 0.0_wp
       if (ncat == 1) then
-         !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
-         !$acc&         private(ci, mice) present(wet_T, areaT, m_ice)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:acc_w, acc_c, acc_h) &
+         !$omp&         private(ci, mice)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                acc_w = acc_w + wet_T(i, j)*areaT(i, j)
@@ -852,8 +852,8 @@ contains
             end do
          end do
       else
-         !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
-         !$acc&         private(ci, mice, c) present(wet_T, areaT, part_size, m_ice)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:acc_w, acc_c, acc_h) &
+         !$omp&         private(ci, mice, c)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                acc_w = acc_w + wet_T(i, j)*areaT(i, j)
@@ -894,8 +894,8 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      !$acc parallel loop collapse(3) reduction(+:acc) &
-      !$acc&         private(uc, vc) present(h_layer, u_face, v_face, areaT)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:acc) &
+      !$omp&         private(uc, vc)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
@@ -944,7 +944,7 @@ contains
       !! per CLAUDE.md's NaN-blind-if/else-clamp gotcha: it is the
       !! dedicated bit-pattern test and is not subject to `-fast`
       !! reassociation.
-      !$acc routine seq
+      !$omp declare target
       real(real64), intent(in) :: r
       integer(int64), intent(out) :: e1, e2, e3, e4, e5, e6
       integer(int64), intent(out) :: epoison
@@ -1064,8 +1064,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(h_layer, areaT)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&         private(val, d1, d2, d3, d4, d5, d6, dpoison)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val = real(h_layer(i, j, k), real64)*real(areaT(i, j), real64)
@@ -1120,8 +1120,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, areaT)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&         private(val, d1, d2, d3, d4, d5, d6, dpoison)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val = real(hTr(i, j, k), real64)*real(areaT(i, j), real64)
@@ -1178,9 +1178,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, uc, vc, d1, d2, d3, d4, d5, d6, dpoison) &
-         !$acc&         present(h_layer, u_face, v_face, areaT)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&         private(val, uc, vc, d1, d2, d3, d4, d5, d6, dpoison)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                uc = 0.5_wp*(u_face(i, j, k) + u_face(i + 1, j, k))
@@ -1261,13 +1260,13 @@ contains
       ehp = 0_int64
 
       if (ncat == 1) then
-         !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(ci, mice, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) present(wet_T, areaT, m_ice)
+         !$omp target teams distribute parallel do collapse(2) &
+         !$omp&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
+         !$omp&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
+         !$omp&    private(ci, mice, val_w, val_c, val_h, &
+         !$omp&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
+         !$omp&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
+         !$omp&            dh1, dh2, dh3, dh4, dh5, dh6, dhp)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val_w = real(wet_T(i, j)*areaT(i, j), real64)
@@ -1304,14 +1303,13 @@ contains
             end do
          end do
       else
-         !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(ci, mice, c, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) &
-         !$acc&    present(wet_T, areaT, part_size, m_ice)
+         !$omp target teams distribute parallel do collapse(2) &
+         !$omp&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
+         !$omp&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
+         !$omp&    private(ci, mice, c, val_w, val_c, val_h, &
+         !$omp&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
+         !$omp&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
+         !$omp&            dh1, dh2, dh3, dh4, dh5, dh6, dhp)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                val_w = real(wet_T(i, j)*areaT(i, j), real64)
@@ -1372,7 +1370,7 @@ contains
       !! loops below — same module ⇒ NVHPC keeps it inlined (and it's a
       !! status-cadence cold path regardless).  Sole home of the CFL formula,
       !! shared by the gated + un-gated `compute_max_cfl` loops.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u_l, u_r, v_l, v_r, idx, idy, dt
       real(wp) :: cfl, uc, vc
       uc = 0.5_wp*(u_l + u_r)
@@ -1422,8 +1420,7 @@ contains
          ! Separate loop so the compiler keeps the !$acc parallel region clean
          ! (no absent-optional reference inside the parallel body).
          acc = 0.0_wp
-         !$acc parallel loop collapse(3) reduction(max:acc) &
-         !$acc&         present(u_face, v_face, h_layer, idxT, idyT)
+         !$omp target teams distribute parallel do collapse(3) reduction(max:acc)
          do k = 1, nz
             do j = j_lo, j_hi
                do i = i_lo, i_hi
@@ -1440,8 +1437,7 @@ contains
          ! Un-gated path: all layers contribute.  Byte-identical to the
          ! pre-Phase-3 implementation.
          acc = 0.0_wp
-         !$acc parallel loop collapse(3) reduction(max:acc) &
-         !$acc&         present(u_face, v_face, idxT, idyT)
+         !$omp target teams distribute parallel do collapse(3) reduction(max:acc)
          do k = 1, nz
             do j = j_lo, j_hi
                do i = i_lo, i_hi

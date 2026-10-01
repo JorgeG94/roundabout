@@ -360,16 +360,16 @@ contains
          ! Device round-trip: map the state + vcoord, remap on-device,
          ! pull the results back.  (eos is a flat POD passed by value —
          ! copied into the kernel automatically, no enter_data needed.)
-         !$acc enter data copyin(ms, vc, bt_eta, bt_H_ref)
+         !$omp target enter data map(to: ms, vc, bt_eta, bt_H_ref)
          call ms%enter_data()
          call vc%enter_data()
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref, &
                                          method=REMAP_PPM, eos=eos)
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update self(bt_eta)
+         !$omp target update from(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(bt_eta)
          call vc%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, vc, bt_eta, bt_H_ref)
+         !$omp target exit data map(delete: ms, vc, bt_eta, bt_H_ref)
 
          finite = .true.
          do k = 1, NZ

@@ -124,7 +124,7 @@ program bench_ocean
 
    ! ---- Device placement (same as the driver) ----
    call ocean_state_enter_data(os)
-   !$acc enter data copyin(sf)
+   !$omp target enter data map(to: sf)
    call sf%enter_data()
 
    call profiler_init(.true.)
@@ -170,7 +170,7 @@ program bench_ocean
    call profiler_report()
 
    call sf%exit_data()
-   !$acc exit data delete(sf)
+   !$omp target exit data map(delete: sf)
    call ocean_state_exit_data(os)
 
 contains
@@ -198,7 +198,7 @@ contains
                  u => os%multilayer%u_face_x_layer, &
                  v => os%multilayer%v_face_y_layer, &
                  eta => os%dyn%bt_work%bt_eta)
-         !$acc update self(h, u, v, eta)
+         !$omp target update from(h, u, v, eta)
          bad = ""
          if (.not. all(ieee_is_finite(h))) then
             bad = "h_layer"
@@ -227,7 +227,7 @@ contains
       associate (u => os%multilayer%u_face_x_layer, &
                  v => os%multilayer%v_face_y_layer, &
                  eta => os%dyn%bt_work%bt_eta)
-         !$acc update self(u, v, eta)
+         !$omp target update from(u, v, eta)
          eta_mx = maxval(abs(eta))
          u_mx = max(maxval(abs(u)), maxval(abs(v)))
       end associate
@@ -249,7 +249,7 @@ contains
       character(len=MAP_COLS) :: line
       ! associate-leaf so the D->H sync lands on ifx/flang (see report_progress).
       associate (eta => os%dyn%bt_work%bt_eta)
-         !$acc update self(eta)
+         !$omp target update from(eta)
       end associate
       ng = cfg%nghost
       nxp = cfg%nx

@@ -56,14 +56,14 @@ contains
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_dyn_t), intent(inout) :: dyn
       real(wp), intent(in) :: f_corner(:, :)  ! assumed-shape-ok: host-side test driver
-      !$acc enter data copyin(dyn, f_corner)
+      !$omp target enter data map(to: dyn, f_corner)
       call dyn%enter_data()
       call subtract_fast_cor_ref(grid, metrics, dyn%bt_work, f_corner, &
                                  OBC_WALL, OBC_WALL, OBC_WALL, OBC_WALL, &
                                  .true., .true., .true., .true.)
-      !$acc update self(dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast)
+      !$omp target update from(dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast)
       call dyn%exit_data()
-      !$acc exit data delete(dyn, f_corner)
+      !$omp target exit data map(delete: dyn, f_corner)
    end subroutine run_subtract
 
    subroutine test_uniform_flow(error)

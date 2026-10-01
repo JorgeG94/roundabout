@@ -251,11 +251,11 @@ contains
 
       associate (ms => engine%state%multilayer, mt => engine%state%metrics)
          if (after_steps) then
-            !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+            !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
             do it = 1, size(ms%tracers)
-               !$acc update self(ms%tracers(it)%hTr)
+               !$omp target update from(ms%tracers(it)%hTr)
             end do
-            !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
+            !$omp target update from(engine%state%dyn%bt_work%bt_eta_end)
          end if
          s%h = ms%h_layer
          s%u = ms%u_face_x_layer

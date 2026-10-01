@@ -301,7 +301,7 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%pv_flux_y)
       call scratch_3d_buffer_enter_data_impl(this%mass_flux_u)
       call scratch_3d_buffer_enter_data_impl(this%mass_flux_v)
-      !$acc enter data copyin(this%f_corner)
+      !$omp target enter data map(to: this%f_corner)
    end subroutine coriolis_adv_enter_data_impl
 
    subroutine coriolis_adv_exit_data(this)
@@ -320,7 +320,7 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%pv_flux_y)
       call scratch_3d_buffer_exit_data_impl(this%mass_flux_u)
       call scratch_3d_buffer_exit_data_impl(this%mass_flux_v)
-      !$acc exit data delete(this%f_corner)
+      !$omp target exit data map(delete: this%f_corner)
    end subroutine coriolis_adv_exit_data_impl
 
    subroutine coriolis_adv_set_beta_plane(this, grid, f_0, beta, y_ref)
@@ -1371,7 +1371,7 @@ contains
 
    pure function corner_abs_vort(ic, jc, k, nx, ny, nz, q_val, h, wet_T, areaT, &
                                  use_mom6_ch) result(av)
-      !$acc routine seq
+      !$omp declare target
       !! BOUND_CORIOLIS abs_vort recovery: return `(f+ζ)` at corner `(ic,jc)`
       !! by multiplying the PV `q_val` back by the corner thickness Pass 2
       !! divided abs_vort by — recovering `(f+ζ)` to round-off.  Recomputes
@@ -1444,7 +1444,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       nz = ms%nz_ml
 
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
          ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + &
                                       dt*this%pv_flux_x%data(i, j, k)
@@ -1453,9 +1453,9 @@ contains
          ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + &
                                       dt*this%pv_flux_y%data(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine coriolis_adv_apply_tendencies
 
@@ -1591,7 +1591,7 @@ contains
       !! Branchless apart from the upwind sign pick and MOM6's exact
       !! divide-guard (`|b| <= eps*tau` -> degenerate factor), both scalar
       !! per-lane predicates -- GPU-safe in `do concurrent`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: qm1, q0, qp1, qp2
       real(wp), intent(in) :: adv_vel
       real(wp) :: qf
@@ -1623,7 +1623,7 @@ contains
       !! (not an additive epsilon) to a dominant value when the smoothness
       !! indicator `b` is degenerate (`|b| <= eps*tau`), so a locally constant
       !! stencil takes over without a 0/0.  Shared by weno3/5/7.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: tau, b
       real(wp) :: fac
       if (abs(b) > PV_WENO_EPS_REL*tau) then
@@ -1634,21 +1634,21 @@ contains
    end function fac_weno
 
    pure function beta5_0(a, b, c) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c
       real(wp) :: w
       w = a*(10.0_wp*a - 31.0_wp*b + 11.0_wp*c) + b*(25.0_wp*b - 19.0_wp*c) + 4.0_wp*c*c
    end function beta5_0
 
    pure function beta5_1(a, b, c) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c
       real(wp) :: w
       w = a*(4.0_wp*a - 13.0_wp*b + 5.0_wp*c) + b*(13.0_wp*b - 13.0_wp*c) + 4.0_wp*c*c
    end function beta5_1
 
    pure function beta5_2(a, b, c) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c
       real(wp) :: w
       w = a*(4.0_wp*a - 19.0_wp*b + 11.0_wp*c) + b*(25.0_wp*b - 31.0_wp*c) + 10.0_wp*c*c
@@ -1660,7 +1660,7 @@ contains
       !! `q3,q4`, upwind-biased on `adv_vel`.  Three 3-point candidates blended by
       !! WENO-Z (ideal weights 3/10, 3/5, 1/10; tau = |b0-b2|).  Applied to the
       !! absolute vorticity directly (see `weno3_recon`).  Radius 3 (nghost>=3).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: q1, q2, q3, q4, q5, q6
       real(wp), intent(in) :: adv_vel
       real(wp) :: qf
@@ -1691,7 +1691,7 @@ contains
    end function weno5_recon
 
    pure function beta7_0(a, b, c, d) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c, d
       real(wp) :: w
       w = a*(2.107_wp*a - 9.402_wp*b + 7.042_wp*c - 1.854_wp*d) &
@@ -1700,7 +1700,7 @@ contains
    end function beta7_0
 
    pure function beta7_1(a, b, c, d) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c, d
       real(wp) :: w
       w = a*(0.547_wp*a - 2.522_wp*b + 1.922_wp*c - 0.494_wp*d) &
@@ -1709,7 +1709,7 @@ contains
    end function beta7_1
 
    pure function beta7_2(a, b, c, d) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c, d
       real(wp) :: w
       w = a*(0.267_wp*a - 1.642_wp*b + 1.602_wp*c - 0.494_wp*d) &
@@ -1718,7 +1718,7 @@ contains
    end function beta7_2
 
    pure function beta7_3(a, b, c, d) result(w)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, b, c, d
       real(wp) :: w
       w = a*(0.547_wp*a - 3.882_wp*b + 4.642_wp*c - 1.854_wp*d) &
@@ -1733,7 +1733,7 @@ contains
       !! WENO-Z (ideal weights 4/35, 18/35, 12/35, 1/35; Balsara-Shu smoothness;
       !! tau = |(b0-b3) + 3(b1-b2)|).  Applied to the absolute vorticity directly.
       !! Radius 4 (nghost>=4).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: q1, q2, q3, q4, q5, q6, q7, q8
       real(wp), intent(in) :: adv_vel
       real(wp) :: qf

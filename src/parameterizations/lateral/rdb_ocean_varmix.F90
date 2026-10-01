@@ -386,13 +386,13 @@ contains
    subroutine ocean_varmix_enter_data_impl(this)
       type(ocean_varmix_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%f2_dx2_u, this%f2_dx2_v)
-      !$acc enter data copyin(this%beta_dx2_u, this%beta_dx2_v)
-      !$acc enter data copyin(this%l2_u, this%l2_v)
-      !$acc enter data copyin(this%res_fn_u, this%res_fn_v)
-      !$acc enter data copyin(this%sn_u, this%sn_v)
-      !$acc enter data copyin(this%khth_u, this%khth_v)
-      !$acc enter data copyin(this%khtr_u, this%khtr_v)
+      !$omp target enter data map(to: this%f2_dx2_u, this%f2_dx2_v)
+      !$omp target enter data map(to: this%beta_dx2_u, this%beta_dx2_v)
+      !$omp target enter data map(to: this%l2_u, this%l2_v)
+      !$omp target enter data map(to: this%res_fn_u, this%res_fn_v)
+      !$omp target enter data map(to: this%sn_u, this%sn_v)
+      !$omp target enter data map(to: this%khth_u, this%khth_v)
+      !$omp target enter data map(to: this%khtr_u, this%khtr_v)
    end subroutine ocean_varmix_enter_data_impl
 
    subroutine ocean_varmix_exit_data(this)
@@ -406,13 +406,13 @@ contains
    subroutine ocean_varmix_exit_data_impl(this)
       type(ocean_varmix_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%khtr_u, this%khtr_v)
-      !$acc exit data delete(this%khth_u, this%khth_v)
-      !$acc exit data delete(this%sn_u, this%sn_v)
-      !$acc exit data delete(this%res_fn_u, this%res_fn_v)
-      !$acc exit data delete(this%l2_u, this%l2_v)
-      !$acc exit data delete(this%beta_dx2_u, this%beta_dx2_v)
-      !$acc exit data delete(this%f2_dx2_u, this%f2_dx2_v)
+      !$omp target exit data map(delete: this%khtr_u, this%khtr_v)
+      !$omp target exit data map(delete: this%khth_u, this%khth_v)
+      !$omp target exit data map(delete: this%sn_u, this%sn_v)
+      !$omp target exit data map(delete: this%res_fn_u, this%res_fn_v)
+      !$omp target exit data map(delete: this%l2_u, this%l2_v)
+      !$omp target exit data map(delete: this%beta_dx2_u, this%beta_dx2_v)
+      !$omp target exit data map(delete: this%f2_dx2_u, this%f2_dx2_v)
    end subroutine ocean_varmix_exit_data_impl
 
    ! =================================================================
@@ -586,7 +586,7 @@ contains
    end subroutine varmix_compute_impl
 
    pure function varmix_res_fn(f2_dx2, beta_dx2, cg1, alpha, p) result(r)
-      !$acc routine seq
+      !$omp declare target
       !! Divide-free resolution function for power `p` (even).  p=2:
       !! `dx_term/(dx_term + (alpha*cg1)^2)`; general even p:
       !! `dx_term^(p/2)/(dx_term^(p/2) + (alpha*cg1)^p)`.  `dx_term =
@@ -609,7 +609,7 @@ contains
 
    pure function varmix_assemble(kh_bg, cff, l2, sn, res_fn, resoln, &
                                  kh_min, kh_max, do_visbeck) result(kh)
-      !$acc routine seq
+      !$omp declare target
       !! Assembly chain in the load-bearing order: background + Visbeck
       !! addend, THEN Res_fn scale, THEN clamp.  `kh_max <= 0` ⇒ no upper cap.
       real(wp), intent(in) :: kh_bg, cff, l2, sn, res_fn, kh_min, kh_max

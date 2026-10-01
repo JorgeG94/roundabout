@@ -589,15 +589,15 @@ contains
       ! Phase 2 flux accumulators (allocated-but-unused at ratio=1; the
       ! windowed drain in Phase 6b reads/writes them on the device).
       if (allocated(this%uhtr)) then
-         !$acc enter data copyin(this%uhtr, this%vhtr)
+         !$omp target enter data map(to: this%uhtr, this%vhtr)
       end if
       ! Phase 2 (6b) windowed-drain workspace.
       if (allocated(this%hprev_work)) then
-         !$acc enter data copyin(this%h_win_start)
-         !$acc enter data copyin(this%hprev_work, this%uhr_x, this%uhr_y, &
-         !$acc                   this%uhh_x, this%uhh_y, this%tr_flux_x, &
-         !$acc                   this%tr_flux_y, this%tr_work, this%pal, &
-         !$acc                   this%par, this%pa6)
+         !$omp target enter data map(to: this%h_win_start)
+         !$omp target enter data map(to: this%hprev_work, this%uhr_x, this%uhr_y, &
+         !$omp                   this%uhh_x, this%uhh_y, this%tr_flux_x, &
+         !$omp                   this%tr_flux_y, this%tr_work, this%pal, &
+         !$omp                   this%par, this%pa6)
       end if
    end subroutine continuity_enter_data_impl
 
@@ -612,13 +612,13 @@ contains
    subroutine continuity_exit_data_impl(this)
       type(continuity_t), intent(inout) :: this
       if (allocated(this%hprev_work)) then
-         !$acc exit data delete(this%pa6, this%par, this%pal, this%tr_work, &
-         !$acc                  this%tr_flux_y, this%tr_flux_x, this%uhh_y, &
-         !$acc                  this%uhh_x, this%uhr_y, this%uhr_x, this%hprev_work)
-         !$acc exit data delete(this%h_win_start)
+         !$omp target exit data map(delete: this%pa6, this%par, this%pal, this%tr_work, &
+         !$omp                  this%tr_flux_y, this%tr_flux_x, this%uhh_y, &
+         !$omp                  this%uhh_x, this%uhr_y, this%uhr_x, this%hprev_work)
+         !$omp target exit data map(delete: this%h_win_start)
       end if
       if (allocated(this%uhtr)) then
-         !$acc exit data delete(this%vhtr, this%uhtr)
+         !$omp target exit data map(delete: this%vhtr, this%uhtr)
       end if
       call scratch_3d_buffer_exit_data_impl(this%mt_h_new)
       call scratch_3d_buffer_exit_data_impl(this%mt_grounded)
@@ -2712,7 +2712,7 @@ contains
                                                   nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
             end do
          end if
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
       ! Mid-Lie-split north fold (Appendix A): re-fold the centre fields
       ! (h_layer + tracers) AFTER the periodic wrap so the meridional
@@ -3417,7 +3417,7 @@ contains
    end subroutine tracer_advect_one_impl
 
    pure elemental function ppm_mirror_h(h_nbr, h_loc, w_nbr) result(h_out)
-      !$acc routine seq
+      !$omp declare target
       !! Mirror-h at a land neighbour (spec §14 C2 / MOM6's
       !! reflected-coast PPM): substitute the LOCAL cell's
       !! thickness (or tracer) for a LAND neighbour's held floor value
@@ -3438,7 +3438,7 @@ contains
    end function ppm_mirror_h
 
    pure elemental function volcfl_face(h_edge, dh, curv3, cfl) result(h_face)
-      !$acc routine seq
+      !$omp declare target
       !! MOM6 swept-volume continuity-PPM face thickness (Lin & Rood
       !! / MOM_continuity_PPM `flux_elem`).  Integrates the donor
       !! cell's reconstructed parabola over the swept volume rather
@@ -3470,7 +3470,7 @@ contains
    end function volcfl_face
 
    pure subroutine ppm_limited_slope(h_im1, h_i, h_ip1, dh)
-      !$acc routine seq
+      !$omp declare target
       !! Van Leer monotonized centred slope for cell i.  Returns 0
       !! at local extrema (sign change between left and right
       !! differences) and the slope-limited centred derivative
@@ -3497,7 +3497,7 @@ contains
    end subroutine ppm_limited_slope
 
    pure subroutine ppm_cell_limiter(h_centre, h_left, h_right)
-      !$acc routine seq
+      !$omp declare target
       !! Colella-Woodward 1984 eq 1.10 monotonic limiter on the
       !! parabolic profile in a single cell.  Three branches:
       !!
@@ -3527,7 +3527,7 @@ contains
    end subroutine ppm_cell_limiter
 
    pure subroutine ppm_limit_pos(h_centre, h_left, h_right, h_min)
-      !$acc routine seq
+      !$omp declare target
       !! Positivity-preserving limiter on the PPM reconstruction.
       !! Mirrors MOM6's `PPM_limit_pos`:
       !! when the parabolic fit predicts a minimum interior to the
@@ -3795,7 +3795,7 @@ contains
                                       per_x, per_y, fold_n, no_wait=.true.)
                call drain_wrap_centre(this%pa6, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, no_wait=.true.)
-               !$acc wait(1)
+               ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
                call drain_swept_flux_x(nx, ny, nz, metrics%areaT, this%uhh_x, &
                                        this%hprev_work, this%pal, this%par, this%pa6, &
                                        this%tr_flux_x)
@@ -3858,7 +3858,7 @@ contains
                                       per_x, per_y, fold_n, no_wait=.true.)
                call drain_wrap_centre(this%pa6, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, no_wait=.true.)
-               !$acc wait(1)
+               ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
                call drain_swept_flux_y(nx, ny, nz, metrics%areaT, this%uhh_y, &
                                        this%hprev_work, this%pal, this%par, this%pa6, &
                                        this%tr_flux_y)
@@ -4506,7 +4506,7 @@ contains
       !! `d = -1` (u<0, downwind toward -i).  Gathers the mirrored/clamped
       !! stencil in downwind-positive order and dispatches to the coastal
       !! swept-average face helper at the highest feasible rung.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nx, ny, nz, cc, jj, kk, d, avail_up, avail_down, rung_max
       real(wp), intent(in) :: tr(nx, ny, nz), wet_T(nx, ny)
       real(wp), intent(in) :: cfl
@@ -4554,7 +4554,7 @@ contains
                                   avail_up, avail_down, rung_max, cfl) result(conc)
       !! Meridional analogue of weno_face_conc_x.  `cc` is the donor cell
       !! (j-index); the stencil steps along j with `d = +1` (u>0) / `-1` (u<0).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nx, ny, nz, ii, cc, kk, d, avail_up, avail_down, rung_max
       real(wp), intent(in) :: tr(nx, ny, nz), wet_T(nx, ny)
       real(wp), intent(in) :: cfl

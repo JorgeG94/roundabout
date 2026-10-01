@@ -104,7 +104,7 @@ contains
       !! RAW `s` (no max(0,s) clamp) — faithful to SIS2, which clamps
       !! only in enth_from_TS. Do not unify with ice_enth_from_ts's
       !! internal t_fr.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: s
          !! Ice bulk salinity (PSU).
       real(wp) :: t_fr
@@ -115,7 +115,7 @@ contains
    pure elemental function ice_enthalpy_liquid_freeze(s) result(enth)
       !! Enthalpy (J/kg) of liquid water at the freezing point for
       !! salinity `s` — SIS2 `enthalpy_liquid_freeze` (SIS2_ice_thm.F90:1679).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: s
          !! Ice bulk salinity (PSU).
       real(wp) :: enth
@@ -128,7 +128,7 @@ contains
       !! `enthalpy_liquid` (SIS2_ice_thm.F90:1691). `s` is unused in
       !! this linear form; the argument is kept for SIS2 call-site
       !! parity (`enthalpy_liquid(T, S, ITV)`).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: t
          !! Water temperature (degC).
       real(wp), intent(in) :: s
@@ -146,7 +146,7 @@ contains
       !! T_fr*log(T_fr/T) form) is deliberately NOT ported — with
       !! ICE_CP_BRINE == ICE_CP_ICE it is unreachable, and dropping it
       !! keeps the map closed-form-invertible (see module docstring).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: t
          !! Ice temperature (degC).
       real(wp), intent(in) :: s
@@ -180,7 +180,7 @@ contains
       !! refinement (:1876-1933) is only needed when Cp_brine /= Cp_ice
       !! and is deliberately NOT ported. Uses RAW `s` for t_fr (no max),
       !! faithful to SIS2.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: en
          !! Ice specific enthalpy (J/kg).
       real(wp), intent(in) :: s

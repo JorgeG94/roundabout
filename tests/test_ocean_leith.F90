@@ -71,14 +71,14 @@ contains
       type(ocean_lateral_mix_t), intent(inout), optional :: lmix
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       if (present(lmix)) then
-         !$acc enter data copyin(lmix)
+         !$omp target enter data map(to: lmix)
          call lmix%enter_data()
       end if
       if (present(hv)) then
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
       end if
    end subroutine map_in
@@ -90,14 +90,14 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       if (present(hv)) then
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
       end if
       if (present(lmix)) then
          call lmix%exit_data()
-         !$acc exit data delete(lmix)
+         !$omp target exit data map(delete: lmix)
       end if
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -126,7 +126,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix=lmix)
       call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms)
-      !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
       call map_out(ms, metrics, lmix=lmix)
 
       max_x = maxval(abs(lmix%ah_face_x - AH_BG))
@@ -160,7 +160,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix=lmix)
       call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms)
-      !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
       call map_out(ms, metrics, lmix=lmix)
 
       max_x = maxval(abs(lmix%ah_face_x - AH_BG))
@@ -213,7 +213,7 @@ contains
 
          call map_in(ms, metrics, grid, lmix=lmix)
          call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms)
-         !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+         !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
          call map_out(ms, metrics, lmix=lmix)
 
          ! Some interior face should be > 0 (the floor at ah_bg=0).
@@ -269,7 +269,7 @@ contains
 
          call map_in(ms, metrics, grid, lmix=lmix)
          call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms)
-         !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+         !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
          call map_out(ms, metrics, lmix=lmix)
 
          call check(error, maxval(lmix%ah_face_x) <= AH_MAX + 1.0e-12_wp, &
@@ -324,7 +324,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix=lmix, hv=hv)
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, lmix)
-      !$acc update self(hv%du_visc%data)
+      !$omp target update from(hv%du_visc%data)
       call map_out(ms, metrics, lmix=lmix, hv=hv)
 
       ! Interior u-face Laplacian: u(i, j) = i² → d²u/dx² = 2/dx²,
@@ -368,7 +368,7 @@ contains
 
       call map_in(ms, metrics, grid, hv=hv)
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms)
-      !$acc update self(hv%du_visc%data)
+      !$omp target update from(hv%du_visc%data)
       call map_out(ms, metrics, hv=hv)
 
       expected_du_visc = NU_H*2.0_wp/(DX*DX)

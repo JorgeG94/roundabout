@@ -54,7 +54,7 @@ contains
       !! `rdb_ice_snow%ice_snowfall_ocean_share` instead of being added
       !! as orphan snow (which would trip `rdb_ice_transport`'s
       !! fail-loud `mca_snow > 0` where `mca_ice <= 0` reduction).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first -- decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)
@@ -79,7 +79,7 @@ contains
       !! `m_freeze = -bmelt/(enth_ocean - enth_freeze)`, mass-weighted
       !! mix of the bottom layer's enthalpy + salinity, `bmelt` reset
       !! to 0.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)
@@ -129,7 +129,7 @@ contains
       !! drains to `heat_to_ocn`. Snow/pond-free path — `tmelt` is
       !! assumed already >= 0 on entry (the caller folds any negative
       !! top-melt into `bmelt` upstream, SIS2:1159-1163).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)
@@ -182,7 +182,7 @@ contains
       !! from k=nk down to k=0. The prototype's separate `ablation`
       !! return is dropped (it is `h2o_ice_to_ocn` restricted to this
       !! call; PR 3b can re-derive it if needed).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)
@@ -241,7 +241,7 @@ contains
       !! two-pointer drain loop follows the SIS2/prototype branch
       !! order exactly, including the
       !! `(m_ice_avg - mlay_new(k2) > src_m(k1)) .or. (k2 == nk)` test.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)
@@ -353,7 +353,7 @@ contains
       !! flooding exchanges NOTHING with the ocean (SIS2_ice_thm.F90:1273,
       !! "There are no further heat or mass losses or gains by the
       !! ice+snow").
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_lay(0:nk)

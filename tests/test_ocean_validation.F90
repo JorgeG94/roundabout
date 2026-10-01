@@ -160,9 +160,9 @@ contains
       type(ocean_vdiff_t), intent(inout) :: vd
       type(ocean_vmix_t), intent(inout) :: vmix
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
       call ct%enter_data()
       call cor%enter_data()
       call pgf%enter_data()
@@ -202,9 +202,9 @@ contains
       call pgf%exit_data()
       call cor%exit_data()
       call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_all
 
    ! -----------------------------------------------------------------
@@ -288,14 +288,14 @@ contains
 
          call map_in_all(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
          call ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, DT, sf=sf)
-         !$acc update self(vmix%bl_depth)
+         !$omp target update from(vmix%bl_depth)
          i_probe = grid%nx_total/2
          j_probe = grid%ny_total/2
          bl_after_first = vmix%bl_depth(i_probe, j_probe)
          do step = 2, N_STEPS
             call ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, DT, sf=sf)
          end do
-         !$acc update self(vmix%bl_depth)
+         !$omp target update from(vmix%bl_depth)
          call map_out_all(metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
 
          bl_at_end = vmix%bl_depth(i_probe, j_probe)

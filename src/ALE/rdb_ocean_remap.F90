@@ -498,7 +498,6 @@ contains
    end subroutine remap_y_face_velocity
 
    pure subroutine rescale_anomaly_ke(nz, h_old_face, h_new_face, u_old_col, u_new_col)
-      !$acc routine seq
       !$omp declare target
       !! KE-conserving rescale of a remapped face-velocity column.
       !! The column remap conserves momentum (Σ h·u) but not KE; restore it by
@@ -730,26 +729,23 @@ contains
       n_bad = 0
       worst_rel = 0.0_wp
       worst_neg = 0.0_wp
-      !$acc parallel loop collapse(2) present(h_old, h_new) &
-      !$acc   reduction(+:n_bad) reduction(max:worst_rel) reduction(min:worst_neg) &
-      !$acc   private(k, s_old, s_new, rel, hmin)
-      do j = 1, ny
-         do i = 1, nx
-            s_old = 0.0_wp
-            s_new = 0.0_wp
-            hmin = 0.0_wp
-            do k = 1, nz
-               s_old = s_old + h_old(i, j, k)
-               s_new = s_new + h_new(i, j, k)
-               hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
-            end do
-            ! Relative to the LARGER total, so a land column (both zero)
-            ! scores 0 rather than tripping on a 0/0.
-            rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
-            worst_rel = max(worst_rel, rel)
-            worst_neg = min(worst_neg, hmin)
-            if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, s_old, s_new, rel, hmin) &
+         reduce(+:n_bad) reduce(max:worst_rel) reduce(min:worst_neg)
+         s_old = 0.0_wp
+         s_new = 0.0_wp
+         hmin = 0.0_wp
+         do k = 1, nz
+            s_old = s_old + h_old(i, j, k)
+            s_new = s_new + h_new(i, j, k)
+            hmin = min(hmin, h_old(i, j, k), h_new(i, j, k))
          end do
+         ! Relative to the LARGER total, so a land column (both zero)
+         ! scores 0 rather than tripping on a 0/0.
+         rel = abs(s_new - s_old)/max(abs(s_old), abs(s_new), H_DIV_EPS)
+         worst_rel = max(worst_rel, rel)
+         worst_neg = min(worst_neg, hmin)
+         if (hmin < 0.0_wp .or. rel > rel_tol) n_bad = n_bad + 1
       end do
    end subroutine ocean_remap_scan_preconditions
 
@@ -805,7 +801,7 @@ contains
    end subroutine ocean_remap_tracer_column
 
    pure subroutine remap_fold_filler_defect(nz, h_old_col, h_new_col, q_src, q_new)
-      !$acc routine seq
+      !$omp declare target
       !! On a column that carries a vanished layer (source or target), make
       !! the tracer remap conservative EXACTLY, not just on a matched column:
       !! the content the remap failed to place, `Σ q_src − Σ q_new`, is

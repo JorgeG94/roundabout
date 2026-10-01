@@ -164,7 +164,7 @@ contains
       type(ocean_dyn_t), intent(inout) :: dyn
       type(ocean_vcoord_t), intent(inout) :: vc
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -209,7 +209,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
    end subroutine map_out
 
    subroutine stamp_stratification(ms, eos, S_top, T_top, dSdk, dTdk)
@@ -574,7 +574,7 @@ contains
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc)
          ! Pull both h_layer and target_h to host.
-         !$acc update self(ms%h_layer, vc%target_h)
+         !$omp target update from(ms%h_layer, vc%target_h)
          ! After the remap, h_layer == target_h (the remap kernel writes
          ! ms%h_layer = vcoord%target_h — step 6 of ocean_apply_ale_remap_step).
          max_diff_after_thermo = maxval(abs(ms%h_layer - vc%target_h))
@@ -587,7 +587,7 @@ contains
          ! away from the stale target_h that was set during step 1.
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc)
-         !$acc update self(ms%h_layer, vc%target_h)
+         !$omp target update from(ms%h_layer, vc%target_h)
          max_diff_after_nonthermo = maxval(abs(ms%h_layer - vc%target_h))
          call check(error, max_diff_after_nonthermo > 1.0e-8_wp, &
                     "cadence ZSTAR: h_layer == target_h after non-thermo step (remap ran when it should not)")
@@ -676,7 +676,7 @@ contains
          do step = 1, 4
             call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                       va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc)
-            !$acc update self(ms%h_layer, vc%target_h)
+            !$omp target update from(ms%h_layer, vc%target_h)
             max_diff = maxval(abs(ms%h_layer - vc%target_h))
             call check(error, max_diff < 1.0e-10_wp, &
                        "cadence ratio=1: h_layer /= target_h (remap skipped on every-step path)")

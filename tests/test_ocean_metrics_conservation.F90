@@ -295,7 +295,7 @@ contains
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
          call make_spherical_metrics(metrics, grid, LON_W, LAT_S, DLON, DLAT, REARTH)
-         !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call ms%enter_data(); call ct%enter_data(); call cor%enter_data()
          call pgf%enter_data(); call hv%enter_data(); call bd%enter_data()
          call ss%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -311,7 +311,7 @@ contains
          call hd%exit_data(); call va%exit_data(); call ss%exit_data()
          call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
          call cor%exit_data(); call ct%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call destroy_cartesian_metrics(metrics)
 
          max_du = maxval(abs(ms%u_face_x_layer))
@@ -537,18 +537,18 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(coriolis_adv_t), intent(inout) :: cor
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
-      !$acc enter data copyin(ms, pgf, cor)
+      !$omp target enter data map(to: ms, pgf, cor)
       call ms%enter_data(); call pgf%enter_data(); call cor%enter_data()
       call ocean_eos_compute(eos, ms)
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
       call coriolis_adv_compute_tendencies(grid, metrics, cor, ms)
-      !$acc update self(pgf%dpdx_face%data, cor%pv_flux_x%data)
+      !$omp target update from(pgf%dpdx_face%data, cor%pv_flux_x%data)
       call cor%exit_data(); call pgf%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, pgf, cor)
+      !$omp target exit data map(delete: ms, pgf, cor)
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
    end subroutine eval_pgf_cor
 
    ! =================================================================
@@ -655,9 +655,9 @@ contains
    subroutine enter_hd(ms, hd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hd)
+      !$omp target enter data map(to: hd)
       call hd%enter_data()
    end subroutine enter_hd
 
@@ -665,15 +665,15 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
       call hd%exit_data()
-      !$acc exit data delete(hd)
+      !$omp target exit data map(delete: hd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine leave_hd
 
    subroutine enter(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms, ct)
+      !$omp target enter data map(to: ms, ct)
       call ms%enter_data()
       call ct%enter_data()
       ! metrics already entered by make_*_metrics.
@@ -687,7 +687,7 @@ contains
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct)
+      !$omp target exit data map(delete: ms, ct)
    end subroutine leave
 
 end module test_ocean_metrics_conservation

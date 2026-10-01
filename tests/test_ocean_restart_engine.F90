@@ -149,14 +149,14 @@ contains
       integer :: is, it
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
-      !$acc update self(engine%state%multilayer%h_layer)
-      !$acc update self(engine%state%multilayer%u_face_x_layer)
-      !$acc update self(engine%state%multilayer%v_face_y_layer)
-      !$acc update self(engine%state%multilayer%tracers(is)%hTr)
-      !$acc update self(engine%state%multilayer%tracers(it)%hTr)
-      !$acc update self(engine%state%barotropic%h)
-      !$acc update self(engine%state%barotropic%u_face_x)
-      !$acc update self(engine%state%barotropic%v_face_y)
+      !$omp target update from(engine%state%multilayer%h_layer)
+      !$omp target update from(engine%state%multilayer%u_face_x_layer)
+      !$omp target update from(engine%state%multilayer%v_face_y_layer)
+      !$omp target update from(engine%state%multilayer%tracers(is)%hTr)
+      !$omp target update from(engine%state%multilayer%tracers(it)%hTr)
+      !$omp target update from(engine%state%barotropic%h)
+      !$omp target update from(engine%state%barotropic%u_face_x)
+      !$omp target update from(engine%state%barotropic%v_face_y)
       snap%h = engine%state%multilayer%h_layer
       snap%u = engine%state%multilayer%u_face_x_layer
       snap%v = engine%state%multilayer%v_face_y_layer

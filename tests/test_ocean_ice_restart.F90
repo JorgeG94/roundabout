@@ -231,7 +231,7 @@ contains
       use rdb_ice_state, only: ocean_sea_ice_t
       type(ocean_sea_ice_t), intent(inout) :: ice
       ice%m_ice(MELT_I, MELT_J, 1) = 0.0_wp
-      !$acc update device(ice%m_ice)
+      !$omp target update to(ice%m_ice)
    end subroutine scripted_thermo
 
    pure function host_ci(m_ice, i, j) result(ci)
@@ -375,7 +375,7 @@ contains
       end if
       ! Precondition (ii): the blend is non-degenerate (some interior
       ! face differs from the pristine wind — proves a in (0,1] fired).
-      !$acc update self(A%surface_stress%tau_x, A%surface_stress%tau_y)
+      !$omp target update from(A%surface_stress%tau_x, A%surface_stress%tau_y)
       call check(error, &
                  maxval(abs(A%surface_stress%tau_x(NGHOST + 1:NGHOST + NXP + 1, &
                                                    NGHOST + 1:NGHOST + NYP) - TAU_A_X0)) &
@@ -390,8 +390,8 @@ contains
       ! Pull the device-computed write-time snapshot to the host BEFORE
       ! taking it — component arrays only (never `update self(A%ice)` /
       ! `update self(A%surface_stress)`, commit 72152870).
-      !$acc update self(A%surface_stress%tau_x, A%surface_stress%tau_y)
-      !$acc update self(A%ice%tau_ocn_x, A%ice%tau_ocn_y)
+      !$omp target update from(A%surface_stress%tau_x, A%surface_stress%tau_y)
+      !$omp target update from(A%ice%tau_ocn_x, A%ice%tau_ocn_y)
       allocate (tau_x_a, source=A%surface_stress%tau_x)
       allocate (tau_y_a, source=A%surface_stress%tau_y)
       allocate (tau_ocn_x_a, source=A%ice%tau_ocn_x)
@@ -452,17 +452,17 @@ contains
       call advance_ice(gA, A, sfA, par, mutate_ci=.false.)
       call advance_ice(gB, B, sfB, par, mutate_ci=.false.)
 
-      !$acc update self(A%surface_stress%tau_x, A%surface_stress%tau_y)
-      !$acc update self(B%surface_stress%tau_x, B%surface_stress%tau_y)
-      !$acc update self(A%ice%u_ice, A%ice%v_ice, A%ice%str_d, A%ice%str_t, A%ice%str_s)
-      !$acc update self(B%ice%u_ice, B%ice%v_ice, B%ice%str_d, B%ice%str_t, B%ice%str_s)
-      !$acc update self(A%ice%fxoc, A%ice%fyoc, B%ice%fxoc, B%ice%fyoc)
-      !$acc update self(A%multilayer%h_layer, A%multilayer%u_face_x_layer, &
-      !$acc&            A%multilayer%v_face_y_layer, A%barotropic%h, &
-      !$acc&            A%barotropic%u_face_x, A%barotropic%v_face_y)
-      !$acc update self(B%multilayer%h_layer, B%multilayer%u_face_x_layer, &
-      !$acc&            B%multilayer%v_face_y_layer, B%barotropic%h, &
-      !$acc&            B%barotropic%u_face_x, B%barotropic%v_face_y)
+      !$omp target update from(A%surface_stress%tau_x, A%surface_stress%tau_y)
+      !$omp target update from(B%surface_stress%tau_x, B%surface_stress%tau_y)
+      !$omp target update from(A%ice%u_ice, A%ice%v_ice, A%ice%str_d, A%ice%str_t, A%ice%str_s)
+      !$omp target update from(B%ice%u_ice, B%ice%v_ice, B%ice%str_d, B%ice%str_t, B%ice%str_s)
+      !$omp target update from(A%ice%fxoc, A%ice%fyoc, B%ice%fxoc, B%ice%fyoc)
+      !$omp target update from(A%multilayer%h_layer, A%multilayer%u_face_x_layer, &
+      !$omp&            A%multilayer%v_face_y_layer, A%barotropic%h, &
+      !$omp&            A%barotropic%u_face_x, A%barotropic%v_face_y)
+      !$omp target update from(B%multilayer%h_layer, B%multilayer%u_face_x_layer, &
+      !$omp&            B%multilayer%v_face_y_layer, B%barotropic%h, &
+      !$omp&            B%barotropic%u_face_x, B%barotropic%v_face_y)
 
       compare: block
          integer :: it
@@ -509,7 +509,7 @@ contains
          if (allocated(error)) exit compare
 
          do it = 1, size(A%multilayer%tracers)
-            !$acc update self(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
+            !$omp target update from(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
             ok = arrays_identical_3d(A%multilayer%tracers(it)%hTr, &
                                      B%multilayer%tracers(it)%hTr)
             call check(error, ok, "step (N+1): tracer hTr not bit-identical")
@@ -664,7 +664,7 @@ contains
          call advance_ice(gA, A, sfA, par, mutate_ci=.false.)
       end do
 
-      !$acc update self(A%ice%tau_ocn_x, A%ice%tau_ocn_y)
+      !$omp target update from(A%ice%tau_ocn_x, A%ice%tau_ocn_y)
       call check(error, all(A%ice%tau_ocn_x == 0.0_wp) .and. all(A%ice%tau_ocn_y == 0.0_wp), &
                  "dynamics=.false.: tau_ocn_x/y must stay exactly 0")
       if (allocated(error)) then
@@ -694,8 +694,8 @@ contains
       call advance_ice(gA, A, sfA, par, mutate_ci=.false.)
       call advance_ice(gB, B, sfB, par, mutate_ci=.false.)
 
-      !$acc update self(A%multilayer%h_layer, B%multilayer%h_layer)
-      !$acc update self(A%barotropic%h, B%barotropic%h)
+      !$omp target update from(A%multilayer%h_layer, B%multilayer%h_layer)
+      !$omp target update from(A%barotropic%h, B%barotropic%h)
       ok = arrays_identical_3d(A%multilayer%h_layer, B%multilayer%h_layer)
       call check(error, ok, "dynamics=.false.: h_layer not bit-identical")
       if (.not. allocated(error)) then

@@ -204,7 +204,7 @@ contains
       type(ocean_bottom_drag_t), intent(inout) :: this
       call scratch_3d_buffer_enter_data_impl(this%du_drag)
       call scratch_3d_buffer_enter_data_impl(this%dv_drag)
-      !$acc enter data copyin(this%lambda_bot_u, this%lambda_bot_v)
+      !$omp target enter data map(to: this%lambda_bot_u, this%lambda_bot_v)
       call scratch_3d_buffer_enter_data_impl(this%lambda_side_u)
       call scratch_3d_buffer_enter_data_impl(this%lambda_side_v)
    end subroutine ocean_bdrag_enter_data_impl
@@ -221,7 +221,7 @@ contains
       type(ocean_bottom_drag_t), intent(inout) :: this
       call scratch_3d_buffer_exit_data_impl(this%du_drag)
       call scratch_3d_buffer_exit_data_impl(this%dv_drag)
-      !$acc exit data delete(this%lambda_bot_u, this%lambda_bot_v)
+      !$omp target exit data map(delete: this%lambda_bot_u, this%lambda_bot_v)
       call scratch_3d_buffer_exit_data_impl(this%lambda_side_u)
       call scratch_3d_buffer_exit_data_impl(this%lambda_side_v)
    end subroutine ocean_bdrag_exit_data_impl
@@ -612,7 +612,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       nz = ms%nz_ml
 
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
          ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + &
                                       dt*this%du_drag%data(i, j, k)
@@ -621,9 +621,9 @@ contains
          ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + &
                                       dt*this%dv_drag%data(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_bottom_drag_apply_tendencies
 
@@ -780,7 +780,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       nz = ms%nz_ml
 
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
          ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k)/ &
                                       (1.0_wp + dt*this%lambda_side_u%data(i, j, k))
@@ -789,9 +789,9 @@ contains
          ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k)/ &
                                       (1.0_wp + dt*this%lambda_side_v%data(i, j, k))
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_channel_drag_apply_tendencies
 

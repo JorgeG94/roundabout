@@ -216,11 +216,11 @@ contains
             expected(k) = eos_density_point(eos, T_k(k), S_k(k), eos%p_ref)
          end do
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          call ocean_eos_compute(eos, ms)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          do k = 1, NZ
             mx = maxval(abs(ms%rho_layer(:, :, k) - expected(k)))

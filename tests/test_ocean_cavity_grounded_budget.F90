@@ -450,7 +450,7 @@ contains
          associate (hl => ms%h_layer, wm => ms%wet_mask, &
                     hsal => ms%tracers(ms%idx_salinity)%hTr, &
                     htmp => ms%tracers(ms%idx_temperature)%hTr)
-            !$acc update self(hl, wm, hsal, htmp) if_present
+            !$omp target update from(hl, wm, hsal, htmp)
             allocate (h, source=hl)
             allocate (hs, source=hsal)
             allocate (ht, source=htmp)

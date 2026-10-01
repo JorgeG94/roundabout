@@ -680,19 +680,19 @@ contains
          do i = 1, this%nvars
             associate (v => this%vars(i))
                if (allocated(v%output_buffer)) then
-                  !$acc enter data copyin(v%output_buffer)
+                  !$omp target enter data map(to: v%output_buffer)
                end if
                if (allocated(v%accumulator)) then
-                  !$acc enter data copyin(v%accumulator)
+                  !$omp target enter data map(to: v%accumulator)
                end if
                if (allocated(v%layer_buffer)) then
-                  !$acc enter data copyin(v%layer_buffer)
+                  !$omp target enter data map(to: v%layer_buffer)
                end if
                if (allocated(v%mask)) then
-                  !$acc enter data copyin(v%mask)
+                  !$omp target enter data map(to: v%mask)
                   associate (m => v%mask)
                      if (allocated(m%weight)) then
-                        !$acc enter data copyin(m%weight)
+                        !$omp target enter data map(to: m%weight)
                      end if
                   end associate
                end if
@@ -700,19 +700,19 @@ contains
          end do
       end if
       if (allocated(this%z_out)) then
-         !$acc enter data copyin(this%z_out)
+         !$omp target enter data map(to: this%z_out)
       end if
       if (allocated(this%rho_out)) then
-         !$acc enter data copyin(this%rho_out)
+         !$omp target enter data map(to: this%rho_out)
       end if
       if (allocated(this%sigma_out)) then
-         !$acc enter data copyin(this%sigma_out)
+         !$omp target enter data map(to: this%sigma_out)
       end if
       if (allocated(this%zstar_out)) then
-         !$acc enter data copyin(this%zstar_out)
+         !$omp target enter data map(to: this%zstar_out)
       end if
       if (allocated(this%send_buf)) then
-         !$acc enter data copyin(this%send_buf)
+         !$omp target enter data map(to: this%send_buf)
       end if
       this%on_device = .true.
    end subroutine ocean_diag_enter_data_impl
@@ -733,19 +733,19 @@ contains
       integer :: i
       if (.not. this%is_init) return
       if (allocated(this%send_buf)) then
-         !$acc exit data delete(this%send_buf)
+         !$omp target exit data map(delete: this%send_buf)
       end if
       if (allocated(this%zstar_out)) then
-         !$acc exit data delete(this%zstar_out)
+         !$omp target exit data map(delete: this%zstar_out)
       end if
       if (allocated(this%sigma_out)) then
-         !$acc exit data delete(this%sigma_out)
+         !$omp target exit data map(delete: this%sigma_out)
       end if
       if (allocated(this%rho_out)) then
-         !$acc exit data delete(this%rho_out)
+         !$omp target exit data map(delete: this%rho_out)
       end if
       if (allocated(this%z_out)) then
-         !$acc exit data delete(this%z_out)
+         !$omp target exit data map(delete: this%z_out)
       end if
       if (allocated(this%vars)) then
          do i = this%nvars, 1, -1
@@ -753,19 +753,19 @@ contains
                if (allocated(v%mask)) then
                   associate (m => v%mask)
                      if (allocated(m%weight)) then
-                        !$acc exit data delete(m%weight)
+                        !$omp target exit data map(delete: m%weight)
                      end if
                   end associate
-                  !$acc exit data delete(v%mask)
+                  !$omp target exit data map(delete: v%mask)
                end if
                if (allocated(v%layer_buffer)) then
-                  !$acc exit data delete(v%layer_buffer)
+                  !$omp target exit data map(delete: v%layer_buffer)
                end if
                if (allocated(v%accumulator)) then
-                  !$acc exit data delete(v%accumulator)
+                  !$omp target exit data map(delete: v%accumulator)
                end if
                if (allocated(v%output_buffer)) then
-                  !$acc exit data delete(v%output_buffer)
+                  !$omp target exit data map(delete: v%output_buffer)
                end if
             end associate
          end do
@@ -1135,7 +1135,7 @@ contains
                                   vmin, vmax, vmean, n_valid, n_total)
 
             ! The NetCDF write below needs the array itself on the host.
-            !$acc update self(v%output_buffer) if_present
+            !$omp target update from(v%output_buffer)
             v%fire_count = v%fire_count + 1
             write (line, "(A,F12.2,A,A,A,A,A,ES13.5,A,ES13.5,A,ES13.5)") &
                "[diag] t=", t_emit, " ", trim(v%name), " [", trim(v%units), &

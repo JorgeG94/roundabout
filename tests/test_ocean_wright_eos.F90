@@ -63,11 +63,11 @@ contains
    subroutine run_wright(ms, eos)
       type(multilayer_state_t), intent(inout) :: ms
       type(eos_t), intent(in) :: eos
-      !$acc enter data copyin(ms, eos)
+      !$omp target enter data map(to: ms, eos)
       call ms%enter_data()
       call ocean_eos_compute(eos, ms)
       call ms%exit_data()
-      !$acc exit data delete(ms, eos)
+      !$omp target exit data map(delete: ms, eos)
    end subroutine run_wright
 
    subroutine fill_uniform(ms, h_val, t_val, s_val)

@@ -195,8 +195,8 @@ contains
    subroutine ocean_mle_enter_data_impl(this)
       type(ocean_mle_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%b_ml, this%htot_ml, this%mld_filtered)
-      !$acc enter data copyin(this%uhml, this%vhml)
+      !$omp target enter data map(to: this%b_ml, this%htot_ml, this%mld_filtered)
+      !$omp target enter data map(to: this%uhml, this%vhml)
    end subroutine ocean_mle_enter_data_impl
 
    subroutine ocean_mle_exit_data(this)
@@ -210,8 +210,8 @@ contains
    subroutine ocean_mle_exit_data_impl(this)
       type(ocean_mle_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%vhml, this%uhml)
-      !$acc exit data delete(this%mld_filtered, this%htot_ml, this%b_ml)
+      !$omp target exit data map(delete: this%vhml, this%uhml)
+      !$omp target exit data map(delete: this%mld_filtered, this%htot_ml, this%b_ml)
    end subroutine ocean_mle_exit_data_impl
 
    ! =================================================================
@@ -219,7 +219,7 @@ contains
    ! =================================================================
 
    pure function mle_mu_shape(sigma) result(mu)
-      !$acc routine seq
+      !$omp declare target
       !! FK08 second-order vertical structure function mu(sigma).
       !! sigma in [-1,0]: 0 = surface interface, -1 = ML base.  mu = 0 at
       !! sigma=0 (surface) and sigma <= -1 (ML base); peaks near sigma=-0.5.
@@ -235,7 +235,7 @@ contains
    end function mle_mu_shape
 
    pure function mle_timescale(f_abs, ustar, h_vel, ce, f_floor, use_mom_mixrate) result(ts)
-      !$acc routine seq
+      !$omp declare target
       !! FK restratification timescale [s].
       !!
       !! Bare (default, T1 analytic gate):
@@ -262,7 +262,7 @@ contains
 
    pure function mle_bodner_timescale(f_abs, ustar, h_vel, b0_face, ds, &
                                       cr, mstar, nstar, min_wstar2) result(ts)
-      !$acc routine seq
+      !$omp declare target
       !! Bodner et al. (2023) frontogenesis-arrest MLE timescale [s]:
       !!     ts = Cr · ds · |f| · h / w'u'
       !! where the frontal-arrest length enters inline as `|f|·h/w'u'` and
@@ -282,7 +282,7 @@ contains
    end function mle_bodner_timescale
 
    pure subroutine mle_layer_weights(h_face, nz, h_vel, a)
-      !$acc routine seq
+      !$omp declare target
       !! Per-layer transport weights a(k) = mu(sigma_top) - mu(sigma_bot),
       !! walking surface (k=nz) -> bed (k=1).  `sum_k a(k) = mu(0)-mu(-1) = 0`
       !! (closed cell => conservation).  Layers below the ML base get
@@ -587,7 +587,7 @@ contains
    end subroutine mle_compute_transports
 
    pure function mle_face_ustar_x(ss, rho0, i, j) result(ustar)
-      !$acc routine seq
+      !$omp declare target
       !! Friction velocity u* = sqrt(|tau|/rho0) at the u-face from the
       !! surface wind stress, averaged onto the face.  Only used by the
       !! FK11 mixrate form.  Returns 0 if stress fields are absent.
@@ -606,7 +606,7 @@ contains
    end function mle_face_ustar_x
 
    pure function mle_face_ustar_y(ss, rho0, i, j) result(ustar)
-      !$acc routine seq
+      !$omp declare target
       !! u* at the v-face; mirror of `mle_face_ustar_x`.
       type(ocean_surface_stress_t), intent(in) :: ss
       real(wp), intent(in) :: rho0

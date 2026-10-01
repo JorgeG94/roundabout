@@ -141,18 +141,18 @@ contains
       real(wp), intent(in) :: roll_factor
       logical, intent(out) :: ok
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_transport_step(grid, metrics, ms, ice, dt, adv_substeps, roll_factor, ok)
       associate (ps => ice%part_size, mi => ice%m_ice, msn => ice%m_snow, &
                  ei => ice%enth_ice, es => ice%enth_snow, si => ice%sal_ice, &
                  ui => ice%u_ice, vi => ice%v_ice)
-         !$acc update self(ps, mi, msn, ei, es, si, ui, vi)
+         !$omp target update from(ps, mi, msn, ei, es, si, ui, vi)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_transport
 
    subroutine run_transport_truncated(grid, metrics, ms, ice, dt, adv_substeps, roll_factor, &
@@ -183,10 +183,10 @@ contains
       allocate (mi_u(nx + 1, ny), source=1.0_wp)
       allocate (mi_v(nx, ny + 1), source=1.0_wp)
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
-      !$acc enter data copyin(mi_u, mi_v)
+      !$omp target enter data map(to: mi_u, mi_v)
 
       call evp_truncate_final_impl(metrics%areaT, metrics%dy_cu, metrics%dx_cv, mi_u, mi_v, &
                                    ms%u_face_x_layer(:, :, NZ), ms%v_face_y_layer(:, :, NZ), &
@@ -197,13 +197,13 @@ contains
       associate (ps => ice%part_size, mi => ice%m_ice, msn => ice%m_snow, &
                  ei => ice%enth_ice, es => ice%enth_snow, si => ice%sal_ice, &
                  ui => ice%u_ice, vi => ice%v_ice)
-         !$acc update self(ps, mi, msn, ei, es, si, ui, vi)
+         !$omp target update from(ps, mi, msn, ei, es, si, ui, vi)
       end associate
 
-      !$acc exit data delete(mi_u, mi_v)
+      !$omp target exit data map(delete: mi_u, mi_v)
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       deallocate (mi_u, mi_v)
    end subroutine run_transport_truncated
 
@@ -464,7 +464,7 @@ contains
          ms_a%v_face_y_layer(:, :, NZ) = 0.0_wp
          ms_b%v_face_y_layer(:, :, NZ) = 0.0_wp
 
-         !$acc enter data copyin(ms_a, ms_b)
+         !$omp target enter data map(to: ms_a, ms_b)
          call ms_a%enter_data()
          call ms_b%enter_data()
          call ice_a%enter_data()
@@ -475,13 +475,13 @@ contains
          end do
          associate (pa => ice_a%part_size, ma => ice_a%m_ice, sa => ice_a%m_snow, &
                     pb => ice_b%part_size, mb => ice_b%m_ice, sb => ice_b%m_snow)
-            !$acc update self(pa, ma, sa, pb, mb, sb)
+            !$omp target update from(pa, ma, sa, pb, mb, sb)
          end associate
          call ice_a%exit_data()
          call ice_b%exit_data()
          call ms_a%exit_data()
          call ms_b%exit_data()
-         !$acc exit data delete(ms_a, ms_b)
+         !$omp target exit data map(delete: ms_a, ms_b)
 
          ! A(i) must equal B(mirror(i)) to ~1e-13.
          worst = 0.0_wp
@@ -965,11 +965,11 @@ contains
          call check(error,.not. ice%is_init, "is_init must be false before the no-op call")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          call ice_transport_step(grid, metrics, ms, ice, DT_THERM, 1, 1.0_wp, ok)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          call check(error, ok, "disabled: guarded no-op still returns ok=.true.")
          if (allocated(error)) exit checks

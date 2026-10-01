@@ -262,16 +262,16 @@ contains
       ! clauses).
       call this%metrics_w%enter_data()
       ! Wide Coriolis.
-      !$acc enter data copyin(this%f_corner_w)
+      !$omp target enter data map(to: this%f_corner_w)
       ! Wide shadow arrays.
-      !$acc enter data copyin(this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
-      !$acc enter data copyin(this%w_eta_sum, this%w_eta_end)
-      !$acc enter data copyin(this%w_ubt, this%w_ubt_prev, this%w_rem_u)
-      !$acc enter data copyin(this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
-      !$acc enter data copyin(this%w_vbt, this%w_vbt_prev, this%w_rem_v)
-      !$acc enter data copyin(this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
-      !$acc enter data copyin(this%w_zeta)
-      !$acc enter data copyin(this%w_force_u, this%w_force_v)
+      !$omp target enter data map(to: this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
+      !$omp target enter data map(to: this%w_eta_sum, this%w_eta_end)
+      !$omp target enter data map(to: this%w_ubt, this%w_ubt_prev, this%w_rem_u)
+      !$omp target enter data map(to: this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
+      !$omp target enter data map(to: this%w_vbt, this%w_vbt_prev, this%w_rem_v)
+      !$omp target enter data map(to: this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
+      !$omp target enter data map(to: this%w_zeta)
+      !$omp target enter data map(to: this%w_force_u, this%w_force_v)
    end subroutine bt_wide_enter_data_impl
 
    subroutine bt_wide_exit_data(this)
@@ -286,15 +286,15 @@ contains
    subroutine bt_wide_exit_data_impl(this)
       !! Non-polymorphic exit_data body.
       type(bt_wide_t), intent(inout) :: this
-      !$acc exit data delete(this%w_force_u, this%w_force_v)
-      !$acc exit data delete(this%w_zeta)
-      !$acc exit data delete(this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
-      !$acc exit data delete(this%w_vbt, this%w_vbt_prev, this%w_rem_v)
-      !$acc exit data delete(this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
-      !$acc exit data delete(this%w_ubt, this%w_ubt_prev, this%w_rem_u)
-      !$acc exit data delete(this%w_eta_sum, this%w_eta_end)
-      !$acc exit data delete(this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
-      !$acc exit data delete(this%f_corner_w)
+      !$omp target exit data map(delete: this%w_force_u, this%w_force_v)
+      !$omp target exit data map(delete: this%w_zeta)
+      !$omp target exit data map(delete: this%w_vbt_sum, this%w_vhbt_sum, this%w_vhbt, this%w_vbt_end)
+      !$omp target exit data map(delete: this%w_vbt, this%w_vbt_prev, this%w_rem_v)
+      !$omp target exit data map(delete: this%w_ubt_sum, this%w_uhbt_sum, this%w_uhbt, this%w_ubt_end)
+      !$omp target exit data map(delete: this%w_ubt, this%w_ubt_prev, this%w_rem_u)
+      !$omp target exit data map(delete: this%w_eta_sum, this%w_eta_end)
+      !$omp target exit data map(delete: this%w_eta, this%w_H_ref, this%w_eta_new, this%w_ke)
+      !$omp target exit data map(delete: this%f_corner_w)
       ! Wide metrics: delegate (see enter_data note — one-level names only).
       call this%metrics_w%exit_data()
    end subroutine bt_wide_exit_data_impl

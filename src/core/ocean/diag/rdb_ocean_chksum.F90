@@ -155,8 +155,8 @@ contains
       ! offload transfer/popcnt, this ONE accumulation moves to a
       ! window-cadence host fallback (`!$acc update self(arr)` then a plain
       ! host loop) — a localized one-block change; the FP reductions stay.
-      !$acc parallel loop collapse(3) reduction(+:s, nf, bsum) &
-      !$acc   reduction(min:mn) reduction(max:mx)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:s, nf, bsum) &
+      !$omp   reduction(min:mn) reduction(max:mx)
       do k = 1, nz
          do j = ja, jb
             do i = ia, ib
@@ -202,8 +202,8 @@ contains
       bsum = 0_int64
       ! GPU-offload risk on transfer/popcnt in a device region — see the
       ! matching note in chksum_stats_3d for the host-fallback recipe.
-      !$acc parallel loop collapse(2) reduction(+:s, nf, bsum) &
-      !$acc   reduction(min:mn) reduction(max:mx)
+      !$omp target teams distribute parallel do collapse(2) reduction(+:s, nf, bsum) &
+      !$omp   reduction(min:mn) reduction(max:mx)
       do j = ja, jb
          do i = ia, ib
             s = s + arr(i, j)
@@ -376,7 +376,7 @@ contains
       character(len=16) :: tname
 
       if (.not. chksum_active(probe, step)) return
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call rdb_debug_chksum(grid, ms%h_layer, label, "h_layer", stage, step, probe, LOC_H)
       call rdb_debug_chksum(grid, ms%u_face_x_layer, label, "u_face", stage, step, probe, LOC_U)
       call rdb_debug_chksum(grid, ms%v_face_y_layer, label, "v_face", stage, step, probe, LOC_V)
@@ -404,7 +404,7 @@ contains
       integer, intent(in) :: stage, step
 
       if (.not. chksum_active(probe, step)) return
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call rdb_debug_chksum(grid, bt_work%bt_eta, label, "bt_eta", stage, step, probe, LOC_H)
       call rdb_debug_chksum(grid, bt_work%bt_ubt_end, label, "bt_ubt_end", stage, step, &
                             probe, LOC_U)
@@ -441,9 +441,9 @@ contains
       real(wp) :: amax
 
       if (.not. chksum_active(probe, step)) return
-      !$acc wait
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(visc_rem_u, visc_rem_v)
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
+      !$omp target update from(visc_rem_u, visc_rem_v)
 
       ig = grid%nghost
       i0 = ig + 1

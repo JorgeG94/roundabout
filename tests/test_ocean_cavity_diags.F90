@@ -140,14 +140,14 @@ contains
       ! mem:separate trap (2): these were host-filled AFTER the map, so
       ! they owe an explicit push.  COMPONENT arrays only — never the
       ! aggregate.
-      !$acc update device(state%metrics%cover_frac, state%metrics%z_draft)
-      !$acc update device(state%cavity_flux%active, state%cavity_flux%melt, &
-      !$acc&              state%cavity_flux%t_far, state%cavity_flux%s_far, &
-      !$acc&              state%cavity_flux%t_b, state%cavity_flux%s_b, &
-      !$acc&              state%cavity_flux%ustar, state%cavity_flux%gamma_t, &
-      !$acc&              state%cavity_flux%gamma_s, state%cavity_flux%status)
-      !$acc update device(state%multilayer%p_top)
-      !$acc update device(state%dyn%bt_work%bt_H_ref, state%dyn%bt_work%bt_eta)
+      !$omp target update to(state%metrics%cover_frac, state%metrics%z_draft)
+      !$omp target update to(state%cavity_flux%active, state%cavity_flux%melt, &
+      !$omp&              state%cavity_flux%t_far, state%cavity_flux%s_far, &
+      !$omp&              state%cavity_flux%t_b, state%cavity_flux%s_b, &
+      !$omp&              state%cavity_flux%ustar, state%cavity_flux%gamma_t, &
+      !$omp&              state%cavity_flux%gamma_s, state%cavity_flux%status)
+      !$omp target update to(state%multilayer%p_top)
+      !$omp target update to(state%dyn%bt_work%bt_H_ref, state%dyn%bt_work%bt_eta)
    end subroutine setup_cavity_state
 
    subroutine teardown_cavity_state(state)
@@ -165,7 +165,7 @@ contains
       real(wp), intent(out) :: buf(NX + 2, NY + 2, 1)
 
       buf = 0.0_wp
-      !$acc enter data copyin(buf)
+      !$omp target enter data map(to: buf)
       select case (which)
       case (1); call fill_melt(state, buf)
       case (2); call fill_melt_m_per_yr(state, buf)
@@ -181,8 +181,8 @@ contains
       case (12); call fill_z_draft(state, buf)
       case (13); call fill_water_column(state, buf)
       end select
-      !$acc update self(buf)
-      !$acc exit data delete(buf)
+      !$omp target update from(buf)
+      !$omp target exit data map(delete: buf)
    end subroutine run_fill
 
    pure function rel_diff(a, b) result(r)

@@ -318,10 +318,10 @@ contains
       allocate (oh_buf_send_west(cap_ew), oh_buf_recv_west(cap_ew))
       allocate (oh_buf_send_north(cap_ns), oh_buf_recv_north(cap_ns))
       allocate (oh_buf_send_south(cap_ns), oh_buf_recv_south(cap_ns))
-      !$acc enter data create(oh_buf_send_east, oh_buf_recv_east, &
-      !$acc&                  oh_buf_send_west, oh_buf_recv_west, &
-      !$acc&                  oh_buf_send_north, oh_buf_recv_north, &
-      !$acc&                  oh_buf_send_south, oh_buf_recv_south)
+      !$omp target enter data map(alloc: oh_buf_send_east, oh_buf_recv_east, &
+      !$omp&                  oh_buf_send_west, oh_buf_recv_west, &
+      !$omp&                  oh_buf_send_north, oh_buf_recv_north, &
+      !$omp&                  oh_buf_send_south, oh_buf_recv_south)
 
       oh_cap_ew = cap_ew
       oh_cap_ns = cap_ns
@@ -332,10 +332,10 @@ contains
       !! Release buffers and topology state.  Idempotent.
       if (.not. oh_initialised) return
 
-      !$acc exit data delete(oh_buf_send_east, oh_buf_recv_east, &
-      !$acc&                 oh_buf_send_west, oh_buf_recv_west, &
-      !$acc&                 oh_buf_send_north, oh_buf_recv_north, &
-      !$acc&                 oh_buf_send_south, oh_buf_recv_south)
+      !$omp target exit data map(delete: oh_buf_send_east, oh_buf_recv_east, &
+      !$omp&                 oh_buf_send_west, oh_buf_recv_west, &
+      !$omp&                 oh_buf_send_north, oh_buf_recv_north, &
+      !$omp&                 oh_buf_send_south, oh_buf_recv_south)
       deallocate (oh_buf_send_east, oh_buf_recv_east)
       deallocate (oh_buf_send_west, oh_buf_recv_west)
       deallocate (oh_buf_send_north, oh_buf_recv_north)
@@ -421,27 +421,27 @@ contains
 
       ! Grow E/W if needed (exit-delete / dealloc / alloc / enter-create)
       if (need_ew > oh_cap_ew) then
-         !$acc exit data delete(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                 oh_buf_send_west, oh_buf_recv_west)
+         !$omp target exit data map(delete: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                 oh_buf_send_west, oh_buf_recv_west)
          deallocate (oh_buf_send_east, oh_buf_recv_east)
          deallocate (oh_buf_send_west, oh_buf_recv_west)
          allocate (oh_buf_send_east(need_ew), oh_buf_recv_east(need_ew))
          allocate (oh_buf_send_west(need_ew), oh_buf_recv_west(need_ew))
-         !$acc enter data create(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                  oh_buf_send_west, oh_buf_recv_west)
+         !$omp target enter data map(alloc: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                  oh_buf_send_west, oh_buf_recv_west)
          oh_cap_ew = need_ew
       end if
 
       ! Grow N/S if needed
       if (need_ns > oh_cap_ns) then
-         !$acc exit data delete(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                 oh_buf_send_south, oh_buf_recv_south)
+         !$omp target exit data map(delete: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                 oh_buf_send_south, oh_buf_recv_south)
          deallocate (oh_buf_send_north, oh_buf_recv_north)
          deallocate (oh_buf_send_south, oh_buf_recv_south)
          allocate (oh_buf_send_north(need_ns), oh_buf_recv_north(need_ns))
          allocate (oh_buf_send_south(need_ns), oh_buf_recv_south(need_ns))
-         !$acc enter data create(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                  oh_buf_send_south, oh_buf_recv_south)
+         !$omp target enter data map(alloc: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                  oh_buf_send_south, oh_buf_recv_south)
          oh_cap_ns = need_ns
       end if
 
@@ -479,27 +479,27 @@ contains
 
       ! Grow E/W buffers if needed
       if (need_ew > oh_cap_ew) then
-         !$acc exit data delete(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                 oh_buf_send_west, oh_buf_recv_west)
+         !$omp target exit data map(delete: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                 oh_buf_send_west, oh_buf_recv_west)
          deallocate (oh_buf_send_east, oh_buf_recv_east)
          deallocate (oh_buf_send_west, oh_buf_recv_west)
          allocate (oh_buf_send_east(need_ew), oh_buf_recv_east(need_ew))
          allocate (oh_buf_send_west(need_ew), oh_buf_recv_west(need_ew))
-         !$acc enter data create(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                  oh_buf_send_west, oh_buf_recv_west)
+         !$omp target enter data map(alloc: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                  oh_buf_send_west, oh_buf_recv_west)
          oh_cap_ew = need_ew
       end if
 
       ! Grow N/S buffers if needed
       if (need_ns > oh_cap_ns) then
-         !$acc exit data delete(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                 oh_buf_send_south, oh_buf_recv_south)
+         !$omp target exit data map(delete: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                 oh_buf_send_south, oh_buf_recv_south)
          deallocate (oh_buf_send_north, oh_buf_recv_north)
          deallocate (oh_buf_send_south, oh_buf_recv_south)
          allocate (oh_buf_send_north(need_ns), oh_buf_recv_north(need_ns))
          allocate (oh_buf_send_south(need_ns), oh_buf_recv_south(need_ns))
-         !$acc enter data create(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                  oh_buf_send_south, oh_buf_recv_south)
+         !$omp target enter data map(alloc: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                  oh_buf_send_south, oh_buf_recv_south)
          oh_cap_ns = need_ns
       end if
 
@@ -615,7 +615,7 @@ contains
          ! Pack: buffer index = ((L-1)*nyt + (j-1))*ng + k
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -625,7 +625,7 @@ contains
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -658,20 +658,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, strip_ew_3d, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, strip_ew_3d, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, strip_ew_3d, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, strip_ew_3d, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -696,7 +696,7 @@ contains
          ! Unpack: X pass fills west ghosts (i=1..ng) and east ghosts (i=ng+nxl+1..nxt)
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -706,7 +706,7 @@ contains
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -749,7 +749,7 @@ contains
          ! Pack: buffer index = ((L-1)*ng + (k-1))*nxt + j
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt
@@ -759,7 +759,7 @@ contains
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt
@@ -792,20 +792,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, strip_ns_3d, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, strip_ns_3d, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, strip_ns_3d, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, strip_ns_3d, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -830,7 +830,7 @@ contains
          ! Unpack: Y pass fills south ghosts (j=1..ng) and north ghosts (j=ng+nyl+1..nyt)
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt
@@ -840,7 +840,7 @@ contains
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt
@@ -961,7 +961,7 @@ contains
          ! Pack: buffer index = ((L-1)*nyt + (j-1))*(ng+1) + k
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng + 1
@@ -972,7 +972,7 @@ contains
             end if
             ! Send west: ng per j-row per layer (first ng interior faces after west-seam copy)
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -1005,20 +1005,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, (ng + 1)*nyt*nz, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt*nz, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt*nz, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, (ng + 1)*nyt*nz, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -1043,7 +1043,7 @@ contains
          if (on_device) then
             ! Unpack recv-from-west: fills i=1..ng+1 (west ghosts + seam-copy)
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng + 1
@@ -1054,7 +1054,7 @@ contains
             end if
             ! Unpack recv-from-east: fills east ghosts i=ng+nxl+2..ng+nxl+ng+1
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do j = 1, nyt
                      do k = 1, ng
@@ -1097,7 +1097,7 @@ contains
          ! Pack Y-pass: buffer index = ((L-1)*ng + (k-1))*nxt1 + j
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt1
@@ -1107,7 +1107,7 @@ contains
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt1
@@ -1140,20 +1140,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, nxt1*ng*nz, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, nxt1*ng*nz, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, nxt1*ng*nz, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, nxt1*ng*nz, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -1177,7 +1177,7 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt1
@@ -1187,7 +1187,7 @@ contains
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do j = 1, nxt1
@@ -1305,7 +1305,7 @@ contains
          ! Pack X-pass: buffer index = ((L-1)*ng + (k-1))*nyt1 + i
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do i = 1, nyt1
@@ -1315,7 +1315,7 @@ contains
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do i = 1, nyt1
@@ -1348,20 +1348,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, ng*nyt1*nz, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt1*nz, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt1*nz, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, ng*nyt1*nz, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -1385,7 +1385,7 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do i = 1, nyt1
@@ -1395,7 +1395,7 @@ contains
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do k = 1, ng
                      do i = 1, nyt1
@@ -1440,7 +1440,7 @@ contains
          if (on_device) then
             ! Send north: ng+1 per i-col per layer
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do i = 1, nxt
                      do k = 1, ng + 1
@@ -1451,7 +1451,7 @@ contains
             end if
             ! Send south: ng per i-col per layer
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do i = 1, nxt
                      do k = 1, ng
@@ -1484,20 +1484,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, (ng + 1)*nxt*nz, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, ng*nxt*nz, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, ng*nxt*nz, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, (ng + 1)*nxt*nz, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -1522,7 +1522,7 @@ contains
          if (on_device) then
             ! Recv from south (ng+1 per i-col per layer) → fills south ghosts + seam-copy j=1..ng+1
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do i = 1, nxt
                      do k = 1, ng + 1
@@ -1533,7 +1533,7 @@ contains
             end if
             ! Recv from north (ng per i-col per layer) → fills north ghosts j=ng+nyl+2..ng+nyl+ng+1
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(3)
                do L = 1, nz
                   do i = 1, nxt
                      do k = 1, ng
@@ -1641,26 +1641,26 @@ contains
                           "a mid-run device reallocation (breaks UCX IPC handle reuse).")
 
       if (need_ew > oh_cap_ew) then
-         !$acc exit data delete(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                 oh_buf_send_west, oh_buf_recv_west)
+         !$omp target exit data map(delete: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                 oh_buf_send_west, oh_buf_recv_west)
          deallocate (oh_buf_send_east, oh_buf_recv_east)
          deallocate (oh_buf_send_west, oh_buf_recv_west)
          allocate (oh_buf_send_east(need_ew), oh_buf_recv_east(need_ew))
          allocate (oh_buf_send_west(need_ew), oh_buf_recv_west(need_ew))
-         !$acc enter data create(oh_buf_send_east, oh_buf_recv_east, &
-         !$acc&                  oh_buf_send_west, oh_buf_recv_west)
+         !$omp target enter data map(alloc: oh_buf_send_east, oh_buf_recv_east, &
+         !$omp&                  oh_buf_send_west, oh_buf_recv_west)
          oh_cap_ew = need_ew
       end if
 
       if (need_ns > oh_cap_ns) then
-         !$acc exit data delete(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                 oh_buf_send_south, oh_buf_recv_south)
+         !$omp target exit data map(delete: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                 oh_buf_send_south, oh_buf_recv_south)
          deallocate (oh_buf_send_north, oh_buf_recv_north)
          deallocate (oh_buf_send_south, oh_buf_recv_south)
          allocate (oh_buf_send_north(need_ns), oh_buf_recv_north(need_ns))
          allocate (oh_buf_send_south(need_ns), oh_buf_recv_south(need_ns))
-         !$acc enter data create(oh_buf_send_north, oh_buf_recv_north, &
-         !$acc&                  oh_buf_send_south, oh_buf_recv_south)
+         !$omp target enter data map(alloc: oh_buf_send_north, oh_buf_recv_north, &
+         !$omp&                  oh_buf_send_south, oh_buf_recv_south)
          oh_cap_ns = need_ns
       end if
 
@@ -1904,7 +1904,7 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      oh_buf_send_east((j - 1)*ng + k) = fld(nxl + k, j)
@@ -1912,7 +1912,7 @@ contains
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      oh_buf_send_west((j - 1)*ng + k) = fld(ng + k, j)
@@ -1939,20 +1939,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, strip_ew, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, strip_ew, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, strip_ew, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, strip_ew, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -1975,7 +1975,7 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      fld(k, j) = oh_buf_recv_west((j - 1)*ng + k)
@@ -1983,7 +1983,7 @@ contains
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      fld(ng + nxl + k, j) = oh_buf_recv_east((j - 1)*ng + k)
@@ -2019,7 +2019,7 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt
                      oh_buf_send_north((k - 1)*nxt + j) = fld(j, nyl + k)
@@ -2027,7 +2027,7 @@ contains
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt
                      oh_buf_send_south((k - 1)*nxt + j) = fld(j, ng + k)
@@ -2054,20 +2054,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, strip_ns, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, strip_ns, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, strip_ns, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, strip_ns, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -2090,7 +2090,7 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt
                      fld(j, k) = oh_buf_recv_south((k - 1)*nxt + j)
@@ -2098,7 +2098,7 @@ contains
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt
                      fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt + j)
@@ -2172,7 +2172,7 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng + 1
                      oh_buf_send_east((j - 1)*(ng + 1) + k) = fld(nxl + k, j)
@@ -2180,7 +2180,7 @@ contains
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      oh_buf_send_west((j - 1)*ng + k) = fld(ng + 1 + k, j)
@@ -2207,20 +2207,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, (ng + 1)*nyt, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, (ng + 1)*nyt, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -2243,7 +2243,7 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng + 1
                      fld(k, j) = oh_buf_recv_west((j - 1)*(ng + 1) + k)
@@ -2251,7 +2251,7 @@ contains
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do j = 1, nyt
                   do k = 1, ng
                      fld(ng + nxl + 1 + k, j) = oh_buf_recv_east((j - 1)*ng + k)
@@ -2287,7 +2287,7 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt1
                      oh_buf_send_north((k - 1)*nxt1 + j) = fld(j, nyl + k)
@@ -2295,7 +2295,7 @@ contains
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt1
                      oh_buf_send_south((k - 1)*nxt1 + j) = fld(j, ng + k)
@@ -2322,20 +2322,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, nxt1*ng, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, nxt1*ng, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, nxt1*ng, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, nxt1*ng, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -2358,7 +2358,7 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt1
                      fld(j, k) = oh_buf_recv_south((k - 1)*nxt1 + j)
@@ -2366,7 +2366,7 @@ contains
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do j = 1, nxt1
                      fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt1 + j)
@@ -2440,7 +2440,7 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do i = 1, nyt1
                      oh_buf_send_east((k - 1)*nyt1 + i) = fld(nxl + k, i)
@@ -2448,7 +2448,7 @@ contains
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do i = 1, nyt1
                      oh_buf_send_west((k - 1)*nyt1 + i) = fld(ng + k, i)
@@ -2475,20 +2475,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_e) then
-               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               !$omp target data use_device_addr(oh_buf_send_east, oh_buf_recv_east)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_east, ng*nyt1, rk_e, TAG_OC_W_TO_E, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt1, rk_e, TAG_OC_E_TO_W, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_w) then
-               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               !$omp target data use_device_addr(oh_buf_send_west, oh_buf_recv_west)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt1, rk_w, TAG_OC_E_TO_W, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_west, ng*nyt1, rk_w, TAG_OC_W_TO_E, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_e) then
@@ -2511,7 +2511,7 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do i = 1, nyt1
                      fld(k, i) = oh_buf_recv_west((k - 1)*nyt1 + i)
@@ -2519,7 +2519,7 @@ contains
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do k = 1, ng
                   do i = 1, nyt1
                      fld(ng + nxl + k, i) = oh_buf_recv_east((k - 1)*nyt1 + i)
@@ -2555,7 +2555,7 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do i = 1, nxt
                   do k = 1, ng + 1
                      oh_buf_send_north((i - 1)*(ng + 1) + k) = fld(i, nyl + k)
@@ -2563,7 +2563,7 @@ contains
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do i = 1, nxt
                   do k = 1, ng
                      oh_buf_send_south((i - 1)*ng + k) = fld(i, ng + 1 + k)
@@ -2590,20 +2590,20 @@ contains
          nreq = 0
          if (on_device) then
             if (need_n) then
-               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               !$omp target data use_device_addr(oh_buf_send_north, oh_buf_recv_north)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_north, (ng + 1)*nxt, rk_n, TAG_OC_S_TO_N, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_north, ng*nxt, rk_n, TAG_OC_N_TO_S, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
             if (need_s) then
-               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               !$omp target data use_device_addr(oh_buf_send_south, oh_buf_recv_south)
                nreq = nreq + 1
                call HALO_ISEND_N(comm, oh_buf_send_south, ng*nxt, rk_s, TAG_OC_N_TO_S, reqs(nreq))
                nreq = nreq + 1
                call HALO_IRECV_N(comm, oh_buf_recv_south, (ng + 1)*nxt, rk_s, TAG_OC_S_TO_N, reqs(nreq))
-               !$acc end host_data
+               !$omp end target data
             end if
          else
             if (need_n) then
@@ -2626,7 +2626,7 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do i = 1, nxt
                   do k = 1, ng + 1
                      fld(i, k) = oh_buf_recv_south((i - 1)*(ng + 1) + k)
@@ -2634,7 +2634,7 @@ contains
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
+               !$omp target teams distribute parallel do collapse(2)
                do i = 1, nxt
                   do k = 1, ng
                      fld(i, ng + nyl + 1 + k) = oh_buf_recv_north((i - 1)*ng + k)

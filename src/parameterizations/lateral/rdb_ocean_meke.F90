@@ -327,14 +327,14 @@ contains
    subroutine ocean_meke_enter_data_impl(this)
       type(ocean_meke_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%meke, this%kh_diff, this%le, this%ku)
-      !$acc enter data copyin(this%i_mass, this%depth_tot)
-      !$acc enter data copyin(this%bottom_fac2, this%barotr_fac2, this%src)
-      !$acc enter data copyin(this%uflux, this%vflux, this%del2)
-      !$acc enter data copyin(this%mass_ws, this%rd_ws, this%f_centre)
-      !$acc enter data copyin(this%u_bbl2, this%ke_diss_ws)
-      !$acc enter data copyin(this%sn_u_ws, this%sn_v_ws)
-      !$acc enter data copyin(this%baro_hu, this%baro_hv)
+      !$omp target enter data map(to: this%meke, this%kh_diff, this%le, this%ku)
+      !$omp target enter data map(to: this%i_mass, this%depth_tot)
+      !$omp target enter data map(to: this%bottom_fac2, this%barotr_fac2, this%src)
+      !$omp target enter data map(to: this%uflux, this%vflux, this%del2)
+      !$omp target enter data map(to: this%mass_ws, this%rd_ws, this%f_centre)
+      !$omp target enter data map(to: this%u_bbl2, this%ke_diss_ws)
+      !$omp target enter data map(to: this%sn_u_ws, this%sn_v_ws)
+      !$omp target enter data map(to: this%baro_hu, this%baro_hv)
    end subroutine ocean_meke_enter_data_impl
 
    subroutine ocean_meke_exit_data(this)
@@ -348,14 +348,14 @@ contains
    subroutine ocean_meke_exit_data_impl(this)
       type(ocean_meke_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%baro_hu, this%baro_hv)
-      !$acc exit data delete(this%sn_u_ws, this%sn_v_ws)
-      !$acc exit data delete(this%u_bbl2, this%ke_diss_ws)
-      !$acc exit data delete(this%mass_ws, this%rd_ws, this%f_centre)
-      !$acc exit data delete(this%uflux, this%vflux, this%del2)
-      !$acc exit data delete(this%bottom_fac2, this%barotr_fac2, this%src)
-      !$acc exit data delete(this%i_mass, this%depth_tot)
-      !$acc exit data delete(this%meke, this%kh_diff, this%le, this%ku)
+      !$omp target exit data map(delete: this%baro_hu, this%baro_hv)
+      !$omp target exit data map(delete: this%sn_u_ws, this%sn_v_ws)
+      !$omp target exit data map(delete: this%u_bbl2, this%ke_diss_ws)
+      !$omp target exit data map(delete: this%mass_ws, this%rd_ws, this%f_centre)
+      !$omp target exit data map(delete: this%uflux, this%vflux, this%del2)
+      !$omp target exit data map(delete: this%bottom_fac2, this%barotr_fac2, this%src)
+      !$omp target exit data map(delete: this%i_mass, this%depth_tot)
+      !$omp target exit data map(delete: this%meke, this%kh_diff, this%le, this%ku)
    end subroutine ocean_meke_exit_data_impl
 
    subroutine ocean_meke_set_f_centre(this, grid, f_centre)
@@ -734,7 +734,7 @@ contains
 
    pure function meke_inv_lmix(ueddy, sn, beta, area, rd_over_dx, depth, cdrag, &
                                a_deform, a_rhines, a_eady, a_frict, a_grid) result(inv_l)
-      !$acc routine seq
+      !$omp declare target
       !! Harmonic inverse mixing length `1/Lmix = Sum aX/LX` over the five
       !! length scales (deformation, frictional, Rhines, Eady, grid).  Each
       !! scale is gated `aX*LX > 0` so a zero weight or a degenerate scale

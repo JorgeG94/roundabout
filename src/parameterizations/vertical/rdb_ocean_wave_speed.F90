@@ -161,19 +161,19 @@ contains
    subroutine ocean_wave_speed_enter_data_impl(this)
       type(ocean_wave_speed_t), intent(inout) :: this
       if (allocated(this%f_centre)) then
-         !$acc enter data copyin(this%f_centre)
+         !$omp target enter data map(to: this%f_centre)
       end if
       if (allocated(this%beta_centre)) then
-         !$acc enter data copyin(this%beta_centre)
+         !$omp target enter data map(to: this%beta_centre)
       end if
       if (allocated(this%cg1)) then
-         !$acc enter data copyin(this%cg1)
+         !$omp target enter data map(to: this%cg1)
       end if
       if (allocated(this%rd)) then
-         !$acc enter data copyin(this%rd)
+         !$omp target enter data map(to: this%rd)
       end if
       if (allocated(this%rd_over_dx)) then
-         !$acc enter data copyin(this%rd_over_dx)
+         !$omp target enter data map(to: this%rd_over_dx)
       end if
    end subroutine ocean_wave_speed_enter_data_impl
 
@@ -188,19 +188,19 @@ contains
    subroutine ocean_wave_speed_exit_data_impl(this)
       type(ocean_wave_speed_t), intent(inout) :: this
       if (allocated(this%rd_over_dx)) then
-         !$acc exit data delete(this%rd_over_dx)
+         !$omp target exit data map(delete: this%rd_over_dx)
       end if
       if (allocated(this%rd)) then
-         !$acc exit data delete(this%rd)
+         !$omp target exit data map(delete: this%rd)
       end if
       if (allocated(this%cg1)) then
-         !$acc exit data delete(this%cg1)
+         !$omp target exit data map(delete: this%cg1)
       end if
       if (allocated(this%beta_centre)) then
-         !$acc exit data delete(this%beta_centre)
+         !$omp target exit data map(delete: this%beta_centre)
       end if
       if (allocated(this%f_centre)) then
-         !$acc exit data delete(this%f_centre)
+         !$omp target exit data map(delete: this%f_centre)
       end if
    end subroutine ocean_wave_speed_exit_data_impl
 
@@ -266,7 +266,7 @@ contains
       !! 0 for land / homogeneous / `kc<2` / sub-floor columns.
       !! Gathers+flips surface-down, backtracking convective merge,
       !! symmetric tridiag, fixed-budget Sturm-count bisection.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: h_rak(NZ_STACK_MAX), rho_rak(NZ_STACK_MAX)
       real(wp), intent(in) :: rho0
@@ -384,7 +384,7 @@ contains
    pure integer function sturm_count(igu, igl, kc, lam) result(n_chg)
       !! Number of Sturm-sequence sign changes (eigenvalues < lam) via
       !! the three-term determinant recursion with dynamic rescaling.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: igu(NZ_STACK_MAX + 1), igl(NZ_STACK_MAX + 1)
       integer, intent(in) :: kc
       real(wp), intent(in) :: lam
@@ -419,7 +419,7 @@ contains
 
    pure integer function det_sign(igu, igl, kc, lam) result(sgn)
       !! Sign of det(M(lam)) on rows 2..kc (Sturm/Hallberg recursion).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: igu(NZ_STACK_MAX + 1), igl(NZ_STACK_MAX + 1)
       integer, intent(in) :: kc
       real(wp), intent(in) :: lam
@@ -450,7 +450,7 @@ contains
       !! Reduces to cg1/|f| away from the equator and sqrt(cg1/(2*beta))
       !! at f=0; a small inside-sqrt guard + denominator floor handle
       !! f = beta = 0.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: cg1, fabs, beta
       real(wp) :: rd
       real(wp) :: denom

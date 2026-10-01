@@ -119,9 +119,9 @@ contains
    subroutine map_in(ms, cor)
       type(multilayer_state_t), intent(inout) :: ms
       type(coriolis_adv_t), intent(inout) :: cor
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(cor)
+      !$omp target enter data map(to: cor)
       call cor%enter_data()
    end subroutine map_in
 
@@ -129,9 +129,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(coriolis_adv_t), intent(inout) :: cor
       call cor%exit_data()
-      !$acc exit data delete(cor)
+      !$omp target exit data map(delete: cor)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -415,16 +415,16 @@ contains
          ms%h_layer = 1.0_wp
          ms%u_face_x_layer = U0
          ms%v_face_y_layer = 0.0_wp
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor_beta)
+         !$omp target enter data map(to: cor_beta)
          call cor_beta%enter_data()
          call coriolis_adv_compute_tendencies(grid, metrics, cor_beta, ms)
-         !$acc update self(cor_beta%pv_flux_y%data)
+         !$omp target update from(cor_beta%pv_flux_y%data)
          call cor_beta%exit_data()
-         !$acc exit data delete(cor_beta)
+         !$omp target exit data map(delete: cor_beta)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          i_probe = grid%nx_total/2
          j_south = grid%nghost + 2
@@ -442,16 +442,16 @@ contains
          ! ---- f-plane control ----
          cor_fplane%f_0 = F0
          call cor_fplane%init(grid, nz_ml=NZ)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor_fplane)
+         !$omp target enter data map(to: cor_fplane)
          call cor_fplane%enter_data()
          call coriolis_adv_compute_tendencies(grid, metrics, cor_fplane, ms)
-         !$acc update self(cor_fplane%pv_flux_y%data)
+         !$omp target update from(cor_fplane%pv_flux_y%data)
          call cor_fplane%exit_data()
-         !$acc exit data delete(cor_fplane)
+         !$omp target exit data map(delete: cor_fplane)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          dv_dt_fplane = cor_fplane%pv_flux_y%data(i_probe, j_south, 1)
          ! f-plane uniform: north and south probes must agree.
@@ -516,12 +516,12 @@ contains
       cor_A%f_0 = F0
       call cor_A%init(grid, nz_ml=NZ)
       ms%h_layer = 1.0_wp
-      !$acc enter data copyin(ms, cor_A)
+      !$omp target enter data map(to: ms, cor_A)
       call ms%enter_data(); call cor_A%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_A, ms)
-      !$acc update self(cor_A%pv_flux_y%data)
+      !$omp target update from(cor_A%pv_flux_y%data)
       call cor_A%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_A)
+      !$omp target exit data map(delete: ms, cor_A)
 
       ! ---- Run B: h heavily weighted toward i <= i_jump ----
       cor_B%f_0 = F0
@@ -537,12 +537,12 @@ contains
             end do
          end do
       end do
-      !$acc enter data copyin(ms, cor_B)
+      !$omp target enter data map(to: ms, cor_B)
       call ms%enter_data(); call cor_B%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_B, ms)
-      !$acc update self(cor_B%pv_flux_y%data)
+      !$omp target update from(cor_B%pv_flux_y%data)
       call cor_B%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_B)
+      !$omp target exit data map(delete: ms, cor_B)
 
       ! Probe a v-face straddling the u-jump.  i = i_jump puts the
       ! east-west neighbours one on each side of the discontinuity.
@@ -592,24 +592,24 @@ contains
       ! ---- Sadourny run ----
       cor_sad%f_0 = F0
       call cor_sad%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_sad)
+      !$omp target enter data map(to: ms, cor_sad)
       call ms%enter_data(); call cor_sad%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_sad, ms)
-      !$acc update self(cor_sad%pv_flux_x%data, cor_sad%pv_flux_y%data)
+      !$omp target update from(cor_sad%pv_flux_x%data, cor_sad%pv_flux_y%data)
       call cor_sad%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_sad)
+      !$omp target exit data map(delete: ms, cor_sad)
 
       ! ---- HK run on the same state ----
       cor_hk%f_0 = F0
       cor_hk%pv_variant = PV_VARIANT_SADOURNY_HK
       call cor_hk%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_hk)
+      !$omp target enter data map(to: ms, cor_hk)
       call ms%enter_data(); call cor_hk%enter_data()
       call coriolis_adv_compute_tendencies_hk(grid, metrics, cor_hk, ms, &
                                               ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_hk%pv_flux_x%data, cor_hk%pv_flux_y%data)
+      !$omp target update from(cor_hk%pv_flux_x%data, cor_hk%pv_flux_y%data)
       call cor_hk%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_hk)
+      !$omp target exit data map(delete: ms, cor_hk)
 
       max_diff_u = maxval(abs(cor_hk%pv_flux_x%data - cor_sad%pv_flux_x%data))
       max_diff_v = maxval(abs(cor_hk%pv_flux_y%data - cor_sad%pv_flux_y%data))
@@ -671,23 +671,23 @@ contains
 
       cor_sad%f_0 = F0
       call cor_sad%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_sad)
+      !$omp target enter data map(to: ms, cor_sad)
       call ms%enter_data(); call cor_sad%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_sad, ms)
-      !$acc update self(cor_sad%pv_flux_x%data)
+      !$omp target update from(cor_sad%pv_flux_x%data)
       call cor_sad%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_sad)
+      !$omp target exit data map(delete: ms, cor_sad)
 
       cor_hk%f_0 = F0
       cor_hk%pv_variant = PV_VARIANT_SADOURNY_HK
       call cor_hk%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_hk)
+      !$omp target enter data map(to: ms, cor_hk)
       call ms%enter_data(); call cor_hk%enter_data()
       call coriolis_adv_compute_tendencies_hk(grid, metrics, cor_hk, ms, &
                                               ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_hk%pv_flux_x%data)
+      !$omp target update from(cor_hk%pv_flux_x%data)
       call cor_hk%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_hk)
+      !$omp target exit data map(delete: ms, cor_hk)
 
       max_abs_diff = maxval(abs(cor_hk%pv_flux_x%data - cor_sad%pv_flux_x%data))
       call check(error, max_abs_diff > DISCRIM_TOL, &
@@ -746,23 +746,23 @@ contains
 
       cor_sad%f_0 = F0
       call cor_sad%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_sad)
+      !$omp target enter data map(to: ms, cor_sad)
       call ms%enter_data(); call cor_sad%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_sad, ms)
-      !$acc update self(cor_sad%pv_flux_y%data)
+      !$omp target update from(cor_sad%pv_flux_y%data)
       call cor_sad%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_sad)
+      !$omp target exit data map(delete: ms, cor_sad)
 
       cor_hk%f_0 = F0
       cor_hk%pv_variant = PV_VARIANT_SADOURNY_HK
       call cor_hk%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_hk)
+      !$omp target enter data map(to: ms, cor_hk)
       call ms%enter_data(); call cor_hk%enter_data()
       call coriolis_adv_compute_tendencies_hk(grid, metrics, cor_hk, ms, &
                                               ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_hk%pv_flux_y%data)
+      !$omp target update from(cor_hk%pv_flux_y%data)
       call cor_hk%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_hk)
+      !$omp target exit data map(delete: ms, cor_hk)
 
       max_abs_diff = maxval(abs(cor_hk%pv_flux_y%data - cor_sad%pv_flux_y%data))
       call check(error, max_abs_diff > DISCRIM_TOL, &
@@ -827,13 +827,13 @@ contains
       cor_hk%pv_variant = PV_VARIANT_SADOURNY_HK
       call cor_hk%init(grid, nz_ml=NZ)
       ! f_corner stays uniform = F0 (init seeds it; no beta-plane call).
-      !$acc enter data copyin(ms, cor_hk)
+      !$omp target enter data map(to: ms, cor_hk)
       call ms%enter_data(); call cor_hk%enter_data()
       call coriolis_adv_compute_tendencies_hk(grid, metrics, cor_hk, ms, &
                                               ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_hk%q_corner%data)
+      !$omp target update from(cor_hk%q_corner%data)
       call cor_hk%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_hk)
+      !$omp target exit data map(delete: ms, cor_hk)
 
       ! Hand-check 3 interior corners against the area-weighted formula,
       ! and verify the kernel value differs from the plain 4-cell mean.
@@ -900,24 +900,24 @@ contains
       ! ---- Sadourny enstrophy run (default) ----
       cor_sad%f_0 = F0
       call cor_sad%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_sad)
+      !$omp target enter data map(to: ms, cor_sad)
       call ms%enter_data(); call cor_sad%enter_data()
       call coriolis_adv_compute_tendencies(grid, metrics, cor_sad, ms)
-      !$acc update self(cor_sad%pv_flux_x%data, cor_sad%pv_flux_y%data)
+      !$omp target update from(cor_sad%pv_flux_x%data, cor_sad%pv_flux_y%data)
       call cor_sad%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_sad)
+      !$omp target exit data map(delete: ms, cor_sad)
 
       ! ---- Energy run on the same state ----
       cor_en%f_0 = F0
       cor_en%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       call cor_en%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_en)
+      !$omp target enter data map(to: ms, cor_en)
       call ms%enter_data(); call cor_en%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
+      !$omp target update from(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
       call cor_en%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_en)
+      !$omp target exit data map(delete: ms, cor_en)
 
       max_diff_u = maxval(abs(cor_en%pv_flux_x%data - cor_sad%pv_flux_x%data))
       max_diff_v = maxval(abs(cor_en%pv_flux_y%data - cor_sad%pv_flux_y%data))
@@ -1015,17 +1015,17 @@ contains
       cor_en%f_0 = F0
       cor_en%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       call cor_en%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_en)
+      !$omp target enter data map(to: ms, cor_en)
       call ms%enter_data(); call cor_en%enter_data()
       ! mem:separate: mass_flux_*_layer may be mapped `create` (the
       ! production step recomputes them on-device) — push the host
       ! values we just set.
-      !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+      !$omp target update to(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
 
       ! (a) Reference: default recompute path.
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
+      !$omp target update from(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
       ref_x = cor_en%pv_flux_x%data
       ref_y = cor_en%pv_flux_y%data
 
@@ -1033,7 +1033,7 @@ contains
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, &
                                                            use_state_fluxes=.true.)
-      !$acc update self(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
+      !$omp target update from(cor_en%pv_flux_x%data, cor_en%pv_flux_y%data)
       max_diff_u = maxval(abs(cor_en%pv_flux_x%data - ref_x))
       max_diff_v = maxval(abs(cor_en%pv_flux_y%data - ref_y))
       call check(error, max_diff_u < TOL .and. max_diff_v < TOL, &
@@ -1042,18 +1042,18 @@ contains
 
       ! (b) Engagement: doubled vh must change the u-tendency.
       ms%mass_flux_y_layer = 2.0_wp*ms%mass_flux_y_layer
-      !$acc update device(ms%mass_flux_y_layer)
+      !$omp target update to(ms%mass_flux_y_layer)
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, &
                                                            use_state_fluxes=.true.)
-      !$acc update self(cor_en%pv_flux_x%data)
+      !$omp target update from(cor_en%pv_flux_x%data)
       engage_diff = maxval(abs(cor_en%pv_flux_x%data - ref_x))
       call check(error, engage_diff > 1.0e-8_wp, &
                  "doubled state fluxes did not change the tendency — "// &
                  "flag is not rerouting the transport source")
 
 99    call cor_en%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_en)
+      !$omp target exit data map(delete: ms, cor_en)
       call cor_en%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_energy_state_fluxes_gate
@@ -1124,13 +1124,13 @@ contains
       cor_en%f_0 = F0
       cor_en%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       call cor_en%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_en)
+      !$omp target enter data map(to: ms, cor_en)
       call ms%enter_data(); call cor_en%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_en%pv_flux_x%data)
+      !$omp target update from(cor_en%pv_flux_x%data)
       call cor_en%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_en)
+      !$omp target exit data map(delete: ms, cor_en)
 
       k = KP
       ! Corner PVs: q = F0 / h_corner (uniform area ⇒ plain 4-cell mean).
@@ -1273,13 +1273,13 @@ contains
       cor_en%f_0 = F0
       cor_en%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       call cor_en%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor_en)
+      !$omp target enter data map(to: ms, cor_en)
       call ms%enter_data(); call cor_en%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor_en, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor_en%pv_flux_x%data)
+      !$omp target update from(cor_en%pv_flux_x%data)
       call cor_en%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor_en)
+      !$omp target exit data map(delete: ms, cor_en)
 
       k = KP
       ! Area-weighted corner h: q = F0 / [Σ(areaT·h)/Σ(areaT)] over 4 cells.
@@ -1364,12 +1364,12 @@ contains
          cor_beta%pv_variant = PV_VARIANT_SADOURNY_ENERGY
          call cor_beta%init(grid, nz_ml=NZ)
          call cor_beta%set_beta_plane(grid, F0, BETA, y_ref)
-         !$acc enter data copyin(ms, cor_beta)
+         !$omp target enter data map(to: ms, cor_beta)
          call ms%enter_data(); call cor_beta%enter_data()
          call coriolis_adv_compute_tendencies(grid, metrics, cor_beta, ms)
-         !$acc update self(cor_beta%pv_flux_y%data)
+         !$omp target update from(cor_beta%pv_flux_y%data)
          call cor_beta%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, cor_beta)
+         !$omp target exit data map(delete: ms, cor_beta)
 
          i_probe = grid%nx_total/2
          j_south = grid%nghost + 2
@@ -1386,12 +1386,12 @@ contains
          cor_fplane%f_0 = F0
          cor_fplane%pv_variant = PV_VARIANT_SADOURNY_ENERGY
          call cor_fplane%init(grid, nz_ml=NZ)
-         !$acc enter data copyin(ms, cor_fplane)
+         !$omp target enter data map(to: ms, cor_fplane)
          call ms%enter_data(); call cor_fplane%enter_data()
          call coriolis_adv_compute_tendencies(grid, metrics, cor_fplane, ms)
-         !$acc update self(cor_fplane%pv_flux_y%data)
+         !$omp target update from(cor_fplane%pv_flux_y%data)
          call cor_fplane%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, cor_fplane)
+         !$omp target exit data map(delete: ms, cor_fplane)
 
          dv_dt_fp_s = cor_fplane%pv_flux_y%data(i_probe, j_south, 1)
          dv_dt_fp_n = cor_fplane%pv_flux_y%data(i_probe, j_north, 1)
@@ -1484,15 +1484,15 @@ contains
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .false.
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data)
       fx_off = cor%pv_flux_x%data
       fy_off = cor%pv_flux_y%data
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
       call cor%destroy()
 
       ! Knob ON (same state)
@@ -1500,15 +1500,15 @@ contains
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .true.
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data)
       max_dx = maxval(abs(cor%pv_flux_x%data - fx_off))
       max_dy = maxval(abs(cor%pv_flux_y%data - fy_off))
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
 
       ! Inert to round-off (the convex-combination property; the ~1-ulp abs_vort
       ! recovery in the clamp is the only source of any difference).
@@ -1559,7 +1559,7 @@ contains
       ! Land cell: exclude it from the wet-area corner-h averages (Pass 2), but
       ! it still enters the v-face thickness (Pass 3b) ⇒ telescoping broken.
       metrics%wet_T(iL, jL) = 0.0_wp
-      !$acc update device(metrics%wet_T)
+      !$omp target update to(metrics%wet_T)
 
       call ms%init(grid)
       ! Anomalously THICK land cell vs thin wet neighbours ⇒ over-amplified vh.
@@ -1584,30 +1584,30 @@ contains
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .false.
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%ke_centre%data, cor%q_corner%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%ke_centre%data, cor%q_corner%data)
       fx_off = cor%pv_flux_x%data
       ke_off = cor%ke_centre%data
       q_off = cor%q_corner%data
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
       call cor%destroy()
 
       cor%f_0 = F0
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .true.
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data)
+      !$omp target update from(cor%pv_flux_x%data)
       fx_on = cor%pv_flux_x%data
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
 
       ! Reconstruct pv_part = pv_flux + ke_grad (the pre-KE PV flux the clamp
       ! acts on) and the velocity-form range at every interior u-face.
@@ -1671,14 +1671,14 @@ contains
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%corner_h_variant = corner_variant
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%q_corner%data)
+      !$omp target update from(cor%q_corner%data)
       allocate (q_out, source=cor%q_corner%data)
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
       call cor%destroy()
    end subroutine run_energy_qcorner
 

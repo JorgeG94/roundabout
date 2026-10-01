@@ -137,7 +137,7 @@ contains
       !! Newton/false-position refinement at :625-692 is dead code
       !! under the simplification and is deliberately NOT ported).
       !! Port of prototype `sis2_column.py:21-55`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: m
          !! Layer mass (kg/m²).
       real(wp), intent(in) :: t_fr
@@ -201,7 +201,7 @@ contains
       !! `temp_max` is optional in the SIS2 signature; here it is a
       !! `has_temp_max` logical + `temp_max` value pair (device-routine
       !! `optional` dummies are avoided — same-module call sites only).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: m_lay
          !! Layer mass (kg/m²).
       real(wp), intent(in) :: sice
@@ -341,7 +341,7 @@ contains
       !! `col_enth_out` is measured AFTER the conservative update but
       !! BEFORE the liq-lim clamp (prototype `col_enth2b`) — the clamp
       !! moves energy into tmelt/bmelt, outside this identity.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(in) :: m_snow
@@ -641,7 +641,7 @@ contains
       !! window (`ice_top_melt_peel` starts at k=0), but its albedo and
       !! conduction effect are felt only on the NEXT window. Do not
       !! "helpfully" move the add earlier.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(inout) :: m_snow

@@ -683,31 +683,31 @@ contains
    subroutine ocean_vmix_enter_data_impl(this)
       type(ocean_vmix_t), intent(inout) :: this
       if (allocated(this%kv)) then
-         !$acc enter data copyin(this%kv)
+         !$omp target enter data map(to: this%kv)
       end if
       if (allocated(this%kt)) then
-         !$acc enter data copyin(this%kt)
+         !$omp target enter data map(to: this%kt)
       end if
       if (allocated(this%ks)) then
-         !$acc enter data copyin(this%ks)
+         !$omp target enter data map(to: this%ks)
       end if
       if (allocated(this%smooth_scratch)) then
-         !$acc enter data copyin(this%smooth_scratch)
+         !$omp target enter data map(to: this%smooth_scratch)
       end if
       if (allocated(this%bl_depth)) then
-         !$acc enter data copyin(this%bl_depth)
+         !$omp target enter data map(to: this%bl_depth)
       end if
       if (allocated(this%b0)) then
-         !$acc enter data copyin(this%b0)
+         !$omp target enter data map(to: this%b0)
       end if
       if (allocated(this%gamma_t)) then
-         !$acc enter data copyin(this%gamma_t)
+         !$omp target enter data map(to: this%gamma_t)
       end if
       if (allocated(this%gamma_s)) then
-         !$acc enter data copyin(this%gamma_s)
+         !$omp target enter data map(to: this%gamma_s)
       end if
       if (allocated(this%kd_bg)) then
-         !$acc enter data copyin(this%kd_bg)
+         !$omp target enter data map(to: this%kd_bg)
       end if
    end subroutine ocean_vmix_enter_data_impl
 
@@ -722,31 +722,31 @@ contains
    subroutine ocean_vmix_exit_data_impl(this)
       type(ocean_vmix_t), intent(inout) :: this
       if (allocated(this%kv)) then
-         !$acc exit data delete(this%kv)
+         !$omp target exit data map(delete: this%kv)
       end if
       if (allocated(this%kt)) then
-         !$acc exit data delete(this%kt)
+         !$omp target exit data map(delete: this%kt)
       end if
       if (allocated(this%ks)) then
-         !$acc exit data delete(this%ks)
+         !$omp target exit data map(delete: this%ks)
       end if
       if (allocated(this%smooth_scratch)) then
-         !$acc exit data delete(this%smooth_scratch)
+         !$omp target exit data map(delete: this%smooth_scratch)
       end if
       if (allocated(this%bl_depth)) then
-         !$acc exit data delete(this%bl_depth)
+         !$omp target exit data map(delete: this%bl_depth)
       end if
       if (allocated(this%b0)) then
-         !$acc exit data delete(this%b0)
+         !$omp target exit data map(delete: this%b0)
       end if
       if (allocated(this%gamma_t)) then
-         !$acc exit data delete(this%gamma_t)
+         !$omp target exit data map(delete: this%gamma_t)
       end if
       if (allocated(this%gamma_s)) then
-         !$acc exit data delete(this%gamma_s)
+         !$omp target exit data map(delete: this%gamma_s)
       end if
       if (allocated(this%kd_bg)) then
-         !$acc exit data delete(this%kd_bg)
+         !$omp target exit data map(delete: this%kd_bg)
       end if
    end subroutine ocean_vmix_exit_data_impl
 
@@ -1251,7 +1251,7 @@ contains
       !! the linear EOS has `dSV/dT = +α_T/ρ_0²`, `dSV/dS = −β_S/ρ_0²`,
       !! so the two reduce to the identical expression (they agree to
       !! round-off, not bitwise — the FP op orders differ).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: alpha_T, beta_S
          !! Dimensional linear-EOS sensitivities (kg/m^3 per degC / psu).
       real(wp), intent(in) :: rho0
@@ -2043,7 +2043,7 @@ contains
    end subroutine vmix_bkgnd_fill_impl
 
    pure function henyey_lat_factor_impl(lat_deg, n0_2omega, max_lat) result(fac)
-      !$acc routine seq
+      !$omp declare target
       !! Henyey, Wright & Flatte (1986) JGR 91:8487 latitude dependence of
       !! the internal-wave-driven mixing rate, in the SIMPLIFIED constant-`N0`
       !! form of Harrison & Hallberg (2008) JPO 38:1894 — the in-situ column
