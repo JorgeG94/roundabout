@@ -242,7 +242,13 @@ which land noticeably closer to the 1/4-degree run's.
 
 ## 6. Results: the two-year run (all five fixes, current numbers)
 
-**The run.** `southern_ocean_1deg_wind.nml` at tip `e3552f9a6`, one V100,
+**The build.** This branch combined with the five fixes the results depend
+on, all now on `main`: the sponge outer-face wall (#82), the periodic-seam
+ghost refresh (#84), the free-slip viscosity and the `z_fixed` + zinit
+on-target seed (#88), and the `vorticity_z` diagnostic (#86). This branch
+alone does not reproduce these numbers; `main` with this PR merged does.
+
+**The run.** `southern_ocean_1deg_wind.nml` on that build, one V100,
 single rank, `CUDA_VISIBLE_DEVICES`-pinned, host-staged halo path (no MPI):
 730 days, 35040 steps, **3116.4 s wall — 4.3 s/simulated day, ~55 simulated
 years per wallclock day (SYPD)**. Grepped the full `run.log` for
@@ -389,7 +395,7 @@ field) is essentially resolution-independent at this grid-to-grid ratio.
 
 ## 7. 1° vs 1/4°, side by side
 
-Same fixed code (`feat/southern-ocean-1deg` tip `e3552f9a6`), same physics
+Same fixed code (the Sec. 6 build), same physics
 family, same vertical profile, same wind forcing and north-sponge design;
 different horizontal resolution AND different initial condition (the one
 variable this task does not isolate — see below).
@@ -525,7 +531,7 @@ frames, `python_prototypes/southern_ocean_1deg/final/`):
   rising EKE). Drake strip: `+166.7 Sv`, matching Sec. 6's year-2 mean.
 * **Antarctica itself is solid, uniform grey in every frame** — the
   `PolarSouthMap` pole-void fix (below) and the vorticity land-sentinel fix
-  (`e3552f9a6`, movie-side) both hold at this resolution: no false
+  (movie-side, "treat the vorticity land sentinel as missing") both hold at this resolution: no false
   open-water wedge through the pole.
 
 **Known simplification**: the tripolar (here, plain lat-lon) -> image remap
