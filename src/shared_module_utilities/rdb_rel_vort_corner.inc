@@ -13,18 +13,16 @@
 !
 ! `#include` this file in the `contains` section of any module that computes
 ! this corner ζ inside a `do concurrent` kernel.  It is the SAME formula
-! `rdb_coriolis_adv::coriolis_adv_compute_tendencies{,_barotropic}` evaluates
-! inline for its `q_corner` scratch (Pass 1 of each) — several modules must
-! agree bit-for-bit on what "the model's relative vorticity" means, so this
-! is a rule, not a routine: putting the value here instead of hand-copying
-! the expression is what keeps a diagnostic that reports ζ (e.g. the
-! `vorticity_z` derived diag, `rdb_ocean_diag_derived`) from silently
-! drifting off the dynamics' own PV term.
+! `rdb_coriolis_adv` evaluates inline for its `q_corner` scratch (Pass 1 of
+! the barotropic, Sadourny, HK and Sadourny-energy kernels): a diagnostic
+! that reports ζ (the `vorticity_z` derived diag, `rdb_ocean_diag_derived`)
+! must agree bit-for-bit with the dynamics' own PV term, so this is a rule,
+! not a routine.
 !
-! `rdb_coriolis_adv` itself is NOT yet migrated onto this include (its two
-! call sites keep their historical inline form) — only new/diagnostic
-! consumers use it for now; migrating the dynamics kernel is a separate,
-! answer-neutral refactor left for its own PR.
+! Today this file has ONE consumer (the diag).  `rdb_coriolis_adv` is NOT
+! yet migrated: its four inline copies are marked "inline twin" and must be
+! kept in step by hand until the migration (a separate refactor that needs
+! a golden check and GPU timing) lands.
 !
 ! The consuming module must already `use rdb_constants, only: wp`.
 ! Everything here is `pure` and device-callable (`!$acc routine seq`).

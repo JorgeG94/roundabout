@@ -409,6 +409,8 @@ contains
       ns = merge(1.0_wp, 0.0_wp, this%no_slip)
 
       ! ---- Pass 1: relative vorticity at SW corners (circulation/area) ----
+      ! Inline twin of `rdb_rvc_zeta_corner` (shared_module_utilities/
+      ! rdb_rel_vort_corner.inc, read by the `vorticity_z` diag): keep in step.
       ! zeta_corner(i, j) sits at position (i-1/2, j-1/2).  Curvilinear
       ! circulation form (design §2):
       !   zeta = ( v(i,j)·dyCv(i,j) - v(i-1,j)·dyCv(i-1,j)
@@ -622,6 +624,8 @@ contains
       ns = merge(1.0_wp, 0.0_wp, this%no_slip)
 
       ! ---- Pass 1: relative vorticity at SW corners, per layer ----
+      ! Inline twin of `rdb_rvc_zeta_corner` (shared_module_utilities/
+      ! rdb_rel_vort_corner.inc, read by the `vorticity_z` diag): keep in step.
       ! Circulation/area (design §2) — see the barotropic kernel for the
       ! reduction to `(Δv)/dx - (Δu)/dy` on uniform square metrics.
       ! Slip factor `(1-2·ns)·wet_q + 2·ns` masks the rel-vort at land
@@ -899,6 +903,8 @@ contains
       ns = merge(1.0_wp, 0.0_wp, this%no_slip)
 
       ! ---- Pass 1: relative vorticity at corners (circulation/area) ----
+      ! Inline twin of `rdb_rvc_zeta_corner` (shared_module_utilities/
+      ! rdb_rel_vort_corner.inc, read by the `vorticity_z` diag): keep in step.
       ! Slip factor masks the rel-vort at land corners (C1); Pass 2 reads
       ! this back as `zeta_corner` and adds the UNMASKED planetary f.
       do concurrent(k=1:nz, j=2:ny, i=2:nx)
@@ -1159,6 +1165,8 @@ contains
       use_mom6_ch = this%corner_h_variant == CORNER_H_MOM6_AREA
 
       ! ---- Pass 1: relative vorticity at corners (circulation/area) ----
+      ! Inline twin of `rdb_rvc_zeta_corner` (shared_module_utilities/
+      ! rdb_rel_vort_corner.inc, read by the `vorticity_z` diag): keep in step.
       ! Slip factor masks the rel-vort at land corners (C1); Pass 2 reads
       ! this back and adds the UNMASKED planetary f.
       do concurrent(k=1:nz, j=2:ny, i=2:nx)
