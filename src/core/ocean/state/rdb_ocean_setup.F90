@@ -4571,7 +4571,12 @@ contains
          ! ---- Open-edge tracer reservoirs (§1, v2) ----
          ! Cache length-scale knobs on bc so kernels can read them without
          ! going back to cfg.  Then allocate reservoir arrays when the feature
-         ! is enabled and the edge is open-ish.
+         ! is enabled and the edge is open-ish.  The RAW tag is compared on
+         ! purpose: an OBC_SPONGE edge still gets a reservoir, which is inert
+         ! there (the ghost fill is gated on is_open_ish, which excludes it,
+         ! and the update sees the zero outer-face flux, so tres holds its
+         ! seed).  Mapping through ocean_bc_outer_face_tag would drop the
+         ! bc_tres_* fields from the restart registry.
          bc%res_lscale_out = bc_cfg%res_lscale_out
          bc%res_lscale_in = bc_cfg%res_lscale_in
 
@@ -4646,6 +4651,8 @@ contains
          end select
 
          if (bc%radiation_scheme == 1) then
+            ! Raw tags: an OBC_SPONGE edge allocates these buffers but never
+            ! uses them (the Orlanski kernels are gated on is_radiating).
             ! West
             if (bc%west%bc_type /= OBC_WALL .and. bc%west%bc_type /= OBC_PERIODIC .and. &
                 bc%west%bc_type /= OBC_CLAMPED) then
