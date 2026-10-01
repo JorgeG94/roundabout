@@ -352,7 +352,7 @@ contains
       if (ierr == OCEAN_STATUS_OK) then
          ! Closed-budget mass/salt/heat out+src at the final step, EFP-reduced
          ! (reproducing_sums default on) so it is order-invariant across rank
-         ! counts -- the periodic-seam / tripolar-fold regression this test
+         ! counts -- the periodic-seam / sponge-seam-ghost regression this test
          ! case exists for (see `compare_budget` and
          ! `check_periodic_sponge_serial_out`).  A fresh `cstats` per call is
          ! fine: `budget_out` is computed independently of the t=0 reference

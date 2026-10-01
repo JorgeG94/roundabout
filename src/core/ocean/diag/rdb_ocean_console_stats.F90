@@ -361,10 +361,11 @@ contains
          !! `heat_out`/`*_src`/`*_active`, section (d) below) back to the
          !! caller instead of only formatting them into the printed console
          !! line.  Absent ⇒ inert (no behaviour change; existing callers are
-         !! untouched).  Consumer: `tests/mpi/test_ocean_decomp_bitid_mpi`'s
-         !! `periodic_channel_zstar` case asserts these are bit-identical
-         !! between the serial reference and every `px x py` factorisation —
-         !! the EFP `reproducing_sums` path (default on) makes the boundary
+         !! untouched).  Consumer: `tests/mpi/test_ocean_decomp_bitid_mpi`,
+         !! which asserts these are bit-identical across every `px x py`
+         !! factorisation of each case (`compare_budget`), and, on the
+         !! `periodic_sponge` case, against the serial reference too
+         !! (`check_periodic_sponge_serial_out`) — the EFP `reproducing_sums` path (default on) makes the boundary
          !! `out` terms order-invariant across rank counts, exactly like the
          !! totals.
 
