@@ -16,7 +16,10 @@ that blow-up was a model defect in the sponge edge, now fixed — see
 "Stability" (§5). The
 point is a single-GPU, few-hour run of the Antarctic Circumpolar Current
 that a laptop-class movie script can turn into a "watch it spin" video —
-see `southern_movie.py` below.
+see `southern_movie.py` below. **Current results** (two full years, five
+fixes landed since the first clean run — see §5-7): Drake Passage 170.5 /
+167.5 Sv (year 1 / year 2), closed mass/salt/heat budgets to 10⁻¹¹-10⁻¹³,
+and a side-by-side comparison against the 1/4-degree companion run.
 
 | | |
 |---|---|
@@ -155,7 +158,7 @@ the relaxation shows up as a `src` term on the salt and heat budget lines
 round-off: the sponge edge is a closed wall, and a growing `out` there is
 the signature of the defect described in "Stability" just below.
 
-## 5. Stability: the day-573 blow-up was a leaking sponge edge
+## 5. Stability: the day-573 blow-up was a leaking sponge edge (history, fixed)
 
 The first attempt at this namelist (global viscosity, `nu_h = 2000`) ran
 for 573 days and then blew up: at outer step 27528 (day 573.5) the
@@ -220,39 +223,236 @@ viscosity there is the 2000 m²/s floor. MOM6's OM_1deg reads
 51 S and 0 north of that; roundabout has no reader for it (the global
 README names this as a known limit).
 
-**The two-year run** (V100, `CUDA_VISIBLE_DEVICES`-pinned, 2026-09-29):
-730 days, no NaN, no truncation, no limiter events; relative mass/salt/heat
-closure residuals −1.5e-11 / −2.4e-13 / −1.1e-13 at day 730.
+**Superseded (history, not current numbers).** The first clean two-year run
+after this fix (V100, `CUDA_VISIBLE_DEVICES`-pinned, 2026-09-29) reported
+Drake Passage transport of 139.7 Sv (year 1) / 133.2 Sv (year 2) and a
+circumpolar-mean jet at 51.7 S / 50.6 S, against an old `nu_h = 150000`
+workaround run at 134.3 / 126.1 Sv. That pair of runs predated four further
+fixes that landed afterward — the periodic east-west seam's ghost refresh,
+the velocity-form Laplacian/biharmonic going free-slip at land, `z_fixed`
+being seeded on its own target under `&ocean_zinit_nml`, and `vorticity_z`
+being written as the dynamics' own corner ζ with a proper `_FillValue` —
+each of which touches this domain (the periodic seam runs the full
+longitude circle here; the free-slip fix changes every land-adjacent
+viscous stress; the `zinit`/`z_fixed` fix changes the WOA13 seeding this
+domain depends on entirely, since there is no file-backed open boundary to
+fall back on). Those old numbers are **not reproduced below** — see
+"Results: the two-year run" (§6) for the current, fully-fixed-code numbers,
+which land noticeably closer to the 1/4-degree run's.
 
-| | this namelist (fixed model) | old 150000 m²/s workaround |
+## 6. Results: the two-year run (all five fixes, current numbers)
+
+**The run.** `southern_ocean_1deg_wind.nml` at tip `e3552f9a6`, one V100,
+single rank, `CUDA_VISIBLE_DEVICES`-pinned, host-staged halo path (no MPI):
+730 days, 35040 steps, **3116.4 s wall — 4.3 s/simulated day, ~55 simulated
+years per wallclock day (SYPD)**. Grepped the full `run.log` for
+`nan`/`truncat`/`error stop`/`non-finite`: **zero hits** — no NaN, no CFL
+truncation, no limiter event, no error-stop over the full two years.
+Profiler (`Profiler Report: Compute`, % of the 3116.4 s): the barotropic
+solver dominates as usual (`ocean_barotropic_solver` 11.5%,
+`ocean_continuity` 7.7%, `ocean_ale_remap` 6.5%, `ocean_F_slow_assembly`
+4.7%, `ocean_vdiff_apply` 4.3%) — a single-rank run, so unlike the 1/4-degree
+run's profile (Sec. 7 there) there is no `ocean_comms_bt`/`ocean_comms_ml`
+network cost, just the host-staged halo bookkeeping.
+
+**Budgets at day 730** (relative `Error`; `src` is the sponge relaxation
+term, which the north band is expected to carry since it is a tracked
+source, not a leak — a nonzero `out` on a closed wall face would be the
+leaking-sponge defect Sec. 5 fixed):
+
+| | value | relative Error | `out` | `src` |
+|---|---:|---:|---:|---:|
+| Mass | 4.277525218E+20 kg | −1.454E−11 | −2.084 kg | 0 (wall, no source) |
+| Salt | 1.481850327E+22 | −3.068E−13 | −1.268E+06 | +1.260E+18 (sponge) |
+| Heat | 1.047293361E+21 | −2.934E−13 | +1.235E+05 | +1.235E+19 (sponge) |
+
+`En` (day 730) **7.107E-04 m²/s²**, `MaxCFL` **0.0259**. Mass/salt/heat are
+closed to 10⁻¹¹-10⁻¹³ relative error over two years — the same order the
+1/4-degree run's fixed sponge edge achieves (−2.870E−11/+3.575E−13/
++1.062E−12, `../southern_ocean_025/README.md` Sec. 7) and consistent with
+the OBC_SPONGE outer-face fix (Sec. 5) holding at both resolutions.
+
+**Diagnostics.** Reproduced with the SAME script the 1/4-degree run uses,
+generalised (2026-10-01) to take the grid/run/diagnostic paths and the
+analysis bands as CLI arguments instead of being forked per grid — one
+script, `python_prototypes/southern_ocean_025/southern_025_analysis.py`,
+now drives both READMEs. It auto-detects and strips the ghost-cell halo
+(`ng = (shape − physical_size) / 2` on each horizontal axis, the same
+technique `southern_movie.py` already used), so it reads this run's raw,
+un-merged `*_rank_000000.nc` (single rank, `ng = nghost = 3`) exactly as it
+reads the 1/4-degree run's already-ghost-stripped `merged.nc` (`ng = 0`).
+Regression-checked against the published 1/4-degree numbers before use:
+reran it against that run's `merged.nc` and reproduced every number in
+`../southern_ocean_025/README.md` Sec. 7 (budgets) and Sec. 8 (Drake, SSH,
+jet, EKE, vorticity) bit-for-bit (175.6/170.0 Sv, +1.552/+1.503 m, 55.92 S,
+the EKE and vorticity tables) before trusting it on the 1-degree grid.
+
+```bash
+python3.10 python_prototypes/southern_ocean_025/southern_025_analysis.py \
+    --run RUN_DIR --diag RUN_DIR/output/southern_ocean_1deg_wind_rank_000000.nc \
+    --data /home/jorge/nci/cdx/data/OM_1deg_southern --bathy bathy_om1deg.nc \
+    --out python_prototypes/southern_ocean_1deg/final --stem southern_1deg_2yr \
+    --sponge-rows 6
+```
+
+(`--sponge-rows 6` is the north-edge analysis band, deliberately a little
+wider than the model's own `sponge_width = 5` cells, matching how the
+1/4-degree analysis uses 24 analysis rows against that run's `sponge_width
+= 20`.) Output: `python_prototypes/southern_ocean_1deg/final/
+southern_1deg_2yr_daily.txt` (one row/day) and `southern_1deg_full_output.txt`
+(full stdout, committed — see "Commit" below).
+
+**Drake Passage transport** (`sum(transport_x * dyt)`, wet cells of the
+67.5 W column, 70-52 S — the section lands on the SAME nominal longitude as
+the 1/4-degree run's section, both cuts sharing OM's node-latitude/longitude
+convention):
+
+| | mean | range | seasonal cycle |
+|---|---:|---:|---|
+| Year 1 (days 30-365) | **170.5 Sv** | 153.1-186.0 Sv | trough ~166 Sv around bin 7 (late June/July), peak ~176 Sv bin 9 (Sep) |
+| Year 2 (days 366-730) | **167.5 Sv** | 150.6-183.5 Sv | trough ~163 Sv bin 7, peak ~173 Sv bin 9 |
+
+Early spin-up (days 1-10) already ranges 30.7-185.0 Sv and is inside the
+year-1 band by day 3-4 — the same fast barotropic-adjustment-to-the-IC
+mechanism `../global_1deg/README.md` Sec. 6.3 and the 1/4-degree README
+Sec. 8 both document (the transport comes from the WOA13 density field
+answering within days, not from wind spin-up or eddy growth over weeks).
+Section-placement check: columns 4 cells either side of i=233 (67.5 W) give
+165.6/165.3 Sv on the last day vs 165.3 Sv at the home column — sub-Sv,
+confirming the number is not sensitive to the exact column.
+
+**This is the headline change from the stale Sec. 5 numbers**: 139.7/133.2
+Sv (pre the four later fixes) vs **170.5/167.5 Sv** now — the fixed-code
+run sits much closer to the 1/4-degree run's 175.6/170.0 Sv (Sec. 7 below).
+Which of the four fixes moved it most is NOT isolated here — this run
+carries all four together and no ablation run was done, so attributing the
+~31 Sv change to any one of them individually would be speculation beyond
+what was measured.
+
+**SSH step across the ACC** (same section, northernmost minus southernmost
+wet cell): Year 1 mean **+1.549 m** (range +1.370 to +1.703), Year 2 mean
+**+1.520 m** (range +1.350 to +1.636) — slightly declining between years,
+the WOA13 density field relaxing slowly under the sponge with no buoyancy
+forcing, the same mechanism the 1/4-degree run's SSH step shows with WOA05.
+
+**Jet latitude.** Circumpolar-mean (all longitudes) top-10 m zonal speed,
+time-meaned per year, restricted to rows that are >=90% wet and outside the
+6-row north sponge analysis band: a single dominant jet core at **53.16 S**
+in both years (zonal-mean `u` 0.082 m/s year 1, 0.083 m/s year 2) — no
+second statistically distinct jet core passes the 20%-prominence /
+2-degree-separation test in either year, same as the 1/4-degree run. This
+sits ~2.8 degrees equatorward of the 1/4-degree run's 55.92 S — smaller
+than the ~4-5 degree gap the stale (pre-fix) 1-degree numbers showed
+against the SAME 1/4-degree reference, consistent with (not conclusive
+proof of) the fixed code also narrowing the resolution-driven jet-position
+gap, alongside the un-isolated IC difference (Sec. "1° vs 1/4°" below).
+
+**Surface EKE** (`0.5*<u'^2+v'^2>` about each year's own time mean,
+area-weighted over the supergrid's T-cell area):
+
+| | domain mean | ACC band mean (61-45 S) | max |
+|---|---:|---:|---:|
+| Year 1 | 1.0481E-03 m²/s² | 1.0912E-03 m²/s² | 1.8648E-01 m²/s² |
+| Year 2 | 9.9639E-04 m²/s² | 1.0474E-03 m²/s² | 1.8187E-01 m²/s² |
+
+Unlike the 1/4-degree run's EKE (which rises ~6-10% year-over-year as its
+resolved eddy field equilibrates), this run's EKE is flat-to-slightly
+*declining* between years — consistent with this 1-degree grid not
+resolving the first baroclinic Rossby radius here. The MAX column is the
+tell: this run's max EKE (1.86E-01) is itself ~2x the 1/4-degree run's
+(8.63E-02) even though its DOMAIN-MEAN EKE is lower — the variance
+concentrates in a handful of large, smoothed, topographically-forced
+jets/fronts rather than spreading across a broad field of resolved eddies
+(see the movie, Sec. 8).
+
+**Vorticity quality** — surface relative-vorticity rms, interior vs.
+coastal ring (wet cells within 2 cells, Chebyshev distance, of any land
+cell) vs. north sponge band (top 6 rows), masking the diagnostic's
+`vorticity_z` land sentinel (`_FillValue = 1e20`):
+
+| day | interior rms (1/s) | coastal rms | coastal/interior | sponge rms | sponge/interior |
+|---:|---:|---:|---:|---:|---:|
+| 30 | 3.891E-07 | 1.399E-06 | 3.60x | 2.747E-07 | 0.71x |
+| 180 | 6.526E-07 | 1.277E-06 | 1.96x | 3.077E-07 | 0.47x |
+| 365 | 6.923E-07 | 1.001E-06 | 1.45x | 3.023E-07 | 0.44x |
+| 730 | 6.964E-07 | 9.749E-07 | 1.40x | 3.343E-07 | 0.48x |
+
+The interior rms climbs ~1.8x from day 30 to day 365 (spin-up) then holds
+flat through year 2, same qualitative shape as the 1/4-degree run. The
+coastal/interior and sponge/interior RATIOS track the 1/4-degree run's
+closely (day 730: 1.40x/0.48x here vs 1.48x/0.49x there — Sec. 7 below),
+even though the absolute interior rms is ~2.8x smaller here (6.96E-07 vs
+1.97E-06 1/s) — a coarser grid damps the resolved vorticity gradients
+themselves, but the RELATIVE quality of the coastal ring and the sponge
+band (both diagnostics of numerical hygiene, not of the physical eddy
+field) is essentially resolution-independent at this grid-to-grid ratio.
+
+## 7. 1° vs 1/4°, side by side
+
+Same fixed code (`feat/southern-ocean-1deg` tip `e3552f9a6`), same physics
+family, same vertical profile, same wind forcing and north-sponge design;
+different horizontal resolution AND different initial condition (the one
+variable this task does not isolate — see below).
+
+| | 1° (this README) | 1/4° (`../southern_ocean_025/README.md`) |
 |---|---:|---:|
-| Drake Passage, days 30–365 | 139.7 Sv (121.7–153.8) | 134.3 Sv (115.8–149.7) |
-| Drake Passage, days 366–730 | 133.2 Sv (116.4–149.3) | 126.1 Sv (109.6–141.5) |
-| Drake SSH step, year 1 / year 2 | 1.32 / 1.25 m | 1.30 / 1.19 m |
-| circumpolar-mean jet latitude (top 10 m) | 51.7 S | 50.6 S |
-| En, last 30 days | 1.39e-3 m²/s² | 6.8e-4 m²/s² |
+| Drake Passage, year 1 / year 2 | 170.5 / 167.5 Sv | 175.6 / 170.0 Sv |
+| SSH step, year 1 / year 2 | 1.549 / 1.520 m | 1.552 / 1.503 m |
+| Jet latitude | 53.16 S | 55.92 S |
+| EKE, ACC band, year 1 / year 2 | 1.09 / 1.05E-03 m²/s² | 1.52 / 1.67E-03 m²/s² |
+| ζ rms, day 730: interior | 6.96E-07 1/s | 1.97E-06 1/s |
+| ζ rms, day 730: coastal/interior | 1.40x | 1.48x |
+| ζ rms, day 730: sponge/interior | 0.48x | 0.49x |
+| Cost | 4.3 s/day, 1 V100, 1 rank | 29.71 s/day, 4 V100s, 4 ranks |
+| Day-730 relative Error (mass/salt/heat) | −1.5E−11 / −3.1E−13 / −2.9E−13 | −2.9E−11 / +3.6E−13 / +1.1E−12 |
 
-For comparison, the global wind-forced run gives 148–160 Sv over its
-first year. The remaining gap is not the viscosity (it is the same), and
-not the sponge's momentum relaxation (`relax_uv = .false.` moves the days
-30–180 mean by +0.8 Sv, 142.1 → 142.9). The transport is set by the
-WOA13 density field and declines slowly here as that field relaxes with
-no buoyancy forcing; the rest of the gap is the domain itself (a walled
-edge at 30 S instead of the rest of the ocean) and is not pursued here.
+**What the numbers say, measured, not speculated beyond it:**
 
-## 6. Diagnostics to report
+* **Drake transport and SSH step are now close** (170.5 vs 175.6 Sv year 1,
+  a 3% gap; SSH step within 2 mm) — a dramatic narrowing from the stale
+  pre-fix 1-degree numbers' 20%+ gap against the same 1/4-degree reference
+  (Sec. 6 above). Both runs' transport is set within days by their own
+  initial density field (both READMEs document the same early-spin-up
+  plateau independently), not by eddy spin-up, so the remaining 3-5 Sv gap
+  is consistent with either resolution or the IC difference below — this
+  task does not run a same-grid IC swap to isolate which.
+* **Jet latitude differs by ~2.8 degrees** (53.16 S vs 55.92 S), smaller
+  than the stale pre-fix gap (~4-5 degrees) but not closed. A single-front
+  1-degree jet sitting equatorward of an eddying 1/4-degree jet's position
+  is the same qualitative pattern the stale numbers showed, just less
+  pronounced.
+* **EKE is NOT comparable as "the same physics at lower resolution"**: the
+  1-degree run does not resolve the first baroclinic Rossby radius here (an
+  established limit, Sec. 9 below), so its surface kinetic-energy variance
+  reflects jet/front smoothing and topographic forcing, not a damped
+  version of the 1/4-degree run's resolved eddy field. The 1/4-degree run's
+  EKE is HIGHER on average (1.52-1.67E-03 vs 1.09-1.05E-03) but its MAX is
+  LOWER (8.63E-02 vs 1.86E-01) — the 1-degree run concentrates its
+  variance in a few strong, coarse jets rather than spreading it across a
+  broad eddy field.
+* **Vorticity hygiene (coastal ring, sponge band) is resolution-independent
+  at this ratio**: both ratios agree to within 0.08 of each other even
+  though the absolute vorticity scale differs by ~2.8x. This is evidence
+  the coastal-ring and sponge-band elevations are a property of the
+  numerics (the staircase coastline, the relaxation band), not an artefact
+  that scales with how well eddies are resolved.
+* **The initial condition is NOT the same field at two resolutions** — this
+  is the one honestly unmeasured confound. The 1-degree run seeds from
+  WOA13 decav January T/S, nearest-neighbour onto the OM_1deg model grid
+  (Sec. "Inputs" above); the 1/4-degree run seeds from WOA05 annual T/S
+  ALREADY on the OM4_025 model grid (no horizontal interpolation, only a
+  vertical fill-gap repair — `../southern_ocean_025/README.md` Sec. 2).
+  Different climatology (WOA13 vs WOA05), different season (January vs
+  annual), different interpolation (nearest-neighbour vs none needed). The
+  1/4-degree README's own Sec. 8 attributes part of its higher transport to
+  this sharper, un-smoothed IC rather than to its resolved eddy field (EKE
+  is near-equilibrated by year 1, not still growing). Disentangling
+  resolution from IC sharpness would need a same-grid IC swap (e.g. run the
+  1-degree domain from a WOA05-on-OM4_025-regridded-to-OM_1deg field, or
+  vice versa); this task measures what is, not what a controlled ablation
+  would show.
 
-`../global_1deg/wind_analysis.py`'s section-transport recipe (Drake
-Passage = `sum(transport_x * dyt)` over the wet cells of the 67.5 W column
-between 70 S and 52 S, divided by 1e6 for Sv) applies unchanged to this
-cut — same longitude convention, same `transport_x` diagnostic. An adapted
-copy lives in `python_prototypes/southern_ocean_1deg/` (outside this repo)
-alongside the run's own analysis and the movie outputs, per the project's
-"large media and run-specific analysis don't belong in the model repo"
-convention; only the reproducible SCRIPTS (the subsetter, the namelist,
-the movie renderer here) are committed to roundabout.
-
-## 7. The movie — `southern_movie.py`
+## 8. The movie — `southern_movie.py`
 
 South-polar-stereographic, centred on Antarctica, extending to the domain's
 own north edge (`--lat-edge`, default -30, matching the sponge). Two
@@ -297,6 +497,37 @@ python3 southern_movie.py RUN/output/....nc movie_frames \
 Produces `movie_frames/southern_ocean_1deg_wind.mp4` (+`.gif`), the 60 fps
 `minterpolate`-smoothed twin (`_smooth60.mp4`), and a last-frame PNG.
 
+**Rendered** (this run, default `--main speed --inset ssh`, all 730 daily
+frames, `python_prototypes/southern_ocean_1deg/final/`):
+`southern_ocean_1deg_2yr.mp4` (20.9 MB, 24 fps) + `_smooth60.mp4` (60 fps
+`minterpolate`) + a GIF. Checked the first, middle and last frames directly:
+
+* **Day 1** — the speed panel is almost dark (near-zero everywhere, INFERNO
+  scale maxing at 0.28 m/s), with structure only as a couple of bright
+  filaments near topographic pinch points on the NE side of the disc and a
+  faint patchy ring elsewhere — the same geostrophic-adjustment-to-the-IC
+  signature the 1/4-degree movie shows at day 1, just coarser. The SSH
+  inset already shows a clear large-scale dipole (red/high on one side,
+  blue/low on the other) from the initial density field, not from the wind
+  (which has barely acted for one day). Drake strip reads `+30.7 Sv`,
+  matching Sec. 6's day-1 table entry.
+* **Day 365** — a continuous, braided bright band of elevated speed wraps
+  the entire circumpolar band — the ACC core as a persistent, structured
+  jet with filamented fine structure, not a single smooth ring, but also
+  not the broad field of discrete eddies the 1/4-degree movie shows at the
+  same day. The SSH inset shows a strong, smooth low (blue) centred over
+  Antarctica ringed by a high (red) further out — the ACC's dynamic-height
+  signature. Drake strip: `+170.6 Sv`, matching Sec. 6's year-1 mean.
+* **Day 730** — visually almost indistinguishable from day 365: the same
+  jet band, same rough intensity, same filament pattern, not visibly more
+  developed — the frame-by-frame confirmation of Sec. 6's EKE table (flat
+  to slightly declining year-over-year, unlike the 1/4-degree run's still-
+  rising EKE). Drake strip: `+166.7 Sv`, matching Sec. 6's year-2 mean.
+* **Antarctica itself is solid, uniform grey in every frame** — the
+  `PolarSouthMap` pole-void fix (below) and the vorticity land-sentinel fix
+  (`e3552f9a6`, movie-side) both hold at this resolution: no false
+  open-water wedge through the pole.
+
 **Known simplification**: the tripolar (here, plain lat-lon) -> image remap
 is nearest-cell (flood-filled owner per pixel), not the bilinear-in-
 index-space remap `global_movie.BilinearLatLonMap` does for the
@@ -321,14 +552,18 @@ every pixel closer to the projection centre than the southernmost real
 grid row's projected radius to LAND explicitly, instead of leaving it to
 flood-fill happenstance.
 
-## 8. Known limits
+## 9. Known limits
 
 * **1 degree does not resolve mesoscale eddies.** The ACC's transport comes
   through as jets and fronts in the vorticity field (and in the SSH step
   across the passage), not as the eddy field a 1/10 degree or finer
   configuration would show — the same caveat the global 1 degree README
   states for its own basin currents. The movie is "watch the ACC spin up
-  and the fronts sharpen", not "watch eddies shed".
+  and the fronts sharpen", not "watch eddies shed". Measured, not just
+  asserted: Sec. 7's EKE comparison shows this run's domain-mean EKE lower
+  but its MAX roughly double the 1/4-degree run's (1.86E-01 vs 8.63E-02
+  m²/s²) — the variance concentrates in a handful of coarse, smoothed jets
+  rather than spreading across a resolved eddy field.
 * **No sea ice.** The Antarctic coastal boundary is a bare land wall with
   no ice-ocean thermodynamics; near-coastal dynamics (polynyas, coastal
   currents under ice) are absent.
@@ -349,10 +584,29 @@ flood-fill happenstance.
   `../global_1deg/README.md` §5, all inherited unchanged since the physics
   and vertical grid are identical.
 
-## 9. Files
+## 10. Files
 
 | | |
 |---|---|
 | `southern_ocean_1deg_wind.nml` | the namelist (§ above) |
 | `southern_movie.py` | the polar movie renderer |
 | `tools/om1deg_subset.f90` (repo root `tools/`) | the generic NetCDF subsetter used to cut the four inputs |
+
+## 11. Commit
+
+The reproducible pieces — this namelist and `southern_movie.py` — are
+committed to `roundabout` (no `tools/` changes this round; the subsetter was
+already in the tree). The run-specific analysis script
+(`python_prototypes/southern_ocean_025/southern_025_analysis.py`, now
+generalised to drive both this README and the 1/4-degree one from CLI
+arguments rather than being forked per grid) and this run's per-day table
+(`python_prototypes/southern_ocean_1deg/final/southern_1deg_2yr_daily.txt`)
+and full text output (`southern_1deg_full_output.txt`) are committed to
+`python_prototypes/` (a separate repository), per the same "large media and
+run-specific analysis don't belong in the model repo" convention the
+1/4-degree README follows. The rendered movie (MP4s + a last-frame PNG,
+`python_prototypes/southern_ocean_1deg/final/`) is left on disk but NOT
+committed — large media stays out of git in that repo too. The raw
+diagnostic file (881 MB, single rank, no merge needed) stays in the run
+directory (`/home/jorge/nci/cdx/data/runs/southern_1deg_2yr_final/`),
+outside both repositories.
