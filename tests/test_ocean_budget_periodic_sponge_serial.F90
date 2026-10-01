@@ -1,12 +1,11 @@
 !! SERIAL (real single-rank, no MPI) regression for the periodic-seam /
 !! sponge-seam-ghost bug: a periodic axis relaxed by a sponge on the
 !! orthogonal edge must complete on ONE rank with a finite, bounded
-!! closed-budget `mass_out` -- the smoke-test half of the coverage; the
-!! MPI-enabled twin (`tests/mpi/test_ocean_decomp_bitid_mpi.F90 ::
-!! periodic_sponge`, ctest's np=1 leg) is the one that reliably fails
-!! before the fix and passes after it -- see "Why this file is a smoke
-!! test, not a tight regression" below for the measurement that forced
-!! that split.
+!! closed-budget `mass_out`.  It is a completes-and-finite smoke test
+!! only: it does NOT fail with the fix reverted.  The regression gate is
+!! the MPI-enabled twin (`tests/mpi/test_ocean_decomp_bitid_mpi.F90 ::
+!! periodic_sponge`, `check_periodic_sponge_serial_out`) -- see "Why this
+!! file is a smoke test, not a tight regression" below.
 !!
 !! ## The bug
 !!
@@ -57,26 +56,22 @@
 !! across toolchains at this scale, so no fixed threshold here can both (a)
 !! pass on every toolchain this suite runs on and (b) reliably fail without
 !! the fix -- a tight bound would be flaky CI, not a regression gate.  The
-!! MPI-enabled companion case does not have this problem: run through the
-!! SAME real single-rank launch (`mpirun -np 1`) with the SAME gfortran
-!! toolchain the gate is asserted under
-!! (`tests/mpi/test_ocean_decomp_bitid_mpi.F90 :: periodic_sponge`,
-!! `check_periodic_sponge_serial_out`), `mass_out` separates cleanly and
-!! monotonically (measured there: `pred_corr` fixed 9.2255E-05 / broken
-!! 1.5045E-04; `ssp_rk2` fixed 8.3477E-06 / broken 1.6591E-04) -- because
-!! that binary compares the SAME toolchain's fixed vs broken build, not two
-!! different toolchains' fixed answers against each other.  THAT test is
-!! ctest's `rdb_test_ocean_decomp_bitid_mpi_1rank` (`RDB_ENABLE_MPI=ON`
-!! only); this file exists so the bug also has a `RDB_ENABLE_MPI=OFF`
-!! smoke gate (the default local/CI build per CLAUDE.md).
+!! MPI-enabled companion case has no threshold to calibrate: it compares
+!! the single-rank reference's closed-budget totals BIT FOR BIT against
+!! every decomposed `px x py` run of the same problem (EFP reproducing
+!! sums make that an exact identity), so the stale-ghost reference
+!! differs from the decomposed runs whenever the fix is reverted.  It can
+!! only do that with something to compare against, i.e. on its 2- and
+!! 4-rank ctest legs (`rdb_test_ocean_decomp_bitid_mpi`, `..._4rank`;
+!! `RDB_ENABLE_MPI=ON` only).  This file exists so the
+!! `RDB_ENABLE_MPI=OFF` build (the default local/CI build per CLAUDE.md)
+!! still runs the configuration.
 !!
 !! `periodic_sponge_seam_out_is_finite_and_bounded` therefore only asserts
 !! the run completes and `mass_out` stays finite and under a generous,
 !! toolchain-portable ceiling (`MASS_OUT_CEILING`, comfortably above every
-!! noise-floor value measured above, comfortably below the historical
-!! failure's scale) -- it catches a gross regression (a NaN, a crash, or a
-!! reversion so complete the seam leak reaches this ceiling even at toy
-!! scale) without being a source of toolchain-dependent flakes.
+!! value in the table above).  It catches a NaN or a crash, not the seam
+!! bug itself.
 module test_ocean_budget_periodic_sponge_serial
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
