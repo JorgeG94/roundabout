@@ -55,6 +55,10 @@ module test_ocean_restart
    real(wp), parameter :: DT = 300.0_wp
    integer, parameter :: N_INNER = 20
    integer, parameter :: N_STEPS = 5
+   ! Viscous variant's Laplacian viscosity: nu_h*DT/DX**2 = 3e-3, well
+   ! inside the explicit limit, but large enough that dropping a step's
+   ! viscous tendency changes every face.
+   real(wp), parameter :: NU_H_VISCOUS = 1000.0_wp
    ! Wetdry variant: 2x2 interior patch overwritten to a near-dry depth
    ! (b = 0.01 m < dry_depth = 0.05 m) inside a 0.3 m basin.  Both the A
    ! (write) and B (read) builds must patch b identically — b is NOT in
@@ -84,6 +88,7 @@ contains
                   new_unittest("restart_bit_exact_closed_wall", test_bit_exact_closed), &
                   new_unittest("restart_bit_exact_periodic_x", test_bit_exact_periodic), &
                   new_unittest("restart_bit_exact_physics_rich", test_bit_exact_physics), &
+                  new_unittest("restart_bit_exact_viscous", test_bit_exact_viscous), &
                   new_unittest("restart_decomp_mismatch_errors", test_decomp_mismatch), &
                   new_unittest("restart_decomp_mismatch_read_wrapper", &
                                test_decomp_mismatch_read), &
@@ -138,7 +143,7 @@ contains
       end if
    end subroutine make_cfg
 
-   subroutine setup_state(cfg, grid, state, sf, periodic_x, physics_rich, wetdry)
+   subroutine setup_state(cfg, grid, state, sf, periodic_x, physics_rich, wetdry, viscous)
       !! Mirror the driver's ocean init path: init, seed, metrics, wrap
       !! (when periodic), enter_data.  Leaves the state device-resident.
       !!
@@ -164,6 +169,7 @@ contains
       logical, intent(in) :: periodic_x
       logical, intent(in), optional :: physics_rich
       logical, intent(in), optional :: wetdry
+      logical, intent(in), optional :: viscous
 
       integer :: nx_w, ny_w, i, j
       logical :: do_wd
@@ -188,6 +194,9 @@ contains
             state%vmix%use_kpp = .true.
             state%dyn%dt_therm_ratio = 2
          end if
+      end if
+      if (present(viscous)) then
+         if (viscous) state%hvisc%nu_h = NU_H_VISCOUS
       end if
       if (do_wd) then
          ! Step 1: overwrite the 2x2 interior patch to b = 0.01 m
@@ -339,13 +348,14 @@ contains
       call state%destroy()
    end subroutine teardown
 
-   subroutine roundtrip(error, periodic_x, physics_rich, wetdry)
+   subroutine roundtrip(error, periodic_x, physics_rich, wetdry, viscous)
       !! The bit-exact gate, parameterised on the periodic-x + physics
       !! + wetdry flags.
       type(error_type), allocatable, intent(out) :: error
       logical, intent(in) :: periodic_x
       logical, intent(in), optional :: physics_rich
       logical, intent(in), optional :: wetdry
+      logical, intent(in), optional :: viscous
 
       type(config_t) :: cfg
       type(hgrid_t) :: gA, gB
@@ -355,7 +365,7 @@ contains
       character(len=*), parameter :: FN = "test_ocean_restart_rt.nc"
       real(wp) :: t_read
       integer :: step_read, s, it
-      logical :: ok, phys, do_wd
+      logical :: ok, phys, do_wd, visc
       real(wp), allocatable :: bld_A(:, :), rho_A(:, :, :)
       real(wp), allocatable :: wd_A(:, :)
 
@@ -363,13 +373,16 @@ contains
       if (present(physics_rich)) phys = physics_rich
       do_wd = .false.
       if (present(wetdry)) do_wd = wetdry
+      visc = .false.
+      if (present(viscous)) visc = viscous
 
       call make_cfg(cfg, physics_rich=phys, wetdry=do_wd)
       call decomp_init(decomp, NX, NY, 1, 1, 0)
       call cleanup_file(FN)
 
       ! State A: seed, run N steps, write restart.
-      call setup_state(cfg, gA, A, sfA, periodic_x, physics_rich=phys, wetdry=do_wd)
+      call setup_state(cfg, gA, A, sfA, periodic_x, physics_rich=phys, wetdry=do_wd, &
+                       viscous=visc)
       ! Wetdry precondition: the seed placed 0s at the shallow 2x2 patch.
       if (do_wd) then
          call check(error, &
@@ -438,6 +451,7 @@ contains
          B%vmix%use_kpp = .true.
          B%dyn%dt_therm_ratio = 2
       end if
+      if (visc) B%hvisc%nu_h = NU_H_VISCOUS
       ! Wetdry B: same STATIC fields as A (b patch, bt_H_ref = b, PGF bathy —
       ! none of these are in the restart, so the step-(N+1) gate needs them to
       ! agree by construction) + wd_* workspace allocations (needed by the
@@ -631,6 +645,17 @@ contains
       type(error_type), allocatable, intent(out) :: error
       call roundtrip(error, periodic_x=.false., physics_rich=.true.)
    end subroutine test_bit_exact_physics
+
+   subroutine test_bit_exact_viscous(error)
+      !! Lateral viscosity ON under the default pred_corr scheme.  The
+      !! predictor reuses the previous step's corrector viscous tendency
+      !! (`hvisc%du_visc`/`dv_visc`, MOM6 `diffu(u[n-1])`), so the first
+      !! post-restart step is bit-exact only if those buffers are
+      !! checkpointed.  Every other variant runs inviscid (`nu_h = 0`),
+      !! which is how a resume that dropped them passed this gate.
+      type(error_type), allocatable, intent(out) :: error
+      call roundtrip(error, periodic_x=.false., viscous=.true.)
+   end subroutine test_bit_exact_viscous
 
    subroutine test_bit_exact_periodic(error)
       type(error_type), allocatable, intent(out) :: error

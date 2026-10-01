@@ -118,15 +118,17 @@ contains
    end subroutine scratch_3d_buffer_enter_data
 
    subroutine scratch_3d_buffer_enter_data_impl(this)
-      !! Attach the scratch payload to the device, ZEROED.  That second
-      !! half is a contract, not an implementation detail: `init`
-      !! allocates `source = 0.0_wp`, so a consumer whose producer was
-      !! SKIPPED this step is entitled to read zero, and it must read
-      !! zero on BOTH toolchains (see the inline note below for the
-      !! `pred_corr` predictor that does exactly that).  `type(...)` (not
-      !! `class`) dummy on purpose: a by-reference non-polymorphic dummy
-      !! aliases the heap object, so `create(this%data)` attaches against
-      !! a heap base — no polymorphic stack box for AMD to reject.
+      !! Attach the scratch payload to the device holding the HOST
+      !! payload: zero from `init` (`allocate(..., source = 0.0_wp)`), or
+      !! whatever a warm-restart read restored into it before the map.
+      !! The zero half is a contract, not an implementation detail: a
+      !! consumer whose producer was SKIPPED this step is entitled to read
+      !! zero on a cold start, and it must read zero on BOTH toolchains
+      !! (see the inline note below for the `pred_corr` predictor that
+      !! does exactly that).  `type(...)` (not `class`) dummy on purpose:
+      !! a by-reference non-polymorphic dummy aliases the heap object, so
+      !! `copyin(this%data)` attaches against a heap base — no polymorphic
+      !! stack box for AMD to reject.
       !!
       !! No-op when the payload was never allocated.  Slots may GATE a
       !! buffer's `init` on a runtime knob (see
@@ -136,36 +138,27 @@ contains
       !! lives here rather than at each call site.
       type(scratch_3d_buffer_t), intent(inout) :: this
       if (.not. allocated(this%data)) return
-      !$acc enter data create(this%data)
-      ! Device-side zero-fill.  `create` attaches UNINITIALISED device
-      ! memory: the zero `init` put in the host allocation never crosses.
-      ! Most consumers write every element before reading, but a producer
-      ! is allowed to be SKIPPED for a step and leave its buffer to be
-      ! read as "what the previous step produced" — MOM6's predictor does
-      ! exactly that with `diffu` (`split_scheme = "pred_corr"` skips the
-      ! viscous recompute in stage 1), and on step 1 there is no previous
-      ! producer.  On the host that read yields the documented zero; on
-      ! `-gpu=...,mem:separate` it yielded whatever the allocator handed
-      ! back, which is why a uniform, perfectly balanced periodic jet
-      ! acquired an O(0.25 m/s²) viscous tendency out of nothing.
-      ! A device `do concurrent` rather than `copyin`: the array is
-      ! already present, so this costs a kernel launch instead of an
-      ! H2D of the whole (zero) buffer.
-      call scratch_3d_zero_device(this%data, size(this%data, 1), &
-                                  size(this%data, 2), size(this%data, 3))
+      ! `copyin`, not `create`: `create` attaches UNINITIALISED device
+      ! memory, so the zero `init` put in the host allocation never
+      ! crosses.  Most consumers write every element before reading, but
+      ! a producer is allowed to be SKIPPED for a step and leave its
+      ! buffer to be read as "what the previous step produced" — MOM6's
+      ! predictor does exactly that with `diffu` (`split_scheme =
+      ! "pred_corr"` skips the viscous recompute in stage 1), and on step
+      ! 1 there is no previous producer.  On `-gpu=...,mem:separate` a
+      ! bare `create` yielded whatever the allocator handed back, which is
+      ! why a uniform, perfectly balanced periodic jet once acquired an
+      ! O(0.25 m/s²) viscous tendency out of nothing.  The fix for that
+      ! was a device-side zero-fill after the `create`; it is `copyin` now
+      ! because those buffers are also RESTART state (`hvisc_du_visc`/
+      ! `hvisc_dv_visc` in `ocean_state_build_restart_registry`), and the
+      ! restart read lands on the host BEFORE the map — a zero-fill wiped
+      ! the restored tendency on both toolchains (host builds run the
+      ! `do concurrent` on the host array itself), so the first
+      ! post-restart predictor ran with no lateral viscosity in any column.
+      ! One H2D of each buffer at setup; nothing per step.
+      !$acc enter data copyin(this%data)
    end subroutine scratch_3d_buffer_enter_data_impl
-
-   pure subroutine scratch_3d_zero_device(arr, n1, n2, n3)
-      !! Zero `arr` where it lives.  Explicit-shape dummies so NVHPC
-      !! launches without walking a descriptor; called once per buffer
-      !! at attach time, never per step.
-      integer, intent(in) :: n1, n2, n3
-      real(wp), intent(inout) :: arr(n1, n2, n3)
-      integer :: i, j, k
-      do concurrent(k=1:n3, j=1:n2, i=1:n1)
-         arr(i, j, k) = 0.0_wp
-      end do
-   end subroutine scratch_3d_zero_device
 
    subroutine scratch_3d_buffer_exit_data(this)
       !! Type-bound wrapper — see scratch_3d_buffer_enter_data.
