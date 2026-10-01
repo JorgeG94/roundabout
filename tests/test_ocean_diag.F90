@@ -1500,6 +1500,11 @@ contains
          max_err = maxval(abs(state%diag%vars(1)%output_buffer(i0:i1, j0:j1, :) - expected))
          call check(error, max_err < 1.0e-12_wp, &
                     "vorticity_z on rigid rotation should equal 2Ω to FP")
+         if (allocated(error)) exit checks
+         ! It writes DIAG_MISSING_VALUE on land, so the variable must
+         ! advertise _FillValue even with vanished-masking off.
+         call check(error, state%diag%vars(1)%has_missing, &
+                    "vorticity_z (masks_land) should be tagged has_missing")
       end block checks
       call state%destroy()
    end subroutine test_derived_vorticity
